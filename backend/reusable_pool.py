@@ -1,9 +1,11 @@
-from multiprocessing.pool import Pool
+from multiprocessing.pool import Pool, RUN, TERMINATE
 import multiprocessing as mp
-from multiprocessing.pool import ExceptionWithTraceback, MaybeEncodingError
 import threading
 import os
 from time import sleep
+
+BROKEN = 3
+DEBUG = True
 
 _local = threading.local()
 
@@ -12,7 +14,10 @@ def get_reusable_pool(n_jobs=None):
     _pool = getattr(_local, '_pool', None)
     if _pool is None:
         _local._pool = _pool = _ReusablePool(processes=n_jobs)
-    elif _pool._state != 0:
+    elif _pool._state != RUN:
+        if DEBUG:
+            print("DEBUG   - Create a new pool as the previous one"
+                  " was in state {}".format(_pool._state))
         _pool.terminate()
         _local._pool = None
         return get_reusable_pool(n_jobs)
@@ -26,12 +31,10 @@ class _ReusablePool(Pool):
     """A Pool, not tolerant to fault and reusable"""
     def __init__(self, timeout=10, processes=None, initializer=None,
                  initargs=(), maxtasksperchild=None, context=None):
-        self.pids = []
         super(_ReusablePool, self).__init__(
             processes, initializer, initargs,
             maxtasksperchild, context)
         self.timeout = timeout
-        self.pids = self.starmap(os.getpid, [tuple()]*len(self._pool))
 
     def _join_exited_workers(self):
         """Cleanup after any worker processes which have exited due to reaching
@@ -50,27 +53,25 @@ class _ReusablePool(Pool):
                     self._cache[k]._set(i, (False, AbortedWorkerError(
                         'A process was killed during the execution '
                         'a multiprocessing job.', worker.exitcode)))
+                if worker.exitcode in [-9, -15]:
+                    self._clean_up_crash()
+                    print(
+                        "WARNING - "
+                        "Pool might be corrupted, restart it if you "
+                        "need a new queue \n" +
+                        " "*10+"Worker exited with error "
+                        "code {}".format(worker.exitcode))
                 cleaned = True
                 del self._pool[i]
-        if not self._is_conscistent():
-            self._worker_handler._state = 2
-            self._task_handler._state = 2
-            self._result_handler._state = 2
         return cleaned
 
-    def _is_conscistent(self):
-        import psutil
-        for pid in self.pids:
-            if not psutil.pid_exists(pid):
-                for pid in self.pids:
-                    os.kill(pid, 15)
-                return False
-
-    def _maintain_pool(self):
-        """Clean up any exited workers and start replacements for them.
-        """
-        if self._join_exited_workers():
-            self._repopulate_pool()
+    def _clean_up_crash(self):
+        for p in self._pool:
+            p.terminate()
+        self._outqueue.put(None)
+        self._taskqueue.put(None)
+        threading.current_thread()._state = TERMINATE
+        self._state = BROKEN
 
     def _wait_complete(self):
         if len(self._cache) > 0:
@@ -101,20 +102,21 @@ class _ReusablePool(Pool):
         assert processes == len(self._pool), (
             "Resize pool failed. Got {} extra  processes"
             "".format(processes - len(self._pool)))
-        self.pids = self.starmap(os.getpid, [tuple()]*len(self._pool))
 
-    # @staticmethod
-    # def _help_stuff_finish(inqueue, task_handler, size):
-    #     # task_handler may be blocked trying to put items on inqueue
-    #     print("No problem!!!!!!!\n\n\n")
-    #     util.debug('removing tasks from inqueue until task handler finished')
-    #     for i in range(10):
-    #         sleep(.01)
-    #         print(inqueue._rlock)
-    #     inqueue._rlock.acquire()
-    #     while task_handler.is_alive() and inqueue._reader.poll():
-    #         inqueue._reader.recv()
-    #         time.sleep(0)
+    @staticmethod
+    def _help_stuff_finish(inqueue, task_handler, size):
+        # task_handler may be blocked trying to put items on inqueue
+        mp.util.debug("removing tasks from inqueue until task "
+                      "handler finished")
+        if inqueue._rlock.acquire(timeout=.1):
+            while task_handler.is_alive() and inqueue._reader.poll():
+                inqueue._reader.recv()
+                sleep(0)
+        else:
+            print("WARNING - Unusual finish, the pool might have crashed")
+            while task_handler.is_alive() and inqueue._reader.poll():
+                inqueue._reader.recv()
+                sleep(0)
 
 
 class AbortedWorkerError(Exception):

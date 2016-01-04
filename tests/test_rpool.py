@@ -90,5 +90,9 @@ def test_deadlock_kill():
     pool = get_reusable_pool(1)
     pid = pool.apply(os.getpid, tuple())
     pool = get_reusable_pool(2)
-    os.kill(pid, 15)
+    os.kill(pid, 9)
+    sleep(.2)
+
+    pool = get_reusable_pool(2)
+    pool.apply(print, ('Pool recovered from the worker crash', ))
     pool.terminate()
