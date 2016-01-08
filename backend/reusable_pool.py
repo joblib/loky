@@ -1,3 +1,4 @@
+from __future__ import print_function
 from multiprocessing.pool import Pool, RUN, TERMINATE
 import multiprocessing as mp
 import threading
@@ -15,29 +16,31 @@ def get_reusable_pool(*args, **kwargs):
     _pool = getattr(_local, '_pool', None)
     if _pool is None:
         _local._pool = _pool = _ReusablePool(*args, **kwargs)
-    elif _pool._state != RUN:
-        if DEBUG:
-            print("DEBUG   - Create a new pool as the previous one"
-                  " was in state {}".format(_pool._state))
-        _pool.terminate()
-        _local._pool = None
-        return get_reusable_pool(*args, **kwargs)
     else:
-        _pool.resize(kwargs.get('processes'))
-        ready = False
-        for i in range(1000):
-            if None in [p.pid for p in _pool._pool]:
-                # wait for all processes to get in a clean state
-                sleep(0.001)
-            else:
-                ready = True
-                break
-        if not ready:
-            print("WARNING - Create a new pool as the previous one"
-                  " failed to resize properly.")
+        _pool._maintain_pool()
+        if _pool._state != RUN:
+            if DEBUG:
+                print("DEBUG   - Create a new pool as the previous one"
+                      " was in state {}".format(_pool._state))
             _pool.terminate()
             _local._pool = None
             return get_reusable_pool(*args, **kwargs)
+        else:
+            _pool.resize(kwargs.get('processes'))
+            ready = False
+            for i in range(1000):
+                if None in [p.pid for p in _pool._pool]:
+                    # wait for all processes to get in a clean state
+                    sleep(0.001)
+                else:
+                    ready = True
+                    break
+            if not ready:
+                print("WARNING - Create a new pool as the previous one"
+                      " failed to resize properly.")
+                _pool.terminate()
+                _local._pool = None
+                return get_reusable_pool(*args, **kwargs)
     return _pool
 
 
@@ -45,13 +48,13 @@ class _ReusablePool(Pool):
     """A Pool, not tolerant to fault and reusable"""
     def __init__(self, timeout=10, processes=None, initializer=None,
                  initargs=(), maxtasksperchild=None, context=None):
+        self.maintain_lock = mp.Lock()
         if sys.version_info[:2] >= (3, 4):
             super(_ReusablePool, self).__init__(
                 processes, initializer, initargs, maxtasksperchild, context)
         else:
             super(_ReusablePool, self).__init__(
                 processes, initializer, initargs, maxtasksperchild)
-        self.timeout = timeout
 
     def _join_exited_workers(self):
         """Cleanup after any worker processes which have exited due to reaching
@@ -70,16 +73,25 @@ class _ReusablePool(Pool):
                     self._cache[k]._set(i, (False, AbortedWorkerError(
                         'A process was killed during the execution '
                         'a multiprocessing job.', worker.exitcode)))
-                if worker.exitcode in [-9, -15]:
+                print("A process exited with : {}".format(worker.exitcode))
+                cleaned = True
+                if worker.exitcode < 0:
                     self._clean_up_crash()
                     print(
                         "WARNING - Pool might be corrupted, restart it if you "
                         "need a new queue \n" + " "*10 +
                         "Worker exited with error "
                         "code {}".format(worker.exitcode))
-                cleaned = True
+                    cleaned = False
                 del self._pool[i]
         return cleaned
+
+    def _maintain_pool(self):
+        """Clean up any exited workers and start replacements for them.
+        """
+        with self.maintain_lock:
+            if self._join_exited_workers():
+                self._repopulate_pool()
 
     def _clean_up_crash(self):
         # Terminate tasks handler by sentinel
