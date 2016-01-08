@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import sys
 import psutil
@@ -14,7 +15,7 @@ def crash():
     j = ctypes.pointer(i)
     c = 0
     while True:
-        j[c] = 1
+        j[c] = i
         c += 1
     j
 
@@ -51,7 +52,7 @@ def raise_Error():
 def test_Rpool_crash():
     '''Test the crash handling in pool
     '''
-    pool = get_reusable_pool(2)
+    pool = get_reusable_pool(processes=2)
 
     for func, err in [(crash, AbortedWorkerError),
                       (exit, AbortedWorkerError),
@@ -61,7 +62,7 @@ def test_Rpool_crash():
         sleep(.1)
 
     # Test for external signal comming from neighbor
-    pids = pool.starmap(os.getpid, [tuple()]*2)
+    pids = [p.pid for p in pool._pool]
     res = pool.map_async(kill_friend, pids[::-1])
     assert_raises(AbortedWorkerError, res.get)
 
@@ -72,12 +73,12 @@ def test_Rpool_resize():
     '''Test the resize function in reusable_pool
     '''
 
-    pool = get_reusable_pool(2)
-    pids = pool.starmap(os.getpid, [tuple()]*2)
+    pool = get_reusable_pool(processes=2)
+    pids = [p.pid for p in pool._pool]
     res = pool.apply_async(work_sleep, (.5, pids))
-    pool = get_reusable_pool(1)
+    pool = get_reusable_pool(processes=1)
     assert res.get(), "Resize does not wait for current processes to finish"
-    pool = get_reusable_pool(1)
+    pool = get_reusable_pool(processes=1)
     pool.terminate()
     assert_raises(ValueError, pool.resize, 0)
     pool = get_reusable_pool()
@@ -87,12 +88,12 @@ def test_deadlock_kill():
     '''Create a deadlock in pool by killing
     the lock owner.
     '''
-    pool = get_reusable_pool(1)
-    pid = pool.apply(os.getpid, tuple())
-    pool = get_reusable_pool(2)
+    pool = get_reusable_pool(processes=1)
+    pid = pool._pool[0].pid
+    pool = get_reusable_pool(processes=2)
     os.kill(pid, 9)
     sleep(.2)
 
-    pool = get_reusable_pool(2)
+    pool = get_reusable_pool(processes=2)
     pool.apply(print, ('Pool recovered from the worker crash', ))
     pool.terminate()
