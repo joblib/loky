@@ -49,6 +49,12 @@ def raise_Error():
     raise RuntimeError('bad except')
 
 
+class CrashAtUnpickle(object):
+    """Bad object that triggers a segfault at unpickling time."""
+    def __reduce__(self):
+        return crash, (), ()
+
+
 def test_Rpool_crash():
     '''Test the crash handling in pool
     '''
@@ -59,7 +65,11 @@ def test_Rpool_crash():
                       (raise_Error, RuntimeError)]:
         res = pool.apply_async(func, tuple())
         assert_raises(err, res.get)
-        sleep(.1)
+        sleep(.1)  # wait for pool to recover
+
+    res = pool.apply_async(id, CrashAtUnpickle())
+    assert_raises(AbortedWorkerError, res.get)
+    sleep(.1)  # wait for pool to recover
 
     # Test for external signal comming from neighbor
     pids = [p.pid for p in pool._pool]
