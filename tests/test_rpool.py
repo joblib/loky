@@ -100,10 +100,11 @@ def test_Rpool_resize():
     pids = [p.pid for p in pool._pool]
     res = pool.apply_async(work_sleep, (.5, pids))
     pool = get_reusable_pool(processes=1)
-    assert res.get(), "Resize does not wait for current processes to finish"
+    assert res.get(), "Resize should wait for current processes to finish"
+    assert len(pool._pool) == 1
     pool = get_reusable_pool(processes=1)
     pool.terminate()
-    assert_raises(ValueError, pool.resize, 0)
+    assert_raises(ValueError, pool._resize, 0)
     pool = get_reusable_pool()
 
 

@@ -26,7 +26,7 @@ def get_reusable_pool(*args, **kwargs):
             _local._pool = None
             return get_reusable_pool(*args, **kwargs)
         else:
-            _pool.resize(kwargs.get('processes'))
+            _pool._resize(kwargs.get('processes'))
     return _pool
 
 
@@ -76,7 +76,8 @@ class _ReusablePool(Pool):
         """Clean up any exited workers and start replacements for them.
         """
         with self.maintain_lock:
-            if self._join_exited_workers():
+            if (self._join_exited_workers() or
+                    (self._processes >= len(self._pool))):
                 self._repopulate_pool()
 
     def _clean_up_crash(self):
@@ -96,14 +97,16 @@ class _ReusablePool(Pool):
 
     def _wait_complete(self):
         if len(self._cache) > 0:
-            print("WARNING!!! : You are trying to resize a working pool. "
+            print("WARNING - You are trying to resize a working pool. "
                   "The pool will wait until\nthe jobs are finished and "
                   "then resize it. This can slow down your code and "
                   "you\nshould not do it!")
         while len(self._cache) > 0:
             sleep(.1)
 
-    def resize(self, processes=None):
+    def _resize(self, processes=None):
+        """Resize the pool to the desired number of processes
+        """
         if processes is None:
             processes = os.cpu_count() or 1
         if processes < 1:
@@ -112,13 +115,16 @@ class _ReusablePool(Pool):
             return
         self._wait_complete()
         self._processes = processes
-        self._join_exited_workers()
-        self._repopulate_pool()
         if len(self._pool) > processes:
+            # Sentinel excess workers, they will terminate and
+            # be collected asynchronously
             for worker in self._pool[processes:]:
                 self._inqueue.put(None)
-            while processes != len(self._pool):
-                self._join_exited_workers()
+
+        # Make sure that the pool as the expected number of workers
+        # up and ready
+        while processes != len(self._pool):
+            self._maintain_pool()
 
         assert processes == len(self._pool), (
             "Resize pool failed. Got {} extra  processes"
