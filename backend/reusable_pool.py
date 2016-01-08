@@ -22,7 +22,8 @@ def get_reusable_pool(*args, **kwargs):
             if DEBUG:
                 print("DEBUG   - Create a new pool as the previous one"
                       " was in state {}".format(_pool._state))
-            _pool.terminate()
+            with _pool.maintain_lock:
+                _pool.terminate()
             _local._pool = None
             return get_reusable_pool(*args, **kwargs)
         else:
@@ -53,39 +54,63 @@ class _ReusablePool(Pool):
                 # worker exited
                 mp.util.debug('cleaning up worker %d' % i)
                 worker.join()
-                mp.util.debug('A worker have failed in some ways, we will '
-                              'flag all current jobs as failed')
-                for k in list(self._cache.keys()):
-                    self._cache[k]._set(i, (False, AbortedWorkerError(
-                        'A process was killed during the execution '
-                        'a multiprocessing job.', worker.exitcode)))
-                print("A process exited with : {}".format(worker.exitcode))
                 cleaned = True
-                if worker.exitcode < 0:
+                if worker.exitcode != 0:
+                    mp.util.debug('A worker have failed in some ways, we will '
+                                  'flag all current jobs as failed')
+                    for k in list(self._cache.keys()):
+                        self._cache[k]._set(i, (False, AbortedWorkerError(
+                            'A process was killed during the execution '
+                            'a multiprocessing job.', worker.exitcode)))
                     self._clean_up_crash()
                     print(
                         "WARNING - Pool might be corrupted, restart it if you "
                         "need a new queue \n" + " " * 10 +
                         "Worker exited with error "
                         "code {}".format(worker.exitcode))
-                    cleaned = False
+                    raise BrokenPoolError(worker.exitcode)
                 del self._pool[i]
         return cleaned
+
+    def terminate(self):
+        if self._state != BROKEN:
+            super(_ReusablePool, self).terminate()
+        else:
+            n_tries = 1000
+            delay = .001
+            for i in range(n_tries):
+                alive = False
+                for p in self._pool:
+                    alive |= p.exitcode is None
+                alive |= self._result_handler.is_alive()
+                alive |= self._task_handler.is_alive()
+                if not alive:
+                    return
+                sleep(delay)
+            print('DEBUG   - Terminate was called on a BROKEN pool but some'
+                  ' processes was still alive.')
 
     def _maintain_pool(self):
         """Clean up any exited workers and start replacements for them.
         """
-        with self.maintain_lock:
-            if (self._join_exited_workers() or
-                    (self._processes >= len(self._pool))):
-                self._repopulate_pool()
+        try:
+            with self.maintain_lock:
+                if ((self._join_exited_workers() or
+                        (self._processes >= len(self._pool))) and
+                        self._state != BROKEN):
+                    self._repopulate_pool()
+        except BrokenPoolError:
+            pass
 
     def _clean_up_crash(self):
+        if self._state == BROKEN:
+            return
         # Terminate tasks handler by sentinel
         self._taskqueue.put(None)
 
         # Terminate result handler by sentinel
-        self._outqueue.put(None)
+        #self._outqueue.put(None)
+        self._result_handler._state = TERMINATE
 
         # Terminate the worker handler thread
         threading.current_thread()._state = TERMINATE
@@ -147,6 +172,58 @@ class _ReusablePool(Pool):
                 inqueue._reader.recv()
                 sleep(0)
 
+    @staticmethod
+    def _handle_tasks(taskqueue, put, outqueue, pool, cache):
+        thread = threading.current_thread()
+
+        for taskseq, set_length in iter(taskqueue.get, None):
+            task = None
+            i = -1
+            try:
+                for i, task in enumerate(taskseq):
+                    if thread._state == RUN:
+                        mp.util.debug(
+                            'task handler found thread._state != RUN')
+                        break
+                    try:
+                        put(task)
+                    except Exception as e:
+                        job, ind = task[:2]
+                        try:
+                            cache[job]._set(ind, (False, e))
+                        except KeyError:
+                            pass
+                else:
+                    if set_length:
+                        mp.util.debug('doing set_length()')
+                        set_length(i+1)
+                    continue
+                break
+            except Exception as ex:
+                job, ind = task[:2] if task else (0, 0)
+                if job in cache:
+                    cache[job]._set(ind + 1, (False, ex))
+                if set_length:
+                    mp.util.debug('doing set_length()')
+                    set_length(i+1)
+        else:
+            mp.util.debug('task handler got sentinel')
+
+        try:
+            if pool._state != BROKEN:
+                # tell result handler to finish when cache is empty
+                mp.util.debug('task handler sending sentinel '
+                              'to result handler')
+                outqueue.put(None)
+                # tell workers there is no more work
+                mp.util.debug('task handler sending sentinel to workers')
+                for p in pool:
+                    put(None)
+        except OSError:
+            mp.util.debug('task handler got OSError when sending sentinels')
+
+        mp.util.debug('task handler exiting')
+
 
 class AbortedWorkerError(Exception):
     """A worker was aborted"""
@@ -158,6 +235,18 @@ class AbortedWorkerError(Exception):
 
     def __repr__(self):
         return '{} with exitcode {}'.format(self.msg, self.exitcode)
+
+
+class BrokenPoolError(Exception):
+    """A worker was aborted"""
+    def __init__(self, exitcode):
+        super(BrokenPoolError, self).__init__()
+        self.exitcode = exitcode
+        self.args = [repr(self)]
+
+    def __repr__(self):
+        return ('The pool is rendered unusable by a procecss that exited'
+                ' with exitcode {}'.format(self.exitcode))
 
 if __name__ == '__main__':
     # This will cause a deadlock
