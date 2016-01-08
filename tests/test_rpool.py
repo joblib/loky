@@ -102,7 +102,22 @@ def test_Rpool_resize():
     pool = get_reusable_pool(processes=1)
     assert res.get(), "Resize should wait for current processes to finish"
     assert len(pool._pool) == 1
-    pool = get_reusable_pool(processes=1)
+    assert pool._pool[0].pid in pids
+
+    # Requesting the same number of process should not impact the pool nor
+    # kill the processed
+    old_pid = pool._pool[0].pid
+    unchanged_pool = get_reusable_pool(processes=1)
+    assert len(unchanged_pool._pool) == 1
+    assert unchanged_pool is pool
+    assert unchanged_pool._pool[0].pid == old_pid
+
+    # Growing the pool again should add a single process and keep the old
+    # one as it is still in a good shape
+    pool = get_reusable_pool(processes=2)
+    assert len(pool._pool) == 2
+    assert old_pid in [p.pid for p in pool._pool]
+
     pool.terminate()
     assert_raises(ValueError, pool._resize, 0)
     pool = get_reusable_pool()
