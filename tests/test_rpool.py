@@ -87,10 +87,17 @@ def test_Rpool_crash():
         assert len(pids) == i
         assert None not in pids
         res = pool.map(work_sleep, [(.001 * j, pids) for j in range(2 * i)])
-        res = pool.map(work_sleep, [(.001 * j, pids) for j in range(2 * i)])
-        #assert all(res)
+        assert all(res)
         res = pool.map_async(kill_friend, pids[::-1])
         assert_raises(AbortedWorkerError, res.get)
+
+        pool = get_reusable_pool(processes=i)
+        pids = [p.pid for p in pool._pool]
+        res = pool.imap(work_sleep, [(.001 * j, pids) for j in range(2 * i)])
+        assert all(list(res))
+        res = pool.imap(kill_friend, pids[::-1])
+        assert_raises(AbortedWorkerError, list, res)
+
     pool = get_reusable_pool(processes=1)
     pool.terminate()
 
