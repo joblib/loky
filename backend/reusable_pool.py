@@ -65,7 +65,7 @@ class _ReusablePool(Pool):
                     self._clean_up_crash()
                     print(
                         "WARNING - Pool might be corrupted, restart it if you "
-                        "need a new queue \n" + " "*10 +
+                        "need a new queue \n" + " " * 10 +
                         "Worker exited with error "
                         "code {}".format(worker.exitcode))
                     cleaned = False

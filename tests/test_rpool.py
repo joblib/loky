@@ -10,9 +10,7 @@ from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
 def wait_dead(pid, n_tries=1000, delay=0.001):
     """Wait for process to die"""
     for i in range(n_tries):
-        try:
-            os.kill(pid, 0)  # check that pid exists
-        except OSError:
+        if not psutil.pid_exists(pid):
             return
         sleep(delay)
     raise RuntimeError("Process %d failed to die for at least %0.3fs" %
@@ -38,10 +36,10 @@ def exit():
     sys.exit(1)
 
 
-def work_sleep(time, pids):
-    '''Sleep for some time before returning
-    and check if all the passed pid exist
-    '''
+def work_sleep(arg):
+    """Sleep for some time before returning
+    and check if all the passed pid exist"""
+    time, pids = arg
     sleep(time)
     res = True
     for p in pids:
@@ -83,11 +81,16 @@ def test_Rpool_crash():
     assert_raises(AbortedWorkerError, res.get)
 
     # Test for external signal comming from neighbor
-    pool = get_reusable_pool(processes=2)
-    pids = [p.pid for p in pool._pool]
-    assert None not in pids
-    res = pool.map_async(kill_friend, pids[::-1])
-    assert_raises(AbortedWorkerError, res.get)
+    for i in [1, 2, 5]:
+        pool = get_reusable_pool(processes=i)
+        pids = [p.pid for p in pool._pool]
+        assert len(pids) == i
+        assert None not in pids
+        res = pool.map(work_sleep, [(.001, pids) for _ in range(2 * i)])
+        print("Fail to kill friend?")
+        res = pool.map_async(kill_friend, pids[::-1])
+        print(("no!"))
+        assert_raises(AbortedWorkerError, res.get)
 
     pool.terminate()
 
@@ -102,7 +105,7 @@ def test_Rpool_resize():
     # old one as it is still in a good shape. The resize should not occur
     # while there are on going works.
     pids = [p.pid for p in pool._pool]
-    res = pool.apply_async(work_sleep, (.5, pids))
+    res = pool.apply_async(work_sleep, ((.5, pids),))
     pool = get_reusable_pool(processes=1)
     assert res.get(), "Resize should wait for current processes to finish"
     assert len(pool._pool) == 1
@@ -131,9 +134,7 @@ def test_invalid_process_number():
 
 
 def test_deadlock_kill():
-    '''Create a deadlock in pool by killing
-    the lock owner.
-    '''
+    """Create a deadlock in pool by killing the lock owners."""
     pool = get_reusable_pool(processes=1)
     pid = pool._pool[0].pid
     pool = get_reusable_pool(processes=2)
