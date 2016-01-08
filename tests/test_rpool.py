@@ -151,3 +151,12 @@ def test_deadlock_kill():
     pool = get_reusable_pool(processes=2)
     pool.apply(print, ('Pool recovered from the worker crash', ))
     pool.terminate()
+
+
+def test_freeze():
+    """Test no freeze on OSX with Accelerate"""
+    import numpy as np
+    a = np.random.randn(1000, 1000)
+    np.dot(a, a)
+    pool = get_reusable_pool(2)
+    pool.apply(np.dot, (a, a))
