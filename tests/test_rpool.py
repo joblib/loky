@@ -7,6 +7,18 @@ from nose.tools import assert_raises
 from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
 
 
+def wait_dead(pid, n_tries=1000, delay=0.001):
+    """Wait for process to die"""
+    for i in range(n_tries):
+        try:
+            os.kill(pid, 0)  # check that pid exists
+        except OSError:
+            return
+        sleep(delay)
+    raise RuntimeError("Process %d failed to die for at least %0.3fs" %
+                       (pid, delay * n_tries))
+
+
 def crash():
     '''Induce a segfault in process
     '''
@@ -103,7 +115,7 @@ def test_deadlock_kill():
     pid = pool._pool[0].pid
     pool = get_reusable_pool(processes=2)
     os.kill(pid, 9)
-    sleep(.2)
+    wait_dead(pid)
 
     pool = get_reusable_pool(processes=2)
     pool.apply(print, ('Pool recovered from the worker crash', ))
