@@ -27,20 +27,6 @@ def get_reusable_pool(*args, **kwargs):
             return get_reusable_pool(*args, **kwargs)
         else:
             _pool.resize(kwargs.get('processes'))
-            ready = False
-            for i in range(1000):
-                if None in [p.pid for p in _pool._pool]:
-                    # wait for all processes to get in a clean state
-                    sleep(0.001)
-                else:
-                    ready = True
-                    break
-            if not ready:
-                print("WARNING - Create a new pool as the previous one"
-                      " failed to resize properly.")
-                _pool.terminate()
-                _local._pool = None
-                return get_reusable_pool(*args, **kwargs)
     return _pool
 
 
