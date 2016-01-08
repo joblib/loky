@@ -24,7 +24,8 @@ def get_reusable_pool(*args, **kwargs):
         return get_reusable_pool(*args, **kwargs)
     else:
         _pool.resize(kwargs.get('processes'))
-        return _pool
+        while None in [p.pid for p in _pool._pool]:
+            sleep(0.001)
     return _pool
 
 
@@ -150,4 +151,3 @@ if __name__ == '__main__':
     os.kill(pid, 15)
 
     pool.terminate()
-

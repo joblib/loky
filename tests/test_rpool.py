@@ -58,21 +58,22 @@ class CrashAtUnpickle(object):
 def test_Rpool_crash():
     '''Test the crash handling in pool
     '''
-    pool = get_reusable_pool(processes=2)
 
     for func, err in [(crash, AbortedWorkerError),
                       (exit, AbortedWorkerError),
                       (raise_Error, RuntimeError)]:
+        pool = get_reusable_pool(processes=2)
         res = pool.apply_async(func, tuple())
         assert_raises(err, res.get)
-        sleep(.1)  # wait for pool to recover
 
+    pool = get_reusable_pool(processes=2)
     res = pool.apply_async(id, CrashAtUnpickle())
     assert_raises(AbortedWorkerError, res.get)
-    sleep(.1)  # wait for pool to recover
 
     # Test for external signal comming from neighbor
+    pool = get_reusable_pool(processes=2)
     pids = [p.pid for p in pool._pool]
+    assert None not in pids
     res = pool.map_async(kill_friend, pids[::-1])
     assert_raises(AbortedWorkerError, res.get)
 
