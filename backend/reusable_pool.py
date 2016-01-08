@@ -32,8 +32,8 @@ def get_reusable_pool(*args, **kwargs):
 
 class _ReusablePool(Pool):
     """A Pool, not tolerant to fault and reusable"""
-    def __init__(self, timeout=10, processes=None, initializer=None,
-                 initargs=(), maxtasksperchild=None, context=None):
+    def __init__(self, processes=None, initializer=None, initargs=(),
+                 maxtasksperchild=None, context=None):
         self.maintain_lock = mp.Lock()
         if sys.version_info[:2] >= (3, 4):
             super(_ReusablePool, self).__init__(

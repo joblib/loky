@@ -97,6 +97,10 @@ def test_Rpool_resize():
     '''
 
     pool = get_reusable_pool(processes=2)
+
+    # Decreasing the pool should drop a single process and keep one of the
+    # old one as it is still in a good shape. The resize should not occur
+    # while there are on going works.
     pids = [p.pid for p in pool._pool]
     res = pool.apply_async(work_sleep, (.5, pids))
     pool = get_reusable_pool(processes=1)
@@ -119,8 +123,11 @@ def test_Rpool_resize():
     assert old_pid in [p.pid for p in pool._pool]
 
     pool.terminate()
-    assert_raises(ValueError, pool._resize, 0)
-    pool = get_reusable_pool()
+
+
+def test_invalid_process_number():
+    assert_raises(ValueError, get_reusable_pool, processes=0)
+    assert_raises(ValueError, get_reusable_pool, processes=-1)
 
 
 def test_deadlock_kill():
