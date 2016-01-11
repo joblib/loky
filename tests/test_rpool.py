@@ -66,6 +66,12 @@ class CrashAtUnpickle(object):
         return crash, (), ()
 
 
+class ExitAtUnpickle(object):
+    """Bad object that triggers a process exit at unpickling time."""
+    def __reduce__(self):
+        return exit, (), ()
+
+
 def test_Rpool_crash():
     '''Test the crash handling in pool
     '''
@@ -79,6 +85,10 @@ def test_Rpool_crash():
 
     pool = get_reusable_pool(processes=2)
     res = pool.apply_async(id, CrashAtUnpickle())
+    assert_raises(AbortedWorkerError, res.get)
+
+    pool = get_reusable_pool(processes=2)
+    res = pool.apply_async(id, ExitAtUnpickle())
     assert_raises(AbortedWorkerError, res.get)
 
     # Test for external signal comming from neighbor
