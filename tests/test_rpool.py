@@ -6,10 +6,12 @@ from time import sleep
 from nose.tools import assert_raises
 from nose import SkipTest
 from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
+from multiprocessing import util
+util.log_to_stderr()
 
 
 def wait_dead(pid, n_tries=1000, delay=0.001):
-    """Wait for process to die"""
+    """Wait for process pid to die"""
     for i in range(n_tries):
         if not psutil.pid_exists(pid):
             return
@@ -19,8 +21,7 @@ def wait_dead(pid, n_tries=1000, delay=0.001):
 
 
 def crash():
-    '''Induce a segfault in process
-    '''
+    """Induces a segfault"""
     import ctypes
     i = ctypes.c_char(b'a')
     j = ctypes.pointer(i)
@@ -31,8 +32,7 @@ def crash():
 
 
 def exit():
-    '''Induce a sys exit in process
-    '''
+    """Induces a sys exit with exitcode 1"""
     sys.exit(1)
 
 
@@ -48,14 +48,12 @@ def work_sleep(arg):
 
 
 def kill_friend(pid):
-    '''Try to kill the process associated to pid
-    '''
+    """Function that send SIGKILL at process pid"""
     os.kill(pid, 9)
 
 
-def raise_Error():
-    '''Raise an Exception in process
-    '''
+def raise_error():
+    """Function that raises an Exception in process"""
     raise RuntimeError('bad except')
 
 
@@ -71,21 +69,24 @@ class ExitAtUnpickle(object):
         return exit, (), ()
 
 
-def test_Rpool_crash():
-    '''Test the crash handling in pool
-    '''
+def test_crash():
+    """Test crash handling in pool"""
 
+    # Test the return value of crashing, exiting
+    # and erroring functions
     for func, err in [(crash, AbortedWorkerError),
                       (exit, AbortedWorkerError),
-                      (raise_Error, RuntimeError)]:
+                      (raise_error, RuntimeError)]:
         pool = get_reusable_pool(processes=2)
         res = pool.apply_async(func, tuple())
         assert_raises(err, res.get)
 
+    # Crash a worker at unpickling time
     pool = get_reusable_pool(processes=2)
     res = pool.apply_async(id, CrashAtUnpickle())
     assert_raises(AbortedWorkerError, res.get)
 
+    # Exit a worker at unpickling time
     pool = get_reusable_pool(processes=2)
     res = pool.apply_async(id, ExitAtUnpickle())
     assert_raises(AbortedWorkerError, res.get)
@@ -108,13 +109,12 @@ def test_Rpool_crash():
         res = pool.imap(kill_friend, pids[::-1])
         assert_raises(AbortedWorkerError, list, res)
 
-    pool = get_reusable_pool(processes=1)
+    # Clean terminate
     pool.terminate()
 
 
 def test_Rpool_resize():
-    '''Test the resize function in reusable_pool
-    '''
+    """Test the resize function in reusable_pool"""
 
     pool = get_reusable_pool(processes=2)
 
@@ -146,12 +146,13 @@ def test_Rpool_resize():
 
 
 def test_invalid_process_number():
+    """Raise error on invalid process number"""
     assert_raises(ValueError, get_reusable_pool, processes=0)
     assert_raises(ValueError, get_reusable_pool, processes=-1)
 
 
 def test_deadlock_kill():
-    """Create a deadlock in pool by killing the lock owners."""
+    """Create a deadlock in pool by killing the lock owner."""
     pool = get_reusable_pool(processes=1)
     pid = pool._pool[0].pid
     pool = get_reusable_pool(processes=2)

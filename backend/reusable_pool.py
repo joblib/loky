@@ -1,4 +1,3 @@
-from __future__ import print_function
 from multiprocessing.pool import Pool, RUN, TERMINATE
 import multiprocessing as mp
 import threading
@@ -7,7 +6,6 @@ import sys
 from time import sleep
 
 BROKEN = 3
-DEBUG = True
 
 _local = threading.local()
 
@@ -20,10 +18,9 @@ def get_reusable_pool(*args, **kwargs):
     else:
         _pool._maintain_pool()
         if _pool._state != RUN:
-            if DEBUG:
-                print("DEBUG   - Create a new pool with {} processes as the "
-                      "previous one was in state {}"
-                      "".format(processes, _pool._state))
+            mp.util.debug("Create a new pool with {} processes as the "
+                          "previous one was in state {}"
+                          "".format(processes, _pool._state))
             with _pool.maintain_lock:
                 _pool.terminate()
             _local._pool = None
@@ -60,10 +57,9 @@ class _ReusablePool(Pool):
                     mp.util.debug('A worker have failed in some ways, we will '
                                   'flag all current jobs as failed')
                     self._clean_up_crash(worker.exitcode)
-                    print(
-                        "WARNING - Pool might be corrupted, restart it if you "
-                        "need a new queue \n" + " " * 10 +
-                        "Worker exited with error "
+                    mp.util.sub_warning(
+                        "Pool might be corrupted, restart it if you "
+                        "need a new queue. Worker exited with error "
                         "code {}".format(worker.exitcode))
                     raise BrokenPoolError(worker.exitcode)
                 self._pool.remove(worker)
@@ -85,8 +81,8 @@ class _ReusablePool(Pool):
                     return
                 sleep(delay)
             # TODO - kill -9 ?
-            print('WARNING - Terminate was called on a BROKEN pool but some'
-                  ' processes was still alive.')
+            mp.util.sub_warning("Terminate was called on a BROKEN pool but "
+                                "some processes were still alive.")
 
     def _maintain_pool(self):
         """Clean up any exited workers and start replacements for them.
@@ -134,10 +130,10 @@ class _ReusablePool(Pool):
 
     def _wait_complete(self):
         if len(self._cache) > 0:
-            print("WARNING - You are trying to resize a working pool. "
-                  "The pool will wait until\nthe jobs are finished and "
-                  "then resize it. This can slow down your code and "
-                  "you\nshould not do it!")
+            mp.util.sub_warning("You are trying to resize a working pool. "
+                                "The pool will wait until the jobs are "
+                                "finished and then resize it. This can "
+                                "slow down your code.")
         while len(self._cache) > 0:
             sleep(.1)
 
@@ -179,7 +175,7 @@ class _ReusablePool(Pool):
                 inqueue._reader.recv_bytes()
                 sleep(0)
         else:
-            print("WARNING - Unusual finish, the pool might have crashed")
+            mp.util.debug("Unusual finish, the pool might have crashed")
             while task_handler.is_alive() and inqueue._reader.poll():
                 inqueue._reader.recv_bytes()
                 sleep(0)
