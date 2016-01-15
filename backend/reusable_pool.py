@@ -155,15 +155,9 @@ class _ReusablePool(Pool):
         for p in self._pool:
             p.terminate()
 
-        # Flag all the _cached job as failed
-        success, value = (False, AbortedWorkerError(cause_msg, exitcode))
-        for k in list(self._cache.keys()):
-            result = self._cache[k]
-            if hasattr(result, '_index'):
-                while result._index != result._length:
-                    result._set(result._index, (success, value))
-            else:
-                result._set(0, (success, value))
+        # Flag all the _cached job as failed due to aborted worker
+        _ReusablePool._flag_cache(self._cache,
+                                  AbortedWorkerError(cause_msg, exitcode))
 
         # Terminate result handler by sentinel
         self._result_handler._state = TERMINATE
@@ -262,7 +256,7 @@ class _ReusablePool(Pool):
         outqueue.put(None)                  # sentinel
 
         # We must wait for the worker handler to exit before terminating
-        # workers because we don't want workers to be restarted behind our back.
+        # workers because we don't want workers to be restarted behind our back
         mp.util.debug('joining worker handler')
         if threading.current_thread() is not worker_handler:
             worker_handler.join()
@@ -281,15 +275,8 @@ class _ReusablePool(Pool):
         mp.util.debug('joining result handler')
         if threading.current_thread() is not result_handler:
             result_handler.join()
-        # Flag all the _cached job as terminated
-        success, value = (False, TerminatedPoolError())
-        for k in list(cache.keys()):
-            result = cache[k]
-            if hasattr(result, '_index'):
-                while result._index != result._length:
-                    result._set(result._index, (success, value))
-            else:
-                result._set(0, (success, value))
+        # Flag all the _cached job as terminated due to pool termination
+        cls._flag_cache(cache, TerminatedPoolError())
 
         if pool and hasattr(pool[0], 'terminate'):
             mp.util.debug('joining pool workers')
@@ -298,6 +285,18 @@ class _ReusablePool(Pool):
                     # worker has not yet exited
                     mp.util.debug('cleaning up worker %d' % p.pid)
                     p.join()
+
+    @staticmethod
+    def _flag_cache_broken(cache, err):
+        """Flag all the cached job with the given error"""
+        success, value = (False, err)
+        for k in list(cache.keys()):
+            result = cache[k]
+            if hasattr(result, '_index'):
+                while result._index != result._length:
+                    result._set(result._index, (success, value))
+            else:
+                result._set(0, (success, value))
 
 
 class AbortedWorkerError(Exception):
