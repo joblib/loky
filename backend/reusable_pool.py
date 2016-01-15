@@ -156,8 +156,8 @@ class _ReusablePool(Pool):
             p.terminate()
 
         # Flag all the _cached job as failed due to aborted worker
-        _ReusablePool._flag_cache(self._cache,
-                                  AbortedWorkerError(cause_msg, exitcode))
+        _ReusablePool._flag_cache_broken(
+            self._cache, AbortedWorkerError(cause_msg, exitcode))
 
         # Terminate result handler by sentinel
         self._result_handler._state = TERMINATE
@@ -172,22 +172,15 @@ class _ReusablePool(Pool):
         # Flag the pool as broken
         self._state = BROKEN
 
-    def _wait_complete(self):
-        if len(self._cache) > 0:
-            mp.util.sub_warning("You are trying to resize a working pool. "
-                                "The pool will wait until the jobs are "
-                                "finished and then resize it. This can "
-                                "slow down your code.")
-        while len(self._cache) > 0:
-            sleep(.1)
-
     def _resize(self, processes=None):
-        """Resize the pool to the desired number of processes
-        """
+        """Resize the pool to the desired number of processes"""
         if processes is None:
             processes = os.cpu_count() or 1
+        # Make sure we require a valid number of processes.
         if processes < 1:
             raise ValueError("Number of processes must be at least 1")
+
+        # Return if the current size is already good
         if self._processes == processes:
             return
         self._wait_complete()
@@ -207,38 +200,24 @@ class _ReusablePool(Pool):
             "Resize pool failed. Got {} extra  processes"
             "".format(processes - len(self._pool)))
 
-    @staticmethod
-    def _help_stuff_finish(inqueue, outqueue, task_handler, size):
-        # task_handler may be blocked trying to put items on inqueue
-        mp.util.debug("removing tasks from inqueue until task "
-                      "handler finished")
-        # We use a timeout to detect inqueues that was locked by a dead
-        # process and therefor will never be unlocked
-        assert(_is_started(task_handler))
-        if inqueue._rlock.acquire(timeout=.1):
-            while task_handler.is_alive() and inqueue._reader.poll():
-                inqueue._reader.recv_bytes()
-                sleep(0)
-        else:
-            mp.util.debug("inqueue is locked when terminating. "
-                          "The pool might have crashed")
-            while task_handler.is_alive() and inqueue._reader.poll():
-                inqueue._reader.recv_bytes()
-                sleep(0)
-        if outqueue._rlock.acquire(timeout=.1):
-            while task_handler.is_alive() and outqueue._reader.poll():
-                outqueue._reader.recv_bytes()
-                sleep(0)
-        else:
-            mp.util.debug("outqueue is locked when terminating. "
-                          "The pool might have crashed")
-            while task_handler.is_alive() and outqueue._reader.poll():
-                outqueue._reader.recv_bytes()
-                sleep(0)
+    def _wait_job_complete(self):
+        """Wait for the cache to be empty before resizing the pool."""
+        # Issue a warning to the user about the bad effect of this usage.
+        if len(self._cache) > 0:
+            mp.util.sub_warning("You are trying to resize a working pool. "
+                                "The pool will wait until the jobs are "
+                                "finished and then resize it. This can "
+                                "slow down your code.")
+        # Wait for the completion of the jobs
+        while len(self._cache) > 0:
+            sleep(.1)
 
     @classmethod
     def _terminate_pool(cls, taskqueue, inqueue, outqueue, pool,
                         worker_handler, task_handler, result_handler, cache):
+        """Overload the _terminate_pool method to handle outqueue and cache
+        cleaning and avoid deadlocks.
+        """
         # this is guaranteed to only be called once
         mp.util.debug('finalizing pool')
 
@@ -275,8 +254,9 @@ class _ReusablePool(Pool):
         mp.util.debug('joining result handler')
         if threading.current_thread() is not result_handler:
             result_handler.join()
-        # Flag all the _cached job as terminated due to pool termination
-        cls._flag_cache(cache, TerminatedPoolError())
+        # Flag all the _cached job as terminated has the result handler
+        # already exited. This avoid waiting for result forever.
+        cls._flag_cache_broken(cache, TerminatedPoolError())
 
         if pool and hasattr(pool[0], 'terminate'):
             mp.util.debug('joining pool workers')
@@ -287,11 +267,39 @@ class _ReusablePool(Pool):
                     p.join()
 
     @staticmethod
+    def _help_stuff_finish(inqueue, outqueue, task_handler, size):
+        """Ensure the sentinel can be sent by emptying the communication queues.
+        """
+        # task_handler may be blocked trying to put items on inqueue
+        # or sentinel in outqueue.
+        mp.util.debug("removing tasks from inqueue until task "
+                      "handler finished")
+        # We use a timeout to detect inqueues that was locked by a dead
+        # process and therefor will never be unlocked
+        _ReusablePool._empty_queue(inqueue, task_handler)
+        _ReusablePool._empty_queue(outqueue, task_handler)
+
+    @staticmethod
+    def _empty_queue(queue, task_handler):
+        """Empty a communication queue to ensure that maintainer threads will
+        not hang forever.
+        """
+        # We use a timeout to detect queue that was locked by a dead
+        # process and therefor will never be unlocked.
+        if not queue._rlock.acquire(timeout=.1):
+            mp.util.debug("queue is locked when terminating. "
+                          "The pool might have crashed.")
+        while task_handler.is_alive() and queue._reader.poll():
+            queue._reader.recv_bytes()
+            sleep(0)
+
+    @staticmethod
     def _flag_cache_broken(cache, err):
         """Flag all the cached job with the given error"""
         success, value = (False, err)
         for k in list(cache.keys()):
             result = cache[k]
+            # Handle the iterator map case to completly clean the cache
             if hasattr(result, '_index'):
                 while result._index != result._length:
                     result._set(result._index, (success, value))
