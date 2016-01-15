@@ -10,7 +10,7 @@ from nose import SkipTest
 import pytest
 from backend.reusable_pool import get_reusable_pool
 from backend.reusable_pool import AbortedWorkerError, TerminatedPoolError
-from multiprocessing import util
+import multiprocessing as mp
 from multiprocessing.pool import MaybeEncodingError
 from pickle import PicklingError, UnpicklingError
 
@@ -23,8 +23,8 @@ except ImportError:
     pass
 
 # Activate multiprocessing logging
-util.log_to_stderr()
-util._logger.setLevel(20)
+mp.util.log_to_stderr()
+mp.util._logger.setLevel(30)
 
 
 @pytest.yield_fixture
@@ -185,7 +185,7 @@ def test_crash_races(exit_on_deadlock):
     # Test for external crash signal comming from neighbor
     # with various race setup
     for i in [1, 2, 5, 17]:
-        print("# Processes ", i)
+        mp.util.debug("Test race - # Processes = {}".format(i))
         pool = get_reusable_pool(processes=i)
         pids = [p.pid for p in pool._pool]
         assert len(pids) == i
@@ -235,6 +235,9 @@ def test_rpool_resize(exit_on_deadlock):
     assert len(pool._pool) == 2
     assert old_pid in [p.pid for p in pool._pool]
 
+
+def test_kill_after_resize_call(exit_on_deadlock):
+    """Test recovery if killed after resize call"""
     # Test the pool resizing called before a kill arrive
     pool = get_reusable_pool(processes=2)
     pool.apply_async(kill_friend, (pool._pool[1].pid, .1))
@@ -258,7 +261,7 @@ def test_deadlock_kill(exit_on_deadlock):
     wait_dead(pid)
 
     pool = get_reusable_pool(processes=2)
-    pool.apply(print, ('Pool recovered from the worker crash', ))
+    assert pool.apply(sleep_identity, ((1, 0.),)) == 1
     pool.terminate()
 
 
