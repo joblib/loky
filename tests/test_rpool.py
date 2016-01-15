@@ -8,7 +8,8 @@ from faulthandler import cancel_dump_traceback_later
 from nose.tools import assert_raises
 from nose import SkipTest
 import pytest
-from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
+from backend.reusable_pool import get_reusable_pool
+from backend.reusable_pool import AbortedWorkerError, TerminatedPoolError
 from multiprocessing import util
 from multiprocessing.pool import MaybeEncodingError
 from pickle import PicklingError, UnpicklingError
@@ -23,7 +24,7 @@ except ImportError:
 
 # Activate multiprocessing logging
 util.log_to_stderr()
-util._logger.setLevel(20)
+util._logger.setLevel(10)
 
 
 @pytest.yield_fixture
@@ -125,7 +126,9 @@ class ErrorAtUnpickle(object):
         return UnpicklingError, ("Error in unpickle"), ()
 
 
-def identity(x):
+def sleep_identity(args):
+    x, delay = args
+    sleep(delay)
     return x
 
 crash_cases = [
@@ -160,7 +163,18 @@ def test_rpool_crash(exit_on_deadlock, func, args, expected_err):
 
     # Check that the pool can still be recovered
     pool = get_reusable_pool(processes=2)
-    assert pool.apply(identity, (1,)) == 1
+    assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+
+
+def test_terminate_kill(exit_on_deadlock):
+    pool = get_reusable_pool(processes=5)
+    res1 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
+    res2 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
+    assert res1.get() == list(range(50))
+    # Send sentinels and join worker process.
+    # We should get all the results
+    pool.terminate()
+    assert_raises(TerminatedPoolError, res2.get)
 
 
 def test_crash(exit_on_deadlock):
