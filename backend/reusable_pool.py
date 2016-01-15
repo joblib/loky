@@ -92,10 +92,12 @@ class _ReusablePool(Pool):
         if (self._has_started_thread("_result_handler") and
                 not self._result_handler.is_alive()):
             self._clean_up_crash(cause_msg=CRASH_RESULT_HANDLER)
+            print('\n\nPool kill by result_handler')
             raise _BrokenPoolError(worker.exitcode)
         if (self._has_started_thread("_task_handler") and
                 not self._task_handler.is_alive()):
             self._clean_up_crash(cause_msg=CRASH_TASK_HANDLER)
+            print('\n\nPool kill by taskhandler')
             raise _BrokenPoolError(worker.exitcode)
         return cleaned
 
@@ -117,6 +119,11 @@ class _ReusablePool(Pool):
             # TODO - kill -9 ?
             mp.util.sub_warning("Terminate was called on a BROKEN pool but "
                                 "some processes were still alive.")
+            for p in self._pool:
+                print(p.name, "alive: ", p.exitcode is None)
+            print("Result handler alive: ", self._result_handler.is_alive())
+            print("Task handler alive: ", self._task_handler.is_alive())
+
 
     def _maintain_pool(self):
         """Clean up any exited workers and start replacements for them.
@@ -214,58 +221,6 @@ class _ReusablePool(Pool):
             while task_handler.is_alive() and inqueue._reader.poll():
                 inqueue._reader.recv_bytes()
                 sleep(0)
-
-    @staticmethod
-    def _handle_tasks(taskqueue, put, outqueue, pool, cache):
-        thread = threading.current_thread()
-
-        for taskseq, set_length in iter(taskqueue.get, None):
-            task = None
-            i = -1
-            try:
-                for i, task in enumerate(taskseq):
-                    if thread._state == RUN:
-                        mp.util.debug(
-                            'task handler found thread._state != RUN')
-                        break
-                    try:
-                        put(task)
-                    except Exception as e:
-                        job, ind = task[:2]
-                        try:
-                            cache[job]._set(ind, (False, e))
-                        except KeyError:
-                            pass
-                else:
-                    if set_length:
-                        mp.util.debug('doing set_length()')
-                        set_length(i+1)
-                    continue
-                break
-            except Exception as ex:
-                job, ind = task[:2] if task else (0, 0)
-                if job in cache:
-                    cache[job]._set(ind + 1, (False, ex))
-                if set_length:
-                    mp.util.debug('doing set_length()')
-                    set_length(i+1)
-        else:
-            mp.util.debug('task handler got sentinel')
-
-        try:
-            if pool._state != BROKEN:
-                # tell result handler to finish when cache is empty
-                mp.util.debug('task handler sending sentinel '
-                              'to result handler')
-                outqueue.put(None)
-                # tell workers there is no more work
-                mp.util.debug('task handler sending sentinel to workers')
-                for p in pool:
-                    put(None)
-        except OSError:
-            mp.util.debug('task handler got OSError when sending sentinels')
-
-        mp.util.debug('task handler exiting')
 
 
 class AbortedWorkerError(Exception):

@@ -12,6 +12,16 @@ from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
 from multiprocessing import util
 from multiprocessing.pool import MaybeEncodingError
 from pickle import PicklingError, UnpicklingError
+
+# Backward compat for python2 cPickle module
+PICKLING_ERRORS = (PicklingError,)
+try:
+    import cPickle
+    PICKLING_ERRORS += (cPickle.PicklingError,)
+except ImportError:
+    pass
+
+# Activate multiprocessing logging
 util.log_to_stderr()
 util._logger.setLevel(20)
 
@@ -115,64 +125,50 @@ class ErrorAtUnpickle(object):
         return UnpicklingError, ("Error in unpickle"), ()
 
 
-def exit_on_result_pickle():
-    return ExitAtPickle()
+def identity(x):
+    return x
+
+crash_cases = [
+            # Check problem occuring while pickling a task in
+            # the task_handler thread
+            (id, (ExitAtPickle(),), AbortedWorkerError),
+            (id, (ErrorAtPickle(),), PICKLING_ERRORS),
+            # Check problem occuring while unpickling a task on workers
+            (id, (ExitAtUnpickle(),), AbortedWorkerError),
+            (id, (ErrorAtUnpickle(),), PICKLING_ERRORS),
+            (id, (CrashAtUnpickle(),), AbortedWorkerError),
+            # Check problem occuring during function execution on workers
+            (crash, (), AbortedWorkerError),
+            (exit, (), AbortedWorkerError),
+            (raise_error, (), RuntimeError),
+            # Check problem occuring while pickling a task result on workers
+            (return_instance, (CrashAtPickle,), AbortedWorkerError),
+            (return_instance, (ExitAtPickle,), AbortedWorkerError),
+            (return_instance, (ErrorAtPickle,), MaybeEncodingError),
+            # Check problem occuring while unpickling a task in
+            # the result_handler thread
+            (return_instance, (ExitAtUnpickle,), AbortedWorkerError),
+            (return_instance, (ErrorAtUnpickle,), MaybeEncodingError),
+]
 
 
-def crash_on_result_pickle():
-    return CrashAtPickle()
+@pytest.mark.parametrize("func, args, expected_err", crash_cases)
+def test_rpool_crash(exit_on_deadlock, func, args, expected_err):
+    pool = get_reusable_pool(processes=2)
+    res = pool.apply_async(func, args)
+    assert_raises(expected_err, res.get)
+
+    # Check that the pool can still be recovered
+    pool = get_reusable_pool(processes=2)
+    assert pool.apply(identity, (1,)) == 1
 
 
 def test_crash(exit_on_deadlock):
     """Test the crash handling in pool"""
-    # Test the return value of crashing, exiting and erroring functions
-    for func, err in [(crash, AbortedWorkerError),
-                      (exit, AbortedWorkerError),
-                      (crash_on_result_pickle, AbortedWorkerError),
-                      (exit_on_result_pickle, AbortedWorkerError),
-                      (raise_error, RuntimeError)]:
-        pool = get_reusable_pool(processes=2)
-        res = pool.apply_async(func, tuple())
-        assert_raises(err, res.get)
-
-    # Crash a worker at unpickling time
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(id, CrashAtUnpickle())
-    assert_raises(AbortedWorkerError, res.get)
-
-    # Exit a worker at unpickling time
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(id, ExitAtUnpickle())
-    assert_raises(AbortedWorkerError, res.get)
-
-    # Exit the result handler at unpickling time
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(return_instance, (ExitAtUnpickle,))
-    assert_raises(AbortedWorkerError, res.get)
-
-    # Exit the task handler at pickling time
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(work_sleep, (ExitAtPickle(),))
-    assert_raises(AbortedWorkerError, res.get)
-
-    # Exit the task handler at pickling time
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(work_sleep, (ErrorAtPickle(),))
-    assert_raises(PicklingError, res.get)
-
-    # Exit the worker at pickling time
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(return_instance, (ExitAtPickle,))
-    assert_raises(AbortedWorkerError, res.get)
-
-    # Exit the task handler at pickling time
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(return_instance, (ErrorAtPickle,))
-    assert_raises(MaybeEncodingError, res.get)
-
     # Test for external crash signal comming from neighbor
     # with various race setup
     for i in [1, 2, 5, 17]:
+        print("# Processes ", i)
         pool = get_reusable_pool(processes=i)
         pids = [p.pid for p in pool._pool]
         assert len(pids) == i
