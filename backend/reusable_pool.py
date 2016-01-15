@@ -46,7 +46,10 @@ def get_reusable_pool(*args, **kwargs):
             _local._pool = None
             return get_reusable_pool(*args, **kwargs)
         else:
-            _pool._resize(processes)
+            if _pool._resize(processes):
+                return _pool
+            return get_reusable_pool(*args, **kwargs)
+
     return _pool
 
 
@@ -182,8 +185,15 @@ class _ReusablePool(Pool):
 
         # Return if the current size is already good
         if self._processes == processes:
-            return
-        self._wait_complete()
+            return True
+
+        # Wait for the current job to finish and ensure that they did not
+        # break the pool in the process
+        self._wait_job_complete()
+        self._maintain_pool()
+        if self._state != RUN:
+            return False
+
         self._processes = processes
         if len(self._pool) > processes:
             # Sentinel excess workers, they will terminate and
@@ -199,6 +209,7 @@ class _ReusablePool(Pool):
         assert processes == len(self._pool), (
             "Resize pool failed. Got {} extra  processes"
             "".format(processes - len(self._pool)))
+        return True
 
     def _wait_job_complete(self):
         """Wait for the cache to be empty before resizing the pool."""
