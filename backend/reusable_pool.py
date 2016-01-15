@@ -52,6 +52,14 @@ class _ReusablePool(Pool):
             super(_ReusablePool, self).__init__(
                 processes, initializer, initargs, maxtasksperchild)
 
+    def _has_started_thread(self, thread_name):
+        thread = getattr(self, thread_name, None)
+        if hasattr(thread, "_started"):
+            return thread._started.is_set()
+        if hasattr(thread, "_Thread__started"):
+            return thread._Thread__started.is_set()
+        return False
+
     def _join_exited_workers(self):
         """Cleanup after any worker processes which have exited due to reaching
         their specified lifetime.  Returns True if any workers were cleaned up.
@@ -66,16 +74,17 @@ class _ReusablePool(Pool):
                 if worker.exitcode != 0:
                     mp.util.debug('A worker have failed in some ways, we will '
                                   'flag all current jobs as failed')
-                    self._clean_up_crash(cause_msg=CRASH_RESULT_HANDLER,
+                    self._clean_up_crash(cause_msg=CRASH_WORKER,
                                          exitcode=worker.exitcode)
                     mp.util.sub_warning(
                         "Pool might be corrupted. Worker exited with "
                         "error code {}".format(worker.exitcode))
                     raise _BrokenPoolError(worker.exitcode)
                 self._pool.remove(worker)
-        if (hasattr(self, '_result_handler') and
+        if (self._has_started_thread("_result_handler") and
                 not self._result_handler.is_alive()):
             self._clean_up_crash(cause_msg=CRASH_RESULT_HANDLER)
+            raise _BrokenPoolError(worker.exitcode)
         return cleaned
 
     def terminate(self):

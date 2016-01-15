@@ -11,7 +11,7 @@ from nose import SkipTest
 from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
 from multiprocessing import util
 util.log_to_stderr()
-util._logger.setLevel(20)
+util._logger.setLevel(10)
 
 
 def setup_faulthandler():
