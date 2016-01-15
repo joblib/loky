@@ -71,8 +71,9 @@ def work_sleep(arg):
     return res
 
 
-def kill_friend(pid):
+def kill_friend(pid, delay=0):
     """Function that send SIGKILL at process pid"""
+    sleep(delay)
     os.kill(pid, 9)
 
 
@@ -232,6 +233,11 @@ def test_rpool_resize(exit_on_deadlock):
     assert len(pool._pool) == 2
     assert old_pid in [p.pid for p in pool._pool]
 
+    # Test the pool resizing called before a kill arrive
+    pool = get_reusable_pool(processes=2)
+    pool.apply_async(kill_friend, (pool._pool[1].pid, .1))
+    pool = get_reusable_pool(processes=1)
+    assert pool.apply(sleep_identity, ((1, 0.),)) == 1
     pool.terminate()
 
 
