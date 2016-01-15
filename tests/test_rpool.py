@@ -63,10 +63,26 @@ def return_instance(cls):
     return cls()
 
 
+class CrashAtPickle(object):
+    """Bad object that triggers a segfault at pickling time."""
+    def __reduce__(self):
+        crash()
+
+
 class CrashAtUnpickle(object):
     """Bad object that triggers a segfault at unpickling time."""
     def __reduce__(self):
         return crash, (), ()
+
+
+def crash_on_result_pickle():
+    return CrashAtPickle()
+
+
+class ExitAtPickle(object):
+    """Bad object that triggers a segfault at pickling time."""
+    def __reduce__(self):
+        exit()
 
 
 class ExitAtUnpickle(object):
@@ -75,13 +91,17 @@ class ExitAtUnpickle(object):
         return exit, (), ()
 
 
-def test_crash():
-    """Test crash handling in pool"""
+def exit_on_result_pickle():
+    return ExitAtPickle()
 
-    # Test the return value of crashing, exiting
-    # and erroring functions
+
+def test_crash():
+    """Test the crash handling in pool"""
+    # Test the return value of crashing, exiting and erroring functions
     for func, err in [(crash, AbortedWorkerError),
                       (exit, AbortedWorkerError),
+                      # (crash_on_result_pickle, AbortedWorkerError),
+                      (exit_on_result_pickle, AbortedWorkerError),
                       (raise_error, RuntimeError)]:
         pool = get_reusable_pool(processes=2)
         res = pool.apply_async(func, tuple())
