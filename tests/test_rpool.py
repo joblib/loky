@@ -10,8 +10,10 @@ from nose import SkipTest
 import pytest
 from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
 from multiprocessing import util
+from multiprocessing.pool import MaybeEncodingError
+from pickle import PicklingError, UnpicklingError
 util.log_to_stderr()
-util._logger.setLevel(10)
+util._logger.setLevel(20)
 
 
 @pytest.yield_fixture
@@ -72,6 +74,10 @@ def return_instance(cls):
     """Function that returns a instance of cls"""
     return cls()
 
+def do_nothing(arg):
+    """Function that return True, test passing argument"""
+    return True
+
 
 class CrashAtPickle(object):
     """Bad object that triggers a segfault at pickling time."""
@@ -83,10 +89,6 @@ class CrashAtUnpickle(object):
     """Bad object that triggers a segfault at unpickling time."""
     def __reduce__(self):
         return crash, (), ()
-
-
-def crash_on_result_pickle():
-    return CrashAtPickle()
 
 
 class ExitAtPickle(object):
@@ -101,8 +103,24 @@ class ExitAtUnpickle(object):
         return exit, (), ()
 
 
+class ErrorAtPickle(object):
+    """Bad object that triggers a segfault at pickling time."""
+    def __reduce__(self):
+        raise PicklingError("Error in pickle")
+
+
+class ErrorAtUnpickle(object):
+    """Bad object that triggers a process exit at unpickling time."""
+    def __reduce__(self):
+        return UnpicklingError, ("Error in unpickle"), ()
+
+
 def exit_on_result_pickle():
     return ExitAtPickle()
+
+
+def crash_on_result_pickle():
+    return CrashAtPickle()
 
 
 def test_crash(exit_on_deadlock):
@@ -110,7 +128,7 @@ def test_crash(exit_on_deadlock):
     # Test the return value of crashing, exiting and erroring functions
     for func, err in [(crash, AbortedWorkerError),
                       (exit, AbortedWorkerError),
-                      # (crash_on_result_pickle, AbortedWorkerError),
+                      (crash_on_result_pickle, AbortedWorkerError),
                       (exit_on_result_pickle, AbortedWorkerError),
                       (raise_error, RuntimeError)]:
         pool = get_reusable_pool(processes=2)
@@ -131,6 +149,26 @@ def test_crash(exit_on_deadlock):
     pool = get_reusable_pool(processes=2)
     res = pool.apply_async(return_instance, (ExitAtUnpickle,))
     assert_raises(AbortedWorkerError, res.get)
+
+    # Exit the task handler at pickling time
+    pool = get_reusable_pool(processes=2)
+    res = pool.apply_async(work_sleep, (ExitAtPickle(),))
+    assert_raises(AbortedWorkerError, res.get)
+
+    # Exit the task handler at pickling time
+    pool = get_reusable_pool(processes=2)
+    res = pool.apply_async(work_sleep, (ErrorAtPickle(),))
+    assert_raises(PicklingError, res.get)
+
+    # Exit the worker at pickling time
+    pool = get_reusable_pool(processes=2)
+    res = pool.apply_async(return_instance, (ExitAtPickle,))
+    assert_raises(AbortedWorkerError, res.get)
+
+    # Exit the task handler at pickling time
+    pool = get_reusable_pool(processes=2)
+    res = pool.apply_async(return_instance, (ErrorAtPickle,))
+    assert_raises(MaybeEncodingError, res.get)
 
     # Test for external crash signal comming from neighbor
     # with various race setup

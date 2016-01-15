@@ -15,9 +15,19 @@ CRASH_WORKER = ("A process was killed during the execution "
                 "a multiprocessing job.")
 CRASH_RESULT_HANDLER = ("The result handler crashed. This is probably"
                         "due to a result unpickling error.")
+CRASH_TASK_HANDLER = ("The task handler crashed. This is probably"
+                      "due to a result pickling error.")
 
 # Protect the queue fro being reused
 _local = threading.local()
+
+
+# Check if a thread has been started
+def _is_started(thread):
+    if hasattr(thread, "_started"):
+        return thread._started.is_set()
+    # Backward compat for python 2.7
+    return thread._Thread__started.is_set()
 
 
 def get_reusable_pool(*args, **kwargs):
@@ -54,10 +64,8 @@ class _ReusablePool(Pool):
 
     def _has_started_thread(self, thread_name):
         thread = getattr(self, thread_name, None)
-        if hasattr(thread, "_started"):
-            return thread._started.is_set()
-        if hasattr(thread, "_Thread__started"):
-            return thread._Thread__started.is_set()
+        if thread is not None:
+            return _is_started(thread)
         return False
 
     def _join_exited_workers(self):
@@ -84,6 +92,10 @@ class _ReusablePool(Pool):
         if (self._has_started_thread("_result_handler") and
                 not self._result_handler.is_alive()):
             self._clean_up_crash(cause_msg=CRASH_RESULT_HANDLER)
+            raise _BrokenPoolError(worker.exitcode)
+        if (self._has_started_thread("_task_handler") and
+                not self._task_handler.is_alive()):
+            self._clean_up_crash(cause_msg=CRASH_TASK_HANDLER)
             raise _BrokenPoolError(worker.exitcode)
         return cleaned
 
@@ -141,9 +153,12 @@ class _ReusablePool(Pool):
 
         # Terminate result handler by sentinel
         self._result_handler._state = TERMINATE
-        # This Avoids deadlock caused by putting a sentinel in the outqueue
+
+        # This avoids deadlock caused by putting a sentinel in the outqueue
         # as it might be locked by a dead worker
         self._outqueue._wlock = None
+        if sys.version_info[:2] < (3, 4):
+            self._outqueue._make_methods()
 
         # Flag the pool as broken
         self._state = BROKEN
