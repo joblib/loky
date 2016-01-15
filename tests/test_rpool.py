@@ -8,6 +8,7 @@ from nose import SkipTest
 from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
 from multiprocessing import util
 util.log_to_stderr()
+util._logger.setLevel(20)
 
 
 def wait_dead(pid, n_tries=1000, delay=0.001):
@@ -57,6 +58,11 @@ def raise_error():
     raise RuntimeError('bad except')
 
 
+def return_instance(cls):
+    """Function that returns a instance of cls"""
+    return cls()
+
+
 class CrashAtUnpickle(object):
     """Bad object that triggers a segfault at unpickling time."""
     def __reduce__(self):
@@ -91,7 +97,13 @@ def test_crash():
     res = pool.apply_async(id, ExitAtUnpickle())
     assert_raises(AbortedWorkerError, res.get)
 
-    # Test for external signal comming from neighbor
+    # Exit the result handler at unpickling time
+    pool = get_reusable_pool(processes=2)
+    res = pool.apply_async(return_instance, (ExitAtUnpickle,))
+    assert_raises(AbortedWorkerError, res.get)
+
+    # Test for external crash signal comming from neighbor
+    # with various race setup
     for i in [1, 2, 5, 17]:
         pool = get_reusable_pool(processes=i)
         pids = [p.pid for p in pool._pool]
