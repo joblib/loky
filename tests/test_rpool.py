@@ -6,20 +6,19 @@ from time import sleep
 from faulthandler import dump_traceback_later
 from faulthandler import cancel_dump_traceback_later
 from nose.tools import assert_raises
-from nose.tools import with_setup
 from nose import SkipTest
+import pytest
 from backend.reusable_pool import get_reusable_pool, AbortedWorkerError
 from multiprocessing import util
 util.log_to_stderr()
 util._logger.setLevel(10)
 
 
-def setup_faulthandler():
-    dump_traceback_later(timeout=10, exit=True)
-
-
-dump_and_exit_on_deadlock = with_setup(setup_faulthandler,
-                                       cancel_dump_traceback_later)
+@pytest.yield_fixture
+def exit_on_deadlock():
+    dump_traceback_later(timeout=5, exit=True)
+    yield
+    cancel_dump_traceback_later()
 
 
 def wait_dead(pid, n_tries=1000, delay=0.001):
@@ -106,8 +105,7 @@ def exit_on_result_pickle():
     return ExitAtPickle()
 
 
-@dump_and_exit_on_deadlock
-def test_crash():
+def test_crash(exit_on_deadlock):
     """Test the crash handling in pool"""
     # Test the return value of crashing, exiting and erroring functions
     for func, err in [(crash, AbortedWorkerError),
@@ -157,8 +155,7 @@ def test_crash():
     pool.terminate()
 
 
-@dump_and_exit_on_deadlock
-def test_rpool_resize():
+def test_rpool_resize(exit_on_deadlock):
     """Test the resize function in reusable_pool"""
 
     pool = get_reusable_pool(processes=2)
@@ -196,8 +193,7 @@ def test_invalid_process_number():
     assert_raises(ValueError, get_reusable_pool, processes=-1)
 
 
-@dump_and_exit_on_deadlock
-def test_deadlock_kill():
+def test_deadlock_kill(exit_on_deadlock):
     """Create a deadlock in pool by killing the lock owner."""
     pool = get_reusable_pool(processes=1)
     pid = pool._pool[0].pid
@@ -210,8 +206,7 @@ def test_deadlock_kill():
     pool.terminate()
 
 
-@dump_and_exit_on_deadlock
-def test_freeze():
+def test_freeze(exit_on_deadlock):
     """Test no freeze on OSX with Accelerate"""
     raise SkipTest('Known failure')
     import numpy as np

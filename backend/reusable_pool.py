@@ -141,7 +141,7 @@ class _ReusablePool(Pool):
 
         # Terminate result handler by sentinel
         self._result_handler._state = TERMINATE
-        # This Avois deadlock caused by putting a sentinel in the outqueue
+        # This Avoids deadlock caused by putting a sentinel in the outqueue
         # as it might be locked by a dead worker
         self._outqueue._wlock = None
 
