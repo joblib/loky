@@ -5,8 +5,18 @@ import os
 import sys
 from time import sleep
 
+
+# Additional state to flag the pool as unusable
+# with unsafe terminate function
 BROKEN = 3
 
+#
+CRASH_WORKER = ("A process was killed during the execution "
+                "a multiprocessing job.")
+CRASH_RESULT_HANDLER = ("The result handler crashed. This is probably"
+                        "due to a result unpickling error.")
+
+# Protect the queue fro being reused
 _local = threading.local()
 
 
@@ -56,13 +66,16 @@ class _ReusablePool(Pool):
                 if worker.exitcode != 0:
                     mp.util.debug('A worker have failed in some ways, we will '
                                   'flag all current jobs as failed')
-                    self._clean_up_crash(worker.exitcode)
+                    self._clean_up_crash(cause_msg=CRASH_RESULT_HANDLER,
+                                         exitcode=worker.exitcode)
                     mp.util.sub_warning(
-                        "Pool might be corrupted, restart it if you "
-                        "need a new queue. Worker exited with error "
-                        "code {}".format(worker.exitcode))
-                    raise BrokenPoolError(worker.exitcode)
+                        "Pool might be corrupted. Worker exited with "
+                        "error code {}".format(worker.exitcode))
+                    raise _BrokenPoolError(worker.exitcode)
                 self._pool.remove(worker)
+        if (hasattr(self, '_result_handler') and
+                not self._result_handler.is_alive()):
+            self._clean_up_crash(cause_msg=CRASH_RESULT_HANDLER)
         return cleaned
 
     def terminate(self):
@@ -93,10 +106,10 @@ class _ReusablePool(Pool):
                         (self._processes >= len(self._pool))) and
                         self._state != BROKEN):
                     self._repopulate_pool()
-        except BrokenPoolError:
+        except _BrokenPoolError:
             pass
 
-    def _clean_up_crash(self, exitcode):
+    def _clean_up_crash(self, cause_msg, exitcode=None):
         if self._state == BROKEN:
             return
         # Terminate tasks handler by sentinel
@@ -108,9 +121,7 @@ class _ReusablePool(Pool):
             p.terminate()
 
         # Flag all the _cached job as failed
-        success, value = (False, AbortedWorkerError(
-            'A process was killed during the execution '
-            'a multiprocessing job.', exitcode))
+        success, value = (False, AbortedWorkerError(cause_msg, exitcode))
         for k in list(self._cache.keys()):
             result = self._cache[k]
             if hasattr(result, '_index'):
@@ -242,13 +253,18 @@ class AbortedWorkerError(Exception):
         self.args = [repr(self)]
 
     def __repr__(self):
-        return '{} with exitcode {}'.format(self.msg, self.exitcode)
+        format_exitcode = ''
+        if self.exitcode is not None and self.exitcode < 0:
+            format_exitcode = ' with signal {}'.format(-self.exitcode)
+        if self.exitcode is not None and self.exitcode > 0:
+            format_exitcode = ' with exitcode {}'.format(self.exitcode)
+        return self.msg + format_exitcode
 
 
-class BrokenPoolError(Exception):
+class _BrokenPoolError(Exception):
     """A worker was aborted"""
     def __init__(self, exitcode):
-        super(BrokenPoolError, self).__init__()
+        super(_BrokenPoolError, self).__init__()
         self.exitcode = exitcode
         self.args = [repr(self)]
 
