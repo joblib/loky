@@ -24,7 +24,7 @@ except ImportError:
 
 # Activate multiprocessing logging
 util.log_to_stderr()
-util._logger.setLevel(10)
+util._logger.setLevel(20)
 
 
 @pytest.yield_fixture
@@ -157,7 +157,8 @@ crash_cases = [
 
 
 @pytest.mark.parametrize("func, args, expected_err", crash_cases)
-def test_rpool_crash(exit_on_deadlock, func, args, expected_err):
+def test_crashes(exit_on_deadlock, func, args, expected_err):
+    """Test various reusable_pool crash handling"""
     pool = get_reusable_pool(processes=2)
     res = pool.apply_async(func, args)
     assert_raises(expected_err, res.get)
@@ -168,6 +169,7 @@ def test_rpool_crash(exit_on_deadlock, func, args, expected_err):
 
 
 def test_terminate_kill(exit_on_deadlock):
+    """Test reusable_pool termination handling"""
     pool = get_reusable_pool(processes=5)
     res1 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
     res2 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
@@ -178,8 +180,8 @@ def test_terminate_kill(exit_on_deadlock):
     assert_raises(TerminatedPoolError, res2.get)
 
 
-def test_crash(exit_on_deadlock):
-    """Test the crash handling in pool"""
+def test_crash_races(exit_on_deadlock):
+    """Test the race conditions in reusable_pool crash handling"""
     # Test for external crash signal comming from neighbor
     # with various race setup
     for i in [1, 2, 5, 17]:
@@ -205,7 +207,7 @@ def test_crash(exit_on_deadlock):
 
 
 def test_rpool_resize(exit_on_deadlock):
-    """Test the resize function in reusable_pool"""
+    """Test reusable_pool resizing"""
 
     pool = get_reusable_pool(processes=2)
 
@@ -248,7 +250,7 @@ def test_invalid_process_number():
 
 
 def test_deadlock_kill(exit_on_deadlock):
-    """Create a deadlock in pool by killing the lock owner."""
+    """Test deadlock recovery for reusable_pool"""
     pool = get_reusable_pool(processes=1)
     pid = pool._pool[0].pid
     pool = get_reusable_pool(processes=2)
