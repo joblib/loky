@@ -28,7 +28,6 @@ def crash():
     while True:
         j[c] = i
         c += 1
-    j
 
 
 def exit():
