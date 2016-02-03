@@ -246,7 +246,8 @@ class _ReusablePool(Pool):
         mp.util.debug('helping task handler/workers to finish')
         # Flush both inqueue and outqueue to ensure that the task_handler
         # does not get blocked.
-        cls._help_stuff_finish(inqueue, outqueue, task_handler, len(pool))
+        cls._help_stuff_finish(inqueue, outqueue, task_handler, result_handler,
+                               pool, cache)
 
         assert result_handler.is_alive() or len(cache) == 0
 
@@ -286,16 +287,37 @@ class _ReusablePool(Pool):
                     p.join()
 
     @staticmethod
-    def _help_stuff_finish(inqueue, outqueue, task_handler, size):
+    def _help_stuff_finish(inqueue, outqueue, task_handler, result_handler,
+                           pool, cache):
         """Ensure the sentinel can be sent by emptying the communication queues.
         """
         # task_handler may be blocked trying to put items on inqueue
         # or sentinel in outqueue.
         mp.util.debug("removing tasks from inqueue until task "
                       "handler finished")
-        # We use a timeout to detect inqueues that was locked by a dead
-        # process and therefor will never be unlocked
         _ReusablePool._empty_queue(inqueue, task_handler)
+
+        # at this point, no worker should be running and thus we flag the
+        # remaining cache as with the TerminatedPoolError and kill remaining
+        # workers
+        _ReusablePool._flag_cache_broken(cache, TerminatedPoolError)
+        if pool and hasattr(pool[0], 'terminate'):
+            mp.util.debug('terminating workers')
+            for p in pool:
+                if p.exitcode is None:
+                    p.terminate()
+
+        mp.util.debug("removing tasks from outqueue until task "
+                      "handler finished")
+        # Ensure that the results handler quit before emptying the outqueue
+        # to avoid simultaneaous call to read on outqueue
+        outqueue._wlock = None
+        if sys.version_info[:2] < (3, 4):
+            outqueue._make_methods()
+        while result_handler.is_alive():
+            outqueue.put(None)
+            mp.util.debug("Sent sentinel to result_handler")
+            sleep(.001)
         _ReusablePool._empty_queue(outqueue, task_handler)
 
     @staticmethod

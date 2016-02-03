@@ -24,7 +24,7 @@ except ImportError:
 
 # Activate multiprocessing logging
 mp.util.log_to_stderr()
-mp.util._logger.setLevel(30)
+mp.util._logger.setLevel(10)
 
 
 @pytest.yield_fixture
@@ -172,7 +172,7 @@ def test_terminate_kill(exit_on_deadlock):
     """Test reusable_pool termination handling"""
     pool = get_reusable_pool(processes=5)
     res1 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
-    res2 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
+    res2 = pool.map_async(sleep_identity, [(i, 0.002) for i in range(50)])
     assert res1.get() == list(range(50))
     # Send sentinels and join worker process.
     # We should get all the results
