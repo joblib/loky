@@ -2,6 +2,7 @@ from __future__ import print_function
 import os
 import sys
 import psutil
+import warnings
 from time import sleep
 from faulthandler import dump_traceback_later
 from faulthandler import cancel_dump_traceback_later
@@ -174,8 +175,8 @@ def test_terminate_kill(exit_on_deadlock):
     res1 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
     res2 = pool.map_async(sleep_identity, [(i, 0.002) for i in range(50)])
     assert res1.get() == list(range(50))
-    # Send sentinels and join worker process.
-    # We should get all the results
+    # We should get an error as the pool terminated before we fetched
+    # the results from the operation.
     pool.terminate()
     assert_raises(TerminatedPoolError, res2.get)
 
@@ -216,10 +217,12 @@ def test_rpool_resize(exit_on_deadlock):
     # while there are on going works.
     pids = [p.pid for p in pool._pool]
     res = pool.apply_async(work_sleep, ((.5, pids),))
-    pool = get_reusable_pool(processes=1)
-    assert res.get(), "Resize should wait for current processes to finish"
-    assert len(pool._pool) == 1
-    assert pool._pool[0].pid in pids
+    with warnings.catch_warnings(record=True) as w:
+        pool = get_reusable_pool(processes=1)
+        assert res.get(), "Resize should wait for current processes to finish"
+        assert len(pool._pool) == 1
+        assert pool._pool[0].pid in pids
+        assert len(w) == 1
 
     # Requesting the same number of process should not impact the pool nor
     # kill the processed

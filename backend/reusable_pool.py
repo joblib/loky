@@ -1,6 +1,7 @@
 from multiprocessing.pool import Pool, RUN, TERMINATE
 import multiprocessing as mp
 import threading
+import warnings
 import os
 import sys
 from time import sleep
@@ -129,11 +130,10 @@ class _ReusablePool(Pool):
                     return
                 sleep(delay)
             # TODO - kill -9 ?
-            print('\n\n' + '=' * 79)
             mp.util.sub_warning("Terminate was called on a BROKEN pool but "
                                 "some processes were still alive.")
 
-    def _maintain_pool(self, caller='worker_handler'):
+    def _maintain_pool(self):
         """Clean up any exited workers and start replacements for them.
         """
         try:
@@ -219,10 +219,10 @@ class _ReusablePool(Pool):
         """Wait for the cache to be empty before resizing the pool."""
         # Issue a warning to the user about the bad effect of this usage.
         if len(self._cache) > 0:
-            mp.util.sub_warning("You are trying to resize a working pool. "
-                                "The pool will wait until the jobs are "
-                                "finished and then resize it. This can "
-                                "slow down your code.")
+            warnings.warn("You are trying to resize a working pool. "
+                          "The pool will wait until the jobs are "
+                          "finished and then resize it. This can "
+                          "slow down your code.", UserWarning)
         # Wait for the completion of the jobs
         while len(self._cache) > 0:
             sleep(.1)
@@ -329,7 +329,7 @@ class _ReusablePool(Pool):
         # process and therefor will never be unlocked.
         if not queue._rlock.acquire(timeout=.1):
             mp.util.debug("queue is locked when terminating. "
-                          "The pool might have crashed.")
+                          "The pool is probably broken.")
         while task_handler.is_alive() and queue._reader.poll():
             queue._reader.recv_bytes()
             sleep(0)
