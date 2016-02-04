@@ -74,6 +74,7 @@ class _ReusablePool(Pool):
         self._result_handler.name = 'ResultHandler-{}'.format(id_pool)
         self._task_handler.name = 'TaskHandler-{}'.format(id_pool)
         self._worker_handler.name = 'WorkerrHandler-{}'.format(id_pool)
+        mp.util.debug("Just created pool #{}".format(self.id_pool))
 
     def _has_started_thread(self, thread_name):
         thread = getattr(self, thread_name, None)
@@ -113,6 +114,7 @@ class _ReusablePool(Pool):
         return cleaned
 
     def terminate(self):
+        mp.util.debug("Called terminate on pool #{}".format(self.id_pool))
         if self._state != BROKEN:
             self._maintain_pool()
         if self._state != BROKEN:
@@ -153,26 +155,33 @@ class _ReusablePool(Pool):
         self._state = BROKEN
 
         # Terminate the worker handler thread
+        mp.util.debug("set terminate state for worker_handler and workers")
         self._worker_handler._state = TERMINATE
         for p in self._pool:
             p.terminate()
 
         # Flag all the _cached job as failed due to aborted worker
+        mp.util.debug("flag the cache as broken")
         _ReusablePool._flag_cache_broken(
             self._cache, AbortedWorkerError(cause_msg, exitcode))
 
         # Terminate result handler by sentinel
+        mp.util.debug("set terminate state for result_handler")
         self._result_handler._state = TERMINATE
 
         # This avoids deadlock caused by putting a sentinel in the outqueue
         # as it might be locked by a dead worker
+        mp.util.debug("send sentinel for result_handler")
         self._outqueue._wlock = None
         if sys.version_info[:2] < (3, 4):
             self._outqueue._make_methods()
         self._outqueue.put(None)
 
         # Terminate tasks handler by sentinel
+        mp.util.debug("send sentinel for task_handler")
         self._taskqueue.put(None)
+
+        mp.util.debug("end _clean_up_crash")
 
     def _resize(self, processes=None):
         """Resize the pool to the desired number of processes"""
