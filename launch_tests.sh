@@ -16,12 +16,9 @@ do
 	tox $args 2>$AUXFILE
 	ret_val=$?
 
-	if [[ $c -ge $max_test || $ret_val -ne 0 ]]
-	then 
-		sed -n -e '/[Pp]ool /!p' -i $AUXFILE 
-		cat $AUXFILE
-    	rm $AUXFILE
-		break
-	fi
-    rm $AUXFILE
+	test $ret_val -ne 0 && cat $AUXFILE
+	rm $AUXFILE
+
+	# Break if one test fail or if we reached the $max_test value
+	test $c -ge $max_test -o $ret_val -ne 0 && break
 done
