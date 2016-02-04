@@ -87,6 +87,7 @@ def return_instance(cls):
     """Function that returns a instance of cls"""
     return cls()
 
+
 def do_nothing(arg):
     """Function that return True, test passing argument"""
     return True
@@ -216,7 +217,8 @@ def test_rpool_resize(exit_on_deadlock):
     # old one as it is still in a good shape. The resize should not occur
     # while there are on going works.
     pids = [p.pid for p in pool._pool]
-    res = pool.apply_async(work_sleep, ((.5, pids),))
+    res = pool.apply_async(work_sleep, ((.1, pids),))
+    warnings.filterwarnings("always", category=UserWarning)
     with warnings.catch_warnings(record=True) as w:
         pool = get_reusable_pool(processes=1)
         assert res.get(), "Resize should wait for current processes to finish"
