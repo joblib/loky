@@ -25,7 +25,7 @@ except ImportError:
 
 # Activate multiprocessing logging
 mp.util.log_to_stderr()
-mp.util._logger.setLevel(10)
+mp.util._logger.setLevel(5)
 
 
 @pytest.yield_fixture
@@ -168,6 +168,7 @@ def test_crashes(exit_on_deadlock, func, args, expected_err):
     # Check that the pool can still be recovered
     pool = get_reusable_pool(processes=2)
     assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+    pool.terminate()
 
 
 def test_terminate_kill(exit_on_deadlock):
@@ -239,6 +240,7 @@ def test_rpool_resize(exit_on_deadlock):
     pool = get_reusable_pool(processes=2)
     assert len(pool._pool) == 2
     assert old_pid in [p.pid for p in pool._pool]
+    pool.terminate()
 
 
 def test_kill_after_resize_call(exit_on_deadlock):
@@ -248,6 +250,17 @@ def test_kill_after_resize_call(exit_on_deadlock):
     pool.apply_async(kill_friend, (pool._pool[1].pid, .1))
     pool = get_reusable_pool(processes=1)
     assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+    pool.terminate()
+
+
+def test_terminate_deadlock(exit_on_deadlock):
+    """Test recovery if killed after resize call"""
+    # Test the pool terminate call do not cause deadlock
+    pool = get_reusable_pool(processes=2)
+    pool.apply_async(kill_friend, (pool._pool[1].pid, .1))
+    pool.terminate()
+
+    pool = get_reusable_pool(processes=2)
     pool.terminate()
 
 
@@ -278,3 +291,4 @@ def test_freeze(exit_on_deadlock):
     np.dot(a, a)
     pool = get_reusable_pool(2)
     pool.apply(np.dot, (a, a))
+    pool.terminate()
