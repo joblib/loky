@@ -47,10 +47,12 @@ def wait_dead(pid, n_tries=1000, delay=0.001):
 
 def crash():
     """Induces a segfault"""
-    import sys
-    sys.setrecursionlimit(1 << 30)
-    f = lambda f: f(f)
-    f(f)
+    import faulthandler
+    faulthandler._sigsegv()
+    # import sys
+    # sys.setrecursionlimit(1 << 30)
+    # f = lambda f: f(f)
+    # f(f)
 
 
 def exit():
@@ -184,6 +186,8 @@ def test_crash_races(exit_on_deadlock):
     """Test the race conditions in reusable_pool crash handling"""
     # Test for external crash signal comming from neighbor
     # with various race setup
+    if sys.platform == 'win32':
+        raise SkipTest('Skip it for now')
     for i in [1, 2, 5, 17]:
         mp.util.debug("Test race - # Processes = {}".format(i))
         pool = get_reusable_pool(processes=i)
