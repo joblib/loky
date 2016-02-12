@@ -4,8 +4,6 @@ import sys
 import psutil
 import warnings
 from time import sleep
-from faulthandler import dump_traceback_later
-from faulthandler import cancel_dump_traceback_later
 from nose.tools import assert_raises
 from nose import SkipTest
 import pytest
@@ -23,6 +21,17 @@ try:
 except ImportError:
     pass
 
+# Compat for windows and python2.7
+try:
+    from faulthandler import dump_traceback_later
+    from faulthandler import cancel_dump_traceback_later
+except ImportError:
+    def dump_traceback_later(timeout=None, exit=None, file=None):
+        pass
+
+    def cancel_dump_traceback_later():
+        pass
+
 # Activate multiprocessing logging
 mp.util.log_to_stderr()
 mp.util._logger.setLevel(5)
@@ -30,9 +39,11 @@ mp.util._logger.setLevel(5)
 
 @pytest.yield_fixture
 def exit_on_deadlock():
-    dump_traceback_later(timeout=5, exit=True)
-    yield
-    cancel_dump_traceback_later()
+    with open(".exit_on_lock", "w") as f:
+        dump_traceback_later(timeout=5, exit=True, file=f)
+        yield
+        cancel_dump_traceback_later()
+    os.remove(".exit_on_lock")
 
 
 def wait_dead(pid, n_tries=1000, delay=0.001):
@@ -274,6 +285,8 @@ def test_invalid_process_number():
 
 def test_deadlock_kill(exit_on_deadlock):
     """Test deadlock recovery for reusable_pool"""
+    if sys.platform == 'win32':
+        raise SkipTest('Skip it for now')
     pool = get_reusable_pool(processes=1)
     pid = pool._pool[0].pid
     pool = get_reusable_pool(processes=2)
