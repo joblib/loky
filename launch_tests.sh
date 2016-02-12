@@ -16,9 +16,9 @@ do
 	tox $args 2>$AUXFILE
 	ret_val=$?
 
-	test $ret_val -ne 0 && cat $AUXFILE
-	rm $AUXFILE
+	#test $ret_val -ne 0 && cat $AUXFILE
 
 	# Break if one test fail or if we reached the $max_test value
-	test $c -ge $max_test -o $ret_val -ne 0 && break
+	test $ret_val -ne 0 && break
+	test $c -ge $max_test && rm $AUXFILE && break 
 done

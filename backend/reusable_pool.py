@@ -36,24 +36,27 @@ def get_reusable_pool(*args, **kwargs):
     _pool = getattr(_local, '_pool', None)
     processes = kwargs.get('processes')
     if _pool is None:
+        mp.util.debug("Create a pool with size {}.".format(processes))
         _local._pool = _pool = _ReusablePool(*args, id_pool=_local._id_pool,
                                              **kwargs)
         _local._id_pool += 1
     else:
-        _pool._maintain_pool()
+        _pool._maintain_pool(timeout=None)
         if _pool._state != RUN:
             mp.util.debug("Create a new pool with {} processes as the "
                           "previous one was in state {}"
                           "".format(processes, _pool._state))
-            with _pool.maintain_lock:
-                _pool.terminate()
-            _local._pool = None
+            _pool.terminate()
+            _local._pool = _pool = None
             return get_reusable_pool(*args, **kwargs)
         else:
             if _pool._resize(processes):
                 mp.util.debug("Resized existing pool to target size.")
                 return _pool
-            mp.util.debug("Failed to resize existing pool to target size.")
+            mp.util.debug("Failed to resize existing pool to target size {}."
+                          "".format(processes))
+            _pool.terminate()
+            _local._pool = _pool = None
             return get_reusable_pool(*args, **kwargs)
 
     return _pool
@@ -74,7 +77,7 @@ class _ReusablePool(Pool):
         self._result_handler.name = 'ResultHandler-{}'.format(id_pool)
         self._task_handler.name = 'TaskHandler-{}'.format(id_pool)
         self._worker_handler.name = 'WorkerrHandler-{}'.format(id_pool)
-        mp.util.debug("Just created pool #{}".format(self.id_pool))
+        mp.util.debug("Pool{} started.".format(self.id_pool))
 
     def _has_started_thread(self, thread_name):
         thread = getattr(self, thread_name, None)
@@ -99,8 +102,8 @@ class _ReusablePool(Pool):
                     self._clean_up_crash(cause_msg=CRASH_WORKER,
                                          exitcode=worker.exitcode)
                     mp.util.sub_warning(
-                        "Pool might be corrupted. Worker exited with "
-                        "error code {}".format(worker.exitcode))
+                        "Pool{} might be corrupted. Worker exited with "
+                        "error code {}".format(self.id_pool, worker.exitcode))
                     raise _BrokenPoolError(worker.exitcode)
                 self._pool.remove(worker)
         if (self._has_started_thread("_result_handler") and
@@ -114,12 +117,14 @@ class _ReusablePool(Pool):
         return cleaned
 
     def terminate(self):
-        mp.util.debug("Called terminate on pool #{}".format(self.id_pool))
+        mp.util.debug("Pool{} called terminate".format(self.id_pool))
         if self._state != BROKEN:
-            self._maintain_pool()
+            self._maintain_pool(timeout=None)
         if self._state != BROKEN:
-            super(_ReusablePool, self).terminate()
+            with self.maintain_lock:
+                super(_ReusablePool, self).terminate()
         else:
+            self._terminate.cancel()
             n_tries = 1000
             delay = .001
             for i in range(n_tries):
@@ -135,30 +140,74 @@ class _ReusablePool(Pool):
             mp.util.sub_warning("Terminate was called on a BROKEN pool but "
                                 "some processes were still alive.")
 
-    def _maintain_pool(self):
+    def _maintain_pool(self, timeout=.01):
         """Clean up any exited workers and start replacements for them.
         """
-        try:
-            with self.maintain_lock:
-                if (self._state != BROKEN and (
-                        self._join_exited_workers() or
-                        self._processes >= len(self._pool))):
-                    self._repopulate_pool()
-        except _BrokenPoolError:
-            pass
+        if self.maintain_lock.acquire(timeout=timeout):
+            try:
+                    if (self._state != BROKEN and (
+                            self._join_exited_workers() or
+                            self._processes >= len(self._pool))):
+                        self._repopulate_pool()
+            except _BrokenPoolError:
+                pass
+            self.maintain_lock.release()
+        else:
+            mp.util.debug("Could not maintain pool..")
 
     def _clean_up_crash(self, cause_msg, exitcode=None):
         if self._state == BROKEN:
             return
 
         # Flag the pool as broken
+        mp.util.debug('Pool{} cleaning broken pool'.format(self.id_pool))
         self._state = BROKEN
 
         # Terminate the worker handler thread
         mp.util.debug("set terminate state for worker_handler and workers")
         self._worker_handler._state = TERMINATE
-        for p in self._pool:
-            p.terminate()
+
+        # Terminate the
+        if self._pool and hasattr(self._pool[0], 'terminate'):
+            mp.util.debug('terminating workers')
+            for p in self._pool:
+                if p.exitcode is None:
+                    p.terminate()
+                mp.util.debug('cleaning up worker %d' % p.pid)
+                p.join()
+
+        # Break the writing lock on the outqueue to avoid causing deadlocks
+        # with the sentinels
+        self._outqueue._wlock = None
+        if sys.version_info[:2] < (3, 4):
+            self._outqueue._make_methods()
+
+        mp.util.debug("send sentinel for task_handler")
+        self._taskqueue.put(None)
+
+        # Flush inqueue to ensure that the task_handler can put the sentinel
+        # in it without hanging forever
+        mp.util.debug('helping task handler/workers to finish')
+        _ReusablePool._empty_queue(self._inqueue, self._task_handler,
+                                   self._pool)
+
+        # If the result handler is dead, the sentinel might deadlock
+        # due to the outqueue being full
+        if not self._result_handler.is_alive():
+            _ReusablePool._empty_queue(self._outqueue, self._task_handler,
+                                       self._pool)
+
+        # Make sure everything finished
+        mp.util.debug("joining task_handler")
+        if (self._has_started_thread("_task_handler") and
+                threading.current_thread() is not self._task_handler and
+                self._task_handler.is_alive()):
+            self._task_handler.join()
+        mp.util.debug("joining worker_handler")
+        if (self._has_started_thread("_worker_handler") and
+                threading.current_thread() is not self._worker_handler and
+                self._worker_handler.is_alive()):
+            self._worker_handler.join()
 
         # Flag all the _cached job as failed due to aborted worker
         mp.util.debug("flag the cache as broken")
@@ -172,14 +221,12 @@ class _ReusablePool(Pool):
         # This avoids deadlock caused by putting a sentinel in the outqueue
         # as it might be locked by a dead worker
         mp.util.debug("send sentinel for result_handler")
-        self._outqueue._wlock = None
-        if sys.version_info[:2] < (3, 4):
-            self._outqueue._make_methods()
         self._outqueue.put(None)
 
-        # Terminate tasks handler by sentinel
-        mp.util.debug("send sentinel for task_handler")
-        self._taskqueue.put(None)
+        if (self._has_started_thread("_result_handler") and
+                threading.current_thread() is not self._result_handler and
+                self._result_handler.is_alive()):
+            self._result_handler.join()
 
         mp.util.debug("end _clean_up_crash")
 
@@ -211,7 +258,7 @@ class _ReusablePool(Pool):
         # Make sure that the pool as the expected number of workers
         # up and ready
         while processes != len(self._pool) and self._state == RUN:
-            self._maintain_pool()
+            self._maintain_pool(timeout=None)
 
         # Broken signals could have been missed on the wait_job_complete
         # due to delay in OS signal propagation, assert that the pool
@@ -232,12 +279,14 @@ class _ReusablePool(Pool):
                           "The pool will wait until the jobs are "
                           "finished and then resize it. This can "
                           "slow down your code.", UserWarning)
+            mp.util.debug("Pool{} waiting for job completion before resize"
+                          "".format(self.id_pool))
         # Wait for the completion of the jobs
         while len(self._cache) > 0:
             sleep(.1)
 
         # Ensure finishing jobs haven't broken the pool
-        self._maintain_pool()
+        self._maintain_pool(timeout=None)
 
     @classmethod
     def _terminate_pool(cls, taskqueue, inqueue, outqueue, pool,
@@ -246,22 +295,23 @@ class _ReusablePool(Pool):
         cleaning and avoid deadlocks.
         """
         # this is guaranteed to only be called once
-        mp.util.debug('finalizing pool {}'.format(
-            result_handler.name.split('-')[-1]))
+        mp.util.debug('finalizing pool')
+
+        # Flush inqueue to ensure that the task_handler can put the sentinel
+        # in it without hanging forever
+        mp.util.debug('helping task handler/workers to finish')
+        cls._empty_queue(inqueue, task_handler, pool)
+
+        # If the result handler is dead, the sentinel might deadlock
+        # due to the outqueue being full
+        if not result_handler.is_alive():
+            cls._empty_queue(outqueue, task_handler, pool)
 
         worker_handler._state = TERMINATE
-        task_handler._state = TERMINATE
 
-        mp.util.debug('helping task handler/workers to finish')
-        # Flush both inqueue and outqueue to ensure that the task_handler
-        # does not get blocked.
-        cls._help_stuff_finish(inqueue, outqueue, task_handler, result_handler,
-                               pool, cache)
-
-        assert result_handler.is_alive() or len(cache) == 0
-
-        result_handler._state = TERMINATE
-        outqueue.put(None)                  # sentinel
+        mp.util.debug('joining task handler')
+        if threading.current_thread() is not task_handler:
+            task_handler.join()
 
         # We must wait for the worker handler to exit before terminating
         # workers because we don't want workers to be restarted behind our back
@@ -269,31 +319,30 @@ class _ReusablePool(Pool):
         if threading.current_thread() is not worker_handler:
             worker_handler.join()
 
-        # Terminate workers which haven't already finished.
         if pool and hasattr(pool[0], 'terminate'):
             mp.util.debug('terminating workers')
             for p in pool:
                 if p.exitcode is None:
                     p.terminate()
+                mp.util.debug('cleaning up worker %d' % p.pid)
+                p.join()
 
-        mp.util.debug('joining task handler')
-        if threading.current_thread() is not task_handler:
-            task_handler.join()
+        # At this point, there is no work done anymore so we can flag the
+        # jobs remaining in cache as broken
+        cls._flag_cache_broken(cache, TerminatedPoolError())
+        result_handler._state = TERMINATE
+        # send a sentinel to make sure the result_handler do wait forever
+        # on the outqueue
+        outqueue._wlock = None
+        if sys.version_info[:2] < (3, 4):
+            outqueue._make_methods()
+        outqueue.put(None)
+
+        assert result_handler.is_alive() or len(cache) == 0
 
         mp.util.debug('joining result handler')
         if threading.current_thread() is not result_handler:
             result_handler.join()
-        # Flag all the _cached job as terminated has the result handler
-        # already exited. This avoid waiting for result forever.
-        cls._flag_cache_broken(cache, TerminatedPoolError())
-
-        if pool and hasattr(pool[0], 'terminate'):
-            mp.util.debug('joining pool workers')
-            for p in pool:
-                if p.is_alive():
-                    # worker has not yet exited
-                    mp.util.debug('cleaning up worker %d' % p.pid)
-                    p.join()
 
     @staticmethod
     def _help_stuff_finish(inqueue, outqueue, task_handler, result_handler,
@@ -302,22 +351,16 @@ class _ReusablePool(Pool):
         """
         # task_handler may be blocked trying to put items on inqueue
         # or sentinel in outqueue.
-        mp.util.debug("removing tasks from inqueue until task "
-                      "handler finished")
         _ReusablePool._empty_queue(inqueue, task_handler)
 
-        # at this point, no worker should be running and thus we flag the
-        # remaining cache as with the TerminatedPoolError and kill remaining
-        # workers
-        _ReusablePool._flag_cache_broken(cache, TerminatedPoolError)
+        # at this point, no worker should be running, thus we the kill
+        # remaining workers
         if pool and hasattr(pool[0], 'terminate'):
             mp.util.debug('terminating workers')
             for p in pool:
                 if p.exitcode is None:
                     p.terminate()
 
-        mp.util.debug("removing tasks from outqueue until task "
-                      "handler finished")
         # Ensure that the results handler quit before emptying the outqueue
         # to avoid simultaneaous call to read on outqueue
         outqueue._wlock = None
@@ -330,16 +373,21 @@ class _ReusablePool(Pool):
         _ReusablePool._empty_queue(outqueue, task_handler)
 
     @staticmethod
-    def _empty_queue(queue, task_handler):
+    def _empty_queue(queue, handler, pool):
         """Empty a communication queue to ensure that maintainer threads will
         not hang forever.
         """
         # We use a timeout to detect queue that was locked by a dead
         # process and therefor will never be unlocked.
-        if not queue._rlock.acquire(timeout=.1):
+        if not queue._rlock.acquire(timeout=.05):
             mp.util.debug("queue is locked when terminating. "
                           "The pool is probably broken.")
-        while task_handler.is_alive() and queue._reader.poll():
+            if pool and hasattr(pool[0], 'terminate'):
+                mp.util.debug('terminating workers')
+                for p in pool:
+                    if p.exitcode is None:
+                        p.terminate()
+        while handler.is_alive() and queue._reader.poll():
             queue._reader.recv_bytes()
             sleep(0)
 

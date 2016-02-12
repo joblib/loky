@@ -47,13 +47,10 @@ def wait_dead(pid, n_tries=1000, delay=0.001):
 
 def crash():
     """Induces a segfault"""
-    import ctypes
-    i = ctypes.c_char(b'a')
-    j = ctypes.pointer(i)
-    c = 0
-    while True:
-        j[c] = i
-        c += 1
+    import sys
+    sys.setrecursionlimit(1 << 30)
+    f = lambda f: f(f)
+    f(f)
 
 
 def exit():
@@ -257,7 +254,8 @@ def test_terminate_deadlock(exit_on_deadlock):
     """Test recovery if killed after resize call"""
     # Test the pool terminate call do not cause deadlock
     pool = get_reusable_pool(processes=2)
-    pool.apply_async(kill_friend, (pool._pool[1].pid, .1))
+    pool.apply_async(kill_friend, (pool._pool[1].pid, .0))
+    sleep(.01)
     pool.terminate()
 
     pool = get_reusable_pool(processes=2)
