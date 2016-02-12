@@ -21,6 +21,12 @@ try:
 except ImportError:
     pass
 
+# Compat windows
+try:
+    from signal import SIGKILL
+except ImportError:
+    from signal import SIGTERM as SIGKILL
+
 # Compat for windows and python2.7
 try:
     from faulthandler import dump_traceback_later
@@ -40,30 +46,26 @@ mp.util._logger.setLevel(5)
 @pytest.yield_fixture
 def exit_on_deadlock():
     with open(".exit_on_lock", "w") as f:
-        dump_traceback_later(timeout=5, exit=True, file=f)
+        dump_traceback_later(timeout=20, exit=True, file=f)
         yield
         cancel_dump_traceback_later()
     os.remove(".exit_on_lock")
 
 
-def wait_dead(pid, n_tries=1000, delay=0.001):
+def wait_dead(worker, n_tries=1000, delay=0.001):
     """Wait for process pid to die"""
     for i in range(n_tries):
-        if not psutil.pid_exists(pid):
+        if worker.exitcode is not None:
             return
         sleep(delay)
     raise RuntimeError("Process %d failed to die for at least %0.3fs" %
-                       (pid, delay * n_tries))
+                       (worker.pid, delay * n_tries))
 
 
 def crash():
     """Induces a segfault"""
     import faulthandler
     faulthandler._sigsegv()
-    # import sys
-    # sys.setrecursionlimit(1 << 30)
-    # f = lambda f: f(f)
-    # f(f)
 
 
 def exit():
@@ -85,7 +87,7 @@ def work_sleep(arg):
 def kill_friend(pid, delay=0):
     """Function that send SIGKILL at process pid"""
     sleep(delay)
-    os.kill(pid, 9)
+    os.kill(pid, SIGKILL)
 
 
 def raise_error():
@@ -193,29 +195,29 @@ def test_terminate_kill(exit_on_deadlock):
     assert_raises(TerminatedPoolError, res2.get)
 
 
-def test_crash_races(exit_on_deadlock):
+@pytest.mark.parametrize("n_proc", [1, 2, 5, 17])
+def test_crash_races(exit_on_deadlock, n_proc):
     """Test the race conditions in reusable_pool crash handling"""
     # Test for external crash signal comming from neighbor
     # with various race setup
-    if sys.platform == 'win32':
-        raise SkipTest('Skip it for now')
-    for i in [1, 2, 5, 17]:
-        mp.util.debug("Test race - # Processes = {}".format(i))
-        pool = get_reusable_pool(processes=i)
-        pids = [p.pid for p in pool._pool]
-        assert len(pids) == i
-        assert None not in pids
-        res = pool.map(work_sleep, [(.001 * j, pids) for j in range(2 * i)])
-        assert all(res)
-        res = pool.map_async(kill_friend, pids[::-1])
-        assert_raises(AbortedWorkerError, res.get)
+    mp.util.debug("Test race - # Processes = {}".format(n_proc))
+    pool = get_reusable_pool(processes=n_proc)
+    pids = [p.pid for p in pool._pool]
+    assert len(pids) == n_proc
+    assert None not in pids
+    res = pool.map(work_sleep, [(.0001 * (j//2), pids)
+                                for j in range(2 * n_proc)])
+    assert all(res)
+    res = pool.map_async(kill_friend, pids[::-1])
+    assert_raises(AbortedWorkerError, res.get)
 
-        pool = get_reusable_pool(processes=i)
-        pids = [p.pid for p in pool._pool]
-        res = pool.imap(work_sleep, [(.001 * j, pids) for j in range(2 * i)])
-        assert all(list(res))
-        res = pool.imap(kill_friend, pids[::-1])
-        assert_raises(AbortedWorkerError, list, res)
+    pool = get_reusable_pool(processes=n_proc)
+    pids = [p.pid for p in pool._pool]
+    res = pool.imap(work_sleep, [(.0001 * j, pids)
+                                 for j in range(2 * n_proc)])
+    assert all(list(res))
+    res = pool.imap(kill_friend, pids[::-1])
+    assert_raises(AbortedWorkerError, list, res)
 
     # Clean terminate
     pool.terminate()
@@ -285,13 +287,13 @@ def test_invalid_process_number():
 
 def test_deadlock_kill(exit_on_deadlock):
     """Test deadlock recovery for reusable_pool"""
-    if sys.platform == 'win32':
-        raise SkipTest('Skip it for now')
+    # if sys.platform == 'win32':
+    #     raise SkipTest('Skip it for now')
     pool = get_reusable_pool(processes=1)
-    pid = pool._pool[0].pid
+    worker = pool._pool[0]
     pool = get_reusable_pool(processes=2)
-    os.kill(pid, 9)
-    wait_dead(pid)
+    os.kill(worker.pid, SIGKILL)
+    wait_dead(worker)
 
     pool = get_reusable_pool(processes=2)
     assert pool.apply(sleep_identity, ((1, 0.),)) == 1

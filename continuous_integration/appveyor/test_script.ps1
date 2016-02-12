@@ -12,7 +12,7 @@ function TestPythonVersions () {
     	python ./continuous_integration/appveyor/tox -e py$ver
         If( $LASTEXITCODE -ne 0){
             Get-Content $AUXFILE
-            rm $AUXFILE
+            Remove-Item $AUXFILE
             Exit 1
         }
     }
