@@ -14,7 +14,7 @@ BROKEN = 3
 #
 CRASH_WORKER = ("A process was killed during the execution "
                 "a multiprocessing job.")
-CRASH_RESULT_HANDLER = ("The result handler crashed. This is probably"
+CRASH_RESULT_HANDLER = ("The result handler crashed. This is probably "
                         "due to a result unpickling error.")
 CRASH_TASK_HANDLER = ("The task handler crashed. This is probably"
                       "due to a result pickling error.")

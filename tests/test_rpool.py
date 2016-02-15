@@ -1,4 +1,3 @@
-from __future__ import print_function
 import os
 import sys
 import psutil
@@ -42,11 +41,14 @@ except ImportError:
 mp.util.log_to_stderr()
 mp.util._logger.setLevel(5)
 
+# Compat for test timeout with less cores:
+TIMEOUT = max(20 / mp.cpu_count(), 5)
+
 
 @pytest.yield_fixture
 def exit_on_deadlock():
     with open(".exit_on_lock", "w") as f:
-        dump_traceback_later(timeout=20, exit=True, file=f)
+        dump_traceback_later(timeout=TIMEOUT, exit=True, file=f)
         yield
         cancel_dump_traceback_later()
     os.remove(".exit_on_lock")
@@ -98,6 +100,11 @@ def raise_error():
 def return_instance(cls):
     """Function that returns a instance of cls"""
     return cls()
+
+
+def start_job(func, args):
+    pool = get_reusable_pool(processes=2)
+    pool.apply(func, args)
 
 
 def do_nothing(arg):
@@ -175,6 +182,52 @@ def test_crashes(exit_on_deadlock, func, args, expected_err):
     """Test various reusable_pool crash handling"""
     pool = get_reusable_pool(processes=2)
     res = pool.apply_async(func, args)
+    assert_raises(expected_err, res.get)
+
+    # Check that the pool can still be recovered
+    pool = get_reusable_pool(processes=2)
+    assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+    pool.terminate()
+
+
+callback_crash_cases = [
+            # Check problem occuring during function execution on workers
+            # (crash, AbortedWorkerError),
+            (exit, (), AbortedWorkerError),
+            (raise_error, (), RuntimeError),
+            (start_job, (id, (ExitAtPickle(),)), AbortedWorkerError),
+            (start_job, (id, (ErrorAtPickle(),)), PICKLING_ERRORS),
+            # Check problem occuring while unpickling a task on workers
+            (start_job, (id, (ExitAtUnpickle(),)), AbortedWorkerError),
+            (start_job, (id, (ErrorAtUnpickle(),)), PICKLING_ERRORS),
+            (start_job, (id, (CrashAtUnpickle(),)), AbortedWorkerError),
+            # Check problem occuring during function execution on workers
+            (start_job, (crash, ()), AbortedWorkerError),
+            (start_job, (exit, ()), AbortedWorkerError),
+            (start_job, (raise_error, ()), RuntimeError),
+            # Check problem occuring while pickling a task result on workers
+            (start_job, (return_instance, (CrashAtPickle,)),
+             AbortedWorkerError),
+            (start_job, (return_instance, (ExitAtPickle,)),
+             AbortedWorkerError),
+            (start_job, (return_instance, (ErrorAtPickle,)),
+             MaybeEncodingError),
+            # Check problem occuring while unpickling a task in
+            # the result_handler thread
+            (start_job, (return_instance, (ExitAtUnpickle,)),
+             AbortedWorkerError),
+            (start_job, (return_instance, (ErrorAtUnpickle,)),
+             MaybeEncodingError),
+]
+
+
+@pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
+def test_callback(exit_on_deadlock, func, args, expected_err):
+    """Test the recovery from callback crash"""
+    pool = get_reusable_pool(processes=2)
+    res = pool.apply_async(sleep_identity,
+                           ((func, 0),),
+                           callback=lambda f: f(*args))
     assert_raises(expected_err, res.get)
 
     # Check that the pool can still be recovered
