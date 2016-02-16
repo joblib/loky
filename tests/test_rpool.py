@@ -2,9 +2,7 @@ import os
 import sys
 import psutil
 import warnings
-from time import sleep
-from nose.tools import assert_raises
-from nose import SkipTest
+from time import sleep, time
 import pytest
 from backend.reusable_pool import get_reusable_pool
 from backend.reusable_pool import AbortedWorkerError, TerminatedPoolError
@@ -181,7 +179,8 @@ def test_crashes(exit_on_deadlock, func, args, expected_err):
     """Test various reusable_pool crash handling"""
     pool = get_reusable_pool(processes=2)
     res = pool.apply_async(func, args)
-    assert_raises(expected_err, res.get)
+    with pytest.raises(expected_err):
+        res.get()
 
     # Check that the pool can still be recovered
     pool = get_reusable_pool(processes=2)
@@ -227,7 +226,8 @@ def test_callback(exit_on_deadlock, func, args, expected_err):
     res = pool.apply_async(sleep_identity,
                            ((func, 0),),
                            callback=lambda f: f(*args))
-    assert_raises(expected_err, res.get)
+    with pytest.raises(expected_err):
+        res.get()
 
     # Check that the pool can still be recovered
     pool = get_reusable_pool(processes=2)
@@ -244,7 +244,8 @@ def test_terminate_kill(exit_on_deadlock):
     # We should get an error as the pool terminated before we fetched
     # the results from the operation.
     pool.terminate()
-    assert_raises(TerminatedPoolError, res2.get)
+    with pytest.raises(TerminatedPoolError):
+        res2.get()
 
 
 @pytest.mark.parametrize("n_proc", [1, 2, 5, 17])
@@ -261,7 +262,8 @@ def test_crash_races(exit_on_deadlock, n_proc):
                                 for j in range(2 * n_proc)])
     assert all(res)
     res = pool.map_async(kill_friend, pids[::-1])
-    assert_raises(AbortedWorkerError, res.get)
+    with pytest.raises(AbortedWorkerError):
+        res.get()
 
     pool = get_reusable_pool(processes=n_proc)
     pids = [p.pid for p in pool._pool]
@@ -269,7 +271,8 @@ def test_crash_races(exit_on_deadlock, n_proc):
                                  for j in range(2 * n_proc)])
     assert all(list(res))
     res = pool.imap(kill_friend, pids[::-1])
-    assert_raises(AbortedWorkerError, list, res)
+    with pytest.raises(AbortedWorkerError):
+        list(res)
 
     # Clean terminate
     pool.terminate()
@@ -333,14 +336,16 @@ def test_terminate_deadlock(exit_on_deadlock):
 
 def test_invalid_process_number():
     """Raise error on invalid process number"""
-    assert_raises(ValueError, get_reusable_pool, processes=0)
-    assert_raises(ValueError, get_reusable_pool, processes=-1)
+
+    with pytest.raises(ValueError):
+        get_reusable_pool(processes=0)
+
+    with pytest.raises(ValueError):
+        get_reusable_pool(processes=-1)
 
 
 def test_deadlock_kill(exit_on_deadlock):
     """Test deadlock recovery for reusable_pool"""
-    # if sys.platform == 'win32':
-    #     raise SkipTest('Skip it for now')
     pool = get_reusable_pool(processes=1)
     worker = pool._pool[0]
     pool = get_reusable_pool(processes=2)
@@ -352,9 +357,9 @@ def test_deadlock_kill(exit_on_deadlock):
     pool.terminate()
 
 
+@pytest.mark.skipif(True, reason="Known failure")
 def test_freeze(exit_on_deadlock):
     """Test no freeze on OSX with Accelerate"""
-    raise SkipTest('Known failure')
     import numpy as np
     a = np.random.randn(1000, 1000)
     np.dot(a, a)
