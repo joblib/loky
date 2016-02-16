@@ -1,4 +1,5 @@
 from multiprocessing.pool import Pool, RUN, TERMINATE
+from multiprocessing.pool import ApplyResult, MapResult
 import multiprocessing as mp
 import threading
 import warnings
@@ -406,6 +407,121 @@ class _ReusablePool(Pool):
                     result._set(result._index, (success, value))
             else:
                 result._set(0, (success, value))
+
+    def _map_async(self, func, iterable, mapper, chunksize=None, callback=None,
+                   error_callback=None):
+        """Helper function to implement map, starmap and their async
+        counterparts.
+        """
+        if self._state != RUN:
+            raise ValueError("Pool not running")
+        if not hasattr(iterable, '__len__'):
+            iterable = list(iterable)
+
+        if chunksize is None:
+            chunksize, extra = divmod(len(iterable), len(self._pool) * 4)
+            if extra:
+                chunksize += 1
+        if len(iterable) == 0:
+            chunksize = 0
+
+        task_batches = Pool._get_tasks(func, iterable, chunksize)
+        result = RobustMapResult(self._cache, chunksize, len(iterable),
+                                 callback, error_callback=error_callback)
+        self._taskqueue.put((((result._job, i, mapper, (x,), {})
+                              for i, x in enumerate(task_batches)), None))
+        return result
+
+    def apply_async(self, func, args=(), kwds={}, callback=None,
+                    error_callback=None):
+        '''
+        Asynchronous version of `apply()` method.
+        '''
+        if self._state != RUN:
+            raise ValueError("Pool not running")
+        result = RobustApplyResult(self._cache, callback, error_callback)
+        self._taskqueue.put(([(result._job, None, func, args, kwds)], None))
+        return result
+
+
+def callback_call(job, callback):
+    try:
+        callback(job._value)
+    except Exception as e:
+        job._value = e
+        job._success = False
+
+
+class RobustApplyResult(ApplyResult):
+
+    def __init__(self, cache, callback, error_callback):
+        if sys.version_info[:2] >= (3, 3):
+            ApplyResult.__init__(self, cache, callback, error_callback)
+        else:
+            ApplyResult.__init__(self, cache, callback)
+
+    def _set(self, i, obj):
+        self._success, self._value = obj
+        if self._callback and self._success:
+            callback_call(self, self._callback)
+
+        if (hasattr(self, '_error_callback') and self._error_callback and
+                not self._success):
+            callback_call(self, self._error_callback)
+        self._notify()
+        del self._cache[self._job]
+
+    def _notify(self):
+        if sys.version_info[:2] >= (3, 3):
+            self._event.set()
+        else:
+            self._cond.acquire()
+            try:
+                self._ready = True
+                self._cond.notify()
+            finally:
+                self._cond.release()
+
+AsyncResult = RobustApplyResult       # create alias -- see #17805
+
+
+class RobustMapResult(MapResult):
+
+    def __init__(self, cache, chunksize, length, callback, error_callback):
+        if sys.version_info[:2] >= (3, 3):
+            MapResult.__init__(self, cache, chunksize, length, callback,
+                               error_callback)
+        else:
+            MapResult.__init__(self, cache, chunksize, length, callback)
+
+    def _set(self, i, success_result):
+        self._number_left -= 1
+        success, result = success_result
+        if success and self._success:
+            self._value[i*self._chunksize:(i+1)*self._chunksize] = result
+            if self._number_left == 0:
+                if self._callback:
+                    callback_call(self, self._callback)
+                del self._cache[self._job]
+                self._notify()
+        else:
+            self._success = False
+            self._value = result
+            if hasattr(self, '_error_callback') and self._error_callback:
+                callback_call(self, self._error_callback)
+            del self._cache[self._job]
+            self._notify()
+
+    def _notify(self):
+        if sys.version_info[:2] >= (3, 3):
+            self._event.set()
+        else:
+            self._cond.acquire()
+            try:
+                self._ready = True
+                self._cond.notify()
+            finally:
+                self._cond.release()
 
 
 class AbortedWorkerError(Exception):
