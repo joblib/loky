@@ -21,7 +21,6 @@ CRASH_TASK_HANDLER = ("The task handler crashed. This is probably"
 
 # Protect the queue fro being reused
 _local = threading.local()
-_local._id_pool = 0
 
 
 # Check if a thread has been started
@@ -34,12 +33,13 @@ def _is_started(thread):
 
 def get_reusable_pool(*args, **kwargs):
     _pool = getattr(_local, '_pool', None)
+    _id_pool = getattr(_local, '_id_pool', 0)
     processes = kwargs.get('processes')
     if _pool is None:
         mp.util.debug("Create a pool with size {}.".format(processes))
-        _local._pool = _pool = _ReusablePool(*args, id_pool=_local._id_pool,
+        _local._pool = _pool = _ReusablePool(*args, id_pool=_id_pool,
                                              **kwargs)
-        _local._id_pool += 1
+        _local._id_pool = _id_pool + 1
     else:
         _pool._maintain_pool(timeout=None)
         if _pool._state != RUN:
@@ -124,7 +124,6 @@ class _ReusablePool(Pool):
             with self.maintain_lock:
                 super(_ReusablePool, self).terminate()
         else:
-            self._terminate.cancel()
             n_tries = 1000
             delay = .001
             for i in range(n_tries):
@@ -227,6 +226,10 @@ class _ReusablePool(Pool):
                 threading.current_thread() is not self._result_handler and
                 self._result_handler.is_alive()):
             self._result_handler.join()
+
+        # Cancel terminate call as the pool as already bee shutdown
+        mp.util.debug("cancel finalizer call")
+        self._terminate.cancel()
 
         mp.util.debug("end _clean_up_crash")
 
