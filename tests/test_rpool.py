@@ -23,8 +23,11 @@ except ImportError:
 # Compat windows
 try:
     from signal import SIGKILL
+    # Increase time if the test is perform on a slow machine
+    TIMEOUT = max(20 / mp.cpu_count(), 5)
 except ImportError:
     from signal import SIGTERM as SIGKILL
+    TIMEOUT = 20
 
 # Compat for windows and python2.7
 try:
@@ -41,9 +44,6 @@ except ImportError:
 mp.util.log_to_stderr()
 mp.util._logger.setLevel(5)
 
-# Compat for test timeout with less cores:
-TIMEOUT = max(20 / mp.cpu_count(), 5)
-
 
 @pytest.yield_fixture
 def exit_on_deadlock():
@@ -51,7 +51,6 @@ def exit_on_deadlock():
         dump_traceback_later(timeout=TIMEOUT, exit=True, file=f)
         yield
         cancel_dump_traceback_later()
-    os.remove(".exit_on_lock")
 
 
 def wait_dead(worker, n_tries=1000, delay=0.001):
@@ -240,7 +239,7 @@ def test_terminate_kill(exit_on_deadlock):
     """Test reusable_pool termination handling"""
     pool = get_reusable_pool(processes=5)
     res1 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
-    res2 = pool.map_async(sleep_identity, [(i, 0.002) for i in range(50)])
+    res2 = pool.map_async(sleep_identity, [(i, 0.003) for i in range(50)])
     assert res1.get() == list(range(50))
     # We should get an error as the pool terminated before we fetched
     # the results from the operation.

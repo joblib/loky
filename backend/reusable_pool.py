@@ -12,7 +12,7 @@ import threading
 # with unsafe terminate function
 BROKEN = 3
 
-#
+# Exit messages for Broken pools
 CRASH_WORKER = ("A process was killed during the execution "
                 "a multiprocessing job.")
 CRASH_RESULT_HANDLER = ("The result handler crashed. This is probably "
@@ -167,7 +167,7 @@ class _ReusablePool(Pool):
         mp.util.debug("set terminate state for worker_handler and workers")
         self._worker_handler._state = TERMINATE
 
-        # Terminate the
+        # Terminate and join the workers
         if self._pool and hasattr(self._pool[0], 'terminate'):
             mp.util.debug('terminating workers')
             for p in self._pool:
