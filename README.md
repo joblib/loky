@@ -4,3 +4,4 @@
 Project to make more robust and reusable pools for multiprocessing in python.  
 This project is under developement and is not yet released.
 
+This work is supported by the Center for Data Science, funded by the IDEX Paris-Saclay, ANR-11-IDEX-0003-02
