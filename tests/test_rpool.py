@@ -86,7 +86,13 @@ def work_sleep(arg):
 def kill_friend(pid, delay=0):
     """Function that send SIGKILL at process pid"""
     sleep(delay)
-    os.kill(pid, SIGKILL)
+    try:
+        os.kill(pid, SIGKILL)
+    except PermissionError as e:
+        if psutil.pid_exists(pid):
+            mp.util.debug("Fail to kill an alive process?!?")
+            raise e
+        mp.util.debug("process {} was already dead".format(pid))
 
 
 def raise_error():
@@ -260,13 +266,8 @@ class TestPoolDeadLock:
                                     for j in range(2 * n_proc)])
         assert all(res)
         res = pool.map_async(kill_friend, pids[::-1])
-        try:
-            with pytest.raises(AbortedWorkerError):
-                res.get()
-        except Exception as e:
-            import traceback
-            print(traceback.format_exc())
-            raise e
+        with pytest.raises(AbortedWorkerError):
+            res.get()
 
         pool = get_reusable_pool(processes=n_proc)
         pids = [p.pid for p in pool._pool]
