@@ -166,6 +166,7 @@ class _ReusablePool(Pool):
         # Terminate the worker handler thread
         mp.util.debug("set terminate state for worker_handler and workers")
         self._worker_handler._state = TERMINATE
+        self._task_handler._state = TERMINATE
 
         # Terminate and join the workers
         if self._pool and hasattr(self._pool[0], 'terminate'):
@@ -189,13 +190,13 @@ class _ReusablePool(Pool):
         # in it without hanging forever
         mp.util.debug('helping task handler/workers to finish')
         _ReusablePool._empty_queue(self._inqueue, self._task_handler,
-                                   self._pool)
+                                   self._taskqueue, self._pool)
 
         # If the result handler is dead, the sentinel might deadlock
         # due to the outqueue being full
         if not self._result_handler.is_alive():
             _ReusablePool._empty_queue(self._outqueue, self._task_handler,
-                                       self._pool)
+                                       self._taskqueue, self._pool)
 
         # Make sure everything finished
         mp.util.debug("joining task_handler")
@@ -304,24 +305,25 @@ class _ReusablePool(Pool):
         # Flush inqueue to ensure that the task_handler can put the sentinel
         # in it without hanging forever
         mp.util.debug('helping task handler/workers to finish')
-        cls._empty_queue(inqueue, task_handler, pool)
+        cls._empty_queue(inqueue, task_handler, taskqueue, pool)
 
         # If the result handler is dead, the sentinel might deadlock
         # due to the outqueue being full
         if not result_handler.is_alive():
-            cls._empty_queue(outqueue, task_handler, pool)
+            cls._empty_queue(outqueue, task_handler, taskqueue, pool)
 
         worker_handler._state = TERMINATE
-
-        mp.util.debug('joining task handler')
-        if threading.current_thread() is not task_handler:
-            task_handler.join()
+        task_handler._state = TERMINATE
 
         # We must wait for the worker handler to exit before terminating
         # workers because we don't want workers to be restarted behind our back
         mp.util.debug('joining worker handler')
         if threading.current_thread() is not worker_handler:
             worker_handler.join()
+
+        mp.util.debug('joining task handler')
+        if threading.current_thread() is not task_handler:
+            task_handler.join()
 
         if pool and hasattr(pool[0], 'terminate'):
             mp.util.debug('terminating workers')
@@ -377,7 +379,7 @@ class _ReusablePool(Pool):
         _ReusablePool._empty_queue(outqueue, task_handler)
 
     @staticmethod
-    def _empty_queue(queue, handler, pool):
+    def _empty_queue(queue, handler, taskqueue, pool):
         """Empty a communication queue to ensure that maintainer threads will
         not hang forever.
         """
@@ -391,7 +393,8 @@ class _ReusablePool(Pool):
                 for p in pool:
                     if p.exitcode is None:
                         p.terminate()
-        while handler.is_alive() and queue._reader.poll():
+        while (handler.is_alive() and (queue._reader.poll() or
+                                       not taskqueue.empty())):
             queue._reader.recv_bytes()
             sleep(0)
 
