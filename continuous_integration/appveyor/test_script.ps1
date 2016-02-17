@@ -8,6 +8,7 @@ $AUXFILE="./.exit_on_lock"
 $VERSION=(27, 33, 34, 35)
 
 function TestPythonVersions () {
+    Write-Host $PYTHON
     ForEach($ver in $VERSION){
     	python ./continuous_integration/appveyor/tox -e py$ver
         If( $LASTEXITCODE -ne 0){
