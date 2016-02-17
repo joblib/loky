@@ -174,164 +174,194 @@ crash_cases = [
 ]
 
 
-@pytest.mark.parametrize("func, args, expected_err", crash_cases)
-def test_crashes(exit_on_deadlock, func, args, expected_err):
-    """Test various reusable_pool crash handling"""
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(func, args)
-    with pytest.raises(expected_err):
-        res.get()
+class TestPoolDeadLock:
+    @pytest.mark.parametrize("func, args, expected_err", crash_cases)
+    def test_crashes(self, exit_on_deadlock, func, args, expected_err):
+        """Test various reusable_pool crash handling"""
+        pool = get_reusable_pool(processes=2)
+        res = pool.apply_async(func, args)
+        with pytest.raises(expected_err):
+            res.get()
 
-    # Check that the pool can still be recovered
-    pool = get_reusable_pool(processes=2)
-    assert pool.apply(sleep_identity, ((1, 0.),)) == 1
-    pool.terminate()
+        # Check that the pool can still be recovered
+        pool = get_reusable_pool(processes=2)
+        assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+        pool.terminate()
 
+    callback_crash_cases = [
+                # Check problem occuring during function execution on workers
+                # (crash, AbortedWorkerError),
+                (exit, (), AbortedWorkerError),
+                (raise_error, (), RuntimeError),
+                (start_job, (id, (ExitAtPickle(),)), AbortedWorkerError),
+                (start_job, (id, (ErrorAtPickle(),)), PICKLING_ERRORS),
+                # Check problem occuring while unpickling a task on workers
+                (start_job, (id, (ExitAtUnpickle(),)), AbortedWorkerError),
+                (start_job, (id, (ErrorAtUnpickle(),)), PICKLING_ERRORS),
+                (start_job, (id, (CrashAtUnpickle(),)), AbortedWorkerError),
+                # Check problem occuring during function execution on workers
+                (start_job, (crash, ()), AbortedWorkerError),
+                (start_job, (exit, ()), AbortedWorkerError),
+                (start_job, (raise_error, ()), RuntimeError),
+                # Check problem occuring while pickling a task
+                # result on workers
+                (start_job, (return_instance, (CrashAtPickle,)),
+                 AbortedWorkerError),
+                (start_job, (return_instance, (ExitAtPickle,)),
+                 AbortedWorkerError),
+                (start_job, (return_instance, (ErrorAtPickle,)),
+                 MaybeEncodingError),
+                # Check problem occuring while unpickling a task in
+                # the result_handler thread
+                (start_job, (return_instance, (ExitAtUnpickle,)),
+                 AbortedWorkerError),
+                (start_job, (return_instance, (ErrorAtUnpickle,)),
+                 MaybeEncodingError),
+    ]
 
-callback_crash_cases = [
-            # Check problem occuring during function execution on workers
-            # (crash, AbortedWorkerError),
-            (exit, (), AbortedWorkerError),
-            (raise_error, (), RuntimeError),
-            (start_job, (id, (ExitAtPickle(),)), AbortedWorkerError),
-            (start_job, (id, (ErrorAtPickle(),)), PICKLING_ERRORS),
-            # Check problem occuring while unpickling a task on workers
-            (start_job, (id, (ExitAtUnpickle(),)), AbortedWorkerError),
-            (start_job, (id, (ErrorAtUnpickle(),)), PICKLING_ERRORS),
-            (start_job, (id, (CrashAtUnpickle(),)), AbortedWorkerError),
-            # Check problem occuring during function execution on workers
-            (start_job, (crash, ()), AbortedWorkerError),
-            (start_job, (exit, ()), AbortedWorkerError),
-            (start_job, (raise_error, ()), RuntimeError),
-            # Check problem occuring while pickling a task result on workers
-            (start_job, (return_instance, (CrashAtPickle,)),
-             AbortedWorkerError),
-            (start_job, (return_instance, (ExitAtPickle,)),
-             AbortedWorkerError),
-            (start_job, (return_instance, (ErrorAtPickle,)),
-             MaybeEncodingError),
-            # Check problem occuring while unpickling a task in
-            # the result_handler thread
-            (start_job, (return_instance, (ExitAtUnpickle,)),
-             AbortedWorkerError),
-            (start_job, (return_instance, (ErrorAtUnpickle,)),
-             MaybeEncodingError),
-]
+    @pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
+    def test_callback(self, exit_on_deadlock, func, args, expected_err):
+        """Test the recovery from callback crash"""
+        pool = get_reusable_pool(processes=2)
+        res = pool.apply_async(sleep_identity,
+                               ((func, 0),),
+                               callback=lambda f: f(*args))
+        with pytest.raises(expected_err):
+            res.get()
 
+        # Check that the pool can still be recovered
+        pool = get_reusable_pool(processes=2)
+        assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+        pool.terminate()
 
-@pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
-def test_callback(exit_on_deadlock, func, args, expected_err):
-    """Test the recovery from callback crash"""
-    pool = get_reusable_pool(processes=2)
-    res = pool.apply_async(sleep_identity,
-                           ((func, 0),),
-                           callback=lambda f: f(*args))
-    with pytest.raises(expected_err):
-        res.get()
-
-    # Check that the pool can still be recovered
-    pool = get_reusable_pool(processes=2)
-    assert pool.apply(sleep_identity, ((1, 0.),)) == 1
-    pool.terminate()
-
-
-def test_terminate_kill(exit_on_deadlock):
-    """Test reusable_pool termination handling"""
-    pool = get_reusable_pool(processes=5)
-    res1 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
-    res2 = pool.map_async(sleep_identity, [(i, 0.003) for i in range(50)])
-    assert res1.get() == list(range(50))
-    # We should get an error as the pool terminated before we fetched
-    # the results from the operation.
-    pool.terminate()
-    with pytest.raises(TerminatedPoolError):
-        res2.get()
-
-
-@pytest.mark.parametrize("n_proc", [1, 2, 5, 17])
-def test_crash_races(exit_on_deadlock, n_proc):
-    """Test the race conditions in reusable_pool crash handling"""
-    # Test for external crash signal comming from neighbor
-    # with various race setup
-    mp.util.debug("Test race - # Processes = {}".format(n_proc))
-    pool = get_reusable_pool(processes=n_proc)
-    pids = [p.pid for p in pool._pool]
-    assert len(pids) == n_proc
-    assert None not in pids
-    res = pool.map(work_sleep, [(.0001 * (j//2), pids)
-                                for j in range(2 * n_proc)])
-    assert all(res)
-    res = pool.map_async(kill_friend, pids[::-1])
-    with pytest.raises(AbortedWorkerError):
-        res.get()
-
-    pool = get_reusable_pool(processes=n_proc)
-    pids = [p.pid for p in pool._pool]
-    res = pool.imap(work_sleep, [(.0001 * j, pids)
-                                 for j in range(2 * n_proc)])
-    assert all(list(res))
-    res = pool.imap(kill_friend, pids[::-1])
-    with pytest.raises(AbortedWorkerError):
-        list(res)
-
-    # Clean terminate
-    pool.terminate()
-
-
-def test_rpool_resize(exit_on_deadlock):
-    """Test reusable_pool resizing"""
-
-    pool = get_reusable_pool(processes=2)
-
-    # Decreasing the pool should drop a single process and keep one of the
-    # old one as it is still in a good shape. The resize should not occur
-    # while there are on going works.
-    pids = [p.pid for p in pool._pool]
-    res = pool.apply_async(work_sleep, ((.1, pids),))
-    warnings.filterwarnings("always", category=UserWarning)
-    with warnings.catch_warnings(record=True) as w:
+    def test_deadlock_kill(self, exit_on_deadlock):
+        """Test deadlock recovery for reusable_pool"""
         pool = get_reusable_pool(processes=1)
-        assert res.get(), "Resize should wait for current processes to finish"
-        assert len(pool._pool) == 1
-        assert pool._pool[0].pid in pids
-        assert len(w) == 1
+        worker = pool._pool[0]
+        pool = get_reusable_pool(processes=2)
+        os.kill(worker.pid, SIGKILL)
+        wait_dead(worker)
 
-    # Requesting the same number of process should not impact the pool nor
-    # kill the processed
-    old_pid = pool._pool[0].pid
-    unchanged_pool = get_reusable_pool(processes=1)
-    assert len(unchanged_pool._pool) == 1
-    assert unchanged_pool is pool
-    assert unchanged_pool._pool[0].pid == old_pid
+        pool = get_reusable_pool(processes=2)
+        assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+        pool.terminate()
 
-    # Growing the pool again should add a single process and keep the old
-    # one as it is still in a good shape
-    pool = get_reusable_pool(processes=2)
-    assert len(pool._pool) == 2
-    assert old_pid in [p.pid for p in pool._pool]
-    pool.terminate()
+    @pytest.mark.parametrize("n_proc", [1, 2, 5, 17])
+    def test_crash_races(self, exit_on_deadlock, n_proc):
+        """Test the race conditions in reusable_pool crash handling"""
+        # Test for external crash signal comming from neighbor
+        # with various race setup
+        mp.util.debug("Test race - # Processes = {}".format(n_proc))
+        pool = get_reusable_pool(processes=n_proc)
+        pids = [p.pid for p in pool._pool]
+        assert len(pids) == n_proc
+        assert None not in pids
+        res = pool.map(work_sleep, [(.0001 * (j//2), pids)
+                                    for j in range(2 * n_proc)])
+        assert all(res)
+        res = pool.map_async(kill_friend, pids[::-1])
+        try:
+            with pytest.raises(AbortedWorkerError):
+                res.get()
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            raise e
+
+        pool = get_reusable_pool(processes=n_proc)
+        pids = [p.pid for p in pool._pool]
+        res = pool.imap(work_sleep, [(.0001 * j, pids)
+                                     for j in range(2 * n_proc)])
+        assert all(list(res))
+        res = pool.imap(kill_friend, pids[::-1])
+        with pytest.raises(AbortedWorkerError):
+            list(res)
+
+        # Clean terminate
+        pool.terminate()
 
 
-def test_kill_after_resize_call(exit_on_deadlock):
-    """Test recovery if killed after resize call"""
-    # Test the pool resizing called before a kill arrive
-    pool = get_reusable_pool(processes=2)
-    pool.apply_async(kill_friend, (pool._pool[1].pid, .1))
-    pool = get_reusable_pool(processes=1)
-    assert pool.apply(sleep_identity, ((1, 0.),)) == 1
-    pool.terminate()
+class TestTerminatePool:
+    def test_terminate_kill(self, exit_on_deadlock):
+        """Test reusable_pool termination handling"""
+        pool = get_reusable_pool(processes=5)
+        res1 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
+        res2 = pool.map_async(sleep_identity, [(i, 0.003) for i in range(50)])
+        assert res1.get() == list(range(50))
+        # We should get an error as the pool terminated before we fetched
+        # the results from the operation.
+        pool.terminate()
+        with pytest.raises(TerminatedPoolError):
+            res2.get()
+
+    def test_terminate_deadlock(self, exit_on_deadlock):
+        """Test recovery if killed after resize call"""
+        # Test the pool terminate call do not cause deadlock
+        pool = get_reusable_pool(processes=2)
+        pool.apply_async(kill_friend, (pool._pool[1].pid, .0))
+        sleep(.01)
+        pool.terminate()
+
+        pool = get_reusable_pool(processes=2)
+        pool.terminate()
+
+    def test_terminate(self, exit_on_deadlock):
+
+        pool = get_reusable_pool(processes=4)
+        res = pool.map_async(
+            sleep, [0.1 for i in range(10000)], chunksize=1
+            )
+        pool.terminate()
+        join = TimingWrapper(pool.join)
+        join()
+        assert join.elapsed < 0.5
+        with pytest.raises(TerminatedPoolError):
+            res.get()
 
 
-def test_terminate_deadlock(exit_on_deadlock):
-    """Test recovery if killed after resize call"""
-    # Test the pool terminate call do not cause deadlock
-    pool = get_reusable_pool(processes=2)
-    pool.apply_async(kill_friend, (pool._pool[1].pid, .0))
-    sleep(.01)
-    pool.terminate()
+class TestResizeRpool:
+    def test_rpool_resize(self, exit_on_deadlock):
+        """Test reusable_pool resizing"""
 
-    pool = get_reusable_pool(processes=2)
-    pool.terminate()
+        pool = get_reusable_pool(processes=2)
+
+        # Decreasing the pool should drop a single process and keep one of the
+        # old one as it is still in a good shape. The resize should not occur
+        # while there are on going works.
+        pids = [p.pid for p in pool._pool]
+        res = pool.apply_async(work_sleep, ((.1, pids),))
+        warnings.filterwarnings("always", category=UserWarning)
+        with warnings.catch_warnings(record=True) as w:
+            pool = get_reusable_pool(processes=1)
+            assert res.get(), ("Resize should wait for current processes "
+                               " to finish")
+            assert len(pool._pool) == 1
+            assert pool._pool[0].pid in pids
+            assert len(w) == 1
+
+        # Requesting the same number of process should not impact the pool nor
+        # kill the processed
+        old_pid = pool._pool[0].pid
+        unchanged_pool = get_reusable_pool(processes=1)
+        assert len(unchanged_pool._pool) == 1
+        assert unchanged_pool is pool
+        assert unchanged_pool._pool[0].pid == old_pid
+
+        # Growing the pool again should add a single process and keep the old
+        # one as it is still in a good shape
+        pool = get_reusable_pool(processes=2)
+        assert len(pool._pool) == 2
+        assert old_pid in [p.pid for p in pool._pool]
+        pool.terminate()
+
+    def test_kill_after_resize_call(self, exit_on_deadlock):
+        """Test recovery if killed after resize call"""
+        # Test the pool resizing called before a kill arrive
+        pool = get_reusable_pool(processes=2)
+        pool.apply_async(kill_friend, (pool._pool[1].pid, .1))
+        pool = get_reusable_pool(processes=1)
+        assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+        pool.terminate()
 
 
 def test_invalid_process_number():
@@ -344,19 +374,6 @@ def test_invalid_process_number():
         get_reusable_pool(processes=-1)
 
 
-def test_deadlock_kill(exit_on_deadlock):
-    """Test deadlock recovery for reusable_pool"""
-    pool = get_reusable_pool(processes=1)
-    worker = pool._pool[0]
-    pool = get_reusable_pool(processes=2)
-    os.kill(worker.pid, SIGKILL)
-    wait_dead(worker)
-
-    pool = get_reusable_pool(processes=2)
-    assert pool.apply(sleep_identity, ((1, 0.),)) == 1
-    pool.terminate()
-
-
 @pytest.mark.skipif(True, reason="Known failure")
 def test_freeze(exit_on_deadlock):
     """Test no freeze on OSX with Accelerate"""
@@ -366,3 +383,17 @@ def test_freeze(exit_on_deadlock):
     pool = get_reusable_pool(2)
     pool.apply(np.dot, (a, a))
     pool.terminate()
+
+
+class TimingWrapper(object):
+
+    def __init__(self, func):
+        self.func = func
+        self.elapsed = None
+
+    def __call__(self, *args, **kwds):
+        t = time()
+        try:
+            return self.func(*args, **kwds)
+        finally:
+            self.elapsed = time() - t
