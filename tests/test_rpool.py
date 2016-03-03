@@ -95,9 +95,9 @@ def kill_friend(pid, delay=0):
         mp.util.debug("process {} was already dead".format(pid))
 
 
-def raise_error():
+def raise_error(Err):
     """Function that raises an Exception in process"""
-    raise RuntimeError('bad except')
+    raise Err()
 
 
 def return_instance(cls):
@@ -135,7 +135,7 @@ class CrashAtPickle(object):
 class CrashAtUnpickle(object):
     """Bad object that triggers a segfault at unpickling time."""
     def __reduce__(self):
-        return crash, (), ()
+        return crash, ()
 
 
 class ExitAtPickle(object):
@@ -147,7 +147,7 @@ class ExitAtPickle(object):
 class ExitAtUnpickle(object):
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
-        return exit, (), ()
+        return exit, ()
 
 
 class ErrorAtPickle(object):
@@ -159,67 +159,55 @@ class ErrorAtPickle(object):
 class ErrorAtUnpickle(object):
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
-        return UnpicklingError, ("Error in unpickle"), ()
+        return raise_error, (UnpicklingError, )
 
 
-def sleep_identity(args):
+def id_sleep(args):
     x, delay = args
     sleep(delay)
     return x
 
-crash_cases = [
-            # Check problem occuring while pickling a task in
-            # the task_handler thread
-            (id, (ExitAtPickle(),), AbortedWorkerError),
-            (id, (ErrorAtPickle(),), PICKLING_ERRORS),
-            # Check problem occuring while unpickling a task on workers
-            (id, (ExitAtUnpickle(),), AbortedWorkerError),
-            (id, (ErrorAtUnpickle(),), PICKLING_ERRORS),
-            (id, (CrashAtUnpickle(),), AbortedWorkerError),
-            # Check problem occuring during function execution on workers
-            (crash, (), AbortedWorkerError),
-            (exit, (), AbortedWorkerError),
-            (raise_error, (), RuntimeError),
-            # Check problem occuring while pickling a task result on workers
-            (return_instance, (CrashAtPickle,), AbortedWorkerError),
-            (return_instance, (ExitAtPickle,), AbortedWorkerError),
-            (return_instance, (ErrorAtPickle,), MaybeEncodingError),
-            # Check problem occuring while unpickling a task in
-            # the result_handler thread
-            (return_instance, (ExitAtUnpickle,), AbortedWorkerError),
-            (return_instance, (ErrorAtUnpickle,), MaybeEncodingError),
-]
-
 
 class TestPoolDeadLock:
-    @pytest.mark.parametrize("func, args, expected_err", crash_cases)
-    def test_crashes(self, exit_on_deadlock, func, args, expected_err):
-        """Test various reusable_pool crash handling"""
-        pool = get_reusable_pool(processes=2)
-        res = pool.apply_async(func, args)
-        with pytest.raises(expected_err):
-            res.get()
 
-        # Check that the pool can still be recovered
-        pool = get_reusable_pool(processes=2)
-        assert pool.apply(sleep_identity, ((1, 0.),)) == 1
-        pool.terminate()
+    crash_cases = [
+                # Check problem occuring while pickling a task in
+                (id, (ExitAtPickle(),), AbortedWorkerError),
+                (id, (ErrorAtPickle(),), PICKLING_ERRORS),
+                # Check problem occuring while unpickling a task on workers
+                (id, (ExitAtUnpickle(),), AbortedWorkerError),
+                (id, (ErrorAtUnpickle(),), AbortedWorkerError),
+                (id, (CrashAtUnpickle(),), AbortedWorkerError),
+                # Check problem occuring during function execution on workers
+                (crash, (), AbortedWorkerError),
+                (exit, (), AbortedWorkerError),
+                (raise_error, (RuntimeError, ), RuntimeError),
+                # Check problem occuring while pickling a task result
+                # on workers
+                (return_instance, (CrashAtPickle,), AbortedWorkerError),
+                (return_instance, (ExitAtPickle,), AbortedWorkerError),
+                (return_instance, (ErrorAtPickle,), MaybeEncodingError),
+                # Check problem occuring while unpickling a task in
+                # the result_handler thread
+                (return_instance, (ExitAtUnpickle,), AbortedWorkerError),
+                (return_instance, (ErrorAtUnpickle,), AbortedWorkerError),
+    ]
 
     callback_crash_cases = [
                 # Check problem occuring during function execution on workers
                 # (crash, AbortedWorkerError),
                 (exit, (), AbortedWorkerError),
-                (raise_error, (), RuntimeError),
+                (raise_error, (RuntimeError, ), RuntimeError),
                 (start_job, (id, (ExitAtPickle(),)), AbortedWorkerError),
                 (start_job, (id, (ErrorAtPickle(),)), PICKLING_ERRORS),
                 # Check problem occuring while unpickling a task on workers
                 (start_job, (id, (ExitAtUnpickle(),)), AbortedWorkerError),
-                (start_job, (id, (ErrorAtUnpickle(),)), PICKLING_ERRORS),
+                (start_job, (id, (ErrorAtUnpickle(),)), AbortedWorkerError),
                 (start_job, (id, (CrashAtUnpickle(),)), AbortedWorkerError),
                 # Check problem occuring during function execution on workers
                 (start_job, (crash, ()), AbortedWorkerError),
                 (start_job, (exit, ()), AbortedWorkerError),
-                (start_job, (raise_error, ()), RuntimeError),
+                (start_job, (raise_error, (RuntimeError, )), RuntimeError),
                 # Check problem occuring while pickling a task
                 # result on workers
                 (start_job, (return_instance, (CrashAtPickle,)),
@@ -233,14 +221,27 @@ class TestPoolDeadLock:
                 (start_job, (return_instance, (ExitAtUnpickle,)),
                  AbortedWorkerError),
                 (start_job, (return_instance, (ErrorAtUnpickle,)),
-                 MaybeEncodingError),
+                 AbortedWorkerError),
     ]
+
+    @pytest.mark.parametrize("func, args, expected_err", crash_cases)
+    def test_crashes(self, exit_on_deadlock, func, args, expected_err):
+        """Test various reusable_pool crash handling"""
+        pool = get_reusable_pool(processes=2)
+        res = pool.apply_async(func, args)
+        with pytest.raises(expected_err):
+            res.get()
+
+        # Check that the pool can still be recovered
+        pool = get_reusable_pool(processes=2)
+        assert pool.apply(id_sleep, ((1, 0.),)) == 1
+        pool.terminate()
 
     @pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
     def test_callback(self, exit_on_deadlock, func, args, expected_err):
         """Test the recovery from callback crash"""
         pool = get_reusable_pool(processes=2)
-        res = pool.apply_async(sleep_identity,
+        res = pool.apply_async(id_sleep,
                                ((func, 0),),
                                callback=lambda f: f(*args))
         with pytest.raises(expected_err):
@@ -253,7 +254,7 @@ class TestPoolDeadLock:
 
         # Check that the pool can still be recovered
         pool = get_reusable_pool(processes=2)
-        assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+        assert pool.apply(id_sleep, ((1, 0.),)) == 1
         pool.terminate()
 
     def test_deadlock_kill(self, exit_on_deadlock):
@@ -265,7 +266,7 @@ class TestPoolDeadLock:
         wait_dead(worker)
 
         pool = get_reusable_pool(processes=2)
-        assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+        assert pool.apply(id_sleep, ((1, 0.),)) == 1
         pool.terminate()
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 17])
@@ -426,7 +427,7 @@ class TestResizeRpool:
         pool = get_reusable_pool(processes=2)
         pool.apply_async(kill_friend, (pool._pool[1].pid, .1))
         pool = get_reusable_pool(processes=1)
-        assert pool.apply(sleep_identity, ((1, 0.),)) == 1
+        assert pool.apply(id_sleep, ((1, 0.),)) == 1
         pool.terminate()
 
 
