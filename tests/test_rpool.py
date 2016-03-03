@@ -110,6 +110,17 @@ def start_job(func, args):
     pool.apply(func, args)
 
 
+class SayWhenError(ValueError):
+    pass
+
+
+def exception_throwing_generator(total, when):
+    for i in range(total):
+        if i == when:
+            raise SayWhenError("Somebody said when")
+        yield i
+
+
 def do_nothing(arg):
     """Function that return True, test passing argument"""
     return True
@@ -282,6 +293,53 @@ class TestPoolDeadLock:
         res = pool.imap(kill_friend, pids[::-1])
         with pytest.raises(AbortedWorkerError):
             list(res)
+
+        # Clean terminate
+        pool.terminate()
+
+    def test_imap_handle_iterable_exception(self, exit_on_deadlock):
+        pool = get_reusable_pool(processes=2)
+        it = pool.imap(id_sleep, exception_throwing_generator(10, 3), 1)
+        for i in range(3):
+            assert next(it) == i
+        with pytest.raises(SayWhenError):
+            it.__next__()
+
+        # SayWhenError seen at start of problematic chunk's results
+        it = self.pool.imap(id_sleep, exception_throwing_generator(20, 7), 2)
+        for i in range(6):
+            assert next(it) == i
+        with pytest.raises(SayWhenError):
+            it.__next__()
+
+        it = self.pool.imap(id_sleep, exception_throwing_generator(20, 7), 4)
+        for i in range(4):
+            assert next(it) == i
+        with pytest.raises(SayWhenError):
+            it.__next__()
+        pool.terminate()
+
+    def test_imap_unordered_handle_iterable_exception(self, exit_on_deadlock):
+        """Test correct hadeling of generator failure in crash"""
+        pool = get_reusable_pool(processes=2)
+        it = pool.imap_unordered(id_sleep, exception_throwing_generator(10, 3),
+                                 1)
+        expected_values = list(range(10))
+        with pytest.raises(SayWhenError):
+            # imap_unordered makes it difficult to anticipate the SayWhenError
+            for i in range(10):
+                value = next(it)
+                assert value in expected_values
+                expected_values.remove(value)
+
+        it = pool.imap_unordered(id_sleep, exception_throwing_generator(20, 7),
+                                 2)
+        expected_values = list(map(id_sleep, list(range(20))))
+        with pytest.raises(SayWhenError):
+            for i in range(20):
+                value = next(it)
+                assert value in expected_values
+                expected_values.remove(value)
 
         # Clean terminate
         pool.terminate()
