@@ -15,6 +15,7 @@ PICKLING_ERRORS = (PicklingError,)
 try:
     import cPickle
     PICKLING_ERRORS += (cPickle.PicklingError,)
+    from multiprocessing import TimeoutError
 except ImportError:
     pass
 
@@ -27,7 +28,7 @@ except ImportError:
     from signal import SIGTERM as SIGKILL
     TIMEOUT = 20
 
-# Compat for windows and python2.7
+# Compat windows and python2.7
 try:
     from faulthandler import dump_traceback_later
     from faulthandler import cancel_dump_traceback_later
@@ -88,7 +89,7 @@ def kill_friend(pid, delay=0):
     sleep(delay)
     try:
         os.kill(pid, SIGKILL)
-    except PermissionError as e:
+    except (PermissionError, ProcessLookupError) as e:
         if psutil.pid_exists(pid):
             mp.util.debug("Fail to kill an alive process?!?")
             raise e
@@ -287,6 +288,7 @@ class TestPoolDeadLock:
         assert all(res)
         res = pool.map_async(kill_friend, pids[::-1])
         with pytest.raises(AbortedWorkerError):
+            print(pool._pool)
             res.get()
 
         pool = get_reusable_pool(processes=n_proc)
@@ -301,28 +303,34 @@ class TestPoolDeadLock:
         # Clean terminate
         pool.terminate()
 
+    @pytest.mark.skipif(sys.version_info[:2] == (3, 3),
+                        reason='Regression from 3.3: do not catch '
+                               'imap generating errors')
     def test_imap_handle_iterable_exception(self, exit_on_deadlock):
         pool = get_reusable_pool(processes=2)
         it = pool.imap(id_sleep, exception_throwing_generator(10, 3), 1)
         for i in range(3):
             assert next(it) == i
         with pytest.raises(SayWhenError):
-            it.__next__()
+            next(it)
 
         # SayWhenError seen at start of problematic chunk's results
         it = pool.imap(id_sleep, exception_throwing_generator(20, 7), 2)
         for i in range(6):
             assert next(it) == i
         with pytest.raises(SayWhenError):
-            it.__next__()
+            next(it)
 
         it = pool.imap(id_sleep, exception_throwing_generator(20, 7), 4)
         for i in range(4):
             assert next(it) == i
         with pytest.raises(SayWhenError):
-            it.__next__()
+            next(it)
         pool.terminate()
 
+    @pytest.mark.skipif(sys.version_info[:2] == (3, 3),
+                        reason='Regression from 3.3: do not catch '
+                               'imap generating errors')
     def test_imap_unordered_handle_iterable_exception(self, exit_on_deadlock):
         """Test correct hadeling of generator failure in crash"""
         pool = get_reusable_pool(processes=2)

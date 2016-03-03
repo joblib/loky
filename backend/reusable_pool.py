@@ -17,7 +17,7 @@ CRASH_WORKER = ("A process was killed during the execution "
                 "a multiprocessing job.")
 CRASH_RESULT_HANDLER = ("The result handler crashed. This is probably "
                         "due to a result unpickling error.")
-CRASH_TASK_HANDLER = ("The task handler crashed. This is probably"
+CRASH_TASK_HANDLER = ("The task handler crashed. This is probably "
                       "due to a result pickling error.")
 
 # Protect the queue fro being reused
@@ -81,7 +81,7 @@ class _ReusablePool(Pool):
                 processes, initializer, initargs, maxtasksperchild)
         self._result_handler.name = 'ResultHandler-{}'.format(id_pool)
         self._task_handler.name = 'TaskHandler-{}'.format(id_pool)
-        self._worker_handler.name = 'WorkerrHandler-{}'.format(id_pool)
+        self._worker_handler.name = 'WorkerHandler-{}'.format(id_pool)
         mp.util.debug("Pool{} started.".format(self.id_pool))
 
     def _has_started_thread(self, thread_name):
@@ -405,8 +405,17 @@ class _ReusablePool(Pool):
     @staticmethod
     def _flag_cache_broken(cache, err):
         """Flag all the cached job with the given error"""
+        mp.util.debug("flag cache as broken with err: {}".format(err))
         for k in list(cache.keys()):
             cache[k]._flag(err)
+
+    def map_async(self, func, iterable, chunksize=None, callback=None,
+                  error_callback=None):
+        '''
+        Asynchronous version of `map()` method.
+        '''
+        return self._map_async(func, iterable, mapstar, chunksize, callback,
+                               error_callback)
 
     def _map_async(self, func, iterable, mapper, chunksize=None, callback=None,
                    error_callback=None):
@@ -572,14 +581,19 @@ class RobustMapResult(MapResult):
     def _flag(self, err):
         self._success = False
         self._value = err
-        if self._error_callback:
+        if (hasattr(self, '_error_callback') and self._error_callback and
+                not self._success):
             callback_call(self, self._error_callback)
         del self._cache[self._job]
-        self._event.set()
+        self._notify()
 
 
 class RobustIMapIterator(IMapIterator):
     def _flag(self, err):
+        # We can set the length to whatever as this operation should be called
+        # after the task handeler finished
+        if self._length is None:
+            self._set_length(self._index+1)
         with self._cond:
             while self._index < self._length:
                 if self._index in self._unsorted:
