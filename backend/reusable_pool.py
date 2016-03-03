@@ -451,7 +451,8 @@ def callback_call(job, callback):
     try:
         callback(job._value)
     except Exception as e:
-        job._value = e
+        err = CallbackError(e, job._value)
+        job._value = err
         job._success = False
 
 
@@ -564,6 +565,23 @@ class TerminatedPoolError(Exception):
 
     def __repr__(self):
         return ('The pool was terminated while the task could complete')
+
+
+class CallbackError(Exception):
+    """The callback have failed in some ways and wrap value and
+    error together in results
+    """
+    def __init__(self, e, value):
+        super(CallbackError, self).__init__()
+        self.args = [repr(e)]
+        self.err = e
+        self.value = value
+
+    def __repr__(self):
+        return ('The callback for the jobs raised an error {}\n'
+                'The result is still accessible in this Error as'
+                'in the filed result')
+
 
 if __name__ == '__main__':
     # This will cause a deadlock

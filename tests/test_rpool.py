@@ -4,7 +4,7 @@ import psutil
 import warnings
 from time import sleep, time
 import pytest
-from backend.reusable_pool import get_reusable_pool
+from backend.reusable_pool import get_reusable_pool, CallbackError
 from backend.reusable_pool import AbortedWorkerError, TerminatedPoolError
 import multiprocessing as mp
 from multiprocessing.pool import MaybeEncodingError
@@ -233,7 +233,12 @@ class TestPoolDeadLock:
                                ((func, 0),),
                                callback=lambda f: f(*args))
         with pytest.raises(expected_err):
-            res.get()
+            try:
+                res.get()
+            except CallbackError as e:
+                assert func == e.value
+                print(e)
+                raise e.err
 
         # Check that the pool can still be recovered
         pool = get_reusable_pool(processes=2)
@@ -286,12 +291,14 @@ class TestTerminatePool:
     def test_terminate_kill(self, exit_on_deadlock):
         """Test reusable_pool termination handling"""
         pool = get_reusable_pool(processes=5)
-        res1 = pool.map_async(sleep_identity, [(i, 0.001) for i in range(50)])
-        res2 = pool.map_async(sleep_identity, [(i, 0.003) for i in range(50)])
+        res1 = pool.map_async(id_sleep, [(i, 0.001) for i in range(50)])
+        res2 = pool.map_async(id_sleep, [(i, 0.1) for i in range(50)])
         assert res1.get() == list(range(50))
         # We should get an error as the pool terminated before we fetched
         # the results from the operation.
-        pool.terminate()
+        terminate = TimingWrapper(pool.terminate)
+        terminate()
+        assert terminate.elapsed < 0.5
         with pytest.raises(TerminatedPoolError):
             res2.get()
 
