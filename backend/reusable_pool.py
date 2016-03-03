@@ -1,5 +1,5 @@
 from multiprocessing.pool import Pool, RUN, TERMINATE
-from multiprocessing.pool import ApplyResult, MapResult
+from multiprocessing.pool import ApplyResult, MapResult, IMapIterator
 import multiprocessing as mp
 import threading
 import warnings
@@ -22,6 +22,10 @@ CRASH_TASK_HANDLER = ("The task handler crashed. This is probably"
 
 # Protect the queue fro being reused
 _local = threading.local()
+
+
+def mapstar(args):
+    return list(map(*args))
 
 
 # Check if a thread has been started
@@ -401,15 +405,8 @@ class _ReusablePool(Pool):
     @staticmethod
     def _flag_cache_broken(cache, err):
         """Flag all the cached job with the given error"""
-        success, value = (False, err)
         for k in list(cache.keys()):
-            result = cache[k]
-            # Handle the iterator map case to completly clean the cache
-            if hasattr(result, '_index'):
-                while result._index != result._length:
-                    result._set(result._index, (success, value))
-            else:
-                result._set(0, (success, value))
+            cache[k]._flag(err)
 
     def _map_async(self, func, iterable, mapper, chunksize=None, callback=None,
                    error_callback=None):
@@ -446,6 +443,48 @@ class _ReusablePool(Pool):
         self._taskqueue.put(([(result._job, None, func, args, kwds)], None))
         return result
 
+    def imap(self, func, iterable, chunksize=1):
+        '''
+        Equivalent of `map()` -- can be MUCH slower than `Pool.map()`.
+        '''
+        if self._state != RUN:
+            raise ValueError("Pool not running")
+        if chunksize == 1:
+            result = RobustIMapIterator(self._cache)
+            self._taskqueue.put((((result._job, i, func, (x,), {})
+                                  for i, x in enumerate(iterable)),
+                                 result._set_length))
+            return result
+        else:
+            assert chunksize > 1
+            task_batches = Pool._get_tasks(func, iterable, chunksize)
+            result = RobustIMapIterator(self._cache)
+            self._taskqueue.put((((result._job, i, mapstar, (x,), {})
+                                  for i, x in enumerate(task_batches)),
+                                result._set_length))
+            return (item for chunk in result for item in chunk)
+
+    def imap_unordered(self, func, iterable, chunksize=1):
+        '''
+        Like `imap()` method but ordering of results is arbitrary.
+        '''
+        if self._state != RUN:
+            raise ValueError("Pool not running")
+        if chunksize == 1:
+            result = RobustIMapUnorderedIterator(self._cache)
+            self._taskqueue.put((((result._job, i, func, (x,), {})
+                                 for i, x in enumerate(iterable)),
+                                result._set_length))
+            return result
+        else:
+            assert chunksize > 1
+            task_batches = Pool._get_tasks(func, iterable, chunksize)
+            result = RobustIMapUnorderedIterator(self._cache)
+            self._taskqueue.put((((result._job, i, mapstar, (x,), {})
+                                 for i, x in enumerate(task_batches)),
+                                result._set_length))
+            return (item for chunk in result for item in chunk)
+
 
 def callback_call(job, callback):
     try:
@@ -474,6 +513,9 @@ class RobustApplyResult(ApplyResult):
             callback_call(self, self._error_callback)
         self._notify()
         del self._cache[self._job]
+
+    def _flag(self, err):
+        self._set(0, (False, err))
 
     def _notify(self):
         if sys.version_info[:2] >= (3, 3):
@@ -526,6 +568,39 @@ class RobustMapResult(MapResult):
                 self._cond.notify()
             finally:
                 self._cond.release()
+
+    def _flag(self, err):
+        self._success = False
+        self._value = err
+        if self._error_callback:
+            callback_call(self, self._error_callback)
+        del self._cache[self._job]
+        self._event.set()
+
+
+class RobustIMapIterator(IMapIterator):
+    def _flag(self, err):
+        with self._cond:
+            while self._index < self._length:
+                if self._index in self._unsorted:
+                    obj = self._unsorted.pop(self._index)
+                    self._items.append(obj)
+                else:
+                    self._items.append((False, err))
+                self._index += 1
+                self._cond.notify()
+            del self._cache[self._job]
+
+
+class RobustIMapUnorderedIterator(RobustIMapIterator):
+
+    def _set(self, i, obj):
+        with self._cond:
+            self._items.append(obj)
+            self._index += 1
+            self._cond.notify()
+            if self._index == self._length:
+                del self._cache[self._job]
 
 
 class AbortedWorkerError(Exception):
