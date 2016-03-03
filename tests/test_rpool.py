@@ -163,7 +163,10 @@ class ErrorAtUnpickle(object):
 
 
 def id_sleep(args):
-    x, delay = args
+    try:
+        x, delay = args
+    except TypeError:
+        x, delay = args, 0
     sleep(delay)
     return x
 
@@ -307,13 +310,13 @@ class TestPoolDeadLock:
             it.__next__()
 
         # SayWhenError seen at start of problematic chunk's results
-        it = self.pool.imap(id_sleep, exception_throwing_generator(20, 7), 2)
+        it = pool.imap(id_sleep, exception_throwing_generator(20, 7), 2)
         for i in range(6):
             assert next(it) == i
         with pytest.raises(SayWhenError):
             it.__next__()
 
-        it = self.pool.imap(id_sleep, exception_throwing_generator(20, 7), 4)
+        it = pool.imap(id_sleep, exception_throwing_generator(20, 7), 4)
         for i in range(4):
             assert next(it) == i
         with pytest.raises(SayWhenError):
