@@ -253,7 +253,6 @@ class TestPoolDeadLock:
                 res.get()
             except CallbackError as e:
                 assert func == e.value
-                print(e)
                 raise e.err
 
         # Check that the pool can still be recovered
@@ -288,7 +287,6 @@ class TestPoolDeadLock:
         assert all(res)
         res = pool.map_async(kill_friend, pids[::-1])
         with pytest.raises(AbortedWorkerError):
-            print(pool._pool)
             res.get()
 
         pool = get_reusable_pool(processes=n_proc)
@@ -303,51 +301,66 @@ class TestPoolDeadLock:
         # Clean terminate
         pool.terminate()
 
-    @pytest.mark.skipif(sys.version_info[:2] == (3, 3),
-                        reason='Regression from 3.3: do not catch '
-                               'imap generating errors')
     def test_imap_handle_iterable_exception(self, exit_on_deadlock):
+        # The catch of the errors in imap generation depend on the
+        # builded version of python
+        expected_err = (SayWhenError,)
+        if sys.version_info[:2] < (3, 5):
+            expected_err += (AbortedWorkerError,)
         pool = get_reusable_pool(processes=2)
         it = pool.imap(id_sleep, exception_throwing_generator(10, 3), 1)
-        for i in range(3):
-            assert next(it) == i
-        with pytest.raises(SayWhenError):
+        with pytest.raises(expected_err) as exc_info:
+            for i in range(3):
+                assert next(it) == i
             next(it)
+        if isinstance(exc_info, SayWhenError):
+            assert i == 3
 
         # SayWhenError seen at start of problematic chunk's results
+        pool = get_reusable_pool(processes=2)
         it = pool.imap(id_sleep, exception_throwing_generator(20, 7), 2)
-        for i in range(6):
-            assert next(it) == i
-        with pytest.raises(SayWhenError):
-            next(it)
 
-        it = pool.imap(id_sleep, exception_throwing_generator(20, 7), 4)
-        for i in range(4):
-            assert next(it) == i
-        with pytest.raises(SayWhenError):
+        with pytest.raises(expected_err) as exc_info:
+            for i in range(6):
+                assert next(it) == i
             next(it)
+        if isinstance(exc_info, SayWhenError):
+            assert i == 6
+
+        pool = get_reusable_pool(processes=2)
+        it = pool.imap(id_sleep, exception_throwing_generator(20, 7), 4)
+
+        with pytest.raises(expected_err) as exc_info:
+            for i in range(4):
+                assert next(it) == i
+            next(it)
+        if isinstance(exc_info, SayWhenError):
+            assert i == 4
         pool.terminate()
 
-    @pytest.mark.skipif(sys.version_info[:2] == (3, 3),
-                        reason='Regression from 3.3: do not catch '
-                               'imap generating errors')
     def test_imap_unordered_handle_iterable_exception(self, exit_on_deadlock):
         """Test correct hadeling of generator failure in crash"""
+        # The catch of the errors in imap generation depend on the
+        # builded version of python
+        expected_err = (SayWhenError,)
+        if sys.version_info[:2] < (3, 5):
+            expected_err += (AbortedWorkerError,)
         pool = get_reusable_pool(processes=2)
         it = pool.imap_unordered(id_sleep, exception_throwing_generator(10, 3),
                                  1)
         expected_values = list(range(10))
-        with pytest.raises(SayWhenError):
+        with pytest.raises(expected_err):
             # imap_unordered makes it difficult to anticipate the SayWhenError
             for i in range(10):
                 value = next(it)
                 assert value in expected_values
                 expected_values.remove(value)
 
+        pool = get_reusable_pool(processes=2)
         it = pool.imap_unordered(id_sleep, exception_throwing_generator(20, 7),
                                  2)
         expected_values = list(map(id_sleep, list(range(20))))
-        with pytest.raises(SayWhenError):
+        with pytest.raises(expected_err):
             for i in range(20):
                 value = next(it)
                 assert value in expected_values
