@@ -272,7 +272,7 @@ class TestPoolDeadLock:
         assert pool.apply(id_sleep, ((1, 0.),)) == 1
         pool.terminate()
 
-    @pytest.mark.parametrize("n_proc", [1, 2, 5, 17])
+    @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, exit_on_deadlock, n_proc):
         """Test the race conditions in reusable_pool crash handling"""
         # Test for external crash signal comming from neighbor
