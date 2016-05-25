@@ -8,15 +8,18 @@ import sys
 from time import sleep
 
 import threading
+
+__all__ = ['get_reusable_pool', 'TerminatedPoolError', 'AbortedWorkerError']
+
 # Additional state to flag the pool as unusable
 # with unsafe terminate function
 BROKEN = 3
 
 # Exit messages for Broken pools
 CRASH_WORKER = ("A process was killed during the execution "
-                "a multiprocessing job.")
-CRASH_RESULT_HANDLER = ("The result handler crashed. This is probably "
-                        "due to a result unpickling error.")
+                "of multiprocessing job.")
+CRASH_RESULT_HANDLER = ("The result handler crashed. This can be caused by "
+                        "an unpickling error.")
 CRASH_TASK_HANDLER = ("The task handler crashed. This is probably "
                       "due to a result pickling error.")
 
@@ -52,6 +55,7 @@ def get_reusable_pool(*args, **kwargs):
                           "previous one was in state {}"
                           "".format(processes, _pool._state))
             _pool.terminate()
+            _pool.join()
             _local._pool = _pool = None
             return get_reusable_pool(*args, **kwargs)
         else:
@@ -61,6 +65,7 @@ def get_reusable_pool(*args, **kwargs):
             mp.util.debug("Failed to resize existing pool to target size {}."
                           "".format(processes))
             _pool.terminate()
+            _pool.join()
             _local._pool = _pool = None
             return get_reusable_pool(*args, **kwargs)
 
@@ -83,16 +88,22 @@ class _ReusablePool(Pool):
         self._task_handler.name = 'TaskHandler-{}'.format(id_pool)
         self._worker_handler.name = 'WorkerHandler-{}'.format(id_pool)
         mp.util.debug("Pool{} started.".format(self.id_pool))
+        mp.util.debug("Pool{} ident: WH: {:x}  - TH: {:x}  - RH: {:x}".format(
+            id_pool, self._worker_handler.ident,  self._task_handler.ident,
+            self._result_handler.ident))
 
     def _has_started_thread(self, thread_name):
+        """helper function asserting if a pool thread has been created
+        and started.
+        """
         thread = getattr(self, thread_name, None)
-        if thread is not None:
-            return _is_started(thread)
-        return False
+        return thread is not None and _is_started(thread)
 
     def _join_exited_workers(self):
         """Cleanup after any worker processes which have exited due to reaching
         their specified lifetime.  Returns True if any workers were cleaned up.
+        Also detect if a worker stopped unexpectedly and clean up the pool in
+        this case.
         """
         cleaned = False
         for worker in self._pool[:]:
@@ -101,6 +112,8 @@ class _ReusablePool(Pool):
                 mp.util.debug('Cleaning up worker %r' % worker)
                 worker.join()
                 cleaned = True
+                # If a worker has stopped unexpectedely, clean the pool
+                # to avoid deadlocks
                 if worker.exitcode != 0:
                     mp.util.debug('A worker have failed in some ways, we will '
                                   'flag all current jobs as failed')
@@ -111,6 +124,8 @@ class _ReusablePool(Pool):
                         "error code {}".format(self.id_pool, worker.exitcode))
                     raise _BrokenPoolError(worker.exitcode)
                 self._pool.remove(worker)
+
+        # Also make sure the handler threads did not hang up
         if (self._has_started_thread("_result_handler") and
                 not self._result_handler.is_alive()):
             self._clean_up_crash(cause_msg=CRASH_RESULT_HANDLER)
@@ -119,30 +134,42 @@ class _ReusablePool(Pool):
                 not self._task_handler.is_alive()):
             self._clean_up_crash(cause_msg=CRASH_TASK_HANDLER)
             raise _BrokenPoolError(worker.exitcode)
+
         return cleaned
 
     def terminate(self):
-        mp.util.debug("Pool{} called terminate".format(self.id_pool))
-        if self._state != BROKEN:
-            self._maintain_pool(timeout=None)
-        if self._state != BROKEN:
-            with self.maintain_lock:
-                super(_ReusablePool, self).terminate()
-        else:
-            n_tries = 1000
-            delay = .001
-            for i in range(n_tries):
-                alive = False
-                for p in self._pool:
-                    alive |= p.exitcode is None
-                alive |= self._result_handler.is_alive()
-                alive |= self._task_handler.is_alive()
-                if not alive:
-                    return
-                sleep(delay)
-            # TODO - kill -9 ?
-            mp.util.sub_warning("Terminate was called on a BROKEN pool but "
-                                "some processes were still alive.")
+        mp.util.debug('terminating pool')
+
+        # make sure the state of the pool is up to date
+        self._maintain_pool(timeout=None)
+
+        self._state = TERMINATE
+
+        # call terminate with a lock to avoid concurrent call with
+        # clean_up_crash
+        with self.maintain_lock:
+            self._terminate()
+        # mp.util.debug("Pool{} called terminate".format(self.id_pool))
+        # if self._state != BROKEN:
+        #     self._maintain_pool(timeout=None)
+        # if self._state != BROKEN:
+        #     with self.maintain_lock:
+        #         super(_ReusablePool, self).terminate()
+        # else:
+        #     n_tries = 1000
+        #     delay = .001
+        #     for i in range(n_tries):
+        #         alive = False
+        #         for p in self._pool:
+        #             alive |= p.exitcode is None
+        #         alive |= self._result_handler.is_alive()
+        #         alive |= self._task_handler.is_alive()
+        #         if not alive:
+        #             return
+        #         sleep(delay)
+        #     # TODO - kill -9 ?
+        #     mp.util.sub_warning("Terminate was called on a BROKEN pool but "
+        #                         "some processes were still alive.")
 
     def _maintain_pool(self, timeout=.01):
         """Clean up any exited workers and start replacements for them.
@@ -163,8 +190,14 @@ class _ReusablePool(Pool):
         if self._state == BROKEN:
             return
 
+        # self._terminate_pool(self._taskqueue, self._inqueue, self._outqueue,
+        #                      self._pool, self._worker_handler,
+        #                      self._task_handler, self._result_handler,
+        #                      self._cache,
+        #                      err=AbortedWorkerError(cause_msg, exitcode))
+
         # Flag the pool as broken
-        mp.util.debug('Pool{} cleaning broken pool'.format(self.id_pool))
+        mp.util.debug('clean up broken pool{}'.format(self.id_pool))
         self._state = BROKEN
 
         # Terminate the worker handler thread
@@ -208,11 +241,11 @@ class _ReusablePool(Pool):
                 threading.current_thread() is not self._task_handler and
                 self._task_handler.is_alive()):
             self._task_handler.join()
-        mp.util.debug("joining worker_handler")
-        if (self._has_started_thread("_worker_handler") and
-                threading.current_thread() is not self._worker_handler and
-                self._worker_handler.is_alive()):
-            self._worker_handler.join()
+        # mp.util.debug("joining worker_handler")
+        # if (self._has_started_thread("_worker_handler") and
+        #         threading.current_thread() is not self._worker_handler and
+        #         self._worker_handler.is_alive()):
+        #     self._worker_handler.join()
 
         # Flag all the _cached job as failed due to aborted worker
         mp.util.debug("flag the cache as broken")
@@ -297,9 +330,26 @@ class _ReusablePool(Pool):
         # Ensure finishing jobs haven't broken the pool
         self._maintain_pool(timeout=None)
 
+    def join(self):
+        mp.util.debug('joining Pool{}'.format(self.id_pool))
+        assert self._state in (BROKEN, TERMINATE)
+        mp.util.debug('Pool state:\n{}, _state:{}\n{}, _state:{}\n'
+                      '{}, _state:{}\n{}'.format(
+                        self._worker_handler, self._worker_handler._state,
+                        self._task_handler, self._task_handler._state,
+                        self._result_handler, self._result_handler._state,
+                        self._pool))
+        self._worker_handler.join()
+        self._task_handler.join()
+        self._result_handler.join()
+        for p in self._pool:
+            p.join()
+        mp.util.debug('Pool{} terminated cleanly'.format(self.id_pool))
+
     @classmethod
     def _terminate_pool(cls, taskqueue, inqueue, outqueue, pool,
-                        worker_handler, task_handler, result_handler, cache):
+                        worker_handler, task_handler, result_handler, cache,
+                        err=None):
         """Overload the _terminate_pool method to handle outqueue and cache
         cleaning and avoid deadlocks.
         """
@@ -339,7 +389,9 @@ class _ReusablePool(Pool):
 
         # At this point, there is no work done anymore so we can flag the
         # jobs remaining in cache as broken
-        cls._flag_cache_broken(cache, TerminatedPoolError())
+        if not err:
+            err = TerminatedPoolError()
+        cls._flag_cache_broken(cache, err)
         result_handler._state = TERMINATE
         # send a sentinel to make sure the result_handler do wait forever
         # on the outqueue
@@ -409,6 +461,7 @@ class _ReusablePool(Pool):
         for k in list(cache.keys()):
             cache[k]._flag(err)
 
+    # Necessary to avoid issues with name change from 2.7
     def map_async(self, func, iterable, chunksize=None, callback=None,
                   error_callback=None):
         '''
@@ -680,3 +733,4 @@ if __name__ == '__main__':
     os.kill(pid, 15)
 
     pool.terminate()
+    pool.join()

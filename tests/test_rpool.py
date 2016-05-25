@@ -46,10 +46,10 @@ mp.util._logger.setLevel(5)
 
 @pytest.yield_fixture
 def exit_on_deadlock():
-    with open(".exit_on_lock", "w") as f:
-        dump_traceback_later(timeout=TIMEOUT, exit=True, file=f)
-        yield
-        cancel_dump_traceback_later()
+    from sys import stderr
+    dump_traceback_later(timeout=TIMEOUT, exit=True, file=stderr)
+    yield
+    cancel_dump_traceback_later()
 
 
 def wait_dead(worker, n_tries=1000, delay=0.001):
@@ -109,6 +109,8 @@ def return_instance(cls):
 def start_job(func, args):
     pool = get_reusable_pool(processes=2)
     pool.apply(func, args)
+    pool.terminate()
+    pool.join()
 
 
 class SayWhenError(ValueError):
@@ -170,6 +172,10 @@ def id_sleep(args):
         x, delay = args, 0
     sleep(delay)
     return x
+
+
+def is_terminated_properly():
+    pass
 
 
 class TestPoolDeadLock:
@@ -240,6 +246,7 @@ class TestPoolDeadLock:
         pool = get_reusable_pool(processes=2)
         assert pool.apply(id_sleep, ((1, 0.),)) == 1
         pool.terminate()
+        pool.join()
 
     @pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
     def test_callback(self, exit_on_deadlock, func, args, expected_err):
@@ -259,6 +266,7 @@ class TestPoolDeadLock:
         pool = get_reusable_pool(processes=2)
         assert pool.apply(id_sleep, ((1, 0.),)) == 1
         pool.terminate()
+        pool.join()
 
     def test_deadlock_kill(self, exit_on_deadlock):
         """Test deadlock recovery for reusable_pool"""
@@ -271,6 +279,7 @@ class TestPoolDeadLock:
         pool = get_reusable_pool(processes=2)
         assert pool.apply(id_sleep, ((1, 0.),)) == 1
         pool.terminate()
+        pool.join()
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, exit_on_deadlock, n_proc):
@@ -300,6 +309,7 @@ class TestPoolDeadLock:
 
         # Clean terminate
         pool.terminate()
+        pool.join()
 
     def test_imap_handle_iterable_exception(self, exit_on_deadlock):
         # The catch of the errors in imap generation depend on the
@@ -337,6 +347,7 @@ class TestPoolDeadLock:
         if isinstance(exc_info, SayWhenError):
             assert i == 4
         pool.terminate()
+        pool.join()
 
     def test_imap_unordered_handle_iterable_exception(self, exit_on_deadlock):
         """Test correct hadeling of generator failure in crash"""
@@ -368,6 +379,7 @@ class TestPoolDeadLock:
 
         # Clean terminate
         pool.terminate()
+        pool.join()
 
 
 class TestTerminatePool:
@@ -384,6 +396,7 @@ class TestTerminatePool:
         assert terminate.elapsed < 0.5
         with pytest.raises(TerminatedPoolError):
             res2.get()
+        pool.join()
 
     def test_terminate_deadlock(self, exit_on_deadlock):
         """Test recovery if killed after resize call"""
@@ -392,9 +405,11 @@ class TestTerminatePool:
         pool.apply_async(kill_friend, (pool._pool[1].pid, .0))
         sleep(.01)
         pool.terminate()
+        pool.join()
 
         pool = get_reusable_pool(processes=2)
         pool.terminate()
+        pool.join()
 
     def test_terminate(self, exit_on_deadlock):
 
@@ -444,6 +459,7 @@ class TestResizeRpool:
         assert len(pool._pool) == 2
         assert old_pid in [p.pid for p in pool._pool]
         pool.terminate()
+        pool.join()
 
     def test_kill_after_resize_call(self, exit_on_deadlock):
         """Test recovery if killed after resize call"""
@@ -453,6 +469,7 @@ class TestResizeRpool:
         pool = get_reusable_pool(processes=1)
         assert pool.apply(id_sleep, ((1, 0.),)) == 1
         pool.terminate()
+        pool.join()
 
 
 def test_invalid_process_number():
@@ -474,6 +491,7 @@ def test_freeze(exit_on_deadlock):
     pool = get_reusable_pool(2)
     pool.apply(np.dot, (a, a))
     pool.terminate()
+    pool.join()
 
 
 class TimingWrapper(object):
