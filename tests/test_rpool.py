@@ -248,6 +248,7 @@ class TestPoolDeadLock:
         pool.terminate()
         pool.join()
 
+    # @pytest.mark.skipif(True, reason="Known failure")
     @pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
     def test_callback(self, exit_on_deadlock, func, args, expected_err):
         """Test the recovery from callback crash"""
