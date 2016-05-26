@@ -386,11 +386,11 @@ class _ReusablePool(Pool):
         for k in list(cache.keys()):
             cache[k]._flag(err)
 
-    # Necessary to avoid issues with name change from 2.7
     def map_async(self, func, iterable, chunksize=None, callback=None,
                   error_callback=None):
         """
         Asynchronous version of `map()` method.
+        Overloaded to avoid compatibility issues with name change from 2.7
         """
         return self._map_async(func, iterable, mapstar, chunksize, callback,
                                error_callback)
@@ -399,6 +399,8 @@ class _ReusablePool(Pool):
                    error_callback=None):
         """
         Helper function to implement map, starmap and their async counterparts.
+        Overloaded to use RobustMapResult instead of MapResult to permit better
+        handling of callback raising Exceptions
         """
         if self._state != RUN:
             raise ValueError("Pool not running")
@@ -421,9 +423,11 @@ class _ReusablePool(Pool):
 
     def apply_async(self, func, args=(), kwds={}, callback=None,
                     error_callback=None):
-        '''
+        """
         Asynchronous version of `apply()` method.
-        '''
+        Overloaded to use RobustApplyResult instead of ApplyResult to permit
+        better handling of callback raising Exceptions
+        """
         if self._state != RUN:
             raise ValueError("Pool not running")
         result = RobustApplyResult(self._cache, callback, error_callback)
@@ -431,9 +435,11 @@ class _ReusablePool(Pool):
         return result
 
     def imap(self, func, iterable, chunksize=1):
-        '''
+        """
         Equivalent of `map()` -- can be MUCH slower than `Pool.map()`.
-        '''
+        Overloaded to use RobustIMapIterator instead of IMapIterator to permit
+        better handling of callback raising Exceptions
+        """
         if self._state != RUN:
             raise ValueError("Pool not running")
         if chunksize == 1:
@@ -452,9 +458,12 @@ class _ReusablePool(Pool):
             return (item for chunk in result for item in chunk)
 
     def imap_unordered(self, func, iterable, chunksize=1):
-        '''
+        """
         Like `imap()` method but ordering of results is arbitrary.
-        '''
+        Overloaded to use RobustIMapUnorderedIterator instead of
+        IMapUnorderedIterator to permit better handling of callback raising
+        Exceptions
+        """
         if self._state != RUN:
             raise ValueError("Pool not running")
         if chunksize == 1:
