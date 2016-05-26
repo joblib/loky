@@ -37,6 +37,20 @@ def _is_started(thread):
     return thread._Thread__started.is_set()
 
 
+def _terminate_workers(pool):
+    """helper to terminate workers. Avoid compatibility unsafe terminate"""
+    if pool and hasattr(pool[0], 'terminate'):
+        for p in pool:
+            if p.exitcode is None:
+                try:
+                    p.terminate()
+                except ProcessLookupError:
+                    # Terminate is not safe for all version of python (3.3)
+                    pass
+            mp.util.debug('cleaning up worker %d' % p.pid)
+            p.join()
+
+
 def get_reusable_pool(*args, **kwargs):
     """Return a the current ReusablePool. Start a new one if needed"""
     _pool = getattr(_local, '_pool', None)
@@ -178,13 +192,8 @@ class _ReusablePool(Pool):
             self._worker_handler.join()
 
         # Terminate and join the workers
-        if self._pool and hasattr(self._pool[0], 'terminate'):
-            mp.util.debug('terminating workers')
-            for p in self._pool:
-                if p.exitcode is None:
-                    p.terminate()
-                mp.util.debug('cleaning up worker %d' % p.pid)
-                p.join()
+        mp.util.debug('terminating workers')
+        _terminate_workers(self._pool)
 
         # Kill the wlock of the outqueue to avoid deadlock with _task_handler
         # sentinelling the _result handler
@@ -326,13 +335,10 @@ class _ReusablePool(Pool):
             task_handler.join()
 
         # Terminate the workers
-        if pool and hasattr(pool[0], 'terminate'):
-            mp.util.debug('terminating workers')
-            for p in pool:
-                if p.exitcode is None:
-                    p.terminate()
-                mp.util.debug('cleaning up worker %d' % p.pid)
-                p.join()
+
+        # Terminate and join the workers
+        mp.util.debug('terminating workers')
+        _terminate_workers(pool)
 
         # At this point, there is no work done anymore so we can flag all the
         # remaining jobs in cache as broken by the terminate call
@@ -366,12 +372,8 @@ class _ReusablePool(Pool):
                           "The pool is probably broken.")
             acquire = False
             # Terminate the readers of the queue as the read will be unsafe
-            if readers and hasattr(readers[0], 'terminate'):
-                mp.util.debug('terminating readers of the queue')
-                for p in readers:
-                    if p.exitcode is None:
-                        p.terminate()
-                        p.join()
+            mp.util.debug('terminating readers of a queue')
+            _terminate_workers(readers)
         while (writer.is_alive() and (queue._reader.poll() or
                                       (taskqueue and not taskqueue.empty()))):
             queue._reader.recv_bytes()
