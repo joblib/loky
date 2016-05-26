@@ -166,24 +166,16 @@ class _ReusablePool(Pool):
         else:
             mp.util.debug("Could not maintain pool..")
 
-    def _clean_up_crash(self, cause_msg, exitcode=None):
-        if self._state == BROKEN:
-            return
+    def _clean_up_workers(self, cause_msg, exitcode=None):
+        """Clean up deadlocks due to a worker crashing"""
 
-        # self._terminate_pool(self._taskqueue, self._inqueue, self._outqueue,
-        #                      self._pool, self._worker_handler,
-        #                      self._task_handler, self._result_handler,
-        #                      self._cache,
-        #                      err=AbortedWorkerError(cause_msg, exitcode))
-
-        # Flag the pool as broken
-        mp.util.debug('clean up broken pool{}'.format(self.id_pool))
-        self._state = BROKEN
-
-        # Terminate the worker handler thread
-        mp.util.debug("set terminate state for worker_handler and workers")
-        self._worker_handler._state = TERMINATE
-        self._task_handler._state = TERMINATE
+        # If the calling thread is not worker_handler, make sure it will
+        # not restart the workers
+        if (self._has_started_thread("_worker_handler") and
+                threading.current_thread() is not self._worker_handler and
+                self._worker_handler.is_alive()):
+            self._worker_handler._state = TERMINATE
+            self._worker_handler.join()
 
         # Terminate and join the workers
         if self._pool and hasattr(self._pool[0], 'terminate'):
@@ -194,63 +186,37 @@ class _ReusablePool(Pool):
                 mp.util.debug('cleaning up worker %d' % p.pid)
                 p.join()
 
-        # Break the writing lock on the outqueue to avoid causing deadlocks
-        # with the sentinels
+        # Kill the wlock of the outqueue to avoid deadlock with _task_handler
+        # sentinelling the _result handler
         self._outqueue._wlock = None
         if sys.version_info[:2] < (3, 4):
             self._outqueue._make_methods()
 
+    def _clean_up_crash(self, cause_msg, exitcode=None):
+        """
+        Clean up the state of the pool in case of crash from a worker or one of
+        the handlers
+        """
+        if self._state == BROKEN:
+            return
+
+        # Flag the pool as broken
+        mp.util.debug('clean up broken pool{}'.format(self.id_pool))
+        self._state = BROKEN
+
+        if exitcode is not None:
+            self._clean_up_workers(cause_msg, exitcode)
+        self._task_handler._state = TERMINATE
+
         mp.util.debug("send sentinel for task_handler")
         self._taskqueue.put(None)
-
-        # Flush inqueue to ensure that the task_handler can put the sentinel
-        # in it without hanging forever
-        mp.util.debug('helping task handler/workers to finish')
-        _ReusablePool._empty_queue(self._inqueue, self._task_handler,
-                                   self._taskqueue, self._pool)
-
-        # If the result handler is dead, the sentinel might deadlock
-        # due to the outqueue being full
-        if not self._result_handler.is_alive():
-            _ReusablePool._empty_queue(self._outqueue, self._task_handler,
-                                       self._taskqueue, self._pool)
-
-        # Make sure everything finished
-        mp.util.debug("joining task_handler")
-        if (self._has_started_thread("_task_handler") and
-                threading.current_thread() is not self._task_handler and
-                self._task_handler.is_alive()):
-            self._task_handler.join()
-        # mp.util.debug("joining worker_handler")
-        # if (self._has_started_thread("_worker_handler") and
-        #         threading.current_thread() is not self._worker_handler and
-        #         self._worker_handler.is_alive()):
-        #     self._worker_handler.join()
 
         # Flag all the _cached job as failed due to aborted worker
         mp.util.debug("flag the cache as broken")
         _ReusablePool._flag_cache_broken(
             self._cache, AbortedWorkerError(cause_msg, exitcode))
 
-        # Terminate result handler by sentinel
-        mp.util.debug("set terminate state for result_handler")
-        self._result_handler._state = TERMINATE
-
-        # This avoids deadlock caused by putting a sentinel in the outqueue
-        # as it might be locked by a dead worker
-        mp.util.debug("send sentinel for result_handler")
-        self._outqueue.put(None)
-
-        if (self._has_started_thread("_result_handler") and
-                threading.current_thread() is not self._result_handler and
-                self._result_handler.is_alive()):
-            self._result_handler.join()
-
-        # Cancel terminate call as the pool as already bee shutdown
-        mp.util.debug("cancel finalizer call")
-        self._terminate.cancel()
-
-        mp.util.debug("end _clean_up_crash")
+        self._terminate()
 
     def _resize(self, processes=None):
         """Resize the pool to the desired number of processes"""
