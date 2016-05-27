@@ -108,9 +108,20 @@ def return_instance(cls):
 
 def start_job(func, args):
     pool = get_reusable_pool(processes=2)
-    pool.apply(func, args)
-    pool.terminate()
-    pool.join()
+    try:
+        pool.apply(func, args)
+    except Exception as e:
+        # One should never call join before terminate: if the pool is broken,
+        # (AbortedWorkerError was raised) the cleanup mechanism should be
+        # triggered by the _worker_handler thread. Else we should call
+        # terminate explicitly
+        if not isinstance(e, AbortedWorkerError):
+            pool.terminate()
+        raise e
+    finally:
+        # _worker_handler thread is triggered every .1s
+        sleep(.2)
+        pool.join()
 
 
 class SayWhenError(ValueError):
