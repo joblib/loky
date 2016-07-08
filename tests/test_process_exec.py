@@ -442,7 +442,6 @@ class ExecutorTest:
         with pytest.raises(Exception) as cm:
             future.result()
 
-        print(cm.__dir__())
         exc = cm.value
         assert type(exc) is RuntimeError
         assert exc.args == (123,)

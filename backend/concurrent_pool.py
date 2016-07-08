@@ -4,6 +4,7 @@ import threading
 import warnings
 import os
 import time
+from concurrent.futures import TimeoutError
 
 __all__ = ['get_reusable_pool']
 
@@ -22,23 +23,34 @@ def _get_next_pool_id():
         return pool_id
 
 
-def get_reusable_pool(*args, **kwargs):
+def get_reusable_pool(max_workers=None, context=None, kill_on_shutdown=True):
     """Return a the current ReusablePool. Start a new one if needed"""
     _pool = getattr(_local, '_pool', None)
-    max_workers = kwargs.get('max_workers')
     if _pool is None:
         mp.util.debug("Create a pool with size {}.".format(max_workers))
         pool_id = _get_next_pool_id()
-        _local._pool = _pool = ReusablePoolExecutor(*args, pool_id=pool_id,
-                                                    **kwargs)
-        _pool.submit(time.sleep, 0.1).result()
+        _local._pool = _pool = ReusablePoolExecutor(
+            max_workers=max_workers, context=context,
+            kill_on_shutdown=kill_on_shutdown, pool_id=pool_id)
+        res = _pool.submit(time.sleep, 0.01)
+        try:
+            res.result(timeout=2)
+        except TimeoutError:
+            print(_pool._processes)
+            print(_pool._call_queue.empty())
+            print(_pool._call_queue.qsize())
+            print(_pool._pending_work_items[0].future)
+            raise RuntimeError
+            res.result()
     else:
-        if _pool._broken or _pool._shutdown_thread:
+        if _pool._broken or _pool._shutdown_thread or (
+                context and _pool._ctx != context):
             mp.util.debug("Create a new pool with {} processes as the "
-                          "previous one was broken".format(max_workers))
+                          "previous one was unusable".format(max_workers))
             _pool.shutdown()
             _local._pool = _pool = None
-            return get_reusable_pool(*args, **kwargs)
+            return get_reusable_pool(max_workers=max_workers, context=context,
+                                     kill_on_shutdown=kill_on_shutdown)
         else:
             if _pool._resize(max_workers):
                 mp.util.debug("Resized existing pool to target size.")
@@ -48,14 +60,18 @@ def get_reusable_pool(*args, **kwargs):
             _pool.terminate()
             _pool.join()
             _local._pool = _pool = None
-            return get_reusable_pool(*args, **kwargs)
+            return get_reusable_pool(max_workers=max_workers, context=context,
+                                     kill_on_shutdown=kill_on_shutdown, )
 
     return _pool
 
 
 class ReusablePoolExecutor(ProcessPoolExecutor):
-    def __init__(self, max_workers=None, context=None, pool_id=0):
-        super(ReusablePoolExecutor, self).__init__(max_workers, context)
+    def __init__(self, max_workers=None, context=None, kill_on_shutdown=True,
+                 pool_id=0):
+        super(ReusablePoolExecutor, self).__init__(
+            max_workers=max_workers, context=context,
+            kill_on_shutdown=kill_on_shutdown)
         self.pool_id = pool_id
 
     def _resize(self, max_workers):
@@ -67,9 +83,12 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         for _ in range(max_workers, mw):
             self._call_queue.put(None)
         while len(self._processes) > max_workers and not self._broken:
-            time.sleep(.01)
+            time.sleep(.001)
 
         self._adjust_process_count()
+        while not all([p.is_alive() for p in self._processes.values()]):
+            time.sleep(.001)
+
         return True
 
     def _wait_job_complete(self):

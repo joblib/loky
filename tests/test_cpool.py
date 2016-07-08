@@ -6,7 +6,7 @@ from time import sleep, time
 import pytest
 from backend.concurrent_pool import get_reusable_pool
 import multiprocessing as mp
-from backend.process_executor import BrokenProcessPool
+from backend.process_executor import BrokenProcessPool, ShutdownProcessPool
 from pickle import PicklingError, UnpicklingError
 
 # Backward compat for python2 cPickle module
@@ -38,8 +38,8 @@ except ImportError:
         pass
 
 # Activate multiprocessing logging
-mp.util.log_to_stderr()
-mp.util._logger.setLevel(20)
+if not mp.util._log_to_stderr:
+    mp.util.log_to_stderr(10)
 
 
 @pytest.yield_fixture
@@ -208,7 +208,7 @@ class TestPoolDeadLock:
                 # Check problem occuring while unpickling a task in
                 # the result_handler thread
                 (return_instance, (ExitAtUnpickle,), BrokenProcessPool),
-                (return_instance, (ErrorAtUnpickle,), BrokenProcessPool),
+                (return_instance, (ErrorAtUnpickle,), UnpicklingError),
     ]
 
     # callback_crash_cases = [
@@ -283,6 +283,7 @@ class TestPoolDeadLock:
         pool = get_reusable_pool(max_workers=2)
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
+        sleep(.1)
 
         pool = get_reusable_pool(max_workers=2)
         assert pool.apply(id_sleep, (1, 0.)) == 1
@@ -331,19 +332,19 @@ class TestPoolDeadLock:
 
 
 class TestTerminatePool:
-    # def test_terminate_kill(self, exit_on_deadlock):
-    #     """Test reusable_pool termination handling"""
-    #     pool = get_reusable_pool(max_workers=5)
-    #     res1 = pool.map_async(id_sleep, [(i, 0.001) for i in range(50)])
-    #     res2 = pool.map_async(id_sleep, [(i, 0.1) for i in range(50)])
-    #     assert list(res1) == list(range(50))
-    #     # We should get an error as the pool.shutdownd before we fetched
-    #     # the results from the operation.
-    #     terminate = TimingWrapper(pool.shutdown)
-    #     terminate(wait=False)
-    #     assert terminate.elapsed < .5
-    #     with pytest.raises(BrokenProcessPool):
-    #         list(res2)
+    def test_terminate_kill(self, exit_on_deadlock):
+        """Test reusable_pool termination handling"""
+        pool = get_reusable_pool(max_workers=5)
+        res1 = pool.map_async(id_sleep, [(i, 0.001) for i in range(50)])
+        res2 = pool.map_async(id_sleep, [(i, 0.1) for i in range(50)])
+        assert list(res1) == list(range(50))
+        # We should get an error as the pool.shutdownd before we fetched
+        # the results from the operation.
+        terminate = TimingWrapper(pool.shutdown)
+        terminate(wait=False)
+        assert terminate.elapsed < .5
+        with pytest.raises(ShutdownProcessPool):
+            list(res2)
 
     def test_terminate_deadlock(self, exit_on_deadlock):
         """Test recovery if killed after resize call"""
@@ -356,17 +357,17 @@ class TestTerminatePool:
         pool = get_reusable_pool(max_workers=2)
         pool.shutdown()
 
-    # def test_terminate(self, exit_on_deadlock):
+    def test_terminate(self, exit_on_deadlock):
 
-    #     pool = get_reusable_pool(max_workers=4)
-    #     res = pool.map_async(
-    #         sleep, [0.1 for i in range(10000)], chunksize=1
-    #         )
-    #     shutdown = TimingWrapper(pool.shutdown)
-    #     shutdown(wait=False)
-    #     assert shutdown.elapsed < 0.5
-    #     with pytest.raises(BrokenProcessPool):
-    #         list(res)
+        pool = get_reusable_pool(max_workers=4)
+        res = pool.map_async(
+            sleep, [0.1 for i in range(10000)], chunksize=1
+            )
+        shutdown = TimingWrapper(pool.shutdown)
+        shutdown(wait=False)
+        assert shutdown.elapsed < 0.5
+        with pytest.raises(ShutdownProcessPool):
+            list(res)
 
 
 class TestResizeRpool:
@@ -431,8 +432,8 @@ def test_freeze(exit_on_deadlock):
     import numpy as np
     a = np.random.randn(1000, 1000)
     np.dot(a, a)
-    pool = get_reusable_pool(2)
-    pool.apply(np.dot, (a, a))
+    pool = get_reusable_pool(max_workers=2)
+    pool.appl(ynp.dot, (a, a))
     pool.shutdown()
 
 

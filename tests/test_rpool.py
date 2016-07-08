@@ -40,8 +40,8 @@ except ImportError:
         pass
 
 # Activate multiprocessing logging
-mp.util.log_to_stderr()
-mp.util._logger.setLevel(5)
+if not mp.util._log_to_stderr:
+    mp.util.log_to_stderr(10)
 
 
 @pytest.yield_fixture
