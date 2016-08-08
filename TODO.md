@@ -6,7 +6,7 @@
 - [x] cancel_on_shutdown
 - [x] robustification dans backend
 - [ ] idle workers should shutdown while executor should restart missing worker on submit
-- [ ] modification parameters ==> recreate pool
+- [x] modification parameters ==> recreate pool
 - [ ] cutsomizable queue in ProcessPoolExecutor
 - [ ] support python2.7 (kwargs.pop ? ) regardé concurrent future package
 

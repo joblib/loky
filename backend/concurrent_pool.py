@@ -26,12 +26,14 @@ def _get_next_pool_id():
 def get_reusable_pool(max_workers=None, context=None, kill_on_shutdown=True):
     """Return a the current ReusablePool. Start a new one if needed"""
     _pool = getattr(_local, '_pool', None)
+    _args = getattr(_local, '_args', None)
     if _pool is None:
         mp.util.debug("Create a pool with size {}.".format(max_workers))
         pool_id = _get_next_pool_id()
         _local._pool = _pool = ReusablePoolExecutor(
             max_workers=max_workers, context=context,
             kill_on_shutdown=kill_on_shutdown, pool_id=pool_id)
+        _local._args = dict(context=context, kill_on_shutdown=kill_on_shutdown)
         res = _pool.submit(time.sleep, 0.01)
         try:
             res.result(timeout=2)
@@ -43,12 +45,13 @@ def get_reusable_pool(max_workers=None, context=None, kill_on_shutdown=True):
             raise RuntimeError
             res.result()
     else:
-        if _pool._broken or _pool._shutdown_thread or (
-                context and _pool._ctx != context):
+        args = dict(context=context, kill_on_shutdown=kill_on_shutdown)
+        if _pool._broken or _pool._shutdown_thread or args != _args:
             mp.util.debug("Create a new pool with {} processes as the "
                           "previous one was unusable".format(max_workers))
             _pool.shutdown()
             _local._pool = _pool = None
+            _local._args = _args = None
             return get_reusable_pool(max_workers=max_workers, context=context,
                                      kill_on_shutdown=kill_on_shutdown)
         else:
@@ -60,6 +63,7 @@ def get_reusable_pool(max_workers=None, context=None, kill_on_shutdown=True):
             _pool.terminate()
             _pool.join()
             _local._pool = _pool = None
+            _local._args = _args = None
             return get_reusable_pool(max_workers=max_workers, context=context,
                                      kill_on_shutdown=kill_on_shutdown, )
 
