@@ -43,7 +43,6 @@ def get_reusable_pool(max_workers=None, context=None, kill_on_shutdown=True):
             print(_pool._call_queue.qsize())
             print(_pool._pending_work_items[0].future)
             raise RuntimeError
-            res.result()
     else:
         args = dict(context=context, kill_on_shutdown=kill_on_shutdown)
         if _pool._broken or _pool._shutdown_thread or args != _args:

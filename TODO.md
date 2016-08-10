@@ -9,6 +9,7 @@
 - [x] modification parameters ==> recreate pool
 - [ ] cutsomizable queue in ProcessPoolExecutor
 - [ ] support python2.7 (kwargs.pop ? ) regardé concurrent future package
+- [ ] debug lock on start executor
 
 #### Test
 
