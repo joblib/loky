@@ -1,5 +1,4 @@
 import test.support
-from test.support.script_helper import assert_python_ok
 
 # Skip tests if _multiprocessing wasn't built.
 test.support.import_module('_multiprocessing')
@@ -27,6 +26,37 @@ from concurrent import futures
 from concurrent.futures._base import (
     PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, Future)
 from backend.process_executor import BrokenProcessPool
+
+
+def assert_python_ok(*args, **env_vars):
+    res, cmd_line = run_python_until_end(*args, **env_vars)
+    if (res.rc and expected_success) or (not res.rc and not expected_success):
+        # Limit to 80 lines to ASCII characters
+        maxlen = 80 * 100
+        out, err = res.out, res.err
+        if len(out) > maxlen:
+            out = b'(... truncated stdout ...)' + out[-maxlen:]
+        if len(err) > maxlen:
+            err = b'(... truncated stderr ...)' + err[-maxlen:]
+        out = out.decode('ascii', 'replace').rstrip()
+        err = err.decode('ascii', 'replace').rstrip()
+        raise AssertionError("Process return code is %d\n"
+                             "command line: %r\n"
+                             "\n"
+                             "stdout:\n"
+                             "---\n"
+                             "%s\n"
+                             "---\n"
+                             "\n"
+                             "stderr:\n"
+                             "---\n"
+                             "%s\n"
+                             "---"
+                             % (res.rc, cmd_line,
+                                out,
+                                err))
+    return res
+
 
 
 def create_future(state=PENDING, exception=None, result=None):
