@@ -4,7 +4,7 @@ import psutil
 import warnings
 from time import sleep, time
 import pytest
-from backend.concurrent_pool import get_reusable_pool
+from backend.concurrent_pool import get_reusable_executor
 import multiprocessing as mp
 from backend.process_executor import BrokenProcessPool, ShutdownProcessPool
 from pickle import PicklingError, UnpicklingError
@@ -39,7 +39,10 @@ except ImportError:
 
 # Activate multiprocessing logging
 if not mp.util._log_to_stderr:
-    mp.util.log_to_stderr(10)
+    import logging
+    log = mp.util.log_to_stderr(10)
+    log.handlers[0].setFormatter(logging.Formatter(
+        '[%(levelname)s/%(processName)s:%(threadName)s] %(message)s'))
 
 
 @pytest.yield_fixture
@@ -105,16 +108,16 @@ def return_instance(cls):
 
 
 def start_job(func, args):
-    pool = get_reusable_pool(max_workers=2)
+    pool = get_reusable_executor(max_workers=2)
     try:
-        pool.apply(func, args)
+        pool.submit(func, args)
     except Exception as e:
         # One should never call join before terminate: if the pool is broken,
         # (AbortedWorkerError was raised) the cleanup mechanism should be
         # triggered by the _worker_handler thread. Else we should call
         # terminate explicitly
         if not isinstance(e, BrokenProcessPool):
-            pool.shutdown()
+            pool.shutdown(wait=True)
         raise e
     finally:
         # _worker_handler thread is triggered every .1s
@@ -245,21 +248,21 @@ class TestPoolDeadLock:
     @pytest.mark.parametrize("func, args, expected_err", crash_cases)
     def test_crashes(self, exit_on_deadlock, func, args, expected_err):
         """Test various reusable_pool crash handling"""
-        pool = get_reusable_pool(max_workers=2)
+        pool = get_reusable_executor(max_workers=2)
         res = pool.submit(func, *args)
         with pytest.raises(expected_err):
             res.result()
 
         # Check that the pool can still be recovered
-        pool = get_reusable_pool(max_workers=2)
-        assert pool.apply(id_sleep, (1, 0.)) == 1
-        pool.shutdown()
+        pool = get_reusable_executor(max_workers=2)
+        assert pool.submit(id_sleep, (1, 0.)).result() == 1
+        pool.shutdown(wait=True)
 
     # # @pytest.mark.skipif(True, reason="Known failure")
     # @pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
     # def test_callback(self, exit_on_deadlock, func, args, expected_err):
     #     """Test the recovery from callback crash"""
-    #     pool = get_reusable_pool(max_workers=2)
+    #     pool = get_reusable_executor(max_workers=2)
     #     res = pool.apply_async(id_sleep,
     #                            ((func, 0),),
     #                            callback=lambda f: f(*args))
@@ -271,23 +274,23 @@ class TestPoolDeadLock:
     #             raise e.err
 
     #     # Check that the pool can still be recovered
-    #     pool = get_reusable_pool(max_workers=2)
+    #     pool = get_reusable_executor(max_workers=2)
     #     assert pool.apply(id_sleep, ((1, 0.),)) == 1
-    #     pool.shutdown()
+    #     pool.shutdown(wait=True)
     #
 
     def test_deadlock_kill(self, exit_on_deadlock):
         """Test deadlock recovery for reusable_pool"""
-        pool = get_reusable_pool(max_workers=1)
+        pool = get_reusable_executor(max_workers=1)
         worker = next(iter(pool._processes.values()))
-        pool = get_reusable_pool(max_workers=2)
+        pool = get_reusable_executor(max_workers=2)
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
         sleep(.1)
 
-        pool = get_reusable_pool(max_workers=2)
-        assert pool.apply(id_sleep, (1, 0.)) == 1
-        pool.shutdown()
+        pool = get_reusable_executor(max_workers=2)
+        assert pool.submit(id_sleep, (1, 0.)).result() == 1
+        pool.shutdown(wait=True)
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, exit_on_deadlock, n_proc):
@@ -295,7 +298,7 @@ class TestPoolDeadLock:
         # Test for external crash signal comming from neighbor
         # with various race setup
         mp.util.debug("Test race - # Processes = {}".format(n_proc))
-        pool = get_reusable_pool(max_workers=n_proc)
+        pool = get_reusable_executor(max_workers=n_proc)
         pids = list(pool._processes.keys())
         assert len(pids) == n_proc
         assert None not in pids
@@ -307,41 +310,41 @@ class TestPoolDeadLock:
             list(res)
 
         # Clean terminate
-        pool.shutdown()
+        pool.shutdown(wait=True)
 
     def test_imap_handle_iterable_exception(self, exit_on_deadlock):
         # The catch of the errors in imap generation depend on the
         # builded version of python
-        pool = get_reusable_pool(max_workers=2)
+        pool = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
             pool.map(id_sleep, exception_throwing_generator(10, 3),
                      chunksize=1)
 
         # SayWhenError seen at start of problematic chunk's results
-        pool = get_reusable_pool(max_workers=2)
+        pool = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
             pool.map(id_sleep, exception_throwing_generator(20, 7),
                      chunksize=2)
 
-        pool = get_reusable_pool(max_workers=2)
+        pool = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
             pool.map(id_sleep, exception_throwing_generator(20, 7),
                      chunksize=4)
 
-        pool.shutdown()
+        pool.shutdown(wait=True)
 
 
 class TestTerminatePool:
     def test_terminate_kill(self, exit_on_deadlock):
         """Test reusable_pool termination handling"""
-        pool = get_reusable_pool(max_workers=5)
-        res1 = pool.map_async(id_sleep, [(i, 0.001) for i in range(50)])
-        res2 = pool.map_async(id_sleep, [(i, 0.1) for i in range(50)])
+        pool = get_reusable_executor(max_workers=5)
+        res1 = pool.map(id_sleep, [(i, 0.001) for i in range(50)])
+        res2 = pool.map(id_sleep, [(i, 0.1) for i in range(50)])
         assert list(res1) == list(range(50))
         # We should get an error as the pool.shutdownd before we fetched
         # the results from the operation.
         terminate = TimingWrapper(pool.shutdown)
-        terminate(wait=False)
+        terminate(wait=True)
         assert terminate.elapsed < .5
         with pytest.raises(ShutdownProcessPool):
             list(res2)
@@ -349,23 +352,24 @@ class TestTerminatePool:
     def test_terminate_deadlock(self, exit_on_deadlock):
         """Test recovery if killed after resize call"""
         # Test the pool.shutdown call do not cause deadlock
-        pool = get_reusable_pool(max_workers=2)
-        pool.apply_async(kill_friend, (next(iter(pool._processes.keys())), .0))
+        pool = get_reusable_executor(max_workers=2)
+        pool.submit(kill_friend, (next(iter(pool._processes.keys())), .0))
         sleep(.01)
-        pool.shutdown()
+        pool.shutdown(wait=True)
 
-        pool = get_reusable_pool(max_workers=2)
-        pool.shutdown()
+        pool = get_reusable_executor(max_workers=2)
+        pool.shutdown(wait=True)
 
     def test_terminate(self, exit_on_deadlock):
 
-        pool = get_reusable_pool(max_workers=4)
-        res = pool.map_async(
+        pool = get_reusable_executor(max_workers=4)
+        res = pool.map(
             sleep, [0.1 for i in range(10000)], chunksize=1
             )
         shutdown = TimingWrapper(pool.shutdown)
-        shutdown(wait=False)
+        shutdown(wait=True)
         assert shutdown.elapsed < 0.5
+
         with pytest.raises(ShutdownProcessPool):
             list(res)
 
@@ -374,7 +378,7 @@ class TestResizeRpool:
     def test_rpool_resize(self, exit_on_deadlock):
         """Test reusable_pool resizing"""
 
-        pool = get_reusable_pool(max_workers=2)
+        pool = get_reusable_executor(max_workers=2)
 
         # Decreasing the pool should drop a single process and keep one of the
         # old one as it is still in a good shape. The resize should not occur
@@ -383,47 +387,46 @@ class TestResizeRpool:
         res = pool.submit(work_sleep, (.3, pids))
         warnings.filterwarnings("always", category=UserWarning)
         with warnings.catch_warnings(record=True) as w:
-            pool = get_reusable_pool(max_workers=1)
+            pool = get_reusable_executor(max_workers=1)
             assert len(w) == 1
             assert res.result(), ("Resize should wait for current processes "
                                   " to finish")
             assert len(pool._processes) == 1
             assert next(iter(pool._processes.keys())) in pids
-            assert len(w) == 1
 
         # Requesting the same number of process should not impact the pool nor
         # kill the processed
         old_pid = next(iter((pool._processes.keys())))
-        unchanged_pool = get_reusable_pool(max_workers=1)
+        unchanged_pool = get_reusable_executor(max_workers=1)
         assert len(unchanged_pool._processes) == 1
         assert unchanged_pool is pool
         assert next(iter(unchanged_pool._processes.keys())) == old_pid
 
         # Growing the pool again should add a single process and keep the old
         # one as it is still in a good shape
-        pool = get_reusable_pool(max_workers=2)
+        pool = get_reusable_executor(max_workers=2)
         assert len(pool._processes) == 2
         assert old_pid in list(pool._processes.keys())
-        pool.shutdown()
+        pool.shutdown(wait=True)
 
     def test_kill_after_resize_call(self, exit_on_deadlock):
         """Test recovery if killed after resize call"""
         # Test the pool resizing called before a kill arrive
-        pool = get_reusable_pool(max_workers=2)
-        pool.apply_async(kill_friend, (next(iter(pool._processes.keys())), .1))
-        pool = get_reusable_pool(max_workers=1)
-        assert pool.apply(id_sleep, (1, 0.)) == 1
-        pool.shutdown()
+        pool = get_reusable_executor(max_workers=2)
+        pool.submit(kill_friend, (next(iter(pool._processes.keys())), .1))
+        pool = get_reusable_executor(max_workers=1)
+        assert pool.submit(id_sleep, (1, 0.)).result() == 1
+        pool.shutdown(wait=True)
 
 
 def test_invalid_process_number():
     """Raise error on invalid process number"""
 
     with pytest.raises(ValueError):
-        get_reusable_pool(max_workers=0)
+        get_reusable_executor(max_workers=0)
 
     with pytest.raises(ValueError):
-        get_reusable_pool(max_workers=-1)
+        get_reusable_executor(max_workers=-1)
 
 
 @pytest.mark.skipif(True, reason="Known failure")
@@ -432,9 +435,9 @@ def test_freeze(exit_on_deadlock):
     import numpy as np
     a = np.random.randn(1000, 1000)
     np.dot(a, a)
-    pool = get_reusable_pool(max_workers=2)
-    pool.appl(ynp.dot, (a, a))
-    pool.shutdown()
+    pool = get_reusable_executor(max_workers=2)
+    pool.submit(ynp.dot, (a, a))
+    pool.shutdown(wait=True)
 
 
 class TimingWrapper(object):

@@ -6,7 +6,7 @@ import os
 import time
 from concurrent.futures import TimeoutError
 
-__all__ = ['get_reusable_pool']
+__all__ = ['get_reusable_executor']
 
 
 # Protect the queue from being reused in different threads
@@ -23,57 +23,60 @@ def _get_next_pool_id():
         return pool_id
 
 
-def get_reusable_pool(max_workers=None, context=None, kill_on_shutdown=True):
+def get_reusable_executor(max_workers=None, context=None,
+                          timeout=None, kill_on_shutdown=True):
     """Return a the current ReusablePool. Start a new one if needed"""
     _pool = getattr(_local, '_pool', None)
     _args = getattr(_local, '_args', None)
     if _pool is None:
         mp.util.debug("Create a pool with size {}.".format(max_workers))
+        assert len(mp.active_children()) == 0
         pool_id = _get_next_pool_id()
+        _local._args = dict(context=context, timeout=timeout,
+                            kill_on_shutdown=kill_on_shutdown)
         _local._pool = _pool = ReusablePoolExecutor(
-            max_workers=max_workers, context=context,
+            max_workers=max_workers, context=context, timeout=timeout,
             kill_on_shutdown=kill_on_shutdown, pool_id=pool_id)
-        _local._args = dict(context=context, kill_on_shutdown=kill_on_shutdown)
         res = _pool.submit(time.sleep, 0.01)
         try:
-            res.result(timeout=2)
+            res.result(timeout=1)
         except TimeoutError:
             print(_pool._processes)
-            print(_pool._call_queue.empty())
-            print(_pool._call_queue.qsize())
-            print(_pool._pending_work_items[0].future)
+            print(threading.enumerate())
+            time.sleep(3)
+            from faulthandler import dump_traceback
+            dump_traceback()
             raise RuntimeError
     else:
-        args = dict(context=context, kill_on_shutdown=kill_on_shutdown)
+        args = dict(context=context, timeout=timeout,
+                    kill_on_shutdown=kill_on_shutdown)
         if _pool._broken or _pool._shutdown_thread or args != _args:
             mp.util.debug("Create a new pool with {} processes as the "
                           "previous one was unusable".format(max_workers))
-            _pool.shutdown()
+            _pool.shutdown(wait=True, caller='broken')
             _local._pool = _pool = None
             _local._args = _args = None
-            return get_reusable_pool(max_workers=max_workers, context=context,
-                                     kill_on_shutdown=kill_on_shutdown)
+            return get_reusable_executor(max_workers=max_workers, **args)
         else:
             if _pool._resize(max_workers):
-                mp.util.debug("Resized existing pool to target size.")
+                mp.util.debug("Resized existing pool to target size {}."
+                              .format(max_workers))
                 return _pool
             mp.util.debug("Failed to resize existing pool to target size {}."
                           "".format(max_workers))
-            _pool.terminate()
-            _pool.join()
+            _pool.shutdown(wait=True, caller='resize')
             _local._pool = _pool = None
             _local._args = _args = None
-            return get_reusable_pool(max_workers=max_workers, context=context,
-                                     kill_on_shutdown=kill_on_shutdown, )
+            return get_reusable_executor(max_workers=max_workers, **args)
 
     return _pool
 
 
 class ReusablePoolExecutor(ProcessPoolExecutor):
-    def __init__(self, max_workers=None, context=None, kill_on_shutdown=True,
-                 pool_id=0):
+    def __init__(self, max_workers=None, context=None, timeout=None,
+                 kill_on_shutdown=True, pool_id=0):
         super(ReusablePoolExecutor, self).__init__(
-            max_workers=max_workers, context=context,
+            max_workers=max_workers, context=context, timeout=timeout,
             kill_on_shutdown=kill_on_shutdown)
         self.pool_id = pool_id
 
@@ -108,32 +111,12 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         while len(self._pending_work_items) > 0:
             time.sleep(.1)
 
-    def apply(self, fn, *args, **kwargs):
-        r = self.submit(fn, *args, **kwargs)
-        return r.result()
-
-    def apply_async(self, fn, *args, **kwargs):
-        r = self.submit(fn, *args, **kwargs)
-        return BinderResult(r)
-
-    def map_async(self, fn, *args, **kwargs):
-        r = self.map(fn, *args, **kwargs)
-        return r
-
-
-class BinderResult():
-    def __init__(self, res):
-        self.res = res
-
-    def get(self):
-        return self.res.result()
-
 
 if __name__ == '__main__':
     # This will cause a deadlock
-    pool = get_reusable_pool(1)
+    pool = get_reusable_executor(1)
     pid = pool.apply(os.getpid, tuple())
-    pool = get_reusable_pool(2)
+    pool = get_reusable_executor(2)
     os.kill(pid, 15)
 
     pool.terminate()
