@@ -5,11 +5,11 @@
 
 - [x] cancel_on_shutdown
 - [x] robustification dans backend
-- [ ] idle workers should shutdown while executor should restart missing worker on submit
+- [x] idle workers should shutdown while executor should restart missing worker on submit
 - [x] modification parameters ==> recreate pool
 - [ ] cutsomizable queue in ProcessPoolExecutor
 - [ ] support python2.7 (kwargs.pop ? ) regardé concurrent future package
-- [ ] debug lock on start executor
+- [x] debug lock on start executor
 
 #### Test
 

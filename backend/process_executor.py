@@ -50,7 +50,7 @@ import os
 import sys
 from concurrent.futures import _base
 import queue
-from queue import Full
+from queue import Full, Empty
 import multiprocessing as mp
 try:
     from multiprocessing import get_context
@@ -100,7 +100,8 @@ def _python_exit():
     _shutdown = True
     items = list(_threads_wakeup.items())
     for t, q in items:
-        q.send_bytes(b'')
+        if not q.closed:
+            q.send_bytes(b'')
     for t, q in items:
         t.join()
 
@@ -187,7 +188,7 @@ def _process_chunk(fn, chunk):
     return [fn(*args) for args in chunk]
 
 
-def _process_worker(call_queue, result_queue):
+def _process_worker(call_queue, result_queue, timeout=None):
     """Evaluates calls from call_queue and places the results in result_queue.
 
     This worker is run in a separate process.
@@ -200,9 +201,13 @@ def _process_worker(call_queue, result_queue):
         shutdown: A multiprocessing.Event that will be set as a signal to the
             worker that it should exit when call_queue is empty.
     """
+    mp.util.debug('worker started')
     while True:
         try:
-            call_item = call_queue.get(block=True)
+            call_item = call_queue.get(block=True, timeout=timeout)
+        except Empty:
+            mp.util.info("shutting down worker after timeout")
+            call_item = None
         except BaseException as e:
             traceback.print_exc()
             sys.exit(1)
@@ -316,6 +321,8 @@ def _queue_management_worker(executor_reference,
 
         for p in processes.values():
             p.join()
+        mp.util.debug("queue management thread managed: {}"
+                      .format(processes))
 
     reader = result_queue._reader
 
@@ -326,7 +333,7 @@ def _queue_management_worker(executor_reference,
                                 call_queue)
 
         sentinels = [p.sentinel for p in processes.values()]
-        assert sentinels
+        # assert sentinels
         ready = wait([reader, wakeup] + sentinels)
         # broken = not call_queue._thread.is_alive()
         # broken |= any([p.exitcode for p in processes.values()])
@@ -379,9 +386,9 @@ def _queue_management_worker(executor_reference,
             assert shutting_down()
             p = processes.pop(result_item)
             p.join()
-            if not processes:
-                shutdown_worker()
-                return
+            # if not processes:
+            #     shutdown_worker()
+            #     return
         elif result_item is not None:
             work_item = pending_work_items.pop(result_item.work_id, None)
             # work_item can be None if another process terminated (see above)
@@ -412,6 +419,7 @@ def _queue_management_worker(executor_reference,
                 for p in processes.values():
                     p.terminate()
                 shutdown_worker()
+                return
             try:
                 # Since no new work items can be added, it is safe to shutdown
                 # this thread if there are no pending work items.
@@ -427,6 +435,12 @@ def _queue_management_worker(executor_reference,
 
 def _management_worker(executor_reference, queue_management_thread, processes,
                        pending_work_items, work_ids, call_queue, result_queue):
+
+    executor = None
+
+    def shutting_down():
+        return _shutdown or executor is None or executor._shutdown_thread
+
     while True:
         broken_qm = not queue_management_thread.is_alive()
 
@@ -436,7 +450,7 @@ def _management_worker(executor_reference, queue_management_thread, processes,
             broken |= any([p.exitcode for p in processes.values()])
             if not broken:
                 _shutdown_crash(executor_reference, processes,
-                                pending_work_items,
+                                pending_work_items, call_queue,
                                 BrokenProcessPool(
                                     "The QueueManagerThread was terminated "
                                     "abruptly while the future was running or "
@@ -446,26 +460,32 @@ def _management_worker(executor_reference, queue_management_thread, processes,
             return
         elif _is_crashed(call_queue._thread):
             _shutdown_crash(executor_reference, processes, pending_work_items,
-                            BrokenProcessPool(
+                            call_queue, BrokenProcessPool(
                                 "The QueueFeederThread was terminated abruptly"
                                 " while feeding a new job. This is due to a "
                                 "job pickling error."
                             ))
             return
-
+        executor = executor_reference()
+        if shutting_down():
+            return
+        executor = None
         time.sleep(.1)
 
 
-def _shutdown_crash(executor_reference, processes, pending_work_items, exc):
+def _shutdown_crash(executor_reference, processes, pending_work_items,
+                    call_queue, exc):
     executor = executor_reference()
     if executor is not None:
         executor._broken = True
         executor._shutdown_thread = True
         executor = None
+    call_queue.close()
     # Terminate remaining workers forcibly: the queues or their
     # locks may be in a dirty state and block forever.
     for p in processes.values():
         p.terminate()
+        p.join()
     # All futures in flight must be marked failed
     for work_id, work_item in pending_work_items.items():
         work_item.future.set_exception(exc)
@@ -521,7 +541,7 @@ class ShutdownProcessPool(RuntimeError):
 class ProcessPoolExecutor(_base.Executor):
 
     def __init__(self, max_workers=None, context=None,
-                 kill_on_shutdown=False):
+                 timeout=None, kill_on_shutdown=False):
         """Initializes a new ProcessPoolExecutor instance.
 
         Args:
@@ -542,6 +562,7 @@ class ProcessPoolExecutor(_base.Executor):
         # Parameters of this executor
         self._ctx = context or get_context()
         self._kill_on_shutdown = kill_on_shutdown
+        self._timeout = timeout
 
         self._setup_queue()
         # Connection to wakeup QueueManagerThread
@@ -549,6 +570,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._work_ids = queue.Queue()
         self._management_thread = None
         self._queue_management_thread = None
+
         # Map of pids to processes
         self._processes = {}
 
@@ -558,6 +580,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._broken = False
         self._queue_count = 0
         self._pending_work_items = {}
+        mp.util.debug('PoolProcessExecutor is setup')
 
     def _setup_queue(self):
         # Make the call queue slightly larger than the number of processes to
@@ -572,16 +595,15 @@ class ProcessPoolExecutor(_base.Executor):
         self._result_queue = self._ctx.SimpleQueue()
 
     def _start_queue_management_thread(self):
-        # When the executor gets lost, the weakref callback will wake up
-        # the queue management thread.
-        def weakref_cb(_, q=self._wakeup_send):
-            q.send_bytes(b'')
-        if self._queue_management_thread is None:
-            # Start the processes so that their sentinels are known.
+        if len(self._processes) != self._max_workers:
             self._adjust_process_count()
+        if self._queue_management_thread is None:
+            mp.util.debug('_start_queue_management_thread called')
+            # Start the processes so that their sentinels are known.
+            # self._adjust_process_count()
             self._queue_management_thread = threading.Thread(
                 target=_queue_management_worker,
-                args=(weakref.ref(self, weakref_cb),
+                args=(weakref.ref(self),
                       self._processes,
                       self._pending_work_items,
                       self._work_ids,
@@ -592,16 +614,18 @@ class ProcessPoolExecutor(_base.Executor):
                 name="QueueManager")
             self._queue_management_thread.daemon = True
             self._queue_management_thread.start()
-            _threads_wakeup[self._queue_management_thread] = self._wakeup_send
 
     def _start_thread_management_thread(self):
         # When the executor gets lost, the weakref callback will wake up
         # the queue management thread.
+        def weakref_cb(_, q=self._wakeup_send):
+            q.send_bytes(b'')
         if self._management_thread is None:
+            mp.util.debug('_start_thread_management_thread called')
             # Start the processes so that their sentinels are known.
             self._management_thread = threading.Thread(
                 target=_management_worker,
-                args=(weakref.ref(self),
+                args=(weakref.ref(self, weakref_cb),
                       self._queue_management_thread,
                       self._processes,
                       self._pending_work_items,
@@ -611,15 +635,18 @@ class ProcessPoolExecutor(_base.Executor):
                 name="ThreadManager")
             self._management_thread.daemon = True
             self._management_thread.start()
+            _threads_wakeup[self._queue_management_thread] = self._wakeup_send
 
     def _adjust_process_count(self):
         for _ in range(len(self._processes), self._max_workers):
             p = self._ctx.Process(
                 target=_process_worker,
                 args=(self._call_queue,
-                      self._result_queue))
+                      self._result_queue,
+                      self._timeout))
             p.start()
             self._processes[p.pid] = p
+        mp.util.debug('Adjust process count : {}'.format(self._processes))
 
     def submit(self, fn, *args, **kwargs):
         with self._shutdown_lock:
@@ -673,8 +700,8 @@ class ProcessPoolExecutor(_base.Executor):
                               timeout=timeout)
         return itertools.chain.from_iterable(results)
 
-    def shutdown(self, wait=True):
-        mp.util.debug('shuting down the executor')
+    def shutdown(self, caller='main', wait=True):
+        mp.util.debug('shuting down the executor ({})'.format(caller))
         if self._kill_on_shutdown:
             pass
         with self._shutdown_lock:
@@ -684,9 +711,21 @@ class ProcessPoolExecutor(_base.Executor):
             self._wakeup_send.send_bytes(b'')
             if wait and self._queue_management_thread.is_alive():
                 self._queue_management_thread.join()
+        if self._management_thread:
+            if wait and self._management_thread.is_alive():
+                self._management_thread.join()
+        if self._call_queue:
+            self._call_queue.join_thread()
+        if self._processes:
+            for p in self._processes.values():
+                if p.is_alive():
+                    raise RuntimeError
+                p.terminate()
+                p.join()
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
         self._queue_management_thread = None
+        self._management_thread = None
         self._call_queue = None
         self._result_queue = None
         self._wakeup_send = None
