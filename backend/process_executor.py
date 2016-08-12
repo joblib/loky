@@ -63,6 +63,7 @@ import weakref
 from functools import partial
 import itertools
 import traceback
+from _pickle import PicklingError
 
 
 __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
@@ -223,10 +224,12 @@ def _process_worker(call_queue, result_queue, timeout=None):
         else:
             try:
                 result_queue.put(_ResultItem(call_item.work_id, result=r))
+            except PicklingError as e:
+                exc = _ExceptionWithTraceback(e, e.__traceback__)
+                result_queue.put(_ResultItem(call_item.work_id, exception=exc))
             except BaseException as e:
                 traceback.print_exc()
                 sys.exit(1)
-                return
 
 
 def _add_call_item_to_queue(pending_work_items,

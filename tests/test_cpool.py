@@ -204,7 +204,7 @@ class TestPoolDeadLock:
                 # on workers
                 (return_instance, (CrashAtPickle,), BrokenProcessPool),
                 (return_instance, (ExitAtPickle,), BrokenProcessPool),
-                (return_instance, (ErrorAtPickle,), BrokenProcessPool),
+                (return_instance, (ErrorAtPickle,), PicklingError),
                 # Check problem occuring while unpickling a task in
                 # the result_handler thread
                 (return_instance, (ExitAtUnpickle,), BrokenProcessPool),
