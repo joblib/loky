@@ -1,5 +1,4 @@
 import test.support
-from .script_helper import assert_python_ok
 
 # Skip tests if _multiprocessing wasn't built.
 test.support.import_module('_multiprocessing')
@@ -125,7 +124,10 @@ class ExecutorShutdownTest:
         with pytest.raises(RuntimeError):
             self.executor.submit(pow, 2, 5)
 
+    @pytest.mark.skipif(sys.version_info < (3, 4),
+                        reason="requires python>3.4")
     def test_interpreter_shutdown(self, exit_on_deadlock):
+        from .script_helper import assert_python_ok
         # Test the atexit hook for shutdown of worker threads and processes
         rc, out, err = assert_python_ok('-c', """if 1:
             from concurrent.futures import {executor_type}
@@ -397,7 +399,7 @@ class ExecutorTest:
         self.executor.shutdown()
 
     @test.support.cpython_only
-    def test_no_stale_references(self, exit_on_deadlock):
+    def test_no_stale_references(self):
         # Issue #16284: check that the executors don't unnecessarily hang onto
         # references.
         my_object = MyObject()
