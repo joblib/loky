@@ -189,6 +189,33 @@ def is_terminated_properly():
     pass
 
 
+# class ReusableExecutorMixin:
+#     worker_count = 5
+
+#     def setup_method(self, method):
+#         self.t1 = time.time()
+#         try:
+#             self.executor = get_reusable_executor(max_workers=2)
+#         except NotImplementedError as e:
+#             self.skipTest(str(e))
+#         self._prime_executor()
+
+#     def teardown_method(self, method):
+#         self.executor.shutdown(wait=True)
+#         dt = time.time() - self.t1
+#         if test.support.verbose:
+#             print("%.2fs" % dt, end=' ')
+#         assert dt < 60, "synchronization issue: test lasted too long"
+
+#     def _prime_executor(self):
+#         # Make sure that the executor is ready to do work before running the
+#         # tests. This should reduce the probability of timeouts in the tests.
+#         futures = [self.executor.submit(time.sleep, 0.1)
+#                    for _ in range(self.worker_count)]
+#         for f in futures:
+#             f.result()
+
+
 class TestPoolDeadLock:
 
     crash_cases = [
@@ -436,7 +463,7 @@ def test_freeze(exit_on_deadlock):
     a = np.random.randn(1000, 1000)
     np.dot(a, a)
     pool = get_reusable_executor(max_workers=2)
-    pool.submit(ynp.dot, (a, a))
+    pool.submit(np.dot, (a, a))
     pool.shutdown(wait=True)
 
 

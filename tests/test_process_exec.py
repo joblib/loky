@@ -1,13 +1,17 @@
-import test.support
+try:
+    import test.support
 
-# Skip tests if _multiprocessing wasn't built.
-test.support.import_module('_multiprocessing')
-# Skip tests if sem_open implementation is broken.
-test.support.import_module('multiprocessing.synchronize')
-# import threading after _multiprocessing to raise a more revelant error
-# message: "No module named _multiprocessing". _multiprocessing is not compiled
-# without thread support.
-test.support.import_module('threading')
+    # Skip tests if _multiprocessing wasn't built.
+    test.support.import_module('_multiprocessing')
+    # Skip tests if sem_open implementation is broken.
+    test.support.import_module('multiprocessing.synchronize')
+    # import threading after _multiprocessing to raise a more revelant error
+    # message: "No module named _multiprocessing". _multiprocessing is not compiled
+    # without thread support.
+    test.support.import_module('threading')
+except ImportError:
+    pass
+
 
 # from test.support.script_helper import assert_python_ok
 from backend import process_executor
@@ -90,8 +94,7 @@ class ExecutorMixin:
     def teardown_method(self, method):
         self.executor.shutdown(wait=True)
         dt = time.time() - self.t1
-        if test.support.verbose:
-            print("%.2fs" % dt, end=' ')
+        print("%.2fs" % dt)
         assert dt < 60, "synchronization issue: test lasted too long"
 
     def _prime_executor(self):
@@ -107,15 +110,15 @@ class ProcessPoolForkMixin(ExecutorMixin):
     executor_type = process_executor.ProcessPoolExecutor
     context = mp.get_context('fork')
 
+if sys.version_info > (3, 2):
+    class ProcessPoolForkserverMixin(ExecutorMixin):
+        executor_type = process_executor.ProcessPoolExecutor
+        context = mp.get_context('forkserver')
 
-class ProcessPoolForkserverMixin(ExecutorMixin):
-    executor_type = process_executor.ProcessPoolExecutor
-    context = mp.get_context('forkserver')
 
-
-class ProcessPoolSpawnMixin(ExecutorMixin):
-    executor_type = process_executor.ProcessPoolExecutor
-    context = mp.get_context('spawn')
+    class ProcessPoolSpawnMixin(ExecutorMixin):
+        executor_type = process_executor.ProcessPoolExecutor
+        context = mp.get_context('spawn')
 
 
 class ExecutorShutdownTest:
@@ -185,16 +188,17 @@ class TestsProcessPoolForkShutdown(ProcessPoolForkMixin, ExecutorShutdownTest):
         pass
 
 
-class TestsProcessPoolForkserverShutdown(ProcessPoolForkserverMixin,
-                                         ExecutorShutdownTest):
-    def _prime_executor(self):
-        pass
+if sys.version_info > (3, 2):
+    class TestsProcessPoolForkserverShutdown(ProcessPoolForkserverMixin,
+                                             ExecutorShutdownTest):
+        def _prime_executor(self):
+            pass
 
 
-class TestsProcessPoolSpawnShutdown(ProcessPoolSpawnMixin,
-                                    ExecutorShutdownTest):
-    def _prime_executor(self):
-        pass
+    class TestsProcessPoolSpawnShutdown(ProcessPoolSpawnMixin,
+                                        ExecutorShutdownTest):
+        def _prime_executor(self):
+            pass
 
 
 class WaitTests:
@@ -294,12 +298,13 @@ class TestsProcessPoolForkWait(ProcessPoolForkMixin, WaitTests):
     pass
 
 
-class TestsProcessPoolForkserverWait(ProcessPoolForkserverMixin, WaitTests):
-    pass
+if sys.version_info[:2] > (3, 2):
+    class TestsProcessPoolForkserverWait(ProcessPoolForkserverMixin, WaitTests):
+        pass
 
 
-class TestsProcessPoolSpawnWait(ProcessPoolSpawnMixin, WaitTests):
-    pass
+    class TestsProcessPoolSpawnWait(ProcessPoolSpawnMixin, WaitTests):
+        pass
 
 
 class AsCompletedTests:
@@ -345,14 +350,15 @@ class TestsProcessPoolForkAsCompleted(ProcessPoolForkMixin, AsCompletedTests):
     pass
 
 
-class TestsProcessPoolForkserverAsCompleted(ProcessPoolForkserverMixin,
-                                            AsCompletedTests):
-    pass
+if sys.version_info > (3, 2):
+    class TestsProcessPoolForkserverAsCompleted(ProcessPoolForkserverMixin,
+                                                AsCompletedTests):
+        pass
 
 
-class TestsProcessPoolSpawnAsCompleted(ProcessPoolSpawnMixin,
-                                       AsCompletedTests):
-    pass
+    class TestsProcessPoolSpawnAsCompleted(ProcessPoolSpawnMixin,
+                                           AsCompletedTests):
+        pass
 
 
 class ExecutorTest:
@@ -398,7 +404,6 @@ class ExecutorTest:
         self.executor.map(str, [2] * (self.worker_count + 1))
         self.executor.shutdown()
 
-    @test.support.cpython_only
     def test_no_stale_references(self):
         # Issue #16284: check that the executors don't unnecessarily hang onto
         # references.
@@ -465,121 +470,101 @@ class ExecutorTest:
         assert type(cause) is process_executor._RemoteTraceback
         assert 'raise RuntimeError(123)  # some comment' in cause.tb
 
-        with test.support.captured_stderr() as f1:
-            try:
-                raise exc
-            except RuntimeError:
-                sys.excepthook(*sys.exc_info())
-        assert 'raise RuntimeError(123)  # some comment' in f1.getvalue()
-
 
 class TestsProcessPoolForkExecutor(ProcessPoolForkMixin, ExecutorTest):
     pass
 
 
-class TestsProcessPoolForkserverExecutor(ProcessPoolForkserverMixin,
-                                         ExecutorTest):
-    pass
+if sys.version_info > (3, 2):
+    class TestsProcessPoolForkserverExecutor(ProcessPoolForkserverMixin,
+                                             ExecutorTest):
+        pass
 
 
-class TestsProcessPoolSpawnExecutor(ProcessPoolSpawnMixin, ExecutorTest):
-    pass
+    class TestsProcessPoolSpawnExecutor(ProcessPoolSpawnMixin, ExecutorTest):
+        pass
 
 
 class TestsFuture:
-    def test_done_callback_with_result(self, exit_on_deadlock):
-        callback_result = None
-
+    def test_done_callback_with_result(self):
+        callback_result = [None]
         def fn(callback_future):
-            nonlocal callback_result
-            callback_result = callback_future.result()
+            callback_result[0] = callback_future.result()
 
         f = Future()
         f.add_done_callback(fn)
         f.set_result(5)
-        assert 5 == callback_result
+        self.assertEqual(5, callback_result[0])
 
-    def test_done_callback_with_exception(self, exit_on_deadlock):
-        callback_exception = None
-
+    def test_done_callback_with_exception(self):
+        callback_exception = [None]
         def fn(callback_future):
-            nonlocal callback_exception
-            callback_exception = callback_future.exception()
+            callback_exception[0] = callback_future.exception()
 
         f = Future()
         f.add_done_callback(fn)
         f.set_exception(Exception('test'))
-        assert ('test',) == callback_exception.args
+        self.assertEqual(('test',), callback_exception[0].args)
 
-    def test_done_callback_with_cancel(self, exit_on_deadlock):
-        was_cancelled = None
-
+    def test_done_callback_with_cancel(self):
+        was_cancelled = [None]
         def fn(callback_future):
-            nonlocal was_cancelled
-            was_cancelled = callback_future.cancelled()
+            was_cancelled[0] = callback_future.cancelled()
 
         f = Future()
         f.add_done_callback(fn)
-        assert f.cancel()
-        assert was_cancelled
+        self.assertTrue(f.cancel())
+        self.assertTrue(was_cancelled[0])
 
-    def test_done_callback_raises(self, exit_on_deadlock):
-        with test.support.captured_stderr() as stderr:
-            raising_was_called = False
-            fn_was_called = False
+    def test_done_callback_raises(self):
+        with captured_stderr() as stderr:
+            raising_was_called = [False]
+            fn_was_called = [False]
 
             def raising_fn(callback_future):
-                nonlocal raising_was_called
-                raising_was_called = True
+                raising_was_called[0] = True
                 raise Exception('doh!')
 
             def fn(callback_future):
-                nonlocal fn_was_called
-                fn_was_called = True
+                fn_was_called[0] = True
 
             f = Future()
             f.add_done_callback(raising_fn)
             f.add_done_callback(fn)
             f.set_result(5)
-            assert raising_was_called
-            assert fn_was_called
-            assert 'Exception: doh!' in stderr.getvalue()
+            self.assertTrue(raising_was_called)
+            self.assertTrue(fn_was_called)
+            self.assertIn('Exception: doh!', stderr.getvalue())
 
-    def test_done_callback_already_successful(self, exit_on_deadlock):
-        callback_result = None
-
+    def test_done_callback_already_successful(self):
+        callback_result = [None]
         def fn(callback_future):
-            nonlocal callback_result
-            callback_result = callback_future.result()
+            callback_result[0] = callback_future.result()
 
         f = Future()
         f.set_result(5)
         f.add_done_callback(fn)
-        assert 5 == callback_result
+        self.assertEqual(5, callback_result[0])
 
-    def test_done_callback_already_failed(self, exit_on_deadlock):
-        callback_exception = None
-
+    def test_done_callback_already_failed(self):
+        callback_exception = [None]
         def fn(callback_future):
-            nonlocal callback_exception
-            callback_exception = callback_future.exception()
+            callback_exception[0] = callback_future.exception()
 
         f = Future()
         f.set_exception(Exception('test'))
         f.add_done_callback(fn)
-        assert ('test',) == callback_exception.args
+        self.assertEqual(('test',), callback_exception[0].args)
 
-    def test_done_callback_already_cancelled(self, exit_on_deadlock):
-        was_cancelled = None
-
+    def test_done_callback_already_cancelled(self):
+        was_cancelled = [None]
         def fn(callback_future):
-            nonlocal was_cancelled
-            was_cancelled = callback_future.cancelled()
+            was_cancelled[0] = callback_future.cancelled()
 
         f = Future()
-        assert f.cancel()
+        self.assertTrue(f.cancel())
         f.add_done_callback(fn)
-        assert was_cancelled
+        self.assertTrue(was_cancelled[0])
 
     def test_repr(self, exit_on_deadlock):
         import re
