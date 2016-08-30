@@ -1,0 +1,296 @@
+import os
+import sys
+import signal
+import pickle
+from io import BytesIO
+
+from . import spawn
+from multiprocessing import util, reduction
+try:
+    from multiprocessing import context
+    from .process import ExecContext
+    context._concrete_contexts['exec'] = ExecContext()
+except ImportError:
+    from multiprocessing.process import AuthenticationString
+
+__all__ = ['Popen']
+
+
+def _mk_inheritable(fd):
+    if sys.version_info[:2] > (3, 3):
+        if sys.platform == 'win32':
+            # Change to Windwos file handle
+            import msvcrt
+            fdh = msvcrt.get_osfhandle(fd)
+            os.set_handle_inheritable(fdh, True)
+            return fdh
+        else:
+            os.set_inheritable(fd, True)
+            return fd
+    elif sys.platform == 'win32':
+        # TODO: find a hack??
+        # Not yet working
+        import msvcrt
+        import _subprocess
+
+        curproc = _subprocess.GetCurrentProcess()
+        fdh = msvcrt.get_osfhandle(fd)
+        fdh = _subprocess.DuplicateHandle(
+            curproc, fdh, curproc, 0,
+            True,  # set inheritable FLAG
+            _subprocess.DUPLICATE_SAME_ACCESS)
+        return fdh
+    else:
+        return fd
+
+
+def reduce_connection(conn):
+    df = reduction.DupFd(conn.fileno())
+    fd = df.detach()
+    return rebuild_connection, (df, conn.readable, conn.writable)
+
+
+from multiprocessing.connection import Connection
+def rebuild_connection(df, readable, writable):
+    fd = df.detach()
+    return Connection(fd, readable, writable)
+
+reduction.register(Connection, reduce_connection)
+
+
+#
+# Wrapper for an fd used while launching a process
+#
+
+class _DupFd(object):
+    def __init__(self, fd):
+        self.fd = _mk_inheritable(fd)
+    def detach(self):
+        return self.fd
+
+#
+# Start child process using subprocess.Popen
+#
+
+class Popen(object):
+    method = 'exec'
+    DupFd = _DupFd
+
+    def __init__(self, process_obj):
+        sys.stdout.flush()
+        sys.stderr.flush()
+        self.returncode = None
+        self._fds = []
+        self._launch(process_obj)
+
+    def duplicate_for_child(self, fd):
+        self._fds.append(fd)
+        return _mk_inheritable(fd)
+
+    def poll(self, flag=os.WNOHANG):
+        if self.returncode is None:
+            while True:
+                try:
+                    pid, sts = os.waitpid(self.pid, flag)
+                except OSError as e:
+                    # Child process not yet created. See #1731717
+                    # e.errno == errno.ECHILD == 10
+                    return None
+                else:
+                    break
+            if pid == self.pid:
+                if os.WIFSIGNALED(sts):
+                    self.returncode = -os.WTERMSIG(sts)
+                else:
+                    assert os.WIFEXITED(sts)
+                    self.returncode = os.WEXITSTATUS(sts)
+        return self.returncode
+
+    def wait(self, timeout=None):
+        if sys.version_info < (3, 3):
+            import time
+            if timeout is None:
+                return self.poll(0)
+            deadline = time.time() + timeout
+            delay = 0.0005
+            while 1:
+                res = self.poll()
+                if res is not None:
+                    break
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                delay = min(delay * 2, remaining, 0.05)
+                time.sleep(delay)
+            return res
+
+        if self.returncode is None:
+            if timeout is not None:
+                from multiprocessing.connection import wait
+                if not wait([self.sentinel], timeout):
+                    return None
+            # This shouldn't block if wait() returned successfully.
+            return self.poll(os.WNOHANG if timeout == 0.0 else 0)
+        return self.returncode
+
+    def terminate(self):
+        if self.returncode is None:
+            try:
+                os.kill(self.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            except OSError:
+                if self.wait(timeout=0.1) is None:
+                    raise
+
+    def _launch(self, process_obj):
+
+        from multiprocessing import semaphore_tracker
+        tracker_fd = semaphore_tracker.getfd()
+        prep_data = spawn.get_preparation_data(process_obj._name)
+
+        fp = BytesIO()
+        if sys.version_info[:2] > (3, 3):
+            context.set_spawning_popen(self)
+        else:
+            process_obj._authkey = bytes(process_obj.authkey)
+        try:
+            reduction.dump(prep_data, fp)
+            reduction.dump(process_obj, fp)
+        finally:
+            if sys.version_info[:2] > (3, 3):
+                context.set_spawning_popen(None)
+            else:
+                process_obj.authkey = process_obj.authkey
+                assert type(process_obj._authkey) is AuthenticationString
+
+        from subprocess import Popen as popen
+        try:
+            parent_r, child_w = os.pipe()
+            child_r, parent_w = os.pipe()
+            self._chan = CommunicationChannels(parent_w, parent_r)
+            # for fd in self._fds:
+            #     _mk_inheritable(fd)
+
+            cmd_python = [sys.executable, '-m', 'backend.popen_exec']
+            cmd_python += ['--pipe', str(_mk_inheritable(child_w)),
+                           str(_mk_inheritable(child_r)),
+                           '--semaphore', str(_mk_inheritable(tracker_fd))]
+            print(cmd_python)
+            self._fds.extend([child_r, child_w])
+            # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
+            self._proc = popen(cmd_python, close_fds=False)
+            self.sentinel = parent_r
+            method = 'getbuffer'
+            if not hasattr(fp, method):
+                method = 'getvalue'
+            self._chan._dump(getattr(fp, method)(), self._chan.conn_out,
+                             self._chan.pipe_fdw)
+            self.pid = self._proc.pid
+        finally:
+            if parent_r is not None:
+                util.Finalize(self, self._chan.close, ())
+            for fd in (child_r, child_w):
+                if fd is not None:
+                    os.close(fd)
+
+
+class CommunicationChannels(object):
+    '''Bi directional communication channel
+    '''
+    def __init__(self, conn_out, conn_in, strat='buff'):
+        self.strat = strat
+        self.pipe_fdw = os.fdopen(conn_out, 'wb')
+        self.pipe_fdr = os.fdopen(conn_in, 'rb')
+        self.conn_out = reduction.ForkingPickler(self.pipe_fdw)
+        self.conn_in = pickle.Unpickler(self.pipe_fdr)
+
+    def close(self):
+        self.pipe_fdw = self._close(self.pipe_fdw)
+        self.pipe_fdr = self._close(self.pipe_fdr)
+
+    def _close(self, fh):
+        if fh is not None:
+            fh.close()
+            return None
+
+    def dump(self, obj, conn=None, pipe=None):
+        conn_out = conn or self.conn_out
+        pipe_fdw = pipe or self.pipe_fdw
+        if self.strat == 'string':
+            text = pickle.dumps(obj)
+            self._dump(text, conn_out, pipe_fdw)
+        elif self.strat == 'buff':
+            buf = BytesIO()
+            reduction.ForkingPickler(buf).dump(obj)
+            method = 'getbuffer'
+            if not hasattr(buf, method):
+                method = 'getvalue'
+            self._dump(getattr(buf, method)(),
+                       conn_out, pipe_fdw)
+        elif self.strat == 'pipe':
+            conn_out.dump(obj)
+            pipe_fdw.flush()
+
+        else:
+            raise NotImplementedError('Wrong dump strategy')
+
+    def _dump(self, obj, conn, pipe):
+        pipe.write(obj)
+        pipe.flush()
+
+    def load(self):
+        return self.conn_in.load()
+
+
+if __name__ == '__main__':
+
+    import argparse
+    parser = argparse.ArgumentParser('Command line parser')
+    parser.add_argument('--pipe', type=int, nargs=2, default=None,
+                        help='File handle numbers for the pipe')
+    parser.add_argument('--semaphore', type=int, default=None,
+                        help='File handle name for the semaphore tracker')
+    parser.add_argument('--strat', type=str, default='buff',
+                        help='Strategy for communication dump')
+
+    args = parser.parse_args()
+
+    info = dict()
+    w, r = args.pipe
+    if sys.platform == 'win32':
+        import msvcrt
+        w = msvcrt.open_osfhandle(w, os.O_WRONLY)
+        r = msvcrt.open_osfhandle(r, os.O_RDONLY)
+    else:
+        from multiprocessing import semaphore_tracker
+        semaphore_tracker._semaphore_tracker._fd = args.semaphore
+    chan = CommunicationChannels(w, r, strat=args.strat)
+    info['backend'] = 'pipe'
+
+    try:
+        from multiprocessing import context
+        from .process import ExecContext
+        context._concrete_contexts['exec'] = ExecContext()
+    except ImportError:
+        pass
+
+    try:
+        #os.system('ls -l /proc/{}/fd'.format(os.getpid()))
+        prep_data = chan.load()
+        spawn.prepare(prep_data)
+        process_obj = chan.load()
+        process_obj.authkey = process_obj.authkey
+        exitcode = process_obj._bootstrap()
+    except Exception as e:
+        print('\n\n'+'-'*80)
+        print('Process failed with traceback: ')
+        print('-'*80)
+        import traceback
+        print(traceback.format_exc())
+        print('\n'+'-'*80)
+    finally:
+        chan.close()
+        print('[ExecProcess] - Proper close')
+
+        sys.exit(exitcode)
