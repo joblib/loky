@@ -46,10 +46,13 @@ class ExecProcess(BaseProcess):
 class ExecContext(BaseContext):
     _name = 'exec'
     Process = ExecProcess
-
+if sys.version_info < (3, 4):
+    from .backend import synchronize
+    mp.synchronize = synchronize
 try:
     from multiprocessing import context
     context._concrete_contexts['exec'] = ExecContext()
     mp.set_start_method('spawn', force=True)
 except ImportError:
+    print("BIGpass\n\n\n\n\n\n\n\n")
     pass

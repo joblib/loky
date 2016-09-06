@@ -19,6 +19,10 @@ else:
     _python_exe = sys.executable
 
 
+def get_executable():
+    return _python_exe
+
+
 def _check_not_importing_main():
     if getattr(process.current_process(), '_inheriting', False):
         raise RuntimeError('''
@@ -44,13 +48,14 @@ def get_preparation_data(name):
     _check_not_importing_main()
     d = dict(
         log_to_stderr=util._log_to_stderr,
-        authkey=process.current_process().authkey,
+        authkey=bytes(process.current_process().authkey),
         )
 
     if util._logger is not None:
         d['log_level'] = util._logger.getEffectiveLevel()
 
-    sys_path = sys.path.copy()
+
+    sys_path = [p for p in sys.path]
     try:
         i = sys_path.index('')
     except ValueError:
@@ -69,7 +74,10 @@ def get_preparation_data(name):
     # Figure out whether to initialise main in the subprocess as a module
     # or through direct execution (or to leave it alone entirely)
     main_module = sys.modules['__main__']
-    main_mod_name = getattr(main_module.__spec__, "name", None)
+    try:
+        main_mod_name = getattr(main_module.__spec__, "name", None)
+    except:
+        main_mod_name = None
     if main_mod_name is not None:
         d['init_main_from_name'] = main_mod_name
     elif sys.platform != 'win32' or (not WINEXE and not WINSERVICE):

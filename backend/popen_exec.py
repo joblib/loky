@@ -4,8 +4,9 @@ import signal
 import pickle
 from io import BytesIO
 
+from .backend import reduction, semaphore_tracker
 from . import spawn
-from multiprocessing import util, reduction
+from multiprocessing import util
 try:
     from multiprocessing import context
     from .process import ExecContext
@@ -15,47 +16,36 @@ except ImportError:
 
 __all__ = ['Popen']
 
-
-def _mk_inheritable(fd):
-    if sys.version_info[:2] > (3, 3):
-        if sys.platform == 'win32':
-            # Change to Windwos file handle
-            import msvcrt
-            fdh = msvcrt.get_osfhandle(fd)
-            os.set_handle_inheritable(fdh, True)
-            return fdh
-        else:
-            os.set_inheritable(fd, True)
-            return fd
-    elif sys.platform == 'win32':
-        # TODO: find a hack??
-        # Not yet working
-        import msvcrt
-        import _subprocess
-
-        curproc = _subprocess.GetCurrentProcess()
-        fdh = msvcrt.get_osfhandle(fd)
-        fdh = _subprocess.DuplicateHandle(
-            curproc, fdh, curproc, 0,
-            True,  # set inheritable FLAG
-            _subprocess.DUPLICATE_SAME_ACCESS)
-        return fdh
-    else:
-        return fd
+_spawning_popen = None
 
 
-def reduce_connection(conn):
-    df = reduction.DupFd(conn.fileno())
-    fd = df.detach()
-    return rebuild_connection, (df, conn.readable, conn.writable)
+def is_spawning():
+    return _spawning_popen is not None
 
 
-from multiprocessing.connection import Connection
-def rebuild_connection(df, readable, writable):
-    fd = df.detach()
-    return Connection(fd, readable, writable)
+def set_spawning_popen(popen):
+    global _spawning_popen
+    _spawning_popen = popen
 
-reduction.register(Connection, reduce_connection)
+
+def get_spawning_popen():
+    global _spawning_popen
+    return _spawning_popen
+
+try:
+    from multiprocessing.connection import Connection
+
+    def reduce_connection(conn):
+        df = reduction.DupFd(conn.fileno())
+        return rebuild_connection, (df, conn.readable, conn.writable)
+
+    def rebuild_connection(df, readable, writable):
+        fd = df.detach()
+        return Connection(fd, readable, writable)
+
+    reduction.register(Connection, reduce_connection)
+except ImportError:
+    pass
 
 
 #
@@ -64,7 +54,7 @@ reduction.register(Connection, reduce_connection)
 
 class _DupFd(object):
     def __init__(self, fd):
-        self.fd = _mk_inheritable(fd)
+        self.fd = reduction._mk_inheritable(fd)
     def detach(self):
         return self.fd
 
@@ -83,9 +73,17 @@ class Popen(object):
         self._fds = []
         self._launch(process_obj)
 
-    def duplicate_for_child(self, fd):
-        self._fds.append(fd)
-        return _mk_inheritable(fd)
+    if sys.version_info < (3, 4):
+        @classmethod
+        def duplicate_for_child(cls, fd):
+            popen = get_spawning_popen()
+            popen._fds.append(fd)
+            return reduction._mk_inheritable(fd)
+
+    else:
+        def duplicate_for_child(self, fd):
+            self._fds.append(fd)
+            return reduction._mk_inheritable(fd)
 
     def poll(self, flag=os.WNOHANG):
         if self.returncode is None:
@@ -145,26 +143,26 @@ class Popen(object):
 
     def _launch(self, process_obj):
 
-        from multiprocessing import semaphore_tracker
         tracker_fd = semaphore_tracker.getfd()
-        prep_data = spawn.get_preparation_data(process_obj._name)
 
         fp = BytesIO()
+        set_spawning_popen(self)
         if sys.version_info[:2] > (3, 3):
             context.set_spawning_popen(self)
         else:
-            process_obj._authkey = bytes(process_obj.authkey)
+            process_obj.authkey = process_obj.authkey
+            # process_obj._authkey = bytes(process_obj.authkey)
         try:
+            prep_data = spawn.get_preparation_data(process_obj._name)
             reduction.dump(prep_data, fp)
             reduction.dump(process_obj, fp)
         finally:
+            set_spawning_popen(None)
             if sys.version_info[:2] > (3, 3):
                 context.set_spawning_popen(None)
             else:
                 process_obj.authkey = process_obj.authkey
-                assert type(process_obj._authkey) is AuthenticationString
 
-        from subprocess import Popen as popen
         try:
             parent_r, child_w = os.pipe()
             child_r, parent_w = os.pipe()
@@ -173,13 +171,18 @@ class Popen(object):
             #     _mk_inheritable(fd)
 
             cmd_python = [sys.executable, '-m', 'backend.popen_exec']
-            cmd_python += ['--pipe', str(_mk_inheritable(child_w)),
-                           str(_mk_inheritable(child_r)),
-                           '--semaphore', str(_mk_inheritable(tracker_fd))]
+            cmd_python += ['--pipe',
+                           str(reduction._mk_inheritable(child_w)),
+                           str(reduction._mk_inheritable(child_r)),
+                           '--semaphore',
+                           str(reduction._mk_inheritable(tracker_fd))]
             print(cmd_python)
-            self._fds.extend([child_r, child_w])
+            self._fds.extend([child_r, child_w, tracker_fd])
             # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
-            self._proc = popen(cmd_python, close_fds=False)
+            os.system('grep shm /proc/{}/maps'.format(os.getpid()))
+            print('\n')
+            from .fork_exec import fork_exec
+            self._proc = fork_exec(cmd_python, self._fds)
             self.sentinel = parent_r
             method = 'getbuffer'
             if not hasattr(fp, method):
@@ -194,6 +197,15 @@ class Popen(object):
                 if fd is not None:
                     os.close(fd)
 
+    @staticmethod
+    def thread_is_spawning():
+        return True
+
+if sys.version_info < (3, 4):
+    from multiprocessing import forking, synchronize
+    forking.Popen = Popen
+    synchronize.Popen = Popen
+
 
 class CommunicationChannels(object):
     '''Bi directional communication channel
@@ -202,7 +214,7 @@ class CommunicationChannels(object):
         self.strat = strat
         self.pipe_fdw = os.fdopen(conn_out, 'wb')
         self.pipe_fdr = os.fdopen(conn_in, 'rb')
-        self.conn_out = reduction.ForkingPickler(self.pipe_fdw)
+        self.conn_out = reduction.ExecPickler(self.pipe_fdw)
         self.conn_in = pickle.Unpickler(self.pipe_fdr)
 
     def close(self):
@@ -222,7 +234,7 @@ class CommunicationChannels(object):
             self._dump(text, conn_out, pipe_fdw)
         elif self.strat == 'buff':
             buf = BytesIO()
-            reduction.ForkingPickler(buf).dump(obj)
+            reduction.ExecPickler(buf).dump(obj)
             method = 'getbuffer'
             if not hasattr(buf, method):
                 method = 'getvalue'
@@ -263,7 +275,6 @@ if __name__ == '__main__':
         w = msvcrt.open_osfhandle(w, os.O_WRONLY)
         r = msvcrt.open_osfhandle(r, os.O_RDONLY)
     else:
-        from multiprocessing import semaphore_tracker
         semaphore_tracker._semaphore_tracker._fd = args.semaphore
     chan = CommunicationChannels(w, r, strat=args.strat)
     info['backend'] = 'pipe'
@@ -275,12 +286,16 @@ if __name__ == '__main__':
     except ImportError:
         pass
 
+    exitcode = 1
     try:
         #os.system('ls -l /proc/{}/fd'.format(os.getpid()))
         prep_data = chan.load()
         spawn.prepare(prep_data)
         process_obj = chan.load()
         process_obj.authkey = process_obj.authkey
+        print('Sem:')
+        os.system('grep shm /proc/{}/maps'.format(os.getpid()))
+        print('\n')
         exitcode = process_obj._bootstrap()
     except Exception as e:
         print('\n\n'+'-'*80)
