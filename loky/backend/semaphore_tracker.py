@@ -18,8 +18,13 @@ import threading
 import warnings
 import _multiprocessing
 
-from .. import spawn
+from . import spawn
 from multiprocessing import util
+
+try:
+    from _multiprocessing import sem_unlink
+except ImportError:
+    from .semlock import sem_unlink
 
 __all__ = ['ensure_running', 'register', 'unregister']
 
@@ -47,7 +52,7 @@ class SemaphoreTracker(object):
                 fds_to_pass.append(sys.stderr.fileno())
             except Exception:
                 pass
-            cmd = 'from backend.backend.semaphore_tracker import main;main(%d)'
+            cmd = 'print("Start semaphore tracker");from loky.backend.semaphore_tracker import main;main(%d)'
             r, w = os.pipe()
             try:
                 fds_to_pass.append(r)
@@ -96,6 +101,8 @@ def main(fd):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
+    print("Start semaphore tracker")
+
     for f in (sys.stdin, sys.stdout):
         try:
             f.close()
@@ -111,8 +118,14 @@ def main(fd):
                     cmd, name = line.strip().split(b':')
                     if cmd == b'REGISTER':
                         cache.add(name)
+                        name = name.decode('ascii')
+                        sys.stderr.write("Register {}\n".format(name))
+                        sys.stderr.flush()
                     elif cmd == b'UNREGISTER':
                         cache.remove(name)
+                        name = name.decode('ascii')
+                        sys.stderr.write("Unregister {}\n".format(name))
+                        sys.stderr.flush()
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
@@ -136,11 +149,13 @@ def main(fd):
             try:
                 name = name.decode('ascii')
                 try:
-                    _multiprocessing.sem_unlink(name)
+                    sem_unlink(name)
                 except Exception as e:
                     warnings.warn('semaphore_tracker: %r: %s' % (name, e))
             finally:
                 pass
+        sys.stderr.write("SemaphoreTracker is done")
+        sys.stderr.flush()
 
 
 #
@@ -151,19 +166,20 @@ def spawnv_passfds(path, args, passfds):
     passfds = sorted(passfds)
     errpipe_read, errpipe_write = os.pipe()
     try:
-        import _posixsubprocess
-        return _posixsubprocess.fork_exec(
-            args, [os.fsencode(path)], True, passfds, None, None,
-            -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
-            False, False, None)
-    except ImportError:
-        import subprocess
-        from .reduction import _mk_inheritable
-        _pass = []
-        for fd in passfds:
-            _pass += [_mk_inheritable(fd)]
-        subprocess.Popen(args, executable=path)
-
+        if sys.version_info > (3, 3):
+            import _posixsubprocess
+            return _posixsubprocess.fork_exec(
+                args, [os.fsencode(path)], True, passfds, None, None,
+                -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
+                False, False, None)
+        else:
+            from .reduction import _mk_inheritable
+            _pass = []
+            for fd in passfds:
+                _pass += [_mk_inheritable(fd)]
+            from .fork_exec import fork_exec
+            print("Start sempahore tracker in fork exec")
+            fork_exec(args, _pass)
     finally:
         os.close(errpipe_read)
         os.close(errpipe_write)

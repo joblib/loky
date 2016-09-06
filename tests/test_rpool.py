@@ -4,8 +4,8 @@ import psutil
 import warnings
 from time import sleep, time
 import pytest
-from backend.reusable_pool import get_reusable_pool, CallbackError
-from backend.reusable_pool import AbortedWorkerError, TerminatedPoolError
+from loky.reusable_pool import get_reusable_pool, CallbackError
+from loky.reusable_pool import AbortedWorkerError, TerminatedPoolError
 import multiprocessing as mp
 from multiprocessing.pool import MaybeEncodingError
 from pickle import PicklingError, UnpicklingError

@@ -14,7 +14,7 @@ except ImportError:
 
 
 # from test.support.script_helper import assert_python_ok
-from backend import process_executor
+from loky import process_executor
 
 import sys
 import threading
@@ -24,7 +24,7 @@ import weakref
 from concurrent import futures
 from concurrent.futures._base import \
     PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, Future
-from backend.process_executor import BrokenProcessPool
+from loky.process_executor import BrokenProcessPool
 import multiprocessing as mp
 if sys.version_info[:2] < (3, 4):
     mp.get_context = lambda k: mp

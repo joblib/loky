@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-from backend import process
+from loky import backend
 import multiprocessing
 import pytest
 import signal
@@ -11,19 +11,19 @@ DELTA = 0.1
 
 class TestExec:
     TYPE = 'processes'
-    Process = process.ExecProcess
+    Process = backend.Process
     current_process = staticmethod(multiprocessing.current_process)
     active_children = staticmethod(multiprocessing.active_children)
     # Pool = staticmethod(multiprocessing.Pool)
-    Pipe = staticmethod(multiprocessing.Pipe)
-    Queue = staticmethod(multiprocessing.Queue)
+    Pipe = staticmethod(backend.Pipe)
+    Queue = staticmethod(backend.Queue)
     # JoinableQueue = staticmethod(multiprocessing.JoinableQueue)
     # Lock = staticmethod(multiprocessing.Lock)
     # RLock = staticmethod(multiprocessing.RLock)
     # Semaphore = staticmethod(multiprocessing.Semaphore)
     # BoundedSemaphore = staticmethod(multiprocessing.BoundedSemaphore)
     # Condition = staticmethod(multiprocessing.Condition)
-    Event = staticmethod(multiprocessing.Event)
+    Event = staticmethod(backend.Event)
     # Barrier = staticmethod(multiprocessing.Barrier)
     # Value = staticmethod(multiprocessing.Value)
     # Array = staticmethod(multiprocessing.Array)

@@ -44,7 +44,7 @@ def _sem_open(name, o_flag, perm=None, value=None):
         assert value is None, "Wrong number of argument (either 2 or 4)"
         return pthread.sem_open(ctypes.c_char_p(name), o_flag)
     else:
-        assert value, "Wrong number of argument (either 2 or 4)"
+        assert value is not None, "Wrong number of argument (either 2 or 4)"
         return pthread.sem_open(ctypes.c_char_p(name), ctypes.c_int(o_flag),
                                 ctypes.c_int(perm), ctypes.c_int(value))
 
@@ -54,7 +54,8 @@ class SemLock(object):
 
     _rand = tempfile._RandomNameSequence()
 
-    def __init__(self, kind, value, maxvalue, nn=None, *, name=None):
+    def __init__(self, kind, value, maxvalue, n=None, u=None, name=None):
+        assert n is None
         self.count = 0
         self.ident = 0
         self.kind = kind
@@ -75,13 +76,14 @@ class SemLock(object):
             else:
                 raise FileExistsError('cannot find name for semaphore')
 
-            util.debug('created semlock with handle %s' % self.handle)
+            util.debug('created semlock with handle %s and name %s'
+                       % (self.handle, self.name))
 
     @staticmethod
     def _make_name():
         return str.encode('/mp-%s' % next(SemLock._rand))
 
-    def is_mine(self):
+    def _is_mine(self):
         return self.count > 0 and threading.get_ident() == self.ident
 
     def acquire(self, blocking=True, timeout=None):
@@ -89,13 +91,28 @@ class SemLock(object):
             res = pthread.sem_wait(self.handle)
         elif not blocking:
             res = pthread.sem_trywait(self.handle)
+        else:
+            res = pthread.sem_trywait(self.handle)
+            if res < 0:
+                e = ctypes.get_errno()
+                if e == errno.EINTR:
+                    return None
+                elif e == errno.EAGAIN:
+                    return False
+                raiseFromErrno()
+            return True
         if res < 0:
-            errno = ctypes.get_errno()
-            if errno == errno.EINTR:
+            e = ctypes.get_errno()
+            if e == errno.EINTR:
                 return None
+            elif e == errno.EAGAIN:
+                return False
+            raiseFromErrno()
         self.count += 1
+        self.ident = threading.get_ident()
+        return True
 
-    def release(self):
+    def release(self, *args):
         if self.kind == RECURSIVE_MUTEX:
             assert self.is_mine(), (
                 "attempt to release recursive lock not owned by thread")

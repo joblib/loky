@@ -4,9 +4,9 @@ import psutil
 import warnings
 from time import sleep, time
 import pytest
-from backend.concurrent_pool import get_reusable_executor
+from loky.concurrent_pool import get_reusable_executor
 import multiprocessing as mp
-from backend.process_executor import BrokenProcessPool, ShutdownProcessPool
+from loky.process_executor import BrokenProcessPool, ShutdownProcessPool
 from pickle import PicklingError, UnpicklingError
 
 # Backward compat for python2 cPickle module

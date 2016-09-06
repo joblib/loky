@@ -4,8 +4,7 @@ import signal
 import pickle
 from io import BytesIO
 
-from .backend import reduction, semaphore_tracker
-from . import spawn
+from . import reduction, semaphore_tracker, spawn
 from multiprocessing import util
 try:
     from multiprocessing import context
@@ -170,7 +169,7 @@ class Popen(object):
             # for fd in self._fds:
             #     _mk_inheritable(fd)
 
-            cmd_python = [sys.executable, '-m', 'backend.popen_exec']
+            cmd_python = [sys.executable, '-m', 'loky.backend.popen_exec']
             cmd_python += ['--pipe',
                            str(reduction._mk_inheritable(child_w)),
                            str(reduction._mk_inheritable(child_r)),
@@ -178,9 +177,10 @@ class Popen(object):
                            str(reduction._mk_inheritable(tracker_fd))]
             print(cmd_python)
             self._fds.extend([child_r, child_w, tracker_fd])
-            # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
+            print('Fd from main:')
+            os.system('ls -l /proc/{}/fd'.format(os.getpid()))
+            print('SEM from main:')
             os.system('grep shm /proc/{}/maps'.format(os.getpid()))
-            print('\n')
             from .fork_exec import fork_exec
             self._proc = fork_exec(cmd_python, self._fds)
             self.sentinel = parent_r
@@ -279,6 +279,13 @@ if __name__ == '__main__':
     chan = CommunicationChannels(w, r, strat=args.strat)
     info['backend'] = 'pipe'
 
+    import multiprocessing as mp
+    if sys.version_info < (3, 4):
+        from . import synchronize
+        mp.synchronize.SemLock = synchronize.SemLock
+        mp.synchronize.sem_unlink = synchronize.sem_unlink
+        mp.synchronize = synchronize
+        mp.Lock = synchronize.Lock
     try:
         from multiprocessing import context
         from .process import ExecContext
@@ -293,7 +300,9 @@ if __name__ == '__main__':
         spawn.prepare(prep_data)
         process_obj = chan.load()
         process_obj.authkey = process_obj.authkey
-        print('Sem:')
+        print('Fd from child:')
+        os.system('ls -l /proc/{}/fd'.format(os.getpid()))
+        print('Sem from child:')
         os.system('grep shm /proc/{}/maps'.format(os.getpid()))
         print('\n')
         exitcode = process_obj._bootstrap()

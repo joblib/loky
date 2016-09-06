@@ -15,7 +15,7 @@ import _multiprocessing
 
 from time import time as _time
 
-from .. import popen_exec as context
+from .popen_exec import is_spawning, get_spawning_popen
 from multiprocessing import process
 from multiprocessing import util
 
@@ -31,7 +31,7 @@ try:
         from .semlock import sem_unlink
     else:
         from _multiprocessing import SemLock as SemLockC
-        from _multibytecodec import sem_unlink
+        from _multiprocessing import sem_unlink
 except (ImportError):
     raise ImportError("This platform lacks a functioning sem_open" +
                       " implementation, therefore, the required" +
@@ -60,8 +60,7 @@ class SemLock(object):
         for i in range(100):
             try:
                 sl = self._semlock = SemLockC(
-                    kind, value, maxvalue, SemLock._make_name())
-                # unlink_now)
+                    kind, value, maxvalue, SemLock._make_name(), unlink_now)
             except FileExistsError:
                 pass
             else:
@@ -82,7 +81,8 @@ class SemLock(object):
             # disabled.  When the object is garbage collected or the
             # process shuts down we unlink the semaphore name
             from .semaphore_tracker import register
-            register(self._semlock.name)
+            if sys.version_info < (3, 4):
+                register(self._semlock.name)
             util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
                           exitpriority=0)
 
@@ -97,16 +97,16 @@ class SemLock(object):
         self.release = self._semlock.release
 
     def __enter__(self):
-        return self._semlock.__enter__()
+        return self._semlock.acquire()
 
     def __exit__(self, *args):
-        return self._semlock.__exit__(*args)
+        return self._semlock.release(*args)
 
     def __getstate__(self):
-        context.assert_spawning(self)
+        assert is_spawning()
         sl = self._semlock
         if sys.platform == 'win32':
-            h = context.get_spawning_popen().duplicate_for_child(sl.handle)
+            h = get_spawning_popen().duplicate_for_child(sl.handle)
         else:
             h = sl.handle
         return (h, sl.kind, sl.maxvalue, sl.name)
@@ -114,15 +114,20 @@ class SemLock(object):
     def __setstate__(self, state):
         if sys.version_info < (3, 4):
             h, kind, maxvalue, name = state
-            self._semlock(h, kind, maxvalue, name=name)
+            util.debug('try handle %r' % state[0])
+            self._semlock = SemLockC(h, kind, maxvalue, name=name)
         else:
+            util.debug('weird handle %r' % state[0])
             self._semlock = SemLock._rebuild(*state)
         util.debug('recreated blocker with handle %r' % state[0])
         self._make_methods()
 
     @staticmethod
     def _make_name():
-        return str.encode('/mp-%s' % next(SemLock._rand))
+        if sys.version_info < (3, 4):
+            return None
+        return '%s-%s' % (process.current_process()._config['semprefix'],
+                          next(SemLock._rand))
 
 #
 # Semaphore
@@ -130,8 +135,8 @@ class SemLock(object):
 
 class Semaphore(SemLock):
 
-    def __init__(self, value=1, *, ctx):
-        SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX, ctx=ctx)
+    def __init__(self, value=1, ):
+        SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX)
 
     def get_value(self):
         return self._semlock._get_value()
@@ -149,8 +154,8 @@ class Semaphore(SemLock):
 
 class BoundedSemaphore(Semaphore):
 
-    def __init__(self, value=1, *, ctx):
-        SemLock.__init__(self, SEMAPHORE, value, value, ctx=ctx)
+    def __init__(self, value=1):
+        SemLock.__init__(self, SEMAPHORE, value, value)
 
     def __repr__(self):
         try:
@@ -166,8 +171,8 @@ class BoundedSemaphore(Semaphore):
 
 class Lock(SemLock):
 
-    def __init__(self, *, ctx):
-        SemLock.__init__(self, SEMAPHORE, 1, 1, ctx=ctx)
+    def __init__(self):
+        SemLock.__init__(self, SEMAPHORE, 1, 1)
 
     def __repr__(self):
         try:
@@ -191,8 +196,8 @@ class Lock(SemLock):
 
 class RLock(SemLock):
 
-    def __init__(self, *, ctx):
-        SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1, ctx=ctx)
+    def __init__(self):
+        SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1)
 
     def __repr__(self):
         try:
@@ -217,15 +222,15 @@ class RLock(SemLock):
 
 class Condition(object):
 
-    def __init__(self, lock=None, *, ctx):
-        self._lock = lock or ctx.RLock()
-        self._sleeping_count = ctx.Semaphore(0)
-        self._woken_count = ctx.Semaphore(0)
-        self._wait_semaphore = ctx.Semaphore(0)
+    def __init__(self, lock=None):
+        self._lock = lock or RLock()
+        self._sleeping_count = Semaphore(0)
+        self._woken_count = Semaphore(0)
+        self._wait_semaphore = Semaphore(0)
         self._make_methods()
 
     def __getstate__(self):
-        context.assert_spawning(self)
+        assert is_spawning()
         return (self._lock, self._sleeping_count,
                 self._woken_count, self._wait_semaphore)
 
@@ -339,9 +344,9 @@ class Condition(object):
 
 class Event(object):
 
-    def __init__(self, *, ctx):
-        self._cond = ctx.Condition(ctx.Lock())
-        self._flag = ctx.Semaphore(0)
+    def __init__(self):
+        self._cond = Condition(Lock())
+        self._flag = Semaphore(0)
 
     def is_set(self):
         with self._cond:
