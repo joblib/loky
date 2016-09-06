@@ -57,7 +57,9 @@ class TestExec:
     @classmethod
     def _test_process(cls, q, *args, **kwds):
         current = cls.current_process()
+        print('ok')
         q.put(args)
+        print('ok')
         q.put(kwds, timeout=1)
         q.put(current.name, timeout=1)
         if cls.TYPE != 'threads':
