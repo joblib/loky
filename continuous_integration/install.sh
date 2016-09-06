@@ -10,5 +10,6 @@ ver=$(python -V 2>&1 | sed -e 's/Python \([23]\.[0-9]\).*/\1/' -e 's/\.//')
 echo "Testing for python $ver"
 pip install psutil
 [ $ver -lt 33 ] && pip install faulthandler
+[ $ver -lt 33 ] && pip install futures
 
 python setup.py develop 
