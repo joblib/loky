@@ -48,6 +48,8 @@ class ExecContext(BaseContext):
     Process = ExecProcess
 if sys.version_info < (3, 4):
     from .backend import synchronize
+    mp.synchronize.SemLock = synchronize.SemLock
+    mp.synchronize.sem_unlink = synchronize.sem_unlink
     mp.synchronize = synchronize
 try:
     from multiprocessing import context

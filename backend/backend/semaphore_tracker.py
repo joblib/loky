@@ -47,7 +47,7 @@ class SemaphoreTracker(object):
                 fds_to_pass.append(sys.stderr.fileno())
             except Exception:
                 pass
-            cmd = 'from backend.context.semaphore_tracker import main;main(%d)'
+            cmd = 'from backend.backend.semaphore_tracker import main;main(%d)'
             r, w = os.pipe()
             try:
                 fds_to_pass.append(r)

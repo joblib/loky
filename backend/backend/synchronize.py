@@ -26,10 +26,12 @@ __all__ = [
 # raise ImportError for platforms lacking a working sem_open implementation.
 # See issue 3770
 try:
-    if sys.version_info < (3, 4):
-        from _semaphore import SemLock, sem_unlink
+    if sys.platform != 'win32' and sys.version_info < (3, 4):
+        from .semlock import SemLock as SemLockC
+        from .semlock import sem_unlink
     else:
-        from _multiprocessing import SemLock, sem_unlink
+        from _multiprocessing import SemLock as SemLockC
+        from _multibytecodec import sem_unlink
 except (ImportError):
     raise ImportError("This platform lacks a functioning sem_open" +
                       " implementation, therefore, the required" +
@@ -51,14 +53,15 @@ class SemLock(object):
 
     _rand = tempfile._RandomNameSequence()
 
-    def __init__(self, kind, value, maxvalue, *, ctx):
+    def __init__(self, kind, value, maxvalue):
+        util.debug("Using semaphore from backend\n\n\n")
         name = 'exec'
         unlink_now = sys.platform == 'win32' or name == 'fork'
         for i in range(100):
             try:
-                sl = self._semlock = _multiprocessing.SemLock(
-                    kind, value, maxvalue, self._make_name(),
-                    unlink_now)
+                sl = self._semlock = SemLockC(
+                    kind, value, maxvalue, SemLock._make_name())
+                # unlink_now)
             except FileExistsError:
                 pass
             else:
@@ -109,13 +112,17 @@ class SemLock(object):
         return (h, sl.kind, sl.maxvalue, sl.name)
 
     def __setstate__(self, state):
-        self._semlock = _multiprocessing.SemLock._rebuild(*state)
+        if sys.version_info < (3, 4):
+            h, kind, maxvalue, name = state
+            self._semlock(h, kind, maxvalue, name=name)
+        else:
+            self._semlock = SemLock._rebuild(*state)
         util.debug('recreated blocker with handle %r' % state[0])
         self._make_methods()
 
     @staticmethod
     def _make_name():
-        return 'mp-%s' % (next(SemLock._rand))
+        return str.encode('/mp-%s' % next(SemLock._rand))
 
 #
 # Semaphore

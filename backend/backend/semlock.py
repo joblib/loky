@@ -12,6 +12,7 @@ import ctypes
 import tempfile
 import threading
 from multiprocessing import util
+from ctypes.util import find_library
 
 SEM_FAILURE = 0
 if sys.platform == 'darwin':
@@ -21,7 +22,7 @@ RECURSIVE_MUTEX = 0
 SEMAPHORE = 1
 
 
-pthread = ctypes.CDLL(ctypes.util.find_library('pthread'), use_errno=True)
+pthread = ctypes.CDLL(find_library('pthread'), use_errno=True)
 # pthread.sem_open.argtypes = [ctypes.c_char_p, ctypes.c_int,
 #                              ctypes.c_int, ctypes.c_int]
 pthread.sem_open.restype = ctypes.c_void_p
@@ -30,9 +31,15 @@ pthread.sem_wait.argtypes = [ctypes.c_void_p]
 pthread.sem_trywait.argtypes = [ctypes.c_void_p]
 pthread.sem_post.argtypes = [ctypes.c_void_p]
 pthread.sem_getvalue.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+pthread.sem_unlink.argtypes = [ctypes.c_char_p]
 
 
-def sem_open(name, o_flag, perm=None, value=None):
+def sem_unlink(name):
+    if pthread.sem_unlink(name) < 0:
+        raiseFromErrno()
+
+
+def _sem_open(name, o_flag, perm=None, value=None):
     if perm is None:
         assert value is None, "Wrong number of argument (either 2 or 4)"
         return pthread.sem_open(ctypes.c_char_p(name), o_flag)
@@ -47,21 +54,21 @@ class SemLock(object):
 
     _rand = tempfile._RandomNameSequence()
 
-    def __init__(self, kind, value, maxvalue, *, name=None):
+    def __init__(self, kind, value, maxvalue, nn=None, *, name=None):
         self.count = 0
         self.ident = 0
         self.kind = kind
         self.maxvalue = maxvalue
         if name:
             self.name = name
-            self.handle = sem_open(name, 0)
+            self.handle = _sem_open(name, 0)
             if self.handle == SEM_FAILURE:
                 raise FileExistsError('cannot find name for semaphore')
             util.debug('rebuild semlock with handle %s' % self.handle)
         else:
             for i in range(100):
                 self.name = self._make_name()
-                self.handle = sem_open(
+                self.handle = _sem_open(
                     self.name, os.O_CREAT | os.O_EXCL, 384, value)
                 if self.handle != SEM_FAILURE:
                     break
@@ -72,7 +79,7 @@ class SemLock(object):
 
     @staticmethod
     def _make_name():
-        return b'/mp-%s' % str.encode(next(SemLock._rand))
+        return str.encode('/mp-%s' % next(SemLock._rand))
 
     def is_mine(self):
         return self.count > 0 and threading.get_ident() == self.ident
@@ -123,6 +130,27 @@ class SemLock(object):
             raiseFromErrno()
 
         self.count -= 1
+
+    def _is_zero(self):
+        if sys.platform == 'darwin':
+            # Handle broken get_value for mac ==> only Lock will work
+            # as sem_get_value do not work properly
+            assert self.maxvalue == 1, (
+                "semaphore are broken on mac. Can only use locks")
+            if pthread.sem_trywait(self.handle) < 0:
+                e = ctypes.get_errno()
+                if e == errno.EAGAIN:
+                    return True
+                raise OSError(e, errno.errorcode[e])
+            else:
+                if pthread.sem_post(self.handle) < 0:
+                    raiseFromErrno()
+                return False
+        else:
+            value = ctypes.pointer(ctypes.c_int(-1))
+            if pthread.sem_getvalue(self.handle, value) < 0:
+                raiseFromErrno()
+            return value.contents.value == 0
 
 
 def raiseFromErrno():
