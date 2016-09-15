@@ -31,25 +31,10 @@ def get_spawning_popen():
     global _spawning_popen
     return _spawning_popen
 
-try:
-    from multiprocessing.connection import Connection
-
-    def reduce_connection(conn):
-        df = reduction.DupFd(conn.fileno())
-        return rebuild_connection, (df, conn.readable, conn.writable)
-
-    def rebuild_connection(df, readable, writable):
-        fd = df.detach()
-        return Connection(fd, readable, writable)
-
-    reduction.register(Connection, reduce_connection)
-except ImportError:
-    pass
-
-
 #
 # Wrapper for an fd used while launching a process
 #
+
 
 class _DupFd(object):
     def __init__(self, fd):
@@ -142,25 +127,21 @@ class Popen(object):
 
     def _launch(self, process_obj):
 
-        tracker_fd = semaphore_tracker.getfd()
+        tracker_fd = semaphore_tracker._semaphore_tracker._fd
 
         fp = BytesIO()
         set_spawning_popen(self)
         if sys.version_info[:2] > (3, 3):
             context.set_spawning_popen(self)
-        else:
-            process_obj.authkey = process_obj.authkey
-            # process_obj._authkey = bytes(process_obj.authkey)
         try:
             prep_data = spawn.get_preparation_data(process_obj._name)
             reduction.dump(prep_data, fp)
             reduction.dump(process_obj, fp)
+
         finally:
             set_spawning_popen(None)
             if sys.version_info[:2] > (3, 3):
                 context.set_spawning_popen(None)
-            else:
-                process_obj.authkey = process_obj.authkey
 
         try:
             parent_r, child_w = os.pipe()
@@ -172,15 +153,16 @@ class Popen(object):
             cmd_python = [sys.executable, '-m', 'loky.backend.popen_exec']
             cmd_python += ['--pipe',
                            str(reduction._mk_inheritable(child_w)),
-                           str(reduction._mk_inheritable(child_r)),
-                           '--semaphore',
-                           str(reduction._mk_inheritable(tracker_fd))]
+                           str(reduction._mk_inheritable(child_r))]
+            if tracker_fd is not None:
+                cmd_python += ['--semaphore',
+                               str(reduction._mk_inheritable(tracker_fd))]
             print(cmd_python)
             self._fds.extend([child_r, child_w, tracker_fd])
-            print('Fd from main:')
-            os.system('ls -l /proc/{}/fd'.format(os.getpid()))
-            print('SEM from main:')
-            os.system('grep shm /proc/{}/maps'.format(os.getpid()))
+            # print('Fd from main:')
+            # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
+            # print('SEM from main:')
+            # os.system('grep shm /proc/{}/maps'.format(os.getpid()))
             from .fork_exec import fork_exec
             self._proc = fork_exec(cmd_python, self._fds)
             self.sentinel = parent_r
@@ -279,13 +261,6 @@ if __name__ == '__main__':
     chan = CommunicationChannels(w, r, strat=args.strat)
     info['backend'] = 'pipe'
 
-    import multiprocessing as mp
-    if sys.version_info < (3, 4):
-        from . import synchronize
-        mp.synchronize.SemLock = synchronize.SemLock
-        mp.synchronize.sem_unlink = synchronize.sem_unlink
-        mp.synchronize = synchronize
-        mp.Lock = synchronize.Lock
     try:
         from multiprocessing import context
         from .process import ExecContext
@@ -300,11 +275,11 @@ if __name__ == '__main__':
         spawn.prepare(prep_data)
         process_obj = chan.load()
         process_obj.authkey = process_obj.authkey
-        print('Fd from child:')
-        os.system('ls -l /proc/{}/fd'.format(os.getpid()))
-        print('Sem from child:')
-        os.system('grep shm /proc/{}/maps'.format(os.getpid()))
-        print('\n')
+        # print('Fd from child:')
+        # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
+        # print('Sem from child:')
+        # os.system('grep shm /proc/{}/maps'.format(os.getpid()))
+        # print('\n')
         exitcode = process_obj._bootstrap()
     except Exception as e:
         print('\n\n'+'-'*80)

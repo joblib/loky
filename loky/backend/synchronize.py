@@ -172,7 +172,8 @@ class BoundedSemaphore(Semaphore):
 class Lock(SemLock):
 
     def __init__(self):
-        SemLock.__init__(self, SEMAPHORE, 1, 1)
+        super(Lock, self).__init__(SEMAPHORE, 1, 1)
+        # SemLock.__init__(self, SEMAPHORE, 1, 1)
 
     def __repr__(self):
         try:

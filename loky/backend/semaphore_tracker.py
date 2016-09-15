@@ -52,7 +52,9 @@ class SemaphoreTracker(object):
                 fds_to_pass.append(sys.stderr.fileno())
             except Exception:
                 pass
-            cmd = 'print("Start semaphore tracker");from loky.backend.semaphore_tracker import main;main(%d)'
+            cmd = ('print("Start semaphore tracker");'
+                   'from loky.backend.semaphore_tracker import main;'
+                   'main(%d)')
             r, w = os.pipe()
             try:
                 fds_to_pass.append(r)
@@ -100,8 +102,6 @@ def main(fd):
     # protect the process from ^C and "killall python" etc
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
-
-    print("Start semaphore tracker")
 
     for f in (sys.stdin, sys.stdout):
         try:

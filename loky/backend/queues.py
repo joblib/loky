@@ -15,14 +15,17 @@ import time
 import weakref
 import errno
 
-from queue import Empty, Full
-
 from multiprocessing import connection
 
 from multiprocessing.util import debug, info, Finalize, register_after_fork, is_exiting
 from .reduction import ExecPickler
 from .popen_exec import is_spawning
 from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
+
+if sys.version_info < (3, 3):
+    from Queue import Empty, Full
+else:
+    from queue import Empty, Full
 
 
 __all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']

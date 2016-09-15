@@ -57,9 +57,7 @@ class TestExec:
     @classmethod
     def _test_process(cls, q, *args, **kwds):
         current = cls.current_process()
-        print('ok')
         q.put(args)
-        print('ok')
         q.put(kwds, timeout=1)
         q.put(current.name, timeout=1)
         if cls.TYPE != 'threads':
@@ -110,8 +108,6 @@ class TestExec:
         time.sleep(100)
 
     def test_terminate(self):
-        if self.TYPE == 'threads':
-            self.skipTest('test not appropriate for {}'.format(self.TYPE))
 
         p = self.Process(target=self._test_terminate)
         p.daemon = True
@@ -219,8 +215,6 @@ class TestExec:
         event.wait(10.0)
 
     def test_sentinel(self):
-        if self.TYPE == "threads":
-            self.skipTest('test not appropriate for {}'.format(self.TYPE))
         event = self.Event()
         p = self.Process(target=self._test_sentinel, args=(event,))
         with pytest.raises(ValueError):
@@ -258,24 +252,7 @@ class TimingWrapper(object):
 
 
 def wait_for_handle(handle, timeout):
-    from multiprocessing.connection import wait
+    from loky.backend.connection import wait
     if timeout is not None and timeout < 0.0:
         timeout = None
     return wait([handle], timeout)
-
-
-class TestSpawn(TestExec):
-    TYPE = 'processes'
-    Process = multiprocessing.Process
-    current_process = staticmethod(multiprocessing.current_process)
-    active_children = staticmethod(multiprocessing.active_children)
-    # Pool = staticmethod(multiprocessing.Pool)
-    Pipe = staticmethod(multiprocessing.Pipe)
-    Queue = staticmethod(multiprocessing.Queue)
-    # JoinableQueue = staticmethod(multiprocessing.JoinableQueue)
-    # Lock = staticmethod(multiprocessing.Lock)
-    # RLock = staticmethod(multiprocessing.RLock)
-    # Semaphore = staticmethod(multiprocessing.Semaphore)
-    # BoundedSemaphore = staticmethod(multiprocessing.BoundedSemaphore)
-    # Condition = staticmethod(multiprocessing.Condition)
-    Event = staticmethod(multiprocessing.Event)

@@ -70,6 +70,13 @@ class ExecPickler(pickle.Pickler):
                 rv = reduce(obj)
                 self.save_reduce(obj=obj, *rv)
             cls.dispatch[type] = dispatcher
+
+        @classmethod
+        def loads(self, buf, loads=pickle.loads):
+            if isinstance(buf, io.BytesIO):
+                buf = buf.getvalue()
+            return loads(buf)
+
     else:
         _extra_reducers = {}
         _copyreg_dispatch_table = copyreg.dispatch_table
@@ -85,13 +92,16 @@ class ExecPickler(pickle.Pickler):
             '''Register a reduce function for a type.'''
             cls._extra_reducers[type] = reduce
 
+        loads = pickle.loads
+
     @classmethod
     def dumps(cls, obj, protocol=None):
         buf = io.BytesIO()
         cls(buf, protocol).dump(obj)
+        if sys.version_info < (3, 3):
+            return buf.getvalue()
         return buf.getbuffer()
 
-    loads = pickle.loads
 
 register = ExecPickler.register
 
@@ -194,7 +204,11 @@ def _reduce_method(m):
 class _C:
     def f(self):
         pass
+    @classmethod
+    def h(cls):
+        pass
 register(type(_C().f), _reduce_method)
+register(type(_C.h), _reduce_method)
 
 
 def _reduce_method_descriptor(m):
@@ -230,6 +244,19 @@ else:
         return socket.socket(family, type, proto, fileno=fd)
     register(socket.socket, _reduce_socket)
 
-# if sys.version_info < (3, 3):
-#     from multiprocessing.connection import Connection
-#     register(Connection, id)
+if sys.version_info >= (3, 3):
+    from multiprocessing.connection import Connection
+else:
+    from _multiprocessing import Connection
+
+
+def reduce_connection(conn):
+    df = DupFd(conn.fileno())
+    return rebuild_connection, (df, conn.readable, conn.writable)
+
+
+def rebuild_connection(df, readable, writable):
+    fd = df.detach()
+    return Connection(fd, readable, writable)
+
+register(Connection, reduce_connection)

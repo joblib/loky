@@ -46,15 +46,10 @@ class ExecProcess(BaseProcess):
 class ExecContext(BaseContext):
     _name = 'exec'
     Process = ExecProcess
-if sys.version_info < (3, 4):
-    from . import synchronize
-    mp.synchronize.SemLock = synchronize.SemLock
-    mp.synchronize.sem_unlink = synchronize.sem_unlink
-    mp.synchronize = synchronize
-    mp.Lock = synchronize.Lock
+
 try:
     from multiprocessing import context
     context._concrete_contexts['exec'] = ExecContext()
-    mp.set_start_method('spawn', force=True)
+    # mp.set_start_method('spawn', force=True)
 except ImportError:
     pass

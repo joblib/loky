@@ -33,6 +33,12 @@ pthread.sem_post.argtypes = [ctypes.c_void_p]
 pthread.sem_getvalue.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
 pthread.sem_unlink.argtypes = [ctypes.c_char_p]
 
+try:
+    from threading import get_ident
+except ImportError:
+    def get_ident():
+        return threading.current_thread().ident
+
 
 def sem_unlink(name):
     if pthread.sem_unlink(name) < 0:
@@ -84,7 +90,7 @@ class SemLock(object):
         return str.encode('/mp-%s' % next(SemLock._rand))
 
     def _is_mine(self):
-        return self.count > 0 and threading.get_ident() == self.ident
+        return self.count > 0 and get_ident() == self.ident
 
     def acquire(self, blocking=True, timeout=None):
         if blocking and timeout is None:
@@ -109,7 +115,7 @@ class SemLock(object):
                 return False
             raiseFromErrno()
         self.count += 1
-        self.ident = threading.get_ident()
+        self.ident = get_ident()
         return True
 
     def release(self, *args):
