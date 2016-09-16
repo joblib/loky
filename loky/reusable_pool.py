@@ -6,6 +6,8 @@ import warnings
 import os
 import sys
 from time import sleep
+if sys.version_info < (3, 3):
+    ProcessLookupError = OSError
 
 __all__ = ['get_reusable_pool', 'TerminatedPoolError', 'AbortedWorkerError']
 

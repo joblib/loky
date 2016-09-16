@@ -6,12 +6,12 @@ from io import BytesIO
 
 from . import reduction, semaphore_tracker, spawn
 from multiprocessing import util
-try:
+if sys.version_info[:2] > (3, 3):
     from multiprocessing import context
     from .process import ExecContext
     context._concrete_contexts['exec'] = ExecContext()
-except ImportError:
-    from multiprocessing.process import AuthenticationString
+elif sys.version_info[:2] < (3, 3):
+    ProcessLookupError = OSError
 
 __all__ = ['Popen']
 

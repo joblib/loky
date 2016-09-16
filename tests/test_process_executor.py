@@ -176,7 +176,6 @@ class ExecutorShutdownTest:
     def test_context_manager_shutdown(self, exit_on_deadlock):
         with process_executor.ProcessPoolExecutor(max_workers=5) as e:
             processes = e._processes
-            print(type(e), type(processes))
             assert list(e.map(abs, range(-5, 5))) == \
                 [5, 4, 3, 2, 1, 0, 1, 2, 3, 4]
 

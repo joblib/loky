@@ -227,7 +227,6 @@ class TestExec:
 
     @staticmethod
     def assertTimingAlmostEqual(t, g):
-        print(t)
         assert round(t-g, 1) == 0
 
 #
