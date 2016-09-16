@@ -49,12 +49,6 @@ import time
 import os
 import sys
 import multiprocessing as mp
-try:
-    from multiprocessing import get_context
-except ImportError:
-    def get_context():
-        return mp
-
 import threading
 import weakref
 from functools import partial
@@ -68,9 +62,19 @@ try:
     from queue import Full, Empty
     from _pickle import PicklingError
 except ImportError:
+    from loky.backend.connection import wait
     import Queue as queue
     from Queue import Full, Empty
     from pickle import PicklingError
+    ProcessLookupError = OSError
+
+if sys.version_info < (3, 4):
+    import loky.backend as forkexec
+
+    def get_context():
+        return forkexec
+else:
+    from multiprocessing import get_context
 
 
 __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
@@ -103,6 +107,13 @@ def _is_crashed(thread):
     return thread._Thread__started.is_set() and not thread.is_alive()
 
 
+def _clear_list(ll):
+    if sys.version_info < (3, 3):
+        del ll[:]
+    else:
+        ll.clear()
+
+
 def _python_exit():
     global _shutdown
     _shutdown = True
@@ -130,9 +141,11 @@ class _RemoteTraceback(Exception):
         return self.tb
 
 
-class _ExceptionWithTraceback:
+class _ExceptionWithTraceback(BaseException):
 
-    def __init__(self, exc, tb):
+    def __init__(self, exc, tb=None):
+        if tb is None:
+            _, _, tb = sys.exc_info()
         tb = traceback.format_exception(type(exc), exc, tb)
         tb = ''.join(tb)
         self.exc = exc
@@ -175,7 +188,10 @@ class _CallItem(object):
 
 def _get_chunks(chunksize, *iterables):
     """ Iterates over zip()ed iterables in chunks. """
-    it = zip(*iterables)
+    if sys.version_info < (3, 3):
+        it = itertools.izip(*iterables)
+    else:
+        it = zip(*iterables)
     while True:
         chunk = tuple(itertools.islice(it, chunksize))
         if not chunk:
@@ -225,13 +241,14 @@ def _process_worker(call_queue, result_queue, timeout=None):
         try:
             r = call_item.fn(*call_item.args, **call_item.kwargs)
         except BaseException as e:
-            exc = _ExceptionWithTraceback(e, e.__traceback__)
+            exc = _ExceptionWithTraceback(e, getattr(e, "__traceback__", None))
             result_queue.put(_ResultItem(call_item.work_id, exception=exc))
         else:
             try:
                 result_queue.put(_ResultItem(call_item.work_id, result=r))
             except PicklingError as e:
-                exc = _ExceptionWithTraceback(e, e.__traceback__)
+                exc = _ExceptionWithTraceback(e, getattr(e, "__traceback__",
+                                                         None))
                 result_queue.put(_ResultItem(call_item.work_id, exception=exc))
             except BaseException as e:
                 traceback.print_exc()
@@ -340,90 +357,73 @@ def _queue_management_worker(executor_reference,
                                 running_work_items,
                                 work_ids_queue,
                                 call_queue)
+        sentinels = [p.sentinel for p in processes.values()]
+        # assert sentinels
+        ready = wait([reader, wakeup] + sentinels)
+        # broken = not call_queue._thread.is_alive()
+        # broken |= any([p.exitcode for p in processes.values()])
+        if reader in ready:
+            try:
+                result_item = reader.recv()
+            except Exception as exc:
+                result_item = None
+                for work_id in running_work_items:
+                    work_item = pending_work_items.pop(work_id, None)
+                    if work_item is not None:
+                        work_item.future.set_exception(exc)
+                        del work_item
+                _clear_list(running_work_items)
 
-        if sys.version_info < (3, 3):
-
-            result_item = result_queue.get()
-            if result_item is not None:
-                work_item = pending_work_items[result_item.work_id]
-                del pending_work_items[result_item.work_id]
-
+        elif wakeup in ready:
+            wakeup.recv_bytes()
+            result_item = None
+        else:
+            # Mark the process pool broken so that submits fail right now.
+            executor = executor_reference()
+            if executor is not None:
+                executor._broken = True
+                executor._shutdown_thread = True
+                executor = None
+            # All futures in flight must be marked failed
+            for work_id, work_item in pending_work_items.items():
+                work_item.future.set_exception(
+                    BrokenProcessPool(
+                        "A process in the process pool was terminated abruptly"
+                        " while the future was running or pending."
+                    ))
+                # Delete references to object. See issue16284
+                del work_item
+            pending_work_items.clear()
+            # Terminate remaining workers forcibly: the queues or their
+            # locks may be in a dirty state and block forever.
+            for p in processes.values():
+                mp.util.debug('terminate process {}'.format(p.name))
+                try:
+                    p.terminate()
+                except ProcessLookupError:
+                    pass
+            shutdown_worker()
+            return
+        if isinstance(result_item, int):
+            # Clean shutdown of a worker using its PID
+            # (avoids marking the executor broken)
+            assert shutting_down()
+            p = processes.pop(result_item)
+            p.join()
+            # if not processes:
+            #     shutdown_worker()
+            #     return
+        elif result_item is not None:
+            work_item = pending_work_items.pop(result_item.work_id, None)
+            # work_item can be None if another process terminated
+            if work_item is not None:
                 if result_item.exception:
                     work_item.future.set_exception(result_item.exception)
                 else:
                     work_item.future.set_result(result_item.result)
                 # Delete references to object. See issue16284
                 del work_item
-
-        else:
-            sentinels = [p.sentinel for p in processes.values()]
-            # assert sentinels
-            ready = wait([reader, wakeup] + sentinels)
-            # broken = not call_queue._thread.is_alive()
-            # broken |= any([p.exitcode for p in processes.values()])
-            if reader in ready:
-                try:
-                    result_item = reader.recv()
-                except Exception as exc:
-                    result_item = None
-                    for work_id in running_work_items:
-                        work_item = pending_work_items.pop(work_id, None)
-                        if work_item is not None:
-                            work_item.future.set_exception(exc)
-                            del work_item
-                    running_work_items.clear()
-
-            elif wakeup in ready:
-                wakeup.recv_bytes()
-                result_item = None
-            else:
-                # Mark the process pool broken so that submits fail right now.
-                executor = executor_reference()
-                if executor is not None:
-                    executor._broken = True
-                    executor._shutdown_thread = True
-                    executor = None
-                # All futures in flight must be marked failed
-                for work_id, work_item in pending_work_items.items():
-                    work_item.future.set_exception(
-                        BrokenProcessPool(
-                            "A process in the process pool was "
-                            "terminated abruptly while the future was "
-                            "running or pending."
-                        ))
-                    # Delete references to object. See issue16284
-                    del work_item
-                pending_work_items.clear()
-                # Terminate remaining workers forcibly: the queues or their
-                # locks may be in a dirty state and block forever.
-                for p in processes.values():
-                    mp.util.debug('terminate process {}'.format(p.name))
-                    try:
-                        p.terminate()
-                    except ProcessLookupError:
-                        pass
-                shutdown_worker()
-                return
-            if isinstance(result_item, int):
-                # Clean shutdown of a worker using its PID
-                # (avoids marking the executor broken)
-                assert shutting_down()
-                p = processes.pop(result_item)
-                p.join()
-                # if not processes:
-                #     shutdown_worker()
-                #     return
-            elif result_item is not None:
-                work_item = pending_work_items.pop(result_item.work_id, None)
-                # work_item can be None if another process terminated
-                if work_item is not None:
-                    if result_item.exception:
-                        work_item.future.set_exception(result_item.exception)
-                    else:
-                        work_item.future.set_result(result_item.result)
-                    # Delete references to object. See issue16284
-                    del work_item
-                running_work_items.remove(result_item.work_id)
+            running_work_items.remove(result_item.work_id)
         # Check whether we should start shutting down.
         executor = executor_reference()
         # No more work items can be added if:
@@ -726,9 +726,9 @@ class ProcessPoolExecutor(_base.Executor):
         if chunksize < 1:
             raise ValueError("chunksize must be >= 1.")
 
-        results = super().map(partial(_process_chunk, fn),
-                              _get_chunks(chunksize, *iterables),
-                              timeout=timeout)
+        results = super(ProcessPoolExecutor, self).map(
+            partial(_process_chunk, fn), _get_chunks(chunksize, *iterables),
+            timeout=timeout)
         return itertools.chain.from_iterable(results)
 
     def shutdown(self, caller='main', wait=True):

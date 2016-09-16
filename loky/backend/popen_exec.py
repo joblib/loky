@@ -265,7 +265,6 @@ if __name__ == '__main__':
 
     exitcode = 1
     try:
-        #os.system('ls -l /proc/{}/fd'.format(os.getpid()))
         prep_data = chan.load()
         spawn.prepare(prep_data)
         process_obj = chan.load()

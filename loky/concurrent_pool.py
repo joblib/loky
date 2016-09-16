@@ -37,7 +37,7 @@ def get_reusable_executor(max_workers=None, context=None,
         _local._pool = _pool = ReusablePoolExecutor(
             max_workers=max_workers, context=context, timeout=timeout,
             kill_on_shutdown=kill_on_shutdown, pool_id=pool_id)
-        res = _pool.submit(time.sleep, 0.01)
+        res = _pool.submit(time.sleep, 0.001)
         try:
             res.result(timeout=1)
         except TimeoutError:

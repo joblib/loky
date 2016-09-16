@@ -28,6 +28,8 @@ except ImportError:
 
 __all__ = ['ensure_running', 'register', 'unregister']
 
+VERBOSE = False
+
 
 class SemaphoreTracker(object):
 
@@ -60,7 +62,13 @@ class SemaphoreTracker(object):
                 # process will out live us, so no need to wait on pid
                 exe = spawn.get_executable()
                 args = [exe] + util._args_from_interpreter_flags()
+                if len(args[-1]) > 100:
+                    warnings.warn(
+                        "args_from_flag returned -R+ -> why??", RuntimeWarning)
+                    import re
+                    args[-1] = re.sub("-R+", "-R", args[-1])
                 args += ['-c', cmd % r]
+                util.debug("launching Semaphore tracker: {}".format(args))
                 spawnv_passfds(exe, args, fds_to_pass)
             except:
                 os.close(w)
@@ -108,6 +116,10 @@ def main(fd):
         except Exception:
             pass
 
+    if VERBOSE:
+        sys.stderr.write("Main semaphore tracker is running\n")
+        sys.stderr.flush()
+
     cache = set()
     try:
         # keep track of registered/unregistered semaphores
@@ -117,10 +129,18 @@ def main(fd):
                     cmd, name = line.strip().split(b':')
                     if cmd == b'REGISTER':
                         cache.add(name)
-                        name = name.decode('ascii')
+                        if VERBOSE:
+                            name = name.decode('ascii')
+                            sys.stderr.write("[SemaphoreTracker] register {}\n"
+                                             .format(name))
+                            sys.stderr.flush()
                     elif cmd == b'UNREGISTER':
                         cache.remove(name)
-                        name = name.decode('ascii')
+                        if VERBOSE:
+                            name = name.decode('ascii')
+                            sys.stderr.write("[SemaphoreTracker] unregister {}"
+                                             "\n".format(name))
+                            sys.stderr.flush()
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
@@ -142,13 +162,21 @@ def main(fd):
             # semaphore has failed to unregister it. Presumably it has died.
             # We therefore unlink it.
             try:
-                name = name.decode('ascii')
                 try:
                     sem_unlink(name)
+                    if VERBOSE:
+                        name = name.decode('ascii')
+                        sys.stderr.write("[SemaphoreTracker] unregister {}\n"
+                                         .format(name))
+                        sys.stderr.flush()
                 except Exception as e:
                     warnings.warn('semaphore_tracker: %r: %s' % (name, e))
             finally:
                 pass
+
+    if VERBOSE:
+        sys.stderr.write("semaphore tracker shut down\n")
+        sys.stderr.flush()
 
 
 #
@@ -159,7 +187,7 @@ def spawnv_passfds(path, args, passfds):
     passfds = sorted(passfds)
     errpipe_read, errpipe_write = os.pipe()
     try:
-        if sys.version_info > (3, 3):
+        if sys.version_info >= (3, 3):
             import _posixsubprocess
             return _posixsubprocess.fork_exec(
                 args, [os.fsencode(path)], True, passfds, None, None,
