@@ -3,6 +3,7 @@ import multiprocessing as mp
 import threading
 import warnings
 import os
+import sys
 import time
 from concurrent.futures import TimeoutError
 
@@ -75,6 +76,8 @@ def get_reusable_executor(max_workers=None, context=None,
 class ReusablePoolExecutor(ProcessPoolExecutor):
     def __init__(self, max_workers=None, context=None, timeout=None,
                  kill_on_shutdown=True, pool_id=0):
+        if context is None and sys.version_info[2:] > (3, 3):
+            context = mp.get_context('spawn')
         super(ReusablePoolExecutor, self).__init__(
             max_workers=max_workers, context=context, timeout=timeout,
             kill_on_shutdown=kill_on_shutdown)
