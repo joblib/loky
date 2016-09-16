@@ -42,10 +42,50 @@ class ExecProcess(BaseProcess):
             except AttributeError:
                 raise ValueError("process not started")
 
+    if sys.version_info < (3, 4):
+        def __init__(self, group=None, target=None, name=None, args=(),
+                     kwargs={}, daemon=None):
+            if sys.version_info < (3, 3):
+                super(ExecProcess, self).__init__(
+                    group=group, target=target, name=name, args=args,
+                    kwargs=kwargs)
+                self.daemon = daemon
+            else:
+                super(ExecProcess, self).__init__(
+                    group=group, target=target, name=name, args=args,
+                    kwargs=kwargs, daemon=daemon)
+            self.authkey = self.authkey
+
+        @property
+        def authkey(self):
+            return self._authkey
+
+        @authkey.setter
+        def authkey(self, authkey):
+            '''
+            Set authorization key of process
+            '''
+            self._authkey = AuthenticationKey(authkey)
+
 
 class ExecContext(BaseContext):
     _name = 'exec'
     Process = ExecProcess
+
+
+#
+# We subclass bytes to avoid accidental transmission of auth keys over network
+#
+
+class AuthenticationKey(bytes):
+    def __reduce__(self):
+        from .popen_exec import is_spawning
+        if not is_spawning():
+            raise TypeError(
+                'Pickling an AuthenticationKey object is '
+                'disallowed for security reasons'
+                )
+        return AuthenticationKey, (bytes(self),)
 
 try:
     from multiprocessing import context

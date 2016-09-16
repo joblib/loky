@@ -10,7 +10,6 @@ DELTA = 0.1
 
 
 class TestExec:
-    TYPE = 'processes'
     Process = backend.Process
     current_process = staticmethod(multiprocessing.current_process)
     active_children = staticmethod(multiprocessing.active_children)
@@ -56,13 +55,14 @@ class TestExec:
 
     @classmethod
     def _test_process(cls, q, *args, **kwds):
+        multiprocessing.util.debug("Start test properly")
         current = cls.current_process()
         q.put(args)
         q.put(kwds, timeout=1)
         q.put(current.name, timeout=1)
-        if cls.TYPE != 'threads':
-            q.put(bytes(current.authkey))
-            q.put(current.pid)
+        q.put(bytes(current.authkey))
+        q.put(current.pid)
+        multiprocessing.util.debug("Finishe test properly")
 
     # @pytest.mark.skip(reason="Known failure")
     def test_process(self):
@@ -76,8 +76,7 @@ class TestExec:
         p.daemon = True
         current = self.current_process()
 
-        if self.TYPE != 'threads':
-            assert p.authkey == current.authkey
+        assert p.authkey == current.authkey
         assert not p.is_alive()
         assert p.daemon
         assert p not in self.active_children()
@@ -93,9 +92,8 @@ class TestExec:
         assert q.get() == args[1:]
         assert q.get() == kwargs
         assert q.get() == p.name
-        if self.TYPE != 'threads':
-            assert q.get() == current.authkey
-            assert q.get() == p.pid
+        assert q.get() == current.authkey
+        assert q.get() == p.pid
 
         p.join()
 

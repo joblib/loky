@@ -52,8 +52,7 @@ class SemaphoreTracker(object):
                 fds_to_pass.append(sys.stderr.fileno())
             except Exception:
                 pass
-            cmd = ('print("Start semaphore tracker");'
-                   'from loky.backend.semaphore_tracker import main;'
+            cmd = ('from loky.backend.semaphore_tracker import main;'
                    'main(%d)')
             r, w = os.pipe()
             try:
@@ -119,13 +118,9 @@ def main(fd):
                     if cmd == b'REGISTER':
                         cache.add(name)
                         name = name.decode('ascii')
-                        sys.stderr.write("Register {}\n".format(name))
-                        sys.stderr.flush()
                     elif cmd == b'UNREGISTER':
                         cache.remove(name)
                         name = name.decode('ascii')
-                        sys.stderr.write("Unregister {}\n".format(name))
-                        sys.stderr.flush()
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
@@ -154,8 +149,6 @@ def main(fd):
                     warnings.warn('semaphore_tracker: %r: %s' % (name, e))
             finally:
                 pass
-        sys.stderr.write("SemaphoreTracker is done")
-        sys.stderr.flush()
 
 
 #
@@ -178,7 +171,6 @@ def spawnv_passfds(path, args, passfds):
             for fd in passfds:
                 _pass += [_mk_inheritable(fd)]
             from .fork_exec import fork_exec
-            print("Start sempahore tracker in fork exec")
             fork_exec(args, _pass)
     finally:
         os.close(errpipe_read)

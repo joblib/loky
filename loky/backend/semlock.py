@@ -71,7 +71,6 @@ class SemLock(object):
             self.handle = _sem_open(name, 0)
             if self.handle == SEM_FAILURE:
                 raise FileExistsError('cannot find name for semaphore')
-            util.debug('rebuild semlock with handle %s' % self.handle)
         else:
             for i in range(100):
                 self.name = self._make_name()

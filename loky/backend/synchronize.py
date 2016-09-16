@@ -54,12 +54,11 @@ class SemLock(object):
     _rand = tempfile._RandomNameSequence()
 
     def __init__(self, kind, value, maxvalue):
-        util.debug("Using semaphore from backend\n\n\n")
         name = 'exec'
         unlink_now = sys.platform == 'win32' or name == 'fork'
         for i in range(100):
             try:
-                sl = self._semlock = SemLockC(
+                self._semlock = SemLockC(
                     kind, value, maxvalue, SemLock._make_name(), unlink_now)
             except FileExistsError:
                 pass
@@ -68,7 +67,6 @@ class SemLock(object):
         else:
             raise FileExistsError('cannot find name for semaphore')
 
-        util.debug('created semlock with handle %s' % sl.handle)
         self._make_methods()
 
         if sys.platform != 'win32':
@@ -114,12 +112,11 @@ class SemLock(object):
     def __setstate__(self, state):
         if sys.version_info < (3, 4):
             h, kind, maxvalue, name = state
-            util.debug('try handle %r' % state[0])
             self._semlock = SemLockC(h, kind, maxvalue, name=name)
         else:
-            util.debug('weird handle %r' % state[0])
             self._semlock = SemLock._rebuild(*state)
-        util.debug('recreated blocker with handle %r' % state[0])
+        util.debug('recreated blocker with handle %r and name %s'
+                   % (state[0], state[3]))
         self._make_methods()
 
     @staticmethod

@@ -157,7 +157,7 @@ class Popen(object):
             if tracker_fd is not None:
                 cmd_python += ['--semaphore',
                                str(reduction._mk_inheritable(tracker_fd))]
-            print(cmd_python)
+            util.debug("launch python with cmd:\n%s" % cmd_python)
             self._fds.extend([child_r, child_w, tracker_fd])
             # print('Fd from main:')
             # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
@@ -182,11 +182,6 @@ class Popen(object):
     @staticmethod
     def thread_is_spawning():
         return True
-
-if sys.version_info < (3, 4):
-    from multiprocessing import forking, synchronize
-    forking.Popen = Popen
-    synchronize.Popen = Popen
 
 
 class CommunicationChannels(object):
@@ -274,7 +269,6 @@ if __name__ == '__main__':
         prep_data = chan.load()
         spawn.prepare(prep_data)
         process_obj = chan.load()
-        process_obj.authkey = process_obj.authkey
         # print('Fd from child:')
         # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
         # print('Sem from child:')
@@ -290,6 +284,6 @@ if __name__ == '__main__':
         print('\n'+'-'*80)
     finally:
         chan.close()
-        print('[ExecProcess] - Proper close')
+        util.debug('proper close')
 
         sys.exit(exitcode)

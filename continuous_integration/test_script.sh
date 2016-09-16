@@ -11,7 +11,7 @@ AUXFILE=.aux$ver
 DEADLOCK=.exit_on_lock
 
 python --version
-py.test -vsx 2>$AUXFILE
+py.test -vs 2>$AUXFILE
 [ $? -ne 0 ] &&cat $AUXFILE
 [ -e "$DEADLOCK" ] && cat $DEADLOCK
 rm $AUXFILE

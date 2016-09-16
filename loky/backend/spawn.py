@@ -125,7 +125,7 @@ def prepare(data):
     if 'orig_dir' in data:
         process.ORIGINAL_DIR = data['orig_dir']
 
-    if 'start_method' in data:
+    if hasattr(mp, 'set_start_method'):
         mp.set_start_method('exec')
 
     if 'init_main_from_name' in data:
