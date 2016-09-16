@@ -42,7 +42,7 @@ if not mp.util._log_to_stderr:
     import logging
     log = mp.util.log_to_stderr(10)
     log.handlers[0].setFormatter(logging.Formatter(
-        '[%(levelname)s/%(processName)s:%(threadName)s] %(message)s'))
+        '[%(levelname)s||%(processName)s:%(threadName)s] %(message)s'))
 
 
 @pytest.yield_fixture

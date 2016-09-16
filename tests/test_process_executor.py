@@ -105,11 +105,12 @@ class ExecutorMixin:
             f.result()
 
 
-class ProcessPoolForkMixin(ExecutorMixin):
-    executor_type = process_executor.ProcessPoolExecutor
-    context = mp.get_context('fork')
+if sys.version_info[:2] > (3, 3):
 
-if sys.version_info > (3, 2):
+    class ProcessPoolForkMixin(ExecutorMixin):
+        executor_type = process_executor.ProcessPoolExecutor
+        context = mp.get_context('fork')
+
     class ProcessPoolForkserverMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
         context = mp.get_context('forkserver')
@@ -117,6 +118,18 @@ if sys.version_info > (3, 2):
     class ProcessPoolSpawnMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
         context = mp.get_context('spawn')
+
+    class ProcessPoolForkexecMixin(ExecutorMixin):
+        from loky import backend
+        executor_type = process_executor.ProcessPoolExecutor
+        context = mp.get_context('exec')
+
+else:
+
+    class ProcessPoolForkexecMixin(ExecutorMixin):
+        executor_type = process_executor.ProcessPoolExecutor
+        from loky import backend
+        context = backend
 
 
 class ExecutorShutdownTest:
@@ -161,8 +174,9 @@ class ExecutorShutdownTest:
             p.join()
 
     def test_context_manager_shutdown(self, exit_on_deadlock):
-        with futures.ProcessPoolExecutor(max_workers=5) as e:
+        with process_executor.ProcessPoolExecutor(max_workers=5) as e:
             processes = e._processes
+            print(type(e), type(processes))
             assert list(e.map(abs, range(-5, 5))) == \
                 [5, 4, 3, 2, 1, 0, 1, 2, 3, 4]
 
@@ -170,7 +184,7 @@ class ExecutorShutdownTest:
             p.join()
 
     def test_del_shutdown(self, exit_on_deadlock):
-        executor = futures.ProcessPoolExecutor(max_workers=5)
+        executor = process_executor.ProcessPoolExecutor(max_workers=5)
         list(executor.map(abs, range(-5, 5)))
         queue_management_thread = executor._queue_management_thread
         processes = executor._processes
@@ -181,12 +195,13 @@ class ExecutorShutdownTest:
             p.join()
 
 
-class TestsProcessPoolForkShutdown(ProcessPoolForkMixin, ExecutorShutdownTest):
-    def _prime_executor(self):
-        pass
+if sys.version_info[:2] > (3, 3):
 
+    class TestsProcessPoolForkShutdown(ProcessPoolForkMixin,
+                                       ExecutorShutdownTest):
+        def _prime_executor(self):
+            pass
 
-if sys.version_info > (3, 2):
     class TestsProcessPoolForkserverShutdown(ProcessPoolForkserverMixin,
                                              ExecutorShutdownTest):
         def _prime_executor(self):
@@ -196,6 +211,12 @@ if sys.version_info > (3, 2):
                                         ExecutorShutdownTest):
         def _prime_executor(self):
             pass
+
+
+class TestsProcessPoolForkexecShutdown(ProcessPoolForkexecMixin,
+                                       ExecutorShutdownTest):
+    def _prime_executor(self):
+        pass
 
 
 class WaitTests:
@@ -292,11 +313,9 @@ class WaitTests:
         assert set([future2]) == pending
 
 
-class TestsProcessPoolForkWait(ProcessPoolForkMixin, WaitTests):
-    pass
-
-
-if sys.version_info[:2] > (3, 2):
+if sys.version_info[:2] > (3, 3):
+    class TestsProcessPoolForkWait(ProcessPoolForkMixin, WaitTests):
+        pass
 
     class TestsProcessPoolForkserverWait(ProcessPoolForkserverMixin,
                                          WaitTests):
@@ -304,6 +323,10 @@ if sys.version_info[:2] > (3, 2):
 
     class TestsProcessPoolSpawnWait(ProcessPoolSpawnMixin, WaitTests):
         pass
+
+
+class TestsProcessPoolForkexecWait(ProcessPoolForkexecMixin, WaitTests):
+    pass
 
 
 class AsCompletedTests:
@@ -345,11 +368,11 @@ class AsCompletedTests:
         assert len(completed) == 1
 
 
-class TestsProcessPoolForkAsCompleted(ProcessPoolForkMixin, AsCompletedTests):
-    pass
+if sys.version_info[:2] > (3, 3):
+    class TestsProcessPoolForkAsCompleted(ProcessPoolForkMixin,
+                                          AsCompletedTests):
+        pass
 
-
-if sys.version_info > (3, 2):
     class TestsProcessPoolForkserverAsCompleted(ProcessPoolForkserverMixin,
                                                 AsCompletedTests):
         pass
@@ -357,6 +380,11 @@ if sys.version_info > (3, 2):
     class TestsProcessPoolSpawnAsCompleted(ProcessPoolSpawnMixin,
                                            AsCompletedTests):
         pass
+
+
+class TestsProcessPoolForkexecAsCompleted(ProcessPoolForkexecMixin,
+                                          AsCompletedTests):
+    pass
 
 
 class ExecutorTest:
@@ -376,10 +404,10 @@ class ExecutorTest:
 
     def test_map_exception(self, exit_on_deadlock):
         i = self.executor.map(divmod, [1, 1, 1, 1], [2, 3, 0, 5])
-        assert i.__next__(), (0 == 1)
-        assert i.__next__(), (0 == 1)
+        assert next(i), (0 == 1)
+        assert next(i), (0 == 1)
         with pytest.raises(ZeroDivisionError):
-            i.__next__()
+            next(i)
 
     def test_map_timeout(self, exit_on_deadlock):
         results = []
@@ -469,17 +497,20 @@ class ExecutorTest:
         assert 'raise RuntimeError(123)  # some comment' in cause.tb
 
 
-class TestsProcessPoolForkExecutor(ProcessPoolForkMixin, ExecutorTest):
-    pass
+if sys.version_info[:2] > (3, 3):
+    class TestsProcessPoolForkExecutor(ProcessPoolForkMixin, ExecutorTest):
+        pass
 
-
-if sys.version_info > (3, 2):
     class TestsProcessPoolForkserverExecutor(ProcessPoolForkserverMixin,
                                              ExecutorTest):
         pass
 
     class TestsProcessPoolSpawnExecutor(ProcessPoolSpawnMixin, ExecutorTest):
         pass
+
+
+class TestsProcessPoolForkexecExecutor(ProcessPoolForkexecMixin, ExecutorTest):
+    pass
 
 
 class TestsFuture:
