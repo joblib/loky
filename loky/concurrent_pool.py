@@ -40,13 +40,15 @@ def get_reusable_executor(max_workers=None, context=None,
             kill_on_shutdown=kill_on_shutdown, pool_id=pool_id)
         res = _pool.submit(time.sleep, 0.001)
         try:
-            res.result(timeout=1)
+            res.result(timeout=2)
         except TimeoutError:
+            print(res.done(), _pool._call_queue.empty(),
+                  _pool._result_queue.empty())
             print(_pool._processes)
             print(threading.enumerate())
-            time.sleep(3)
             from faulthandler import dump_traceback
             dump_traceback()
+            _pool.submit(dump_traceback)
             raise RuntimeError
     else:
         args = dict(context=context, timeout=timeout,

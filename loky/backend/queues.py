@@ -17,10 +17,27 @@ import errno
 
 from multiprocessing import connection
 
-from multiprocessing.util import debug, info, Finalize, register_after_fork, is_exiting
-from .reduction import ExecPickler
-from .popen_exec import is_spawning
-from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
+from multiprocessing.util import debug, info, Finalize, register_after_fork,\
+    is_exiting
+
+if sys.platform != 'win32':
+    from .reduction import ExecPickler
+    from .popen_exec import is_spawning
+    from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
+else:
+    from multiprocessing import Lock, BoundedSemaphore, Semaphore, Condition
+
+    if sys.version_info[:2] < (3, 4):
+        from multiprocessing.forking import assert_spawning
+        from .reduction import ExecPickler
+    else:
+        from multiprocessing.context import assert_spawning
+        from multiprocessing.reduction import ForkingPickler as ExecPickler
+
+    def is_spawning():
+        assert_spawning("SimpleQueue")
+        return True
+
 
 if sys.version_info < (3, 3):
     from Queue import Empty, Full
