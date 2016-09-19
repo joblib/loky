@@ -1,6 +1,9 @@
 import os
 import sys
 
+if sys.platform == "darwin" and sys.version_info < (3, 3):
+     FileNotFoundError = OSError
+
 
 def close_fds(keep_fds):
     keep_fds = set(keep_fds).union([0, 1, 2])
