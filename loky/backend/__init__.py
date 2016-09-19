@@ -17,4 +17,8 @@ if sys.platform != "win32":
             return queues.Queue(*args, ctx=mp.get_context('spawn'), **kwargs)
 
 else:
-    from multiprocessing import Process, Queue, SimpleQueue, Event, Pipe
+    from multiprocessing import Process, Queue, Event, Pipe
+    if sys.version_info[:2] > (3, 3):
+        from multiprocessing import SimpleQueue
+    else:
+        from .queues import SimpleQueue

@@ -12,6 +12,8 @@ DEADLOCK=.exit_on_lock
 
 $PYTHON --version
 $PYTHON -m pytest -vsx 2>$AUXFILE
-[ $? -ne 0 ] &&cat $AUXFILE
+res_test=$?
+[ $res_test -ne 0 ] &&cat $AUXFILE
 [ -e "$DEADLOCK" ] && cat $DEADLOCK
 rm $AUXFILE
+exit $res_test
