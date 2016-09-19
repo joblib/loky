@@ -15,6 +15,4 @@ $PIP install psutil pytest
 [ $ver -lt 33 ] && $PIP install faulthandler
 [ $ver -lt 33 ] && $PIP install futures
 
-fi
-
 $PYTHON setup.py develop 

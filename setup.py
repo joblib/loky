@@ -124,7 +124,7 @@ def run_setup(with_extensions=True):
     )
 
 try:
-    run_setup(True)
+    run_setup(False)
 except BaseException:
     if _is_build_command(sys.argv):
         import traceback
