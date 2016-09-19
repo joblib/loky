@@ -17,21 +17,22 @@ matrix:
     - os: osx
       osx_image: xcode7.3
       language: generic  # https://github.com/travis-ci/travis-ci/issues/2312
+      env: BREW_PYTHON="python"
+    - os: osx
+      osx_image: xcode7.3
+      language: generic  # https://github.com/travis-ci/travis-ci/issues/2312
+      env: BREW_PYTHON="python3"
   allow_failures:
     - python: "nightly"
+    - os : osx
 
 
 before_install:
   - |
-    # Install into our own pristine virtualenv
-    if [[ $TRAVIS_OS_NAME != 'osx' ]]; then
-      echo 'nothing done'
-    else
-      echo 'started'
+    # Install python using brew on OSX
+    if [[ $TRAVIS_OS_NAME == 'osx' ]]; then
       brew update
-      brew tap homebrew/gui
-      brew install python
-      pip install tox pytest
+      brew install $BREW_PYTHON
     fi
 
 install: source continuous_integration/install.sh
