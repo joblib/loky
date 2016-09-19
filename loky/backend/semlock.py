@@ -128,18 +128,21 @@ class SemLock(object):
             if sys.platform == 'darwin':
                 # Handle broken get_value for mac ==> only Lock will work
                 # as sem_get_value do not work properly
-                assert self.maxvalue == 1, (
-                    "semaphore are broken on mac. Can only use locks")
-                if pthread.sem_trywait(self.handle) < 0:
-                    e = ctypes.get_errno()
-                    if e != errno.EAGAIN:
-                        raise OSError(e, errno.errorcode[e])
-                else:
-                    if pthread.sem_post(self.handle) < 0:
-                        raiseFromErrno()
+                if self.maxvalue == 1:
+                    if pthread.sem_trywait(self.handle) < 0:
+                        e = ctypes.get_errno()
+                        if e != errno.EAGAIN:
+                            raise OSError(e, errno.errorcode[e])
                     else:
-                        raise ValueError(
-                            "semaphore or lock realeased too many times")
+                        if pthread.sem_post(self.handle) < 0:
+                            raiseFromErrno()
+                        else:
+                            raise ValueError(
+                                "semaphore or lock realeased too many times")
+                else:
+                    import warnings
+                    warnings.warn("semaphore are broken on OSX, release might "
+                                  "increase its maximal value", RuntimeWarning)
             else:
                 value = ctypes.pointer(ctypes.c_int(-1))
                 if pthread.sem_getvalue(self.handle, value) < 0:
