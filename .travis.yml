@@ -10,21 +10,13 @@ sudo: false
 matrix:
   include:
     - python: 2.7
+    - python: 3.3
     - python: 3.4
     - python: 3.5
-    - python: 3.6
     - python: "nightly"
     - os: osx
       osx_image: xcode7.3
       language: generic  # https://github.com/travis-ci/travis-ci/issues/2312
-      cache:
-        # As for now travis caches only "$HOME/.cache/pip"
-        # https://docs.travis-ci.com/user/caching/#pip-cache
-        pip: false
-        directories:
-          - $HOME/Library/Caches/pip
-          # `cache` does not support `env`-like `global` so copy-paste from top
-          - $HOME/.ccache  # https://github.com/travis-ci/travis-ci/issues/5853
   allow_failures:
     - python: "nightly"
 
@@ -33,8 +25,9 @@ before_install:
   - |
     # Install into our own pristine virtualenv
     if [[ $TRAVIS_OS_NAME != 'osx' ]]; then
-      echo "nothing done"
+      echo 'nothing done'
     else
+      echo 'started'
       brew update
       brew tap homebrew/gui
       brew install python
