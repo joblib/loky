@@ -26,8 +26,6 @@ from concurrent.futures._base import \
     PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, Future
 from loky.process_executor import BrokenProcessPool
 import multiprocessing as mp
-if sys.version_info[:2] < (3, 4):
-    mp.get_context = lambda k: mp
 
 
 def create_future(state=PENDING, exception=None, result=None):

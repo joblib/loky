@@ -585,6 +585,7 @@ class ProcessPoolExecutor(_base.Executor):
 
         # Parameters of this executor
         self._ctx = context or get_context()
+        mp.util.debug("using context {}".format(self._ctx))
         self._kill_on_shutdown = kill_on_shutdown
         self._timeout = timeout
 
