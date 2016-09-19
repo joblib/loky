@@ -6,10 +6,15 @@
 
 set -e
 
-ver=$(python -V 2>&1 | sed -e 's/Python \([23]\.[0-9]\).*/\1/' -e 's/\.//')
-echo "Testing for python $ver"
-pip install psutil
-[ $ver -lt 33 ] && pip install faulthandler
-[ $ver -lt 33 ] && pip install futures
+PIP="pip"
+test $PYTHON == "python3" && PIP="pip3"
 
-python setup.py develop 
+ver=$($PYTHON -V 2>&1 | sed -e 's/Python \([23]\.[0-9]\).*/\1/' -e 's/\.//')
+echo "Testing for python $ver"
+$PIP install psutil pytest
+[ $ver -lt 33 ] && $PIP install faulthandler
+[ $ver -lt 33 ] && $PIP install futures
+
+fi
+
+$PYTHON setup.py develop 

@@ -4,14 +4,18 @@ import signal
 import pickle
 from io import BytesIO
 
-from . import reduction, semaphore_tracker, spawn
+from . import reduction, spawn
 from multiprocessing import util
+
 if sys.version_info[:2] > (3, 3):
     from multiprocessing import context
     from .process import ExecContext
     context._concrete_contexts['exec'] = ExecContext()
 elif sys.version_info[:2] < (3, 3):
     ProcessLookupError = OSError
+
+if sys.platform != "win32":
+    from . import semaphore_tracker
 
 __all__ = ['Popen']
 

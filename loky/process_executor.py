@@ -56,12 +56,12 @@ import itertools
 import traceback
 from concurrent.futures import _base
 # Compatibility for python2.7
-try:
+if sys.version_info[:2] > (2, 7):
     from multiprocessing.connection import wait
     import queue
     from queue import Full, Empty
     from _pickle import PicklingError
-except ImportError:
+else:
     from loky.backend.connection import wait
     import Queue as queue
     from Queue import Full, Empty
@@ -278,7 +278,7 @@ def _add_call_item_to_queue(pending_work_items,
             return
         try:
             work_id = work_ids.get(block=False)
-        except queue.Empty:
+        except Empty:
             return
         else:
             work_item = pending_work_items[work_id]
