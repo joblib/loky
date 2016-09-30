@@ -456,8 +456,7 @@ def test_invalid_process_number():
         get_reusable_executor(max_workers=-1)
 
 
-@pytest.mark.skipif(True, reason="Known failure")
-def test_freeze(exit_on_deadlock):
+def test_osx_accelerate_freeze(exit_on_deadlock):
     """Test no freeze on OSX with Accelerate"""
     import numpy as np
     a = np.random.randn(1000, 1000)
