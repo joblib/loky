@@ -142,9 +142,9 @@ class ExecutorShutdownTest:
         from .script_helper import assert_python_ok
         # Test the atexit hook for shutdown of worker threads and processes
         rc, out, err = assert_python_ok('-c', """if 1:
-            from concurrent.futures import {executor_type}
+            from loky.process_executor import {executor_type}
             from time import sleep
-            from test.test_concurrent_futures import sleep_and_print
+            from tests.test_process_executor import sleep_and_print
             t = {executor_type}(5)
             t.submit(sleep_and_print, 1.0, "apple")
             """.format(executor_type=self.executor_type.__name__))
