@@ -40,7 +40,7 @@ def get_reusable_executor(max_workers=None, context=None,
             kill_on_shutdown=kill_on_shutdown, pool_id=pool_id)
         res = _pool.submit(time.sleep, 0.001)
         try:
-            res.result(timeout=2)
+            res.result(timeout=max(2, max_workers/mp.cpu_count()))
         except TimeoutError:
             print(res.done(), _pool._call_queue.empty(),
                   _pool._result_queue.empty())

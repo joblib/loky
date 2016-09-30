@@ -21,4 +21,4 @@ else:
     if sys.version_info[:2] > (3, 3):
         from multiprocessing import SimpleQueue
     else:
-        from .queues import SimpleQueue
+        SimpleQueue = Queue
