@@ -116,7 +116,7 @@ def run_setup(with_extensions=True):
             )
     packages = setuptools.find_packages(exclude=['ez_setup', 't', 't.*'])
     setuptools.setup(
-        name='Rpool',
+        name='loky',
         packages=packages,
         ext_modules=extensions,
         zip_safe=False,
