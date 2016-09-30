@@ -11,8 +11,8 @@ test $PYTHON == "python3" && PIP="pip3"
 
 ver=$($PYTHON -V 2>&1 | sed -e 's/Python \([23]\.[0-9]\).*/\1/' -e 's/\.//')
 echo "Testing for python $ver"
-$PIP install psutil pytest
+$PIP install psutil pytest numpy
 [ $ver -lt 33 ] && $PIP install faulthandler
 [ $ver -lt 33 ] && $PIP install futures
 
-$PYTHON setup.py develop 
+$PYTHON setup.py develop
