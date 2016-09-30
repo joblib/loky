@@ -55,24 +55,24 @@ from functools import partial
 import itertools
 import traceback
 from concurrent.futures import _base
+from loky.backend.connection import wait
+
 # Compatibility for python2.7
 if sys.version_info[:2] > (2, 7):
-    from multiprocessing.connection import wait
     import queue
     from queue import Full, Empty
     from _pickle import PicklingError
 else:
-    from loky.backend.connection import wait
     import Queue as queue
     from Queue import Full, Empty
     from pickle import PicklingError
     ProcessLookupError = OSError
 
 if sys.version_info < (3, 4):
-    import loky.backend as forkexec
+    from loky import backend
 
     def get_context():
-        return forkexec
+        return backend
 else:
     from multiprocessing import get_context
 

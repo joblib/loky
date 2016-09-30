@@ -120,7 +120,7 @@ if sys.version_info[:2] > (3, 3):
     class ProcessPoolForkexecMixin(ExecutorMixin):
         from loky import backend
         executor_type = process_executor.ProcessPoolExecutor
-        context = mp.get_context('exec')
+        context = mp.get_context('loky')
 
 else:
 
