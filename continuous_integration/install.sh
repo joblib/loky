@@ -18,9 +18,9 @@ $PIP install --upgrade pip
 $PIP uninstall -y numpy || echo "numpy not previously installed"
 $PIP install psutil pytest
 
-# numpy is not available as wheel in Python 3.3
+# numpy is not available as wheel in Python 3.3 or Python 3.6
 [ $ver -lt 33 ] && $PIP install numpy
-[ $ver -gt 33 ] && $PIP install numpy
+[ $ver -gt 33 -a $ver -lt 36 ] && $PIP install numpy
 
 # Backport modules for Python 2.7
 [ $ver -lt 33 ] && $PIP install faulthandler
