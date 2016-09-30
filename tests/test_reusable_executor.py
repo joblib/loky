@@ -8,6 +8,10 @@ from loky.concurrent_pool import get_reusable_executor
 import multiprocessing as mp
 from loky.process_executor import BrokenProcessPool, ShutdownProcessPool
 from pickle import PicklingError, UnpicklingError
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 # Backward compat for python2 cPickle module
 PICKLING_ERRORS = (PicklingError,)
@@ -456,9 +460,9 @@ def test_invalid_process_number():
         get_reusable_executor(max_workers=-1)
 
 
+@pytest.mark.skipif(np is None, reason="requires numpy")
 def test_osx_accelerate_freeze(exit_on_deadlock):
     """Test no freeze on OSX with Accelerate"""
-    import numpy as np
     a = np.random.randn(1000, 1000)
     np.dot(a, a)
     pool = get_reusable_executor(max_workers=2)

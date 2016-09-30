@@ -16,7 +16,13 @@ echo "Testing for python $ver"
 # with built-in openblas under linux
 $PIP install --upgrade pip
 $PIP uninstall -y numpy || echo "numpy not previously installed"
-$PIP install psutil pytest numpy
+$PIP install psutil pytest
+
+# numpy is not available as wheel in Python 3.3
+[ $ver -lt 33 ] && $PIP install numpy
+[ $ver -gt 33 ] && $PIP install numpy
+
+# Backport modules for Python 2.7
 [ $ver -lt 33 ] && $PIP install faulthandler
 [ $ver -lt 33 ] && $PIP install futures
 
