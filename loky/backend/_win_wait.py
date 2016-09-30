@@ -121,7 +121,7 @@ else:
         ready = []
         while True:
             count += 1
-            if count == 100:
+            if count == 10:
                 count = 0
                 if not all([p.is_alive() for p in processes]):
                     return []
