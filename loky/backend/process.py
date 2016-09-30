@@ -9,7 +9,7 @@ except ImportError:
     BaseContext = object
 
 
-class ExecProcess(BaseProcess):
+class PosixExecProcess(BaseProcess):
     _start_method = 'exec'
 
     @staticmethod
@@ -46,12 +46,12 @@ class ExecProcess(BaseProcess):
         def __init__(self, group=None, target=None, name=None, args=(),
                      kwargs={}, daemon=None):
             if sys.version_info < (3, 3):
-                super(ExecProcess, self).__init__(
+                super(PosixExecProcess, self).__init__(
                     group=group, target=target, name=name, args=args,
                     kwargs=kwargs)
                 self.daemon = daemon
             else:
-                super(ExecProcess, self).__init__(
+                super(PosixExecProcess, self).__init__(
                     group=group, target=target, name=name, args=args,
                     kwargs=kwargs, daemon=daemon)
             self.authkey = self.authkey
@@ -70,7 +70,7 @@ class ExecProcess(BaseProcess):
 
 class ExecContext(BaseContext):
     _name = 'exec'
-    Process = ExecProcess
+    Process = PosixExecProcess
 
 
 #
@@ -87,9 +87,15 @@ class AuthenticationKey(bytes):
                 )
         return AuthenticationKey, (bytes(self),)
 
+
+class WinExecProcess(BaseProcess):
+    """subclass Process for windows access to sentinel"""
+    def start(self):
+        super(WinExecProcess, self).start()
+        self.sentinel = int(self._popen._handle)
+
 try:
     from multiprocessing import context
-    context._concrete_contexts['exec'] = ExecContext()
-    # mp.set_start_method('spawn', force=True)
+    context._concrete_contexts['loky'] = ExecContext()
 except ImportError:
     pass
