@@ -8,14 +8,16 @@ environment:
       PYTHON_VERSION: "2.7.x"
       PYTHON_ARCH: "32"
 
-    - PYTHON: "C:\\Python34-x64"
-      PYTHON_VERSION: "3.4.x"
+    - PYTHON: "C:\\Python27-x64"
+      PYTHON_VERSION: "2.7.x"
       PYTHON_ARCH: "64"
+matrix:
+  fast_finish: true
 
 install:
   # Install Python (from the official .msi of http://python.org) and pip when
   # not already installed.
-  - "powershell ./continuous_integration/appveyor/install.ps1"
+  - ps: ./continuous_integration/appveyor/install.ps1
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
 
   # Install the build and runtime dependencies of the project.

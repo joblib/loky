@@ -1,5 +1,12 @@
+# General ignore rules
 .*
+*sublime*
+
+# Python running files
 __pycache__
 *pyc
-*sublime*
 *egg*
+*.so
+
+# Extra files
+/build

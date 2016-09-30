@@ -1,25 +1,48 @@
 language: python
 # make it explicit that we favor the new container-based travis workers
 sudo: false
-addons:
-  apt:
-    packages:
-      # - python3.4
-      # - python3.5
-      # - python2.7
+# addons:
+#   apt:
+#     packages:
+#       - python2.7
 
-#env:
-#  matrix:
-#    - DISTRIB="ubuntu" PYTHON_VERSION="2.7" COVERAGE="true"
-#    - DISTRIB="ubuntu" PYTHON_VERSION="3.5" INSTALL_MKL="true"
+env: PYTHON="python"
+
+
+matrix:
+  include:
+    - python: 2.7
+    - python: 3.3
+    - python: 3.4
+    - python: 3.5
+    - python: "nightly"
+    - os: osx
+      osx_image: xcode7.3
+      language: generic  # https://github.com/travis-ci/travis-ci/issues/2312
+    - os: osx
+      osx_image: xcode7.3
+      language: generic  # https://github.com/travis-ci/travis-ci/issues/2312
+      env: PYTHON="python3"
+  allow_failures:
+    - python: "nightly"
+    - os : osx
+
+
+before_install:
+  - |
+    # Install python using brew on OSX
+    if [[ $TRAVIS_OS_NAME == 'osx' ]]; then
+      brew update
+      brew install $PYTHON
+    fi
+
 install: source continuous_integration/install.sh
 script: bash continuous_integration/test_script.sh
-after_success:
-    # Ignore coveralls failures as the coveralls server is not very reliable
-    # but we don't want travis to report a failure in the github UI just
-    # because the coverage report failed to be published.
-    - if [[ "$COVERAGE" == "true" ]]; then coveralls || echo "failed"; fi
-cache: apt
+# after_success:
+#     # Ignore coveralls failures as the coveralls server is not very reliable
+#     # but we don't want travis to report a failure in the github UI just
+#     # because the coverage report failed to be published.
+#     - if [[ "$COVERAGE" == "true" ]]; then coveralls || echo "failed"; fi
 notifications:
   webhooks:
     on_success: change
