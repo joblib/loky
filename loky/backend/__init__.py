@@ -24,4 +24,4 @@ else:
         context._concrete_contexts['loky'] = get_context('spawn')
     else:
         from .process import WinExecProcess as Process
-        SimpleQueue = Queue
+        from multiprocessing.queues import SimpleQueue

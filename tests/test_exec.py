@@ -212,6 +212,9 @@ class TestExec:
     def _test_sentinel(cls, event):
         event.wait(10.0)
 
+    @pytest.mark.skipif(
+        sys.platform == 'win32' and sys.version_info[:2]<(3, 4),
+        reason="test require python 3.4+")
     def test_sentinel(self):
         event = self.Event()
         p = self.Process(target=self._test_sentinel, args=(event,))

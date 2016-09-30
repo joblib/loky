@@ -38,13 +38,16 @@ def create_future(state=PENDING, exception=None, result=None):
 
 @pytest.yield_fixture
 def exit_on_deadlock():
-    TIMEOUT = 5
-    from faulthandler import dump_traceback_later
-    from faulthandler import cancel_dump_traceback_later
-    from sys import stderr
-    dump_traceback_later(timeout=TIMEOUT, exit=True, file=stderr)
-    yield
-    cancel_dump_traceback_later()
+    try:
+        TIMEOUT = 5
+        from faulthandler import dump_traceback_later
+        from faulthandler import cancel_dump_traceback_later
+        from sys import stderr
+        dump_traceback_later(timeout=TIMEOUT, exit=True, file=stderr)
+        yield
+        cancel_dump_traceback_later()
+    except ImportError:
+        yield
 
 
 PENDING_FUTURE = create_future(state=PENDING)

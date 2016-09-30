@@ -95,6 +95,7 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 
 _threads_wakeup = weakref.WeakKeyDictionary()
 _shutdown = False
+WAKEUP = b'0'
 
 
 def _is_crashed(thread):
@@ -120,7 +121,7 @@ def _python_exit():
     items = list(_threads_wakeup.items())
     for t, q in items:
         if not q.closed:
-            q.send_bytes(b'')
+            q.send_bytes(WAKEUP)
     for t, q in items:
         t.join()
 
@@ -651,7 +652,7 @@ class ProcessPoolExecutor(_base.Executor):
         # When the executor gets lost, the weakref callback will wake up
         # the queue management thread.
         def weakref_cb(_, q=self._wakeup_send):
-            q.send_bytes(b'')
+            q.send_bytes(WAKEUP)
         if self._management_thread is None:
             mp.util.debug('_start_thread_management_thread called')
             # Start the processes so that their sentinels are known.
@@ -696,7 +697,7 @@ class ProcessPoolExecutor(_base.Executor):
             self._work_ids.put(self._queue_count)
             self._queue_count += 1
             # Wake up queue management thread
-            self._wakeup_send.send_bytes(b'')
+            self._wakeup_send.send_bytes(WAKEUP)
 
             self._start_queue_management_thread()
             self._start_thread_management_thread()
@@ -743,7 +744,7 @@ class ProcessPoolExecutor(_base.Executor):
             self._shutdown_thread = True
         if self._queue_management_thread:
             # Wake up queue management thread
-            self._wakeup_send.send_bytes(b'')
+            self._wakeup_send.send_bytes(WAKEUP)
             if wait and self._queue_management_thread.is_alive():
                 self._queue_management_thread.join()
         if self._management_thread:

@@ -313,7 +313,7 @@ class TestPoolDeadLock:
         pool = get_reusable_executor(max_workers=2)
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
-        sleep(.1)
+        sleep(.2)
 
         pool = get_reusable_executor(max_workers=2)
         assert pool.submit(id_sleep, (1, 0.)).result() == 1
