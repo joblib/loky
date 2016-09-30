@@ -357,9 +357,12 @@ def _queue_management_worker(executor_reference,
                                 running_work_items,
                                 work_ids_queue,
                                 call_queue)
-        sentinels = [p.sentinel for p in processes.values()]
         # assert sentinels
-        ready = wait([reader, wakeup] + sentinels)
+        if sys.platform == "win32" and sys.version_info < (3, 3):
+            ready = wait([reader, wakeup], processes.values())
+        else:
+            sentinels = [p.sentinel for p in processes.values()]
+            ready = wait([reader, wakeup] + sentinels)
         # broken = not call_queue._thread.is_alive()
         # broken |= any([p.exitcode for p in processes.values()])
         if reader in ready:

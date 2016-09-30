@@ -19,6 +19,9 @@ else:
     from multiprocessing import Queue, Event, Pipe
     if sys.version_info[:2] > (3, 3):
         from multiprocessing import Process, SimpleQueue
+        from multiprocessing import context, get_context
+
+        context._concrete_contexts['loky'] = get_context('spawn')
     else:
         from .process import WinExecProcess as Process
         SimpleQueue = Queue

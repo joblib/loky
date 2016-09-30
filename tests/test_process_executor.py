@@ -105,22 +105,23 @@ class ExecutorMixin:
 
 if sys.version_info[:2] > (3, 3):
 
-    class ProcessPoolForkMixin(ExecutorMixin):
-        executor_type = process_executor.ProcessPoolExecutor
-        context = mp.get_context('fork')
+    if sys.platform != "win32":
+        class ProcessPoolForkMixin(ExecutorMixin):
+            executor_type = process_executor.ProcessPoolExecutor
+            context = mp.get_context('fork')
 
-    class ProcessPoolForkserverMixin(ExecutorMixin):
-        executor_type = process_executor.ProcessPoolExecutor
-        context = mp.get_context('forkserver')
+        class ProcessPoolForkserverMixin(ExecutorMixin):
+            executor_type = process_executor.ProcessPoolExecutor
+            context = mp.get_context('forkserver')
+
+        class ProcessPoolForkexecMixin(ExecutorMixin):
+            from loky import backend
+            executor_type = process_executor.ProcessPoolExecutor
+            context = mp.get_context('loky')
 
     class ProcessPoolSpawnMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
         context = mp.get_context('spawn')
-
-    class ProcessPoolForkexecMixin(ExecutorMixin):
-        from loky import backend
-        executor_type = process_executor.ProcessPoolExecutor
-        context = mp.get_context('loky')
 
 else:
 
@@ -193,16 +194,16 @@ class ExecutorShutdownTest:
 
 
 if sys.version_info[:2] > (3, 3):
+    if sys.platform != "win32":
+        class TestsProcessPoolForkShutdown(ProcessPoolForkMixin,
+                                           ExecutorShutdownTest):
+            def _prime_executor(self):
+                pass
 
-    class TestsProcessPoolForkShutdown(ProcessPoolForkMixin,
-                                       ExecutorShutdownTest):
-        def _prime_executor(self):
-            pass
-
-    class TestsProcessPoolForkserverShutdown(ProcessPoolForkserverMixin,
-                                             ExecutorShutdownTest):
-        def _prime_executor(self):
-            pass
+        class TestsProcessPoolForkserverShutdown(ProcessPoolForkserverMixin,
+                                                 ExecutorShutdownTest):
+            def _prime_executor(self):
+                pass
 
     class TestsProcessPoolSpawnShutdown(ProcessPoolSpawnMixin,
                                         ExecutorShutdownTest):
@@ -210,10 +211,11 @@ if sys.version_info[:2] > (3, 3):
             pass
 
 
-class TestsProcessPoolForkexecShutdown(ProcessPoolForkexecMixin,
-                                       ExecutorShutdownTest):
-    def _prime_executor(self):
-        pass
+if sys.platform != "win32":
+    class TestsProcessPoolForkexecShutdown(ProcessPoolForkexecMixin,
+                                           ExecutorShutdownTest):
+        def _prime_executor(self):
+            pass
 
 
 class WaitTests:
@@ -311,19 +313,21 @@ class WaitTests:
 
 
 if sys.version_info[:2] > (3, 3):
-    class TestsProcessPoolForkWait(ProcessPoolForkMixin, WaitTests):
-        pass
+    if sys.platform != "win32":
+        class TestsProcessPoolForkWait(ProcessPoolForkMixin, WaitTests):
+            pass
 
-    class TestsProcessPoolForkserverWait(ProcessPoolForkserverMixin,
-                                         WaitTests):
-        pass
+        class TestsProcessPoolForkserverWait(ProcessPoolForkserverMixin,
+                                             WaitTests):
+            pass
 
     class TestsProcessPoolSpawnWait(ProcessPoolSpawnMixin, WaitTests):
         pass
 
 
-class TestsProcessPoolForkexecWait(ProcessPoolForkexecMixin, WaitTests):
-    pass
+if sys.platform != "win32":
+    class TestsProcessPoolForkexecWait(ProcessPoolForkexecMixin, WaitTests):
+        pass
 
 
 class AsCompletedTests:
@@ -366,22 +370,24 @@ class AsCompletedTests:
 
 
 if sys.version_info[:2] > (3, 3):
-    class TestsProcessPoolForkAsCompleted(ProcessPoolForkMixin,
-                                          AsCompletedTests):
-        pass
+    if sys.platform != "win32":
+        class TestsProcessPoolForkAsCompleted(ProcessPoolForkMixin,
+                                              AsCompletedTests):
+            pass
 
-    class TestsProcessPoolForkserverAsCompleted(ProcessPoolForkserverMixin,
-                                                AsCompletedTests):
-        pass
+        class TestsProcessPoolForkserverAsCompleted(ProcessPoolForkserverMixin,
+                                                    AsCompletedTests):
+            pass
 
     class TestsProcessPoolSpawnAsCompleted(ProcessPoolSpawnMixin,
                                            AsCompletedTests):
         pass
 
 
-class TestsProcessPoolForkexecAsCompleted(ProcessPoolForkexecMixin,
-                                          AsCompletedTests):
-    pass
+if sys.platform != "win32":
+    class TestsProcessPoolForkexecAsCompleted(ProcessPoolForkexecMixin,
+                                              AsCompletedTests):
+        pass
 
 
 class ExecutorTest:
@@ -495,19 +501,22 @@ class ExecutorTest:
 
 
 if sys.version_info[:2] > (3, 3):
-    class TestsProcessPoolForkExecutor(ProcessPoolForkMixin, ExecutorTest):
-        pass
+    if sys.platform != "win32":
+        class TestsProcessPoolForkExecutor(ProcessPoolForkMixin, ExecutorTest):
+            pass
 
-    class TestsProcessPoolForkserverExecutor(ProcessPoolForkserverMixin,
-                                             ExecutorTest):
-        pass
+        class TestsProcessPoolForkserverExecutor(ProcessPoolForkserverMixin,
+                                                 ExecutorTest):
+            pass
 
     class TestsProcessPoolSpawnExecutor(ProcessPoolSpawnMixin, ExecutorTest):
         pass
 
 
-class TestsProcessPoolForkexecExecutor(ProcessPoolForkexecMixin, ExecutorTest):
-    pass
+if sys.platform != "win32":
+    class TestsProcessPoolForkexecExecutor(ProcessPoolForkexecMixin,
+                                           ExecutorTest):
+        pass
 
 
 class TestsFuture:
