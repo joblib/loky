@@ -87,13 +87,6 @@ class AuthenticationKey(bytes):
                 )
         return AuthenticationKey, (bytes(self),)
 
-
-class WinExecProcess(BaseProcess):
-    """subclass Process for windows access to sentinel"""
-    def start(self):
-        super(WinExecProcess, self).start()
-        self.sentinel = int(self._popen._handle)
-
 try:
     from multiprocessing import context
     context._concrete_contexts['loky'] = ExecContext()
