@@ -77,7 +77,7 @@ if sys.version_info[0] == 3:
     macros['PY3'] = 1
 
 
-setup(name='Rpool',
+setup(name='loky',
       version='0.1.dev0',
       packages=find_packages(),
       )
