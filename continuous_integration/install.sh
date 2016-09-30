@@ -11,7 +11,9 @@ test $PYTHON == "python3" && PIP="pip3"
 
 ver=$($PYTHON -V 2>&1 | sed -e 's/Python \([23]\.[0-9]\).*/\1/' -e 's/\.//')
 echo "Testing for python $ver"
+$PIP install --upgrade pip
 $PIP uninstall -y numpy || echo "numpy not previously installed"
+$PYTHON -c "from pip.pep425tags import supported_tags; import pprint; pprint.pprint(supported_tags)"
 $PIP install psutil pytest numpy
 [ $ver -lt 33 ] && $PIP install faulthandler
 [ $ver -lt 33 ] && $PIP install futures
