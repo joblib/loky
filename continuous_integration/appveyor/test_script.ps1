@@ -10,7 +10,7 @@ $VERSION=(27, 33, 34, 35)
 function TestPythonVersions () {
     Write-Host $PYTHON
     ForEach($ver in $VERSION){
-    	python ./continuous_integration/appveyor/tox -e py$ver
+        python ./continuous_integration/appveyor/tox -e py$ver -- -vx > $AUXFILE 2>&1
         If( $LASTEXITCODE -ne 0){
             Get-Content $AUXFILE
             Remove-Item $AUXFILE
