@@ -119,10 +119,10 @@ def _python_exit():
     global _shutdown
     _shutdown = True
     items = list(_threads_wakeup.items())
-    for t, q in items:
-        if not q.closed:
-            q.send_bytes(WAKEUP)
-    for t, q in items:
+    for t, c in items:
+        if not c.closed and t.is_alive():
+            c.send_bytes(WAKEUP)
+    for t, _ in items:
         t.join()
 
 # Controls how many more calls than processes will be queued in the call queue.
@@ -626,7 +626,6 @@ class ProcessPoolExecutor(_base.Executor):
         except AttributeError:
             self._result_queue = mp.queues.SimpleQueue()
 
-
     def _start_queue_management_thread(self):
         if len(self._processes) != self._max_workers:
             self._adjust_process_count()
@@ -736,8 +735,8 @@ class ProcessPoolExecutor(_base.Executor):
             timeout=timeout)
         return itertools.chain.from_iterable(results)
 
-    def shutdown(self, caller='main', wait=True):
-        mp.util.debug('shuting down the executor ({})'.format(caller))
+    def shutdown(self, wait=True):
+        mp.util.debug('shuting down the executor')
         if self._kill_on_shutdown:
             pass
         with self._shutdown_lock:
