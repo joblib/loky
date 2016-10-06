@@ -31,7 +31,7 @@ def get_reusable_executor(max_workers=None, context=None,
     _args = getattr(_local, '_args', None)
     if _pool is None:
         mp.util.debug("Create a pool with size {}.".format(max_workers))
-        assert len(mp.active_children()) == 0
+        # assert len(mp.active_children()) == 0
         pool_id = _get_next_pool_id()
         _local._args = dict(context=context, timeout=timeout,
                             kill_on_shutdown=kill_on_shutdown)
@@ -54,9 +54,16 @@ def get_reusable_executor(max_workers=None, context=None,
         args = dict(context=context, timeout=timeout,
                     kill_on_shutdown=kill_on_shutdown)
         if _pool._broken or _pool._shutdown_thread or args != _args:
+            if _pool._broken:
+                reason = "broken"
+            elif _pool._shutdown_thread:
+                reason = "shutdown"
+            else:
+                reason = "wrong option"
             mp.util.debug("Create a new pool with {} processes as the "
-                          "previous one was unusable".format(max_workers))
-            _pool.shutdown(wait=True, caller='broken')
+                          "previous one was unusable ({})"
+                          .format(max_workers, reason))
+            _pool.shutdown(wait=True)
             _local._pool = _pool = None
             _local._args = _args = None
             return get_reusable_executor(max_workers=max_workers, **args)
@@ -67,7 +74,7 @@ def get_reusable_executor(max_workers=None, context=None,
                 return _pool
             mp.util.debug("Failed to resize existing pool to target size {}."
                           "".format(max_workers))
-            _pool.shutdown(wait=True, caller='resize')
+            _pool.shutdown(wait=True)
             _local._pool = _pool = None
             _local._args = _args = None
             return get_reusable_executor(max_workers=max_workers, **args)

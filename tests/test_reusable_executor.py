@@ -4,7 +4,7 @@ import psutil
 import warnings
 from time import sleep, time
 import pytest
-from loky.concurrent_pool import get_reusable_executor
+from loky.reusable_executor import get_reusable_executor
 import multiprocessing as mp
 from loky.process_executor import BrokenProcessPool, ShutdownProcessPool
 from pickle import PicklingError, UnpicklingError
@@ -112,20 +112,22 @@ def return_instance(cls):
 
 
 def start_job(func, args):
-    pool = get_reusable_executor(max_workers=2)
+    executor = get_reusable_executor(max_workers=2)
     try:
-        pool.submit(func, args)
+        executor.submit(func, args)
     except Exception as e:
-        # One should never call join before terminate: if the pool is broken,
+        # One should never call join before terminate: if the executor is broken,
         # (AbortedWorkerError was raised) the cleanup mechanism should be
         # triggered by the _worker_handler thread. Else we should call
         # terminate explicitly
         if not isinstance(e, BrokenProcessPool):
-            pool.shutdown(wait=True)
+            executor.shutdown(wait=True)
         raise e
     finally:
         # _worker_handler thread is triggered every .1s
         sleep(.2)
+        executor.shutdown(wait=True)
+    assert is_terminated_properly(executor)
 
 
 class SayWhenError(ValueError):
@@ -189,8 +191,8 @@ def id_sleep(args):
     return x
 
 
-def is_terminated_properly():
-    pass
+def is_terminated_properly(executor):
+    return executor._broken or executor._shutdown_thread
 
 
 # class ReusableExecutorMixin:
@@ -245,136 +247,127 @@ class TestPoolDeadLock:
                 (return_instance, (ErrorAtUnpickle,), UnpicklingError),
     ]
 
-    # callback_crash_cases = [
-    #             # Check problem occuring during function execution on workers
-    #             # (crash, AbortedWorkerError),
-    #             (exit, (), AbortedWorkerError),
-    #             (raise_error, (RuntimeError, ), RuntimeError),
-    #             (start_job, (id, (ExitAtPickle(),)), AbortedWorkerError),
-    #             (start_job, (id, (ErrorAtPickle(),)), PICKLING_ERRORS),
-    #             # Check problem occuring while unpickling a task on workers
-    #             (start_job, (id, (ExitAtUnpickle(),)), AbortedWorkerError),
-    #             (start_job, (id, (ErrorAtUnpickle(),)), AbortedWorkerError),
-    #             (start_job, (id, (CrashAtUnpickle(),)), AbortedWorkerError),
-    #             # Check problem occuring during function execution on workers
-    #             (start_job, (crash, ()), AbortedWorkerError),
-    #             (start_job, (exit, ()), AbortedWorkerError),
-    #             (start_job, (raise_error, (RuntimeError, )), RuntimeError),
-    #             # Check problem occuring while pickling a task
-    #             # result on workers
-    #             (start_job, (return_instance, (CrashAtPickle,)),
-    #              AbortedWorkerError),
-    #             (start_job, (return_instance, (ExitAtPickle,)),
-    #              AbortedWorkerError),
-    #             (start_job, (return_instance, (ErrorAtPickle,)),
-    #              MaybeEncodingError),
-    #             # Check problem occuring while unpickling a task in
-    #             # the result_handler thread
-    #             (start_job, (return_instance, (ExitAtUnpickle,)),
-    #              AbortedWorkerError),
-    #             (start_job, (return_instance, (ErrorAtUnpickle,)),
-    #              AbortedWorkerError),
-    # ]
+    callback_crash_cases = [
+        # Check problem occuring during function execution on workers
+        # (crash, (), BrokenProcessPool),
+        (raise_error, (RuntimeError, ), BrokenProcessPool),
+        (exit, (), BrokenProcessPool),
+        (start_job, (id, (ExitAtPickle(),)), BrokenProcessPool),
+        (start_job, (id, (ErrorAtPickle(),)), PICKLING_ERRORS),
+        # Check problem occuring while unpickling a task on workers
+        (start_job, (id, (ExitAtUnpickle(),)), BrokenProcessPool),
+        (start_job, (id, (ErrorAtUnpickle(),)), BrokenProcessPool),
+        (start_job, (id, (CrashAtUnpickle(),)), BrokenProcessPool),
+        # Check problem occuring during function execution on workers
+        (start_job, (crash, ()), BrokenProcessPool),
+        (start_job, (exit, ()), BrokenProcessPool),
+        (start_job, (raise_error, (RuntimeError, )), RuntimeError),
+        # Check problem occuring while pickling a task
+        # result on workers
+        (start_job, (return_instance, (CrashAtPickle,)), BrokenProcessPool),
+        (start_job, (return_instance, (ExitAtPickle,)), BrokenProcessPool),
+        (start_job, (return_instance, (ErrorAtPickle,)), PicklingError),
+        # Check problem occuring while unpickling a task in
+        # the result_handler thread
+        (start_job, (return_instance, (ExitAtUnpickle,)), BrokenProcessPool),
+        (start_job, (return_instance, (ErrorAtUnpickle,)), BrokenProcessPool),
+    ]
 
     @pytest.mark.parametrize("func, args, expected_err", crash_cases)
     def test_crashes(self, exit_on_deadlock, func, args, expected_err):
-        """Test various reusable_pool crash handling"""
-        pool = get_reusable_executor(max_workers=2)
-        res = pool.submit(func, *args)
+        """Test various reusable_executor crash handling"""
+        executor = get_reusable_executor(max_workers=2)
+        res = executor.submit(func, *args)
         with pytest.raises(expected_err):
             res.result()
 
-        # Check that the pool can still be recovered
-        pool = get_reusable_executor(max_workers=2)
-        assert pool.submit(id_sleep, (1, 0.)).result() == 1
-        pool.shutdown(wait=True)
+        # Check that the executor can still be recovered
+        executor = get_reusable_executor(max_workers=2)
+        assert executor.submit(id_sleep, (1, 0.)).result() == 1
+        executor.shutdown(wait=True)
 
     # # @pytest.mark.skipif(True, reason="Known failure")
-    # @pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
-    # def test_callback(self, exit_on_deadlock, func, args, expected_err):
-    #     """Test the recovery from callback crash"""
-    #     pool = get_reusable_executor(max_workers=2)
-    #     res = pool.apply_async(id_sleep,
-    #                            ((func, 0),),
-    #                            callback=lambda f: f(*args))
-    #     with pytest.raises(expected_err):
-    #         try:
-    #             res.get()
-    #         except CallbackError as e:
-    #             assert func == e.value
-    #             raise e.err
+    @pytest.mark.parametrize("func, args, expected_err", callback_crash_cases)
+    def test_callback(self, exit_on_deadlock, func, args, expected_err):
+        """Test the recovery from callback crash"""
+        executor = get_reusable_executor(max_workers=2)
+        res = executor.submit(id_sleep, (func, 0.1))
+        res.add_done_callback(lambda f: f.result()(*args))
+        res.result()
 
-    #     # Check that the pool can still be recovered
-    #     pool = get_reusable_executor(max_workers=2)
-    #     assert pool.apply(id_sleep, ((1, 0.),)) == 1
-    #     pool.shutdown(wait=True)
-    #
+        # makes sure the callback has finished
+        sleep(.1)
+
+        # Check that the executor can still be recovered
+        executor = get_reusable_executor(max_workers=2)
+        assert executor.submit(id_sleep, (1, 0.)).result() == 1
+        executor.shutdown(wait=True)
 
     def test_deadlock_kill(self, exit_on_deadlock):
-        """Test deadlock recovery for reusable_pool"""
-        pool = get_reusable_executor(max_workers=1)
-        worker = next(iter(pool._processes.values()))
-        pool = get_reusable_executor(max_workers=2)
+        """Test deadlock recovery for reusable_executor"""
+        executor = get_reusable_executor(max_workers=1)
+        worker = next(iter(executor._processes.values()))
+        executor = get_reusable_executor(max_workers=2)
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
         sleep(.2)
 
-        pool = get_reusable_executor(max_workers=2)
-        assert pool.submit(id_sleep, (1, 0.)).result() == 1
-        pool.shutdown(wait=True)
+        executor = get_reusable_executor(max_workers=2)
+        assert executor.submit(id_sleep, (1, 0.)).result() == 1
+        executor.shutdown(wait=True)
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, exit_on_deadlock, n_proc):
-        """Test the race conditions in reusable_pool crash handling"""
+        """Test the race conditions in reusable_executor crash handling"""
         # Test for external crash signal comming from neighbor
         # with various race setup
         mp.util.debug("Test race - # Processes = {}".format(n_proc))
-        pool = get_reusable_executor(max_workers=n_proc)
-        pids = list(pool._processes.keys())
+        executor = get_reusable_executor(max_workers=n_proc)
+        pids = list(executor._processes.keys())
         assert len(pids) == n_proc
         assert None not in pids
-        res = pool.map(work_sleep, [(.0001 * (j//2), pids)
+        res = executor.map(work_sleep, [(.0001 * (j//2), pids)
                                     for j in range(2 * n_proc)])
         assert all(list(res))
         with pytest.raises(BrokenProcessPool):
-            res = pool.map(kill_friend, pids[::-1])
+            res = executor.map(kill_friend, pids[::-1])
             list(res)
 
         # Clean terminate
-        pool.shutdown(wait=True)
+        executor.shutdown(wait=True)
 
     def test_imap_handle_iterable_exception(self, exit_on_deadlock):
         # The catch of the errors in imap generation depend on the
         # builded version of python
-        pool = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            pool.map(id_sleep, exception_throwing_generator(10, 3),
+            executor.map(id_sleep, exception_throwing_generator(10, 3),
                      chunksize=1)
 
         # SayWhenError seen at start of problematic chunk's results
-        pool = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            pool.map(id_sleep, exception_throwing_generator(20, 7),
+            executor.map(id_sleep, exception_throwing_generator(20, 7),
                      chunksize=2)
 
-        pool = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            pool.map(id_sleep, exception_throwing_generator(20, 7),
+            executor.map(id_sleep, exception_throwing_generator(20, 7),
                      chunksize=4)
 
-        pool.shutdown(wait=True)
+        executor.shutdown(wait=True)
 
 
 class TestTerminatePool:
     def test_terminate_kill(self, exit_on_deadlock):
-        """Test reusable_pool termination handling"""
-        pool = get_reusable_executor(max_workers=5)
-        res1 = pool.map(id_sleep, [(i, 0.001) for i in range(50)])
-        res2 = pool.map(id_sleep, [(i, 0.1) for i in range(50)])
+        """Test reusable_executor termination handling"""
+        executor = get_reusable_executor(max_workers=5)
+        res1 = executor.map(id_sleep, [(i, 0.001) for i in range(50)])
+        res2 = executor.map(id_sleep, [(i, 0.1) for i in range(50)])
         assert list(res1) == list(range(50))
-        # We should get an error as the pool.shutdownd before we fetched
+        # We should get an error as the executor.shutdownd before we fetched
         # the results from the operation.
-        terminate = TimingWrapper(pool.shutdown)
+        terminate = TimingWrapper(executor.shutdown)
         terminate(wait=True)
         assert terminate.elapsed < .5
         with pytest.raises(ShutdownProcessPool):
@@ -382,22 +375,22 @@ class TestTerminatePool:
 
     def test_terminate_deadlock(self, exit_on_deadlock):
         """Test recovery if killed after resize call"""
-        # Test the pool.shutdown call do not cause deadlock
-        pool = get_reusable_executor(max_workers=2)
-        pool.submit(kill_friend, (next(iter(pool._processes.keys())), .0))
+        # Test the executor.shutdown call do not cause deadlock
+        executor = get_reusable_executor(max_workers=2)
+        executor.submit(kill_friend, (next(iter(executor._processes.keys())), .0))
         sleep(.01)
-        pool.shutdown(wait=True)
+        executor.shutdown(wait=True)
 
-        pool = get_reusable_executor(max_workers=2)
-        pool.shutdown(wait=True)
+        executor = get_reusable_executor(max_workers=2)
+        executor.shutdown(wait=True)
 
     def test_terminate(self, exit_on_deadlock):
 
-        pool = get_reusable_executor(max_workers=4)
-        res = pool.map(
+        executor = get_reusable_executor(max_workers=4)
+        res = executor.map(
             sleep, [0.1 for i in range(10000)], chunksize=1
             )
-        shutdown = TimingWrapper(pool.shutdown)
+        shutdown = TimingWrapper(executor.shutdown)
         shutdown(wait=True)
         assert shutdown.elapsed < 0.5
 
@@ -405,49 +398,49 @@ class TestTerminatePool:
             list(res)
 
 
-class TestResizeRpool:
-    def test_rpool_resize(self, exit_on_deadlock):
-        """Test reusable_pool resizing"""
+class TestResizeExecutor:
+    def test_reusable_executor_resize(self, exit_on_deadlock):
+        """Test reusable_executor resizing"""
 
-        pool = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2)
 
-        # Decreasing the pool should drop a single process and keep one of the
-        # old one as it is still in a good shape. The resize should not occur
-        # while there are on going works.
-        pids = list(pool._processes.keys())
-        res = pool.submit(work_sleep, (.3, pids))
+        # Decreasing the executor should drop a single process and keep one of
+        # the old one as it is still in a good shape. The resize should not
+        # occur while there are on going works.
+        pids = list(executor._processes.keys())
+        res = executor.submit(work_sleep, (.3, pids))
         warnings.filterwarnings("always", category=UserWarning)
         with warnings.catch_warnings(record=True) as w:
-            pool = get_reusable_executor(max_workers=1)
+            executor = get_reusable_executor(max_workers=1)
             assert len(w) == 1
             assert res.result(), ("Resize should wait for current processes "
                                   " to finish")
-            assert len(pool._processes) == 1
-            assert next(iter(pool._processes.keys())) in pids
+            assert len(executor._processes) == 1
+            assert next(iter(executor._processes.keys())) in pids
 
-        # Requesting the same number of process should not impact the pool nor
-        # kill the processed
-        old_pid = next(iter((pool._processes.keys())))
-        unchanged_pool = get_reusable_executor(max_workers=1)
-        assert len(unchanged_pool._processes) == 1
-        assert unchanged_pool is pool
-        assert next(iter(unchanged_pool._processes.keys())) == old_pid
+        # Requesting the same number of process should not impact the executor
+        # nor kill the processed
+        old_pid = next(iter((executor._processes.keys())))
+        unchanged_executor = get_reusable_executor(max_workers=1)
+        assert len(unchanged_executor._processes) == 1
+        assert unchanged_executor is executor
+        assert next(iter(unchanged_executor._processes.keys())) == old_pid
 
-        # Growing the pool again should add a single process and keep the old
-        # one as it is still in a good shape
-        pool = get_reusable_executor(max_workers=2)
-        assert len(pool._processes) == 2
-        assert old_pid in list(pool._processes.keys())
-        pool.shutdown(wait=True)
+        # Growing the executor again should add a single process and keep the
+        # old one as it is still in a good shape
+        executor = get_reusable_executor(max_workers=2)
+        assert len(executor._processes) == 2
+        assert old_pid in list(executor._processes.keys())
+        executor.shutdown(wait=True)
 
     def test_kill_after_resize_call(self, exit_on_deadlock):
         """Test recovery if killed after resize call"""
-        # Test the pool resizing called before a kill arrive
-        pool = get_reusable_executor(max_workers=2)
-        pool.submit(kill_friend, (next(iter(pool._processes.keys())), .1))
-        pool = get_reusable_executor(max_workers=1)
-        assert pool.submit(id_sleep, (1, 0.)).result() == 1
-        pool.shutdown(wait=True)
+        # Test the executor resizing called before a kill arrive
+        executor = get_reusable_executor(max_workers=2)
+        executor.submit(kill_friend, (next(iter(executor._processes.keys())), .1))
+        executor = get_reusable_executor(max_workers=1)
+        assert executor.submit(id_sleep, (1, 0.)).result() == 1
+        executor.shutdown(wait=True)
 
 
 def test_invalid_process_number():
@@ -465,9 +458,9 @@ def test_osx_accelerate_freeze(exit_on_deadlock):
     """Test no freeze on OSX with Accelerate"""
     a = np.random.randn(1000, 1000)
     np.dot(a, a)
-    pool = get_reusable_executor(max_workers=2)
-    pool.submit(np.dot, (a, a))
-    pool.shutdown(wait=True)
+    executor = get_reusable_executor(max_workers=2)
+    executor.submit(np.dot, (a, a))
+    executor.shutdown(wait=True)
 
 
 class TimingWrapper(object):
