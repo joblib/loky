@@ -24,7 +24,7 @@ import weakref
 from concurrent import futures
 from concurrent.futures._base import \
     PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, Future
-from loky.process_executor import BrokenProcessPool
+from loky.process_executor import BrokenExecutor
 import multiprocessing as mp
 
 
@@ -464,10 +464,10 @@ class ExecutorTest:
         p = next(iter(self.executor._processes.values()))
         p.terminate()
         for fut in futures:
-            with pytest.raises(BrokenProcessPool):
+            with pytest.raises(BrokenExecutor):
                 fut.result()
         # Submitting other jobs fails as well.
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(BrokenExecutor):
             self.executor.submit(pow, 2, 8)
 
     def test_map_chunksize(self, exit_on_deadlock):

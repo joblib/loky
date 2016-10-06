@@ -1,6 +1,5 @@
 import os
 import sys
-import multiprocessing as mp
 try:
     from multiprocessing.process import BaseProcess
     from multiprocessing.context import BaseContext

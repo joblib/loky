@@ -391,7 +391,7 @@ def _queue_management_worker(executor_reference,
             # All futures in flight must be marked failed
             for work_id, work_item in pending_work_items.items():
                 work_item.future.set_exception(
-                    BrokenProcessPool(
+                    BrokenExecutor(
                         "A process in the process pool was terminated abruptly"
                         " while the future was running or pending."
                     ))
@@ -438,7 +438,7 @@ def _queue_management_worker(executor_reference,
             if kill_on_shutdown:
                 while pending_work_items:
                     _, work_item = pending_work_items.popitem()
-                    work_item.future.set_exception(ShutdownProcessPool(
+                    work_item.future.set_exception(ShutdownExecutor(
                         "The Executor was shutdown before this job could "
                         "complete."))
                     del work_item
@@ -479,7 +479,7 @@ def _management_worker(executor_reference, queue_management_thread, processes,
             if not broken:
                 _shutdown_crash(executor_reference, processes,
                                 pending_work_items, call_queue,
-                                BrokenProcessPool(
+                                BrokenExecutor(
                                     "The QueueManagerThread was terminated "
                                     "abruptly while the future was running or "
                                     "pending. This is due to a result "
@@ -488,7 +488,7 @@ def _management_worker(executor_reference, queue_management_thread, processes,
             return
         elif _is_crashed(call_queue._thread):
             _shutdown_crash(executor_reference, processes, pending_work_items,
-                            call_queue, BrokenProcessPool(
+                            call_queue, BrokenExecutor(
                                 "The QueueFeederThread was terminated abruptly"
                                 " while feeding a new job. This is due to a "
                                 "job pickling error."
@@ -550,7 +550,7 @@ def _check_system_limits():
     raise NotImplementedError(_system_limited)
 
 
-class BrokenProcessPool(RuntimeError):
+class BrokenExecutor(RuntimeError):
 
     """
     Raised when a process in a ProcessPoolExecutor terminated abruptly
@@ -558,7 +558,7 @@ class BrokenProcessPool(RuntimeError):
     """
 
 
-class ShutdownProcessPool(RuntimeError):
+class ShutdownExecutor(RuntimeError):
 
     """
     Raised when a ProcessPoolExecutor is shutdown while a future was in the
@@ -683,8 +683,8 @@ class ProcessPoolExecutor(_base.Executor):
     def submit(self, fn, *args, **kwargs):
         with self._shutdown_lock:
             if self._broken:
-                raise BrokenProcessPool('A child process terminated abruptly, '
-                                        'the process pool is not usable anymore')
+                raise BrokenExecutor('A child process terminated abruptly, '
+                                     'the process pool is not usable anymore')
             if self._shutdown_thread:
                 raise RuntimeError(
                     'cannot schedule new futures after shutdown')
