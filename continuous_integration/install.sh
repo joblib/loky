@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env sh
 # This script is meant to be called by the "install" step defined in
 # .travis.yml. See http://docs.travis-ci.com/ for more details.
 

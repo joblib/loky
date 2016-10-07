@@ -36,8 +36,8 @@ before_install:
       brew install $PYTHON
     fi
 
-install: source continuous_integration/install.sh
-script: bash continuous_integration/test_script.sh
+install: ./continuous_integration/install.sh
+script: ./continuous_integration/test_script.sh
 # after_success:
 #     # Ignore coveralls failures as the coveralls server is not very reliable
 #     # but we don't want travis to report a failure in the github UI just
