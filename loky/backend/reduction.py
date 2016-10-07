@@ -17,7 +17,7 @@ import pickle
 import socket
 import sys
 
-__all__ = ['send_handle', 'recv_handle', 'ExecPickler', 'register', 'dump']
+__all__ = ['send_handle', 'recv_handle', 'LokyPickler', 'register', 'dump']
 
 
 HAVE_SEND_HANDLE = (sys.platform == 'win32' or
@@ -58,7 +58,7 @@ def _mk_inheritable(fd):
 # Pickler subclass
 #
 
-class ExecPickler(pickle.Pickler):
+class LokyPickler(pickle.Pickler):
     '''Pickler subclass used by multiprocessing.'''
     if sys.version_info < (3, 3):
         dispatch = pickle.Pickler.dispatch.copy()
@@ -83,7 +83,7 @@ class ExecPickler(pickle.Pickler):
 
         def __init__(self, *args):
             pickle.Pickler.__init__(self,   *args)
-            # super(ExecPickler, self).__init__(*args)
+            # super(LokyPickler, self).__init__(*args)
             self.dispatch_table = self._copyreg_dispatch_table.copy()
             self.dispatch_table.update(self._extra_reducers)
 
@@ -103,12 +103,12 @@ class ExecPickler(pickle.Pickler):
         return buf.getbuffer()
 
 
-register = ExecPickler.register
+register = LokyPickler.register
 
 
 def dump(obj, file, protocol=None):
-    '''Replacement for pickle.dump() using ExecPickler.'''
-    ExecPickler(file, protocol).dump(obj)
+    '''Replacement for pickle.dump() using LokyPickler.'''
+    LokyPickler(file, protocol).dump(obj)
 
 #
 # Platform specific definitions
@@ -191,7 +191,7 @@ else:
     def DupFd(fd):
         '''Return a wrapper for an fd.'''
 
-        from .popen_exec import get_spawning_popen
+        from .popen_loky import get_spawning_popen
         popen = get_spawning_popen()
         return popen.DupFd(popen.duplicate_for_child(fd))
 

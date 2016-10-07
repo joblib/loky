@@ -15,7 +15,7 @@ import _multiprocessing
 
 from time import time as _time
 
-from .popen_exec import is_spawning, get_spawning_popen
+from .popen_loky import is_spawning, get_spawning_popen
 from multiprocessing import process
 from multiprocessing import util
 
@@ -54,7 +54,7 @@ class SemLock(object):
     _rand = tempfile._RandomNameSequence()
 
     def __init__(self, kind, value, maxvalue):
-        name = 'exec'
+        name = 'loky'
         unlink_now = sys.platform == 'win32' or name == 'fork'
         for i in range(100):
             try:

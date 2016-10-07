@@ -8,12 +8,12 @@ except ImportError:
     BaseContext = object
 
 
-class PosixExecProcess(BaseProcess):
-    _start_method = 'exec'
+class PosixLokyProcess(BaseProcess):
+    _start_method = 'loky'
 
     @staticmethod
     def _Popen(process_obj):
-        from .popen_exec import Popen
+        from .popen_loky import Popen
         return Popen(process_obj)
 
     if sys.version_info < (3, 3):
@@ -45,12 +45,12 @@ class PosixExecProcess(BaseProcess):
         def __init__(self, group=None, target=None, name=None, args=(),
                      kwargs={}, daemon=None):
             if sys.version_info < (3, 3):
-                super(PosixExecProcess, self).__init__(
+                super(PosixLokyProcess, self).__init__(
                     group=group, target=target, name=name, args=args,
                     kwargs=kwargs)
                 self.daemon = daemon
             else:
-                super(PosixExecProcess, self).__init__(
+                super(PosixLokyProcess, self).__init__(
                     group=group, target=target, name=name, args=args,
                     kwargs=kwargs, daemon=daemon)
             self.authkey = self.authkey
@@ -67,9 +67,9 @@ class PosixExecProcess(BaseProcess):
             self._authkey = AuthenticationKey(authkey)
 
 
-class ExecContext(BaseContext):
-    _name = 'exec'
-    Process = PosixExecProcess
+class LokyContext(BaseContext):
+    _name = 'loky'
+    Process = PosixLokyProcess
 
 
 #
@@ -78,7 +78,7 @@ class ExecContext(BaseContext):
 
 class AuthenticationKey(bytes):
     def __reduce__(self):
-        from .popen_exec import is_spawning
+        from .popen_loky import is_spawning
         if not is_spawning():
             raise TypeError(
                 'Pickling an AuthenticationKey object is '
@@ -88,6 +88,6 @@ class AuthenticationKey(bytes):
 
 try:
     from multiprocessing import context
-    context._concrete_contexts['loky'] = ExecContext()
+    context._concrete_contexts['loky'] = LokyContext()
 except ImportError:
     pass

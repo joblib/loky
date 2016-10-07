@@ -2,7 +2,7 @@ import sys
 
 from multiprocessing import Pipe
 if sys.platform != "win32":
-    from .process import PosixExecProcess as Process
+    from .process import PosixLokyProcess as Process
 
     if sys.version_info < (3, 4):
         from .queues import Queue, SimpleQueue

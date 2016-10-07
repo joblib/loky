@@ -9,8 +9,8 @@ from multiprocessing import util
 
 if sys.version_info[:2] > (3, 3):
     from multiprocessing import context
-    from .process import ExecContext
-    context._concrete_contexts['exec'] = ExecContext()
+    from .process import LokyContext
+    context._concrete_contexts['loky'] = LokyContext()
 elif sys.version_info[:2] < (3, 3):
     ProcessLookupError = OSError
 
@@ -51,7 +51,7 @@ class _DupFd(object):
 #
 
 class Popen(object):
-    method = 'exec'
+    method = 'loky'
     DupFd = _DupFd
 
     def __init__(self, process_obj):
@@ -150,35 +150,37 @@ class Popen(object):
         try:
             parent_r, child_w = os.pipe()
             child_r, parent_w = os.pipe()
-            self._chan = CommunicationChannels(parent_w, parent_r)
             # for fd in self._fds:
             #     _mk_inheritable(fd)
 
-            cmd_python = [sys.executable, '-m', 'loky.backend.popen_exec']
+            cmd_python = [sys.executable, '-m', 'loky.backend.popen_loky']
             cmd_python += ['--pipe',
-                           str(reduction._mk_inheritable(child_w)),
                            str(reduction._mk_inheritable(child_r))]
+            reduction._mk_inheritable(child_w)
             if tracker_fd is not None:
                 cmd_python += ['--semaphore',
                                str(reduction._mk_inheritable(tracker_fd))]
-            util.debug("launch python with cmd:\n%s" % cmd_python)
             self._fds.extend([child_r, child_w, tracker_fd])
-            # print('Fd from main:')
-            # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
-            # print('SEM from main:')
-            # os.system('grep shm /proc/{}/maps'.format(os.getpid()))
+            util.debug("launch python with cmd:\n%s" % cmd_python)
             from .fork_exec import fork_exec
-            self._proc = fork_exec(cmd_python, self._fds)
+            pid = fork_exec(cmd_python, self._fds)
             self.sentinel = parent_r
+
             method = 'getbuffer'
             if not hasattr(fp, method):
                 method = 'getvalue'
-            self._chan._dump(getattr(fp, method)(), self._chan.conn_out,
-                             self._chan.pipe_fdw)
-            self.pid = self._proc.pid
+            with os.fdopen(parent_w, 'wb') as f:
+                f.write(getattr(fp, method)())
+            try:
+                os.fstat(parent_w)
+            except OSError:
+                print("\n\n\nOK\n\n")
+            else:
+                raise OSError(1)
+            self.pid = pid
         finally:
             if parent_r is not None:
-                util.Finalize(self, self._chan.close, ())
+                util.Finalize(self, os.close, (parent_r,))
             for fd in (child_r, child_w):
                 if fd is not None:
                     os.close(fd)
@@ -188,59 +190,11 @@ class Popen(object):
         return True
 
 
-class CommunicationChannels(object):
-    '''Bi directional communication channel
-    '''
-    def __init__(self, conn_out, conn_in, strat='buff'):
-        self.strat = strat
-        self.pipe_fdw = os.fdopen(conn_out, 'wb')
-        self.pipe_fdr = os.fdopen(conn_in, 'rb')
-        self.conn_out = reduction.ExecPickler(self.pipe_fdw)
-        self.conn_in = pickle.Unpickler(self.pipe_fdr)
-
-    def close(self):
-        self.pipe_fdw = self._close(self.pipe_fdw)
-        self.pipe_fdr = self._close(self.pipe_fdr)
-
-    def _close(self, fh):
-        if fh is not None:
-            fh.close()
-            return None
-
-    def dump(self, obj, conn=None, pipe=None):
-        conn_out = conn or self.conn_out
-        pipe_fdw = pipe or self.pipe_fdw
-        if self.strat == 'string':
-            text = pickle.dumps(obj)
-            self._dump(text, conn_out, pipe_fdw)
-        elif self.strat == 'buff':
-            buf = BytesIO()
-            reduction.ExecPickler(buf).dump(obj)
-            method = 'getbuffer'
-            if not hasattr(buf, method):
-                method = 'getvalue'
-            self._dump(getattr(buf, method)(),
-                       conn_out, pipe_fdw)
-        elif self.strat == 'pipe':
-            conn_out.dump(obj)
-            pipe_fdw.flush()
-
-        else:
-            raise NotImplementedError('Wrong dump strategy')
-
-    def _dump(self, obj, conn, pipe):
-        pipe.write(obj)
-        pipe.flush()
-
-    def load(self):
-        return self.conn_in.load()
-
-
 if __name__ == '__main__':
 
     import argparse
     parser = argparse.ArgumentParser('Command line parser')
-    parser.add_argument('--pipe', type=int, nargs=2, default=None,
+    parser.add_argument('--pipe', type=int, default=None,
                         help='File handle numbers for the pipe')
     parser.add_argument('--semaphore', type=int, default=None,
                         help='File handle name for the semaphore tracker')
@@ -250,33 +204,26 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     info = dict()
-    w, r = args.pipe
+    r = args.pipe
     if sys.platform == 'win32':
         import msvcrt
-        w = msvcrt.open_osfhandle(w, os.O_WRONLY)
         r = msvcrt.open_osfhandle(r, os.O_RDONLY)
     else:
         semaphore_tracker._semaphore_tracker._fd = args.semaphore
-    chan = CommunicationChannels(w, r, strat=args.strat)
-    info['backend'] = 'pipe'
 
-    try:
+    if sys.version_info[:2] > (3, 3):
         from multiprocessing import context
-        from .process import ExecContext
-        context._concrete_contexts['exec'] = ExecContext()
-    except ImportError:
-        pass
+        from .process import LokyContext
+        context._concrete_contexts['loky'] = LokyContext()
 
     exitcode = 1
     try:
-        prep_data = chan.load()
+        from_parent = os.fdopen(r, 'rb')
+        prep_data = pickle.load(from_parent)
         spawn.prepare(prep_data)
-        process_obj = chan.load()
-        # print('Fd from child:')
-        # os.system('ls -l /proc/{}/fd'.format(os.getpid()))
-        # print('Sem from child:')
-        # os.system('grep shm /proc/{}/maps'.format(os.getpid()))
-        # print('\n')
+        process_obj = pickle.load(from_parent)
+        from_parent.close()
+        from_parent = None
         exitcode = process_obj._bootstrap()
     except Exception as e:
         print('\n\n'+'-'*80)
@@ -286,7 +233,8 @@ if __name__ == '__main__':
         print(traceback.format_exc())
         print('\n'+'-'*80)
     finally:
-        chan.close()
+        if from_parent is not None:
+            from_parent.close()
         util.debug('proper close')
 
         sys.exit(exitcode)

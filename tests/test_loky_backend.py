@@ -9,7 +9,7 @@ import signal
 DELTA = 0.1
 
 
-class TestExec:
+class TestLokyBackend:
     Process = backend.Process
     current_process = staticmethod(multiprocessing.current_process)
     active_children = staticmethod(multiprocessing.active_children)

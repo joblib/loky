@@ -21,18 +21,18 @@ from multiprocessing.util import debug, info, Finalize, register_after_fork,\
     is_exiting
 
 if sys.platform != 'win32':
-    from .reduction import ExecPickler
-    from .popen_exec import is_spawning
+    from .reduction import LokyPickler
+    from .popen_loky import is_spawning
     from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
 else:
     from multiprocessing import Lock, BoundedSemaphore, Semaphore, Condition
 
     if sys.version_info[:2] < (3, 4):
         from multiprocessing.forking import assert_spawning
-        from .reduction import ExecPickler
+        from .reduction import LokyPickler
     else:
         from multiprocessing.context import assert_spawning
-        from multiprocessing.reduction import ForkingPickler as ExecPickler
+        from multiprocessing.reduction import ForkingPickler as LokyPickler
 
     def is_spawning():
         assert_spawning("SimpleQueue")
@@ -131,10 +131,11 @@ class Queue(object):
             finally:
                 self._rlock.release()
         # unserialize the data after having released the lock
-        return ExecPickler.loads(res)
+        return LokyPickler.loads(res)
 
     def qsize(self):
-        # Raises NotImplementedError on Mac OSX because of broken sem_getvalue()
+        # Raises NotImplementedError on Mac OSX because of broken sem
+        # getvalue()
         return self._maxsize - self._sem._semlock._get_value()
 
     def empty(self):
@@ -259,7 +260,7 @@ class Queue(object):
                             return
 
                         # serialize the data before acquiring the lock
-                        obj = ExecPickler.dumps(obj)
+                        obj = LokyPickler.dumps(obj)
                         if wacquire is None:
                             send_bytes(obj)
                         else:
@@ -365,11 +366,11 @@ class SimpleQueue(object):
         with self._rlock:
             res = self._reader.recv_bytes()
         # unserialize the data after having released the lock
-        return ExecPickler.loads(res)
+        return LokyPickler.loads(res)
 
     def put(self, obj):
         # serialize the data before acquiring the lock
-        obj = ExecPickler.dumps(obj)
+        obj = LokyPickler.dumps(obj)
         if self._wlock is None:
             # writes to a message oriented win32 pipe are atomic
             self._writer.send_bytes(obj)

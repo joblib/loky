@@ -27,9 +27,4 @@ def fork_exec(cmd, keep_fds):
         close_fds(keep_fds)
         os.execv(sys.executable, cmd)
     else:
-        return Proc(pid)
-
-
-class Proc:
-    def __init__(self, pid):
-        self.pid = pid
+        return pid
