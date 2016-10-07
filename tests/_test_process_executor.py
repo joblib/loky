@@ -106,34 +106,6 @@ class ExecutorMixin:
             f.result()
 
 
-if sys.version_info[:2] > (3, 3):
-
-    if sys.platform != "win32":
-        class ProcessPoolForkMixin(ExecutorMixin):
-            executor_type = process_executor.ProcessPoolExecutor
-            context = mp.get_context('fork')
-
-        class ProcessPoolForkserverMixin(ExecutorMixin):
-            executor_type = process_executor.ProcessPoolExecutor
-            context = mp.get_context('forkserver')
-
-        class ProcessPoolForkexecMixin(ExecutorMixin):
-            from loky import backend
-            executor_type = process_executor.ProcessPoolExecutor
-            context = mp.get_context('loky')
-
-    class ProcessPoolSpawnMixin(ExecutorMixin):
-        executor_type = process_executor.ProcessPoolExecutor
-        context = mp.get_context('spawn')
-
-else:
-
-    class ProcessPoolForkexecMixin(ExecutorMixin):
-        executor_type = process_executor.ProcessPoolExecutor
-        from loky import backend
-        context = backend
-
-
 class ExecutorShutdownTest:
     def test_run_after_shutdown(self, exit_on_deadlock):
         self.executor.shutdown()
@@ -148,7 +120,7 @@ class ExecutorShutdownTest:
         rc, out, err = assert_python_ok('-c', """if 1:
             from loky.process_executor import {executor_type}
             from time import sleep
-            from tests.test_process_executor import sleep_and_print
+            from tests._test_process_executor import sleep_and_print
             t = {executor_type}(5)
             t.submit(sleep_and_print, 1.0, "apple")
             """.format(executor_type=self.executor_type.__name__))
@@ -194,31 +166,6 @@ class ExecutorShutdownTest:
         queue_management_thread.join()
         for p in processes.values():
             p.join()
-
-
-if sys.version_info[:2] > (3, 3):
-    if sys.platform != "win32":
-        class TestsProcessPoolForkShutdown(ProcessPoolForkMixin,
-                                           ExecutorShutdownTest):
-            def _prime_executor(self):
-                pass
-
-        class TestsProcessPoolForkserverShutdown(ProcessPoolForkserverMixin,
-                                                 ExecutorShutdownTest):
-            def _prime_executor(self):
-                pass
-
-    class TestsProcessPoolSpawnShutdown(ProcessPoolSpawnMixin,
-                                        ExecutorShutdownTest):
-        def _prime_executor(self):
-            pass
-
-
-if sys.platform != "win32":
-    class TestsProcessPoolForkexecShutdown(ProcessPoolForkexecMixin,
-                                           ExecutorShutdownTest):
-        def _prime_executor(self):
-            pass
 
 
 class WaitTests:
@@ -315,24 +262,6 @@ class WaitTests:
         assert set([future2]) == pending
 
 
-if sys.version_info[:2] > (3, 3):
-    if sys.platform != "win32":
-        class TestsProcessPoolForkWait(ProcessPoolForkMixin, WaitTests):
-            pass
-
-        class TestsProcessPoolForkserverWait(ProcessPoolForkserverMixin,
-                                             WaitTests):
-            pass
-
-    class TestsProcessPoolSpawnWait(ProcessPoolSpawnMixin, WaitTests):
-        pass
-
-
-if sys.platform != "win32":
-    class TestsProcessPoolForkexecWait(ProcessPoolForkexecMixin, WaitTests):
-        pass
-
-
 class AsCompletedTests:
     # TODO(brian@sweetapp.com): Should have a test with a non-zero timeout.
     def test_no_timeout(self, exit_on_deadlock):
@@ -370,27 +299,6 @@ class AsCompletedTests:
         future1 = self.executor.submit(time.sleep, .2)
         completed = [f for f in futures.as_completed([future1, future1])]
         assert len(completed) == 1
-
-
-if sys.version_info[:2] > (3, 3):
-    if sys.platform != "win32":
-        class TestsProcessPoolForkAsCompleted(ProcessPoolForkMixin,
-                                              AsCompletedTests):
-            pass
-
-        class TestsProcessPoolForkserverAsCompleted(ProcessPoolForkserverMixin,
-                                                    AsCompletedTests):
-            pass
-
-    class TestsProcessPoolSpawnAsCompleted(ProcessPoolSpawnMixin,
-                                           AsCompletedTests):
-        pass
-
-
-if sys.platform != "win32":
-    class TestsProcessPoolForkexecAsCompleted(ProcessPoolForkexecMixin,
-                                              AsCompletedTests):
-        pass
 
 
 class ExecutorTest:
@@ -501,25 +409,6 @@ class ExecutorTest:
         cause = exc.__cause__
         assert type(cause) is process_executor._RemoteTraceback
         assert 'raise RuntimeError(123)  # some comment' in cause.tb
-
-
-if sys.version_info[:2] > (3, 3):
-    if sys.platform != "win32":
-        class TestsProcessPoolForkExecutor(ProcessPoolForkMixin, ExecutorTest):
-            pass
-
-        class TestsProcessPoolForkserverExecutor(ProcessPoolForkserverMixin,
-                                                 ExecutorTest):
-            pass
-
-    class TestsProcessPoolSpawnExecutor(ProcessPoolSpawnMixin, ExecutorTest):
-        pass
-
-
-if sys.platform != "win32":
-    class TestsProcessPoolForkexecExecutor(ProcessPoolForkexecMixin,
-                                           ExecutorTest):
-        pass
 
 
 class TestsFuture:
