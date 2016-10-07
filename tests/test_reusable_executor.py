@@ -302,7 +302,7 @@ class TestPoolDeadLock:
                 a = res.result()
                 print(a)
         else:
-            assert executor.submit(id, 1).result() == id(1)
+            assert executor.submit(id_sleep, (1, 0.)).result() == 1
 
         # Check that the executor can still be recovered
         executor = get_reusable_executor(max_workers=2)
