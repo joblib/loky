@@ -171,12 +171,6 @@ class Popen(object):
                 method = 'getvalue'
             with os.fdopen(parent_w, 'wb') as f:
                 f.write(getattr(fp, method)())
-            try:
-                os.fstat(parent_w)
-            except OSError:
-                print("\n\n\nOK\n\n")
-            else:
-                raise OSError(1)
             self.pid = pid
         finally:
             if parent_r is not None:

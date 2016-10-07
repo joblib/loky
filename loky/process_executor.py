@@ -765,6 +765,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._call_queue = None
         self._result_queue = None
         self._wakeup_send = None
+        self._wakeup_recv = None
         self._processes = None
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
 

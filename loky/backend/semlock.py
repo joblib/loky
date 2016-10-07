@@ -40,6 +40,10 @@ except ImportError:
         return threading.current_thread().ident
 
 
+if sys.version_info[:2] < (3, 3):
+    FileExistsError = OSError
+
+
 def sem_unlink(name):
     if pthread.sem_unlink(name) < 0:
         raiseFromErrno()
@@ -83,6 +87,14 @@ class SemLock(object):
 
             util.debug('created semlock with handle %s and name %s'
                        % (self.handle, self.name))
+
+    def __del__(self):
+        try:
+            util.debug("closing semaphore named {}".format(self.name))
+            res = pthread.sem_close(self.handle)
+            assert res == 0, "Issue while closing semaphores"
+        except AttributeError:
+            pass
 
     @staticmethod
     def _make_name():

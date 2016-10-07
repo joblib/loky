@@ -38,6 +38,9 @@ except (ImportError):
                       " synchronization primitives needed will not" +
                       " function, see issue 3770.")
 
+if sys.version_info[:2] < (3, 3):
+    FileExistsError = OSError
+
 #
 # Constants
 #

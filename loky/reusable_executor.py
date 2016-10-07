@@ -42,7 +42,7 @@ def get_reusable_executor(max_workers=None, context=None,
         try:
             res.result(timeout=max(2, max_workers/mp.cpu_count()))
         except TimeoutError:
-            print(res.done(), _pool._call_queue.empty(),
+            print('\n'*3, res.done(), _pool._call_queue.empty(),
                   _pool._result_queue.empty())
             print(_pool._processes)
             print(threading.enumerate())

@@ -221,8 +221,7 @@ def is_terminated_properly(executor):
 #         for f in futures:
 #             f.result()
 
-
-class TestPoolDeadLock:
+class TestExecutorDeadLock:
 
     crash_cases = [
                 # Check problem occuring while pickling a task in
@@ -298,9 +297,7 @@ class TestPoolDeadLock:
         # makes sure the callback has finished
         if break_exec:
             with pytest.raises(BrokenExecutor):
-                res = executor.submit(id, 1)
-                a = res.result()
-                print(a)
+                executor.submit(id, 1).result()
         else:
             assert executor.submit(id_sleep, (1, 0.)).result() == 1
 
