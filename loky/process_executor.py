@@ -186,6 +186,10 @@ class _CallItem(object):
         self.args = args
         self.kwargs = kwargs
 
+    def __repr__(self):
+        return "CallItem({}, {}, {}, {})".format(
+            self.work_id, self.fn, self.args, self.kwargs)
+
 
 def _get_chunks(chunksize, *iterables):
     """ Iterates over zip()ed iterables in chunks. """
@@ -503,6 +507,7 @@ def _management_worker(executor_reference, queue_management_thread, processes,
 
 def _shutdown_crash(executor_reference, processes, pending_work_items,
                     call_queue, exc):
+    mp.util.info("shutdown crash")
     executor = executor_reference()
     if executor is not None:
         executor._broken = True

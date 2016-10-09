@@ -139,7 +139,8 @@ def main(fd):
                         if VERBOSE:
                             name = name.decode('ascii')
                             sys.stderr.write("[SemaphoreTracker] unregister {}"
-                                             "\n".format(name))
+                                             ": cache({})\n"
+                                             .format(name, len(cache)))
                             sys.stderr.flush()
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)

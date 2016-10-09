@@ -117,7 +117,7 @@ class SemLock(object):
             h, kind, maxvalue, name = state
             self._semlock = SemLockC(h, kind, maxvalue, name=name)
         else:
-            self._semlock = SemLock._rebuild(*state)
+            self._semlock = SemLockC._rebuild(*state)
         util.debug('recreated blocker with handle %r and name %s'
                    % (state[0], state[3]))
         self._make_methods()

@@ -1,4 +1,3 @@
-from .process_executor import ProcessPoolExecutor
 import multiprocessing as mp
 import threading
 import warnings
@@ -7,12 +6,14 @@ import sys
 import time
 from concurrent.futures import TimeoutError
 
+from .process_executor import ProcessPoolExecutor
+
 __all__ = ['get_reusable_executor']
 
 
 # Protect the queue from being reused in different threads
 _local = threading.local()
-_pool_id_lock = mp.Lock()
+_pool_id_lock = threading.Lock()
 _next_pool_id = 0
 
 
