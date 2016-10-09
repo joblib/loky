@@ -46,7 +46,7 @@ if not mp.util._log_to_stderr:
     import logging
     log = mp.util.log_to_stderr(10)
     log.handlers[0].setFormatter(logging.Formatter(
-        '[%(levelname)s||%(processName)s:%(threadName)s] %(message)s'))
+        '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
 
 
 @pytest.yield_fixture
@@ -182,11 +182,7 @@ class ErrorAtUnpickle(object):
         return raise_error, (UnpicklingError, )
 
 
-def id_sleep(args):
-    try:
-        x, delay = args
-    except TypeError:
-        x, delay = args, 0
+def id_sleep(x, delay=0):
     sleep(delay)
     return x
 
@@ -221,7 +217,15 @@ def is_terminated_properly(executor):
 #         for f in futures:
 #             f.result()
 
+
 class TestExecutorDeadLock:
+
+    # def teardown_method(self, method):
+    #     import gc
+    #     gc.collect()
+    #     sleep(.1)
+    #     print("Existing files files:")
+    #     os.system("lsof -p {} | grep 'pipe\|shm'".format(os.getpid()))
 
     crash_cases = [
                 # Check problem occuring while pickling a task in
@@ -282,7 +286,7 @@ class TestExecutorDeadLock:
 
         # Check that the executor can still be recovered
         executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, (1, 0.)).result() == 1
+        assert executor.submit(id_sleep, 1, 0.).result() == 1
         executor.shutdown(wait=True)
 
     # # @pytest.mark.skipif(True, reason="Known failure")
@@ -290,7 +294,7 @@ class TestExecutorDeadLock:
     def test_callback(self, exit_on_deadlock, func, args, break_exec):
         """Test the recovery from callback crash"""
         executor = get_reusable_executor(max_workers=2)
-        res = executor.submit(id_sleep, (func, 0.1))
+        res = executor.submit(id_sleep, func, 0.1)
         res.add_done_callback(lambda f: f.result()(*args))
         res.result()
 
@@ -299,11 +303,11 @@ class TestExecutorDeadLock:
             with pytest.raises(BrokenExecutor):
                 executor.submit(id, 1).result()
         else:
-            assert executor.submit(id_sleep, (1, 0.)).result() == 1
+            assert executor.submit(id_sleep, 1, 0.).result() == 1
 
         # Check that the executor can still be recovered
         executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, (1, 0.)).result() == 1
+        assert executor.submit(id_sleep, 1, 0.).result() == 1
         executor.shutdown(wait=True)
 
     def test_deadlock_kill(self, exit_on_deadlock):
@@ -316,7 +320,7 @@ class TestExecutorDeadLock:
         sleep(.2)
 
         executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, (1, 0.)).result() == 1
+        assert executor.submit(id_sleep, 1, 0.).result() == 1
         executor.shutdown(wait=True)
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
@@ -364,9 +368,10 @@ class TestExecutorDeadLock:
 class TestTerminateExecutor:
     def test_terminate_kill(self, exit_on_deadlock):
         """Test reusable_executor termination handling"""
+        from itertools import repeat
         executor = get_reusable_executor(max_workers=5)
-        res1 = executor.map(id_sleep, [(i, 0.001) for i in range(50)])
-        res2 = executor.map(id_sleep, [(i, 0.1) for i in range(50)])
+        res1 = executor.map(id_sleep, range(50), repeat(.001))
+        res2 = executor.map(id_sleep, range(50), repeat(.1))
         assert list(res1) == list(range(50))
         # We should get an error as the executor.shutdownd before we fetched
         # the results from the operation.
@@ -444,7 +449,7 @@ class TestResizeExecutor:
         executor.submit(kill_friend, (next(iter(executor._processes.keys())),
                                       .1))
         executor = get_reusable_executor(max_workers=1)
-        assert executor.submit(id_sleep, (1, 0.)).result() == 1
+        assert executor.submit(id_sleep, 1, 0.).result() == 1
         executor.shutdown(wait=True)
 
 
