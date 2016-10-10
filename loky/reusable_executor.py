@@ -16,6 +16,11 @@ _local = threading.local()
 _pool_id_lock = threading.Lock()
 _next_pool_id = 0
 
+CPU_COUNT = mp.cpu_count()
+if os.environ.get("TRAVIS_TESTING", False):
+    import psutil
+    CPU_COUNT = psutil.Process().cpu_affinity()
+
 
 def _get_next_pool_id():
     global _next_pool_id
@@ -41,8 +46,10 @@ def get_reusable_executor(max_workers=None, context=None,
             kill_on_shutdown=kill_on_shutdown, pool_id=pool_id)
         res = _pool.submit(time.sleep, 0.001)
         try:
-            res.result(timeout=max(2, max_workers/mp.cpu_count()))
+            timeout = max(2, max_workers/CPU_COUNT)
+            res.result(timeout=timeout)
         except TimeoutError:
+            print("Timeout: {}".format(timeout))
             print('\n'*3, res.done(), _pool._call_queue.empty(),
                   _pool._result_queue.empty())
             print(_pool._processes)

@@ -1,4 +1,4 @@
-language: python
+# language: python
 # make it explicit that we favor the new container-based travis workers
 sudo: false
 # addons:
@@ -6,7 +6,9 @@ sudo: false
 #     packages:
 #       - python2.7
 
-env: PYTHON="python"
+env:
+  - PYTHON="python"
+  - TRAVIS_TESTING=1
 
 
 matrix:
@@ -23,9 +25,6 @@ matrix:
       osx_image: xcode7.3
       language: generic  # https://github.com/travis-ci/travis-ci/issues/2312
       env: PYTHON="python3"
-  allow_failures:
-    - python: "nightly"
-    - os : osx
 
 
 before_install:
