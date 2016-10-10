@@ -19,7 +19,7 @@ _next_pool_id = 0
 CPU_COUNT = mp.cpu_count()
 if os.environ.get("TRAVIS_TESTING", False):
     import psutil
-    CPU_COUNT = psutil.Process().cpu_affinity()
+    CPU_COUNT = len(psutil.Process().cpu_affinity())
 
 
 def _get_next_pool_id():

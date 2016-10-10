@@ -1,16 +1,11 @@
-# language: python
+language: python
 # make it explicit that we favor the new container-based travis workers
 sudo: false
-# addons:
-#   apt:
-#     packages:
-#       - python2.7
 
 env:
-  - PYTHON="python"
-  - TRAVIS_TESTING=1
-
-
+  global:
+    - PYTHON="python"
+    - TRAVIS_TESTING=1
 matrix:
   include:
     - python: 2.7
