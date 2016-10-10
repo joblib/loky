@@ -9,7 +9,7 @@
 import os
 import sys
 import socket
-from .customizable_pickler import register
+from .reduction import register
 
 # Windows
 if sys.version_info[:2] < (3, 3):
