@@ -4,8 +4,8 @@ import psutil
 import warnings
 from time import sleep, time
 import pytest
-from loky.reusable_executor import get_reusable_executor
-import multiprocessing as mp
+from loky.reusable_executor import get_reusable_executor, CPU_COUNT
+from multiprocessing import util
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from pickle import PicklingError, UnpicklingError
 try:
@@ -25,7 +25,7 @@ except ImportError:
 try:
     from signal import SIGKILL
     # Increase time if the test is perform on a slow machine
-    TIMEOUT = max(20 / mp.cpu_count(), 5)
+    TIMEOUT = max(20 / CPU_COUNT, 5)
 except ImportError:
     from signal import SIGTERM as SIGKILL
     TIMEOUT = 20
@@ -42,9 +42,9 @@ except ImportError:
         pass
 
 # Activate multiprocessing logging
-if not mp.util._log_to_stderr:
+if not util._log_to_stderr:
     import logging
-    log = mp.util.log_to_stderr(10)
+    log = util.log_to_stderr(10)
     log.handlers[0].setFormatter(logging.Formatter(
         '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
 
@@ -96,9 +96,9 @@ def kill_friend(pid, delay=0):
         os.kill(pid, SIGKILL)
     except (PermissionError, ProcessLookupError) as e:
         if psutil.pid_exists(pid):
-            mp.util.debug("Fail to kill an alive process?!?")
+            util.debug("Fail to kill an alive process?!?")
             raise e
-        mp.util.debug("process {} was already dead".format(pid))
+        util.debug("process {} was already dead".format(pid))
 
 
 def raise_error(Err):
@@ -328,7 +328,7 @@ class TestExecutorDeadLock:
         """Test the race conditions in reusable_executor crash handling"""
         # Test for external crash signal comming from neighbor
         # with various race setup
-        mp.util.debug("Test race - # Processes = {}".format(n_proc))
+        util.debug("Test race - # Processes = {}".format(n_proc))
         executor = get_reusable_executor(max_workers=n_proc)
         pids = list(executor._processes.keys())
         assert len(pids) == n_proc

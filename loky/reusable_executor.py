@@ -18,8 +18,9 @@ _next_pool_id = 0
 
 CPU_COUNT = mp.cpu_count()
 if os.environ.get("TRAVIS_TESTING", False):
-    import psutil
-    CPU_COUNT = len(psutil.Process().cpu_affinity())
+    # Hard code number of cpu in travis as cpu_count return 32 whereas we
+    # only access 2 cores.
+    CPU_COUNT = 2
 
 
 def _get_next_pool_id():
