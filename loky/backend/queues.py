@@ -23,7 +23,12 @@ from multiprocessing.util import debug, info, Finalize, register_after_fork,\
 if sys.platform != 'win32':
     from .reduction import LokyPickler
     from .popen_loky import is_spawning
-    from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
+    if sys.version_info[:2] < (3, 4):
+        from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
+    else:
+        from multiprocessing import Lock, BoundedSemaphore, Semaphore,\
+            Condition
+
 else:
     from multiprocessing import Lock, BoundedSemaphore, Semaphore, Condition
 

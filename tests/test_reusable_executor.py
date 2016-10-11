@@ -183,49 +183,17 @@ class ErrorAtUnpickle(object):
 
 
 def id_sleep(x, delay=0):
+    """sleep for delay seconds and return its first argument"""
     sleep(delay)
     return x
 
 
 def is_terminated_properly(executor):
+    """check if an executor was terminated in a proper way"""
     return executor._broken or executor._shutdown_thread
 
 
-# class ReusableExecutorMixin:
-#     worker_count = 5
-
-#     def setup_method(self, method):
-#         self.t1 = time.time()
-#         try:
-#             self.executor = get_reusable_executor(max_workers=2)
-#         except NotImplementedError as e:
-#             self.skipTest(str(e))
-#         self._prime_executor()
-
-#     def teardown_method(self, method):
-#         self.executor.shutdown(wait=True)
-#         dt = time.time() - self.t1
-#         if test.support.verbose:
-#             print("%.2fs" % dt, end=' ')
-#         assert dt < 60, "synchronization issue: test lasted too long"
-
-#     def _prime_executor(self):
-#         # Make sure that the executor is ready to do work before running the
-#         # tests. This should reduce the probability of timeouts in the tests.
-#         futures = [self.executor.submit(time.sleep, 0.1)
-#                    for _ in range(self.worker_count)]
-#         for f in futures:
-#             f.result()
-
-
 class TestExecutorDeadLock:
-
-    # def teardown_method(self, method):
-    #     import gc
-    #     gc.collect()
-    #     sleep(.1)
-    #     print("Existing files files:")
-    #     os.system("lsof -p {} | grep 'pipe\|shm'".format(os.getpid()))
 
     crash_cases = [
                 # Check problem occuring while pickling a task in
@@ -289,7 +257,6 @@ class TestExecutorDeadLock:
         assert executor.submit(id_sleep, 1, 0.).result() == 1
         executor.shutdown(wait=True)
 
-    # # @pytest.mark.skipif(True, reason="Known failure")
     @pytest.mark.parametrize("func, args, break_exec", callback_crash_cases)
     def test_callback(self, exit_on_deadlock, func, args, break_exec):
         """Test the recovery from callback crash"""

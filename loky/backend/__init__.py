@@ -5,8 +5,8 @@ if sys.platform != "win32":
     from .process import PosixLokyProcess as Process
 
     if sys.version_info < (3, 4):
-        from .queues import Queue, SimpleQueue
         from .synchronize import Event
+        from .queues import Queue, SimpleQueue
     else:
         import multiprocessing as mp
         from multiprocessing import Event

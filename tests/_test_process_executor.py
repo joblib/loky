@@ -21,9 +21,9 @@ import threading
 import time
 import pytest
 import weakref
-from concurrent import futures
-from concurrent.futures._base import \
-    PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, Future
+import loky._base as futures
+from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
+                        FINISHED, Future)
 from loky.process_executor import BrokenExecutor
 import multiprocessing as mp
 

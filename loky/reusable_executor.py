@@ -1,11 +1,11 @@
-import multiprocessing as mp
-import threading
-import warnings
 import os
 import sys
 import time
-from concurrent.futures import TimeoutError
+import warnings
+import threading
+import multiprocessing as mp
 
+from ._base import TimeoutError
 from .process_executor import ProcessPoolExecutor
 
 __all__ = ['get_reusable_executor']

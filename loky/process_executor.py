@@ -54,7 +54,7 @@ import weakref
 from functools import partial
 import itertools
 import traceback
-from concurrent.futures import _base
+from . import _base
 from loky.backend.connection import wait
 
 # Compatibility for python2.7
