@@ -17,7 +17,7 @@ _pool_id_lock = threading.Lock()
 _next_pool_id = 0
 
 CPU_COUNT = mp.cpu_count()
-if os.environ.get("TRAVIS_TESTING", False):
+if os.environ.get("TRAVIS_OS_NAME") is not None:
     # Hard code number of cpu in travis as cpu_count return 32 whereas we
     # only access 2 cores.
     CPU_COUNT = 2

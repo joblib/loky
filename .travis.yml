@@ -5,7 +5,6 @@ sudo: false
 env:
   global:
     - PYTHON="python"
-    - TRAVIS_TESTING=1
 matrix:
   include:
     - python: 2.7
@@ -25,7 +24,7 @@ matrix:
 before_install:
   - |
     # Install python using brew on OSX
-    if [[ $TRAVIS_OS_NAME == 'osx' ]]; then
+    if [ $TRAVIS_OS_NAME == 'osx' ] && [ $PYTHON == 'python3' ]; then
       brew update
       brew install $PYTHON
     fi
