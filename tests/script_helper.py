@@ -57,19 +57,7 @@ _PythonRunResult = collections.namedtuple("_PythonRunResult",
 
 # Executing the interpreter in a subprocess
 def run_python_until_end(*args, **env_vars):
-    env_required = interpreter_requires_environment()
-    if '__isolated' in env_vars:
-        isolated = env_vars.pop('__isolated')
-    else:
-        isolated = not env_vars and not env_required
     cmd_line = [sys.executable, '-X', 'faulthandler']
-    if isolated:
-        # isolated mode: ignore Python environment variables, ignore user
-        # site-packages, and don't add the current directory to sys.path
-        cmd_line.append('-I')
-    elif not env_vars and not env_required:
-        # ignore Python environment variables
-        cmd_line.append('-E')
     # Need to preserve the original environment, for in-place testing of
     # shared library builds.
     env = os.environ.copy()
