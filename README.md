@@ -6,7 +6,7 @@ It features:
 
   * __Deadlock free implementation__: one of the major concern in standard `multiprocessing` and `concurrent.futures` libraries is the ability of the `Pool/Executor` to handle crashes. This library intends to fix those possible deadlocks and send back meaningful errors.
   * __Consistent spawn behavior__: All processes are started using fork/exec on POSIX systems. This ensures safer interactions with third party libraries.
-  * __Reusable executor__: strategy to avoid respawning a complete executor every time. A singleton pool can be reused (and dynamically resized if necessary) accross calls. The workers can be shutdown automatically after timeout idle.
+  * __Reusable executor__: strategy to avoid respawning a complete executor every time. A singleton pool can be reused (and dynamically resized if necessary) across consecutive calls to limit spawning and shutdown overhead. The worker processes can be shutdown automatically after a configurable idling timeout to free system resources.
 
 ### Usage
 
