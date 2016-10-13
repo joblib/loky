@@ -1,12 +1,12 @@
-# Reusable Executor  [![Build Status](https://travis-ci.org/tomMoral/loky.svg?branch=master)](https://travis-ci.org/tomMoral/loky) [![Build status](https://ci.appveyor.com/api/projects/status/7jwt6ys4axq4feoj?svg=true)](https://ci.appveyor.com/project/tomMoral/rpool)
+# Reusable Process Pool Executor  [![Build Status](https://travis-ci.org/tomMoral/loky.svg?branch=master)](https://travis-ci.org/tomMoral/loky) [![Build status](https://ci.appveyor.com/api/projects/status/7jwt6ys4axq4feoj?svg=true)](https://ci.appveyor.com/project/tomMoral/rpool)
 
 ### Goal 
 The aim of this project is to provide a robust, cross plateform and cross version implementation of the `ProcessPoolExecutor` of `concurrent.futures`.  
 It features:
 
-  * __Lock free implementation__: one of the major concern in standard `multiprocessing` and `concurrent.futures` libraries is the ability of the `Pool/Executor` to handle crashes. This library intends to fix those possible deadlocks and send back meaningful errors.
-  * __Consistent spawn behavior__: All processes are started using fork/exec. This ensure safer interactions with third party library.
-  * __Reusable executor__: strategy to avoid respawning complete executor every time.The worker can be shutdown automatically after timeout idle.
+  * __Deadlock free implementation__: one of the major concern in standard `multiprocessing` and `concurrent.futures` libraries is the ability of the `Pool/Executor` to handle crashes. This library intends to fix those possible deadlocks and send back meaningful errors.
+  * __Consistent spawn behavior__: All processes are started using fork/exec on POSIX systems. This ensures safer interactions with third party libraries.
+  * __Reusable executor__: strategy to avoid respawning a complete executor every time. A singleton pool can be reused (and dynamically resized if necessary) accross calls. The workers can be shutdown automatically after timeout idle.
 
 ### Usage
 
