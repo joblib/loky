@@ -388,7 +388,7 @@ def _queue_management_worker(executor_reference,
                 ready = wait([reader], timeout=_timeout_poll)
                 if count == 10:
                     count = 0
-                    ready += [p for p in processes if not p.is_alive()]
+                    ready += [p for p in processes.values() if not p.is_alive()]
             else:
                 sentinels = [p.sentinel for p in processes.values()]
                 ready = wait([reader] + sentinels, timeout=_timeout_poll)
