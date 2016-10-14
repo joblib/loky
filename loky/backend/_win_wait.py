@@ -1,8 +1,19 @@
 from time import sleep
+import ctypes
 try:
     from time import monotonic
 except ImportError:
-    from time import time as monotonic
+    # Backward old for crappy old Python that did not have cross-platform
+    # monotonic clock by default.
+
+    # TODO: do we want to add support for cygwin at some point? See:
+    # https://github.com/atdt/monotonic/blob/master/monotonic.py
+    GetTickCount64 = ctypes.windll.kernel32.GetTickCount64
+    GetTickCount64.restype = ctypes.c_ulonglong
+
+    def monotonic():
+        """Monotonic clock, cannot go backward."""
+        return GetTickCount64() / 1000.0
 
 
 def wait(connections, processes, timeout=None):
