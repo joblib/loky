@@ -1,3 +1,6 @@
+""" Windows systems wait compat for python2.7
+"""
+
 from time import sleep
 import ctypes
 try:
@@ -40,5 +43,5 @@ def wait(connections, processes, timeout=None):
         if len(ready) > 0:
             return ready
         sleep(.001)
-        if deadline - monotonic() <= 0:
+        if timeout is not None and deadline - monotonic() <= 0:
             return []
