@@ -367,13 +367,12 @@ class ExecutorTest:
     def test_killed_child(self, exit_on_deadlock):
         # When a child process is abruptly terminated, the whole pool gets
         # "broken".
-        futures = [self.executor.submit(time.sleep, 3)]
+        future = self.executor.submit(time.sleep, 30)
         # Get one of the processes, and terminate (kill) it
         p = next(iter(self.executor._processes.values()))
         p.terminate()
-        for fut in futures:
-            with pytest.raises(BrokenExecutor):
-                fut.result()
+        with pytest.raises(BrokenExecutor):
+            future.result()
         # Submitting other jobs fails as well.
         with pytest.raises(BrokenExecutor):
             self.executor.submit(pow, 2, 8)

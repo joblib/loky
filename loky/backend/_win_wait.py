@@ -36,8 +36,9 @@ def wait(connections, processes, timeout=None):
         count += 1
         if count == 10:
             count = 0
-            if not all([p.is_alive() for p in processes]):
-                return []
+            dead_processes = [p for p in processes if not p.is_alive()]
+            if len(dead_processes) > 0:
+                return dead_processes
         # We cannot use select as in windows it only support sockets
         ready = [c for c in connections if c.poll(0)]
         if len(ready) > 0:
