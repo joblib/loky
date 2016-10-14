@@ -284,7 +284,7 @@ class TestExecutorDeadLock:
         executor = get_reusable_executor(max_workers=2)
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
-        sleep(.2)
+        sleep(.4)
 
         executor = get_reusable_executor(max_workers=2)
         assert executor.submit(id_sleep, 1, 0.).result() == 1
