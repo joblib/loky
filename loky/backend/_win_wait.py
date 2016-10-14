@@ -23,9 +23,9 @@ def wait(connections, processes, timeout=None):
     """Backward compat for python2.7
 
     This function wait for either:
-    * one connections in object_list is ready for read
-    * one process i processes is not alive
-    * timeout is reached. not that this function has a precision of 2msec
+    * one connection is ready for read,
+    * one process has exited or got killed,
+    * timeout is reached. Note that this function has a precision of 2 msec.
     """
     if timeout is not None:
         deadline = monotonic() + timeout
