@@ -381,10 +381,14 @@ def _queue_management_worker(executor_reference,
                                 work_ids_queue,
                                 call_queue)
         # assert sentinels
+        count = 0
         while not wakeup.get_and_unset():
             if sys.platform == "win32" and sys.version_info < (3, 3):
-                ready = wait([reader], processes.values(),
-                             timeout=_timeout_poll)
+                count += 1
+                ready = wait([reader], timeout=_timeout_poll)
+                if count == 10:
+                    count = 0
+                    ready += [p for p in processes if not p.is_alive()]
             else:
                 sentinels = [p.sentinel for p in processes.values()]
                 ready = wait([reader] + sentinels, timeout=_timeout_poll)

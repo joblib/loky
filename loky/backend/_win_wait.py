@@ -19,7 +19,7 @@ except ImportError:
         return GetTickCount64() / 1000.0
 
 
-def wait(connections, processes, timeout=None):
+def wait(connections, timeout=None):
     """Backward compat for python2.7
 
     This function wait for either:
@@ -30,15 +30,7 @@ def wait(connections, processes, timeout=None):
     if timeout is not None:
         deadline = monotonic() + timeout
 
-    count = 0
-    ready = []
     while True:
-        count += 1
-        if count == 10:
-            count = 0
-            dead_processes = [p for p in processes if not p.is_alive()]
-            if len(dead_processes) > 0:
-                return dead_processes
         # We cannot use select as in windows it only support sockets
         ready = [c for c in connections if c.poll(0)]
         if len(ready) > 0:
