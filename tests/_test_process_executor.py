@@ -21,11 +21,14 @@ import threading
 import time
 import pytest
 import weakref
+from math import sqrt
+from collections import defaultdict
+from threading import Thread
+import traceback
 import loky._base as futures
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import BrokenExecutor
-import multiprocessing as mp
 
 
 def create_future(state=PENDING, exception=None, result=None):
@@ -408,3 +411,86 @@ class ExecutorTest:
         cause = exc.__cause__
         assert type(cause) is process_executor._RemoteTraceback
         assert 'raise RuntimeError(123)  # some comment' in cause.tb
+
+    def _test_thread_safety(self, thread_idx, results):
+        try:
+            # submit a mix of very simple tasks with map and submit,
+            # cancel some of them and check the results
+            map_future_1 = self.executor.map(sqrt, range(40), timeout=10)
+            if thread_idx % 2 == 0:
+                # Make it more likely for scheduling threads to overtake one
+                # another
+                time.sleep(0.001)
+            submit_futures = [self.executor.submit(time.sleep, 0.0001)
+                              for i in range(20)]
+            for i, f in enumerate(submit_futures):
+                if i % 2 == 0:
+                    f.cancel()
+            map_future_2 = self.executor.map(sqrt, range(40), timeout=10)
+
+            assert list(map_future_1) == [sqrt(x) for x in range(40)]
+            assert list(map_future_2) == [sqrt(i) for i in range(40)]
+            for i, f in enumerate(submit_futures):
+                if i % 2 == 1 or not f.cancelled():
+                    assert f.result(timeout=10) is None
+            results[thread_idx] = 'ok'
+        except Exception as e:
+            # Ensure that py.test can report the content of the exception
+            results[thread_idx] = traceback.format_exc()
+
+    def test_thread_safety(self, exit_on_deadlock):
+        # Check that our process-pool executor can be shared to schedule work
+        # by concurrent threads
+        threads = []
+        results = [None] * 10
+        for i in range(len(results)):
+            threads.append(Thread(target=self._test_thread_safety,
+                                  args=(i, results)))
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        for result in results:
+            if result != "ok":
+                raise AssertionError(result)
+
+    @classmethod
+    def return_inputs(cls, *args):
+        return args
+
+    def test_submit_from_callback(self):
+        collected = defaultdict(list)
+        executor = self.executor
+
+        def _collect_and_submit_next(future):
+            name, count = future.result()
+            collected[name].append(count)
+            if count > 0:
+                future = executor.submit(self.return_inputs, name, count - 1)
+                future.add_done_callback(_collect_and_submit_next)
+
+        # Start 3 concurrent callbacks chains
+        fa = executor.submit(self.return_inputs, 'chain a', 100)
+        fa.add_done_callback(_collect_and_submit_next)
+        fb = executor.submit(self.return_inputs, 'chain b', 50)
+        fb.add_done_callback(_collect_and_submit_next)
+        fc = executor.submit(self.return_inputs, 'chain c', 60)
+        fc.add_done_callback(_collect_and_submit_next)
+        assert fa.result() == ('chain a', 100)
+        assert fb.result() == ('chain b', 50)
+        assert fc.result() == ('chain c', 60)
+
+        # Wait a maximum of 5s for the asynchronous callback chains to complete
+        patience = 500
+        while True:
+            if (collected['chain a'] == list(range(100, -1, -1)) and
+                    collected['chain b'] == list(range(50, -1, -1)) and
+                    collected['chain c'] == list(range(60, -1, -1))):
+                # the recursive callback chains have completed successfully
+                break
+            elif patience < 0:
+                raise AssertionError("callback submit chains stalled at: %r"
+                                     % collected)
+            else:
+                patience -= 1
+                time.sleep(0.01)
