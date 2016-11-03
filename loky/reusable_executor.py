@@ -11,10 +11,11 @@ from .process_executor import ProcessPoolExecutor
 __all__ = ['get_reusable_executor']
 
 
-# Protect the queue from being reused in different threads
-_local = threading.local()
-_pool_id_lock = threading.Lock()
-_next_pool_id = 0
+# Singleton executor and id management
+_executor_id_lock = threading.Lock()
+_next_executor_id = 0
+_executor = None
+_executor_args = None
 
 CPU_COUNT = mp.cpu_count()
 if os.environ.get("TRAVIS_OS_NAME") is not None:
@@ -23,72 +24,80 @@ if os.environ.get("TRAVIS_OS_NAME") is not None:
     CPU_COUNT = 2
 
 
-def _get_next_pool_id():
-    global _next_pool_id
-    with _pool_id_lock:
-        pool_id = _next_pool_id
-        _next_pool_id += 1
-        return pool_id
+def _get_next_executor_id():
+    """Ensure that each successive executor instance has a unique, monotonic id.
+
+    The purpose of this monotonic id is to help debug and test automated
+    instance creation.
+    """
+    global _next_executor_id
+    with _executor_id_lock:
+        executor_id = _next_executor_id
+        _next_executor_id += 1
+        return executor_id
 
 
 def get_reusable_executor(max_workers=None, context=None,
                           timeout=None, kill_on_shutdown=True):
     """Return a the current ReusablePool. Start a new one if needed"""
-    _pool = getattr(_local, '_pool', None)
-    _args = getattr(_local, '_args', None)
-    if _pool is None:
+    global _executor, _executor_args
+    executor = _executor
+    if executor is None:
         mp.util.debug("Create a pool with size {}.".format(max_workers))
         # assert len(mp.active_children()) == 0
-        pool_id = _get_next_pool_id()
-        _local._args = dict(context=context, timeout=timeout,
-                            kill_on_shutdown=kill_on_shutdown)
-        _local._pool = _pool = ReusablePoolExecutor(
+        pool_id = _get_next_executor_id()
+        _executor_args = dict(context=context, timeout=timeout,
+                              kill_on_shutdown=kill_on_shutdown)
+        _executor = executor = ReusablePoolExecutor(
             max_workers=max_workers, context=context, timeout=timeout,
             kill_on_shutdown=kill_on_shutdown, pool_id=pool_id)
-        res = _pool.submit(time.sleep, 0.001)
+
+        # Submit a small job to make sure that the pool is an working state
+        res = executor.submit(id, None)
         try:
-            timeout = max(2, max_workers/CPU_COUNT)
-            res.result(timeout=timeout)
+            check_task_timeout = max(2, max_workers/CPU_COUNT)
+            res.result(timeout=check_task_timeout)
         except TimeoutError:
-            print("Timeout: {}".format(timeout))
-            print('\n'*3, res.done(), _pool._call_queue.empty(),
-                  _pool._result_queue.empty())
-            print(_pool._processes)
+            print('\n'*3, res.done(), executor._call_queue.empty(),
+                  executor._result_queue.empty())
+            print(executor._processes)
             print(threading.enumerate())
             from faulthandler import dump_traceback
             dump_traceback()
-            _pool.submit(dump_traceback)
-            raise RuntimeError
+            executor.submit(dump_traceback)
+            raise RuntimeError("Failed to issue a simple task to new executor")
     else:
         args = dict(context=context, timeout=timeout,
                     kill_on_shutdown=kill_on_shutdown)
-        if _pool._broken or _pool._shutdown_thread or args != _args:
-            if _pool._broken:
+        if (executor._broken or executor._shutdown_thread
+                or args != _executor_args):
+            if executor._broken:
                 reason = "broken"
-            elif _pool._shutdown_thread:
+            elif executor._shutdown_thread:
                 reason = "shutdown"
             else:
-                reason = "wrong option"
+                reason = "wrong options"
             mp.util.debug("Create a new pool with {} processes as the "
                           "previous one was unusable ({})"
                           .format(max_workers, reason))
-            _pool.shutdown(wait=True)
-            _local._pool = _pool = None
-            _local._args = _args = None
+            executor.shutdown(wait=True)
+            _executor = executor = _executor_args = None
+            # Recursive call to build a new instance
             return get_reusable_executor(max_workers=max_workers, **args)
         else:
-            if _pool._resize(max_workers):
+            if executor._resize(max_workers):
                 mp.util.debug("Resized existing pool to target size {}."
                               .format(max_workers))
-                return _pool
+                return executor
             mp.util.debug("Failed to resize existing pool to target size {}."
                           "".format(max_workers))
-            _pool.shutdown(wait=True)
-            _local._pool = _pool = None
-            _local._args = _args = None
+            # Resizing failed: shutdown the current instance and create a new
+            # instance from scratch.
+            executor.shutdown(wait=True)
+            _executor = executor = _executor_args = None
             return get_reusable_executor(max_workers=max_workers, **args)
 
-    return _pool
+    return executor
 
 
 class ReusablePoolExecutor(ProcessPoolExecutor):

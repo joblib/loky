@@ -389,6 +389,7 @@ class TestResizeExecutor:
         with warnings.catch_warnings(record=True) as w:
             executor = get_reusable_executor(max_workers=1)
             assert len(w) == 1
+            assert "trying to resize a working pool" in str(w[0].message)
             assert res.result(), ("Resize should wait for current processes "
                                   " to finish")
             assert len(executor._processes) == 1
