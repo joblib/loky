@@ -469,20 +469,23 @@ class ExecutorTest:
                 future = executor.submit(self.return_inputs, name, count - 1)
                 future.add_done_callback(_collect_and_submit_next)
 
-        fa = executor.submit(self.return_inputs, 'chain a', 5)
+        # Start 3 concurrent callbacks chains
+        fa = executor.submit(self.return_inputs, 'chain a', 100)
         fa.add_done_callback(_collect_and_submit_next)
-        fb = executor.submit(self.return_inputs, 'chain b', 3)
+        fb = executor.submit(self.return_inputs, 'chain b', 50)
         fb.add_done_callback(_collect_and_submit_next)
-        assert fa.result() == ('chain a', 5)
-        time.sleep(.001)
-        assert 5 in collected['chain a'], collected
-        assert fb.result() == ('chain b', 3)
-        time.sleep(.001)
-        assert 3 in collected['chain b'], collected
+        fc = executor.submit(self.return_inputs, 'chain c', 60)
+        fc.add_done_callback(_collect_and_submit_next)
+        assert fa.result() == ('chain a', 100)
+        assert fb.result() == ('chain b', 50)
+        assert fc.result() == ('chain c', 60)
+
+        # Wait a maximum of 5s for the asynchronous callback chains to complete
         patience = 500
         while True:
-            if (collected['chain a'] == [5, 4, 3, 2, 1, 0] and
-                    collected['chain b'] == [3, 2, 1, 0]):
+            if (collected['chain a'] == list(range(100, -1, -1)) and
+                    collected['chain b'] == list(range(50, -1, -1)) and
+                    collected['chain c'] == list(range(60, -1, -1))):
                 # the recursive callback chains have completed successfully
                 break
             elif patience < 0:
