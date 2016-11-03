@@ -474,9 +474,11 @@ class ExecutorTest:
         fb = executor.submit(self.return_inputs, 'chain b', 3)
         fb.add_done_callback(_collect_and_submit_next)
         assert fa.result() == ('chain a', 5)
-        assert 5 in collected['chain a']
+        time.sleep(.001)
+        assert 5 in collected['chain a'], collected
         assert fb.result() == ('chain b', 3)
-        assert 3 in collected['chain b']
+        time.sleep(.001)
+        assert 3 in collected['chain b'], collected
         patience = 500
         while True:
             if (collected['chain a'] == [5, 4, 3, 2, 1, 0] and
