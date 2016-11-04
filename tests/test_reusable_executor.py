@@ -184,6 +184,14 @@ def is_terminated_properly(executor):
 
 class ReusableExecutorMixin:
 
+    def _check_subprocesses_number(self, executor):
+        # Check that we have only 2 subprocesses (+ the semaphore tracker)
+        children_pids = set(p.pid for p in psutil.Process().children())
+        assert len(children_pids) == 3
+        worker_pids = set(executor._processes.keys())
+        assert len(worker_pids) == 2
+        assert worker_pids.issubset(children_pids)
+
     def setup_method(self, method):
         executor = get_reusable_executor(max_workers=2)
         # Submit a small job to make sure that the pool is an working state
@@ -199,11 +207,13 @@ class ReusableExecutorMixin:
             dump_traceback()
             executor.submit(dump_traceback).result(TIMEOUT)
             raise RuntimeError("Executor took too long to run basic task.")
+        self._check_subprocesses_number(executor)
 
     def teardown_method(self, method):
         """Make sure the executor can be recovered after the tests"""
         executor = get_reusable_executor(max_workers=2)
         assert executor.submit(id_sleep, 1, 0.).result() == 1
+        self._check_subprocesses_number(executor)
 
 
 class TestExecutorDeadLock(ReusableExecutorMixin):
