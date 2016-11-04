@@ -744,7 +744,8 @@ class ProcessPoolExecutor(_base.Executor):
                 is no limit on the wait time.
             chunksize: If greater than one, the iterables will be chopped into
                 chunks of size chunksize and submitted to the process pool.
-                If set to one, the items in the list will be sent one at a time.
+                If set to one, the items in the list will be sent one at a
+                time.
 
         Returns:
             An iterator equivalent to: map(func, *iterables) but the calls may
