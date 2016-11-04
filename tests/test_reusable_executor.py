@@ -5,8 +5,8 @@ import warnings
 from time import sleep, time
 import pytest
 import threading
-from loky.reusable_executor import get_reusable_executor, CPU_COUNT
-from multiprocessing import util
+from loky.reusable_executor import get_reusable_executor
+from multiprocessing import util, cpu_count
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from pickle import PicklingError, UnpicklingError
 try:
@@ -21,6 +21,13 @@ try:
     PICKLING_ERRORS += (cPickle.PicklingError,)
 except ImportError:
     pass
+
+# Compat Travis
+CPU_COUNT = cpu_count()
+if os.environ.get("TRAVIS_OS_NAME") is not None:
+    # Hard code number of cpu in travis as cpu_count return 32 whereas we
+    # only access 2 cores.
+    CPU_COUNT = 2
 
 # Compat windows
 try:
@@ -175,7 +182,31 @@ def is_terminated_properly(executor):
     return executor._broken or executor._shutdown_thread
 
 
-class TestExecutorDeadLock:
+class ReusableExecutorMixin:
+
+    def setup_method(self, method):
+        executor = get_reusable_executor(max_workers=2)
+        # Submit a small job to make sure that the pool is an working state
+        res = executor.submit(id, None)
+        try:
+            res.result(timeout=TIMEOUT)
+        except TimeoutError:
+            print('\n'*3, res.done(), executor._call_queue.empty(),
+                  executor._result_queue.empty())
+            print(executor._processes)
+            print(threading.enumerate())
+            from faulthandler import dump_traceback
+            dump_traceback()
+            executor.submit(dump_traceback).result(TIMEOUT)
+            raise RuntimeError("Executor took too long to run basic task.")
+
+    def teardown_method(self, method):
+        """Make sure the executor can be recovered after the tests"""
+        executor = get_reusable_executor(max_workers=2)
+        assert executor.submit(id_sleep, 1, 0.).result() == 1
+
+
+class TestExecutorDeadLock(ReusableExecutorMixin):
 
     crash_cases = [
         # Check problem occuring while pickling a task in
@@ -208,11 +239,6 @@ class TestExecutorDeadLock:
         with pytest.raises(expected_err):
             res.result()
 
-        # Check that the executor can still be recovered
-        executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, 1, 0.).result() == 1
-        executor.shutdown(wait=True)
-
     @pytest.mark.parametrize("func, args, expected_exc", crash_cases)
     def test_callback(self, exit_on_deadlock, func, args, expected_exc):
         """Test the recovery from callback crash"""
@@ -237,11 +263,6 @@ class TestExecutorDeadLock:
             raise AssertionError('callback not done before timeout')
         with pytest.raises(expected_exc):
             f.callback_future.result()
-
-        # Check that the executor can still be recovered
-        executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, 42, 0.).result() == 42
-        executor.shutdown(wait=True)
 
     def test_callback_crash_on_submit(self, exit_on_deadlock):
         """Errors in the callback execution directly in queue manager thread.
@@ -268,11 +289,6 @@ class TestExecutorDeadLock:
         assert f.result() == 42
         assert executor.submit(id_sleep, 42, 0.).result() == 42
 
-        # Check that the executor can still be recovered
-        executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, 42, 0.).result() == 42
-        executor.shutdown(wait=True)
-
     def test_deadlock_kill(self, exit_on_deadlock):
         """Test deadlock recovery for reusable_executor"""
         executor = get_reusable_executor(max_workers=1)
@@ -281,10 +297,6 @@ class TestExecutorDeadLock:
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
         sleep(.4)
-
-        executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, 1, 0.).result() == 1
-        executor.shutdown(wait=True)
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, exit_on_deadlock, n_proc):
@@ -302,9 +314,6 @@ class TestExecutorDeadLock:
         with pytest.raises(BrokenExecutor):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
-
-        # Clean terminate
-        executor.shutdown(wait=True)
 
     def test_imap_handle_iterable_exception(self, exit_on_deadlock):
         # The catch of the errors in imap generation depend on the
@@ -325,10 +334,8 @@ class TestExecutorDeadLock:
             executor.map(id_sleep, exception_throwing_generator(20, 7),
                          chunksize=4)
 
-        executor.shutdown(wait=True)
 
-
-class TestTerminateExecutor:
+class TestTerminateExecutor(ReusableExecutorMixin):
     def test_terminate_kill(self, exit_on_deadlock):
         """Test reusable_executor termination handling"""
         from itertools import repeat
@@ -353,9 +360,6 @@ class TestTerminateExecutor:
         sleep(.01)
         executor.shutdown(wait=True)
 
-        executor = get_reusable_executor(max_workers=2)
-        executor.shutdown(wait=True)
-
     def test_terminate(self, exit_on_deadlock):
 
         executor = get_reusable_executor(max_workers=4)
@@ -370,7 +374,7 @@ class TestTerminateExecutor:
             list(res)
 
 
-class TestResizeExecutor:
+class TestResizeExecutor(ReusableExecutorMixin):
     def test_reusable_executor_resize(self, exit_on_deadlock):
         """Test reusable_executor resizing"""
 
@@ -404,7 +408,6 @@ class TestResizeExecutor:
         executor = get_reusable_executor(max_workers=2)
         assert len(executor._processes) == 2
         assert old_pid in list(executor._processes.keys())
-        executor.shutdown(wait=True)
 
     def test_kill_after_resize_call(self, exit_on_deadlock):
         """Test recovery if killed after resize call"""
@@ -413,8 +416,7 @@ class TestResizeExecutor:
         executor.submit(kill_friend, (next(iter(executor._processes.keys())),
                                       .1))
         executor = get_reusable_executor(max_workers=1)
-        assert executor.submit(id_sleep, 1, 0.).result() == 1
-        executor.shutdown(wait=True)
+        assert executor.submit(id_sleep, 42, 0.).result() == 42
 
 
 def test_invalid_process_number():
