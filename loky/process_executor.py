@@ -744,7 +744,8 @@ class ProcessPoolExecutor(_base.Executor):
                 is no limit on the wait time.
             chunksize: If greater than one, the iterables will be chopped into
                 chunks of size chunksize and submitted to the process pool.
-                If set to one, the items in the list will be sent one at a time.
+                If set to one, the items in the list will be sent one at a
+                time.
 
         Returns:
             An iterator equivalent to: map(func, *iterables) but the calls may
@@ -766,8 +767,9 @@ class ProcessPoolExecutor(_base.Executor):
         return itertools.chain.from_iterable(results)
 
     def shutdown(self, wait=True):
-        mp.util.debug('shuting down the executor')
+        mp.util.debug('shutting down executor %s' % self)
         if self._kill_on_shutdown:
+            # TODO: implement me!
             pass
         with self._shutdown_lock:
             self._shutdown_thread = True
@@ -784,9 +786,6 @@ class ProcessPoolExecutor(_base.Executor):
             self._call_queue.join_thread()
         if self._processes:
             for p in self._processes.values():
-                if p.is_alive():
-                    raise RuntimeError
-                p.terminate()
                 p.join()
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
@@ -794,7 +793,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._management_thread = None
         self._call_queue = None
         self._result_queue = None
-        self._processes = None
+        self._processes.clear()
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
 
 atexit.register(_python_exit)

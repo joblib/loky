@@ -81,34 +81,6 @@ class MyObject(object):
         pass
 
 
-class ExecutorMixin:
-    worker_count = 5
-
-    def setup_method(self, method):
-        self.t1 = time.time()
-        try:
-            self.executor = self.executor_type(
-                max_workers=self.worker_count, context=self.context,
-                kill_on_shutdown=not hasattr(method, 'wait_on_shutdown'))
-        except NotImplementedError as e:
-            self.skipTest(str(e))
-        self._prime_executor()
-
-    def teardown_method(self, method):
-        self.executor.shutdown(wait=True)
-        dt = time.time() - self.t1
-        print("%.2fs" % dt)
-        assert dt < 60, "synchronization issue: test lasted too long"
-
-    def _prime_executor(self):
-        # Make sure that the executor is ready to do work before running the
-        # tests. This should reduce the probability of timeouts in the tests.
-        futures = [self.executor.submit(time.sleep, 0.1)
-                   for _ in range(self.worker_count)]
-        for f in futures:
-            f.result()
-
-
 class ExecutorShutdownTest:
     def test_run_after_shutdown(self, exit_on_deadlock):
         self.executor.shutdown()
