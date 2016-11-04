@@ -200,10 +200,6 @@ class TestExecutorDeadLock:
         (return_instance, (ErrorAtUnpickle,), UnpicklingError),
     ]
 
-    # # Check problem occuring during function execution on workers
-    # (raise_error, (RuntimeError, ), RuntimeError),
-    # (exit, (), BrokenExecutor),
-
     @pytest.mark.parametrize("func, args, expected_err", crash_cases)
     def test_crashes(self, exit_on_deadlock, func, args, expected_err):
         """Test various reusable_executor crash handling"""
@@ -229,7 +225,11 @@ class TestExecutorDeadLock:
             future.callback_future = future2
             future.callback_done.set()
 
-        f = executor.submit(id_sleep, 42, 0.)
+        # Make sure the first submitted job last a bit to make sure that
+        # the callback will be called in the queue manager thread and not
+        # immediately in the main thread.
+        delay = 0.1
+        f = executor.submit(id_sleep, 42, delay)
         f.callback_done = threading.Event()
         f.add_done_callback(in_callback_submit)
         assert f.result() == 42
@@ -237,6 +237,36 @@ class TestExecutorDeadLock:
             raise AssertionError('callback not done before timeout')
         with pytest.raises(expected_exc):
             f.callback_future.result()
+
+        # Check that the executor can still be recovered
+        executor = get_reusable_executor(max_workers=2)
+        assert executor.submit(id_sleep, 42, 0.).result() == 42
+        executor.shutdown(wait=True)
+
+    def test_callback_crash_on_submit(self, exit_on_deadlock):
+        """Errors in the callback execution directly in queue manager thread.
+
+        This case can break the process executor and we want to make sure
+        that we can detect the issue and recover by calling
+        get_reusable_executor.
+        """
+        executor = get_reusable_executor(max_workers=2)
+
+        # Make sure the first submitted job last a bit to make sure that
+        # the callback will be called in the queue manager thread and not
+        # immediately in the main thread.
+        delay = 0.1
+        f = executor.submit(id_sleep, 42, delay)
+        f.add_done_callback(lambda _: exit())
+        assert f.result() == 42
+        with pytest.raises(BrokenExecutor):
+            executor.submit(id_sleep, 42, 0.1).result()
+
+        executor = get_reusable_executor(max_workers=2)
+        f = executor.submit(id_sleep, 42, delay)
+        f.add_done_callback(lambda _: raise_error())
+        assert f.result() == 42
+        assert executor.submit(id_sleep, 42, 0.).result() == 42
 
         # Check that the executor can still be recovered
         executor = get_reusable_executor(max_workers=2)
