@@ -384,14 +384,16 @@ class TestResizeExecutor(ReusableExecutorMixin):
         # the old one as it is still in a good shape. The resize should not
         # occur while there are on going works.
         pids = list(executor._processes.keys())
-        res = executor.submit(work_sleep, (.3, pids))
+        res1 = executor.submit(work_sleep, (.3, pids))
         warnings.filterwarnings("always", category=UserWarning)
         with warnings.catch_warnings(record=True) as w:
             executor = get_reusable_executor(max_workers=1)
-            assert len(w) == 1
-            assert "trying to resize a working pool" in str(w[0].message)
-            assert res.result(), ("Resize should wait for current processes "
-                                  " to finish")
+            if sys.version_info[:2] != (3, 3):
+                # warnings unreliable in python3.3 so we skip the test
+                assert len(w) == 1
+                assert "trying to resize a working pool" in str(w[0].message)
+            assert res1.result(), ("Resize should wait for current processes "
+                                   " to finish")
             assert len(executor._processes) == 1
             assert next(iter(executor._processes.keys())) in pids
 

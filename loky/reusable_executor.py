@@ -120,7 +120,7 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
                           "".format(self.pool_id))
         # Wait for the completion of the jobs
         while len(self._pending_work_items) > 0:
-            time.sleep(.1)
+            time.sleep(.01)
 
 
 if __name__ == '__main__':
