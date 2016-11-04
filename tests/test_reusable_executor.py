@@ -9,6 +9,7 @@ from loky.reusable_executor import get_reusable_executor
 from multiprocessing import util, cpu_count
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from pickle import PicklingError, UnpicklingError
+from ._executor_mixin import ReusableExecutorMixin, TIMEOUT
 try:
     import numpy as np
 except ImportError:
@@ -22,21 +23,11 @@ try:
 except ImportError:
     pass
 
-# Compat Travis
-CPU_COUNT = cpu_count()
-if os.environ.get("TRAVIS_OS_NAME") is not None:
-    # Hard code number of cpu in travis as cpu_count return 32 whereas we
-    # only access 2 cores.
-    CPU_COUNT = 2
-
 # Compat windows
 try:
     from signal import SIGKILL
-    # Increase time if the test is perform on a slow machine
-    TIMEOUT = max(20 / CPU_COUNT, 5)
 except ImportError:
     from signal import SIGTERM as SIGKILL
-    TIMEOUT = 20
 
 # Compat windows and python2.7
 try:
@@ -180,40 +171,6 @@ def id_sleep(x, delay=0):
 def is_terminated_properly(executor):
     """check if an executor was terminated in a proper way"""
     return executor._broken or executor._shutdown_thread
-
-
-class ReusableExecutorMixin:
-
-    def _check_subprocesses_number(self, executor):
-        # Check that we have only 2 subprocesses (+ the semaphore tracker)
-        children_pids = set(p.pid for p in psutil.Process().children())
-        assert len(children_pids) == 3
-        worker_pids = set(executor._processes.keys())
-        assert len(worker_pids) == 2
-        assert worker_pids.issubset(children_pids)
-
-    def setup_method(self, method):
-        executor = get_reusable_executor(max_workers=2)
-        # Submit a small job to make sure that the pool is an working state
-        res = executor.submit(id, None)
-        try:
-            res.result(timeout=TIMEOUT)
-        except TimeoutError:
-            print('\n'*3, res.done(), executor._call_queue.empty(),
-                  executor._result_queue.empty())
-            print(executor._processes)
-            print(threading.enumerate())
-            from faulthandler import dump_traceback
-            dump_traceback()
-            executor.submit(dump_traceback).result(TIMEOUT)
-            raise RuntimeError("Executor took too long to run basic task.")
-        self._check_subprocesses_number(executor)
-
-    def teardown_method(self, method):
-        """Make sure the executor can be recovered after the tests"""
-        executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, 1, 0.).result() == 1
-        self._check_subprocesses_number(executor)
 
 
 class TestExecutorDeadLock(ReusableExecutorMixin):
