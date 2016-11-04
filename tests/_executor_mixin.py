@@ -1,10 +1,9 @@
 import os
+import sys
 import time
 import math
 import psutil
 import threading
-import multiprocessing as mp
-from pprint import pprint
 
 from loky.reusable_executor import get_reusable_executor
 from multiprocessing import cpu_count
@@ -27,12 +26,9 @@ except ImportError:
 
 def _check_subprocesses_number(executor, expected_process_number):
     # Check that we have only 2 subprocesses (+ the semaphore tracker)
-    children = psutil.Process().children()
-    children_pids = set(p.pid for p in children
+    children_pids = set(p.pid for p in psutil.Process().children()
                         if ("semaphore_tracker" not in " ".join(p.cmdline())
                             and "forkserver" not in "".join(p.cmdline())))
-    pprint([(c.is_running(), c.pid, c.cmdline()) for c in children])
-    print(mp.active_children())
     assert len(children_pids) == expected_process_number
     worker_pids = set(executor._processes.keys())
     assert len(worker_pids) == expected_process_number
@@ -66,7 +62,8 @@ class ExecutorMixin:
         except NotImplementedError as e:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
-        if self.context.get_start_method() != "forkserver":
+        if (sys.version_info < (3, 4)
+                or self.context.get_start_method() != "forkserver"):
             _check_subprocesses_number(self.executor, self.worker_count)
 
     def teardown_method(self, method):
