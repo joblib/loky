@@ -4,6 +4,7 @@ import psutil
 import warnings
 from time import sleep, time
 import pytest
+import threading
 from loky.reusable_executor import get_reusable_executor, CPU_COUNT
 from multiprocessing import util
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
@@ -111,25 +112,6 @@ def return_instance(cls):
     return cls()
 
 
-def start_job(func, args):
-    executor = get_reusable_executor(max_workers=2)
-    try:
-        executor.submit(func, args)
-    except Exception as e:
-        # One should never call join before terminate: if the executor is
-        # broken, (AbortedWorkerError was raised) the cleanup mechanism should
-        # be triggered by the _worker_handler thread. Else we should call
-        # terminate explicitly
-        if not isinstance(e, BrokenExecutor):
-            executor.shutdown(wait=True)
-        raise e
-    finally:
-        # _worker_handler thread is triggered every .1s
-        sleep(.2)
-        executor.shutdown(wait=True)
-    assert is_terminated_properly(executor)
-
-
 class SayWhenError(ValueError):
     pass
 
@@ -196,53 +178,31 @@ def is_terminated_properly(executor):
 class TestExecutorDeadLock:
 
     crash_cases = [
-                # Check problem occuring while pickling a task in
-                (id, (ExitAtPickle(),), BrokenExecutor),
-                (id, (ErrorAtPickle(),), BrokenExecutor),
-                # Check problem occuring while unpickling a task on workers
-                (id, (ExitAtUnpickle(),), BrokenExecutor),
-                (id, (ErrorAtUnpickle(),), BrokenExecutor),
-                (id, (CrashAtUnpickle(),), BrokenExecutor),
-                # Check problem occuring during function execution on workers
-                (crash, (), BrokenExecutor),
-                (exit, (), SystemExit),
-                (raise_error, (RuntimeError,), RuntimeError),
-                # Check problem occuring while pickling a task result
-                # on workers
-                (return_instance, (CrashAtPickle,), BrokenExecutor),
-                (return_instance, (ExitAtPickle,), BrokenExecutor),
-                (return_instance, (ErrorAtPickle,), PicklingError),
-                # Check problem occuring while unpickling a task in
-                # the result_handler thread
-                (return_instance, (ExitAtUnpickle,), BrokenExecutor),
-                (return_instance, (ErrorAtUnpickle,), UnpicklingError),
-    ]
-
-    callback_crash_cases = [
-        # Check problem occuring during function execution on workers
-        # (crash, (), BrokenExecutor),
-        (raise_error, (RuntimeError, ), False),
-        (exit, (), True),
-        (start_job, (id, (ExitAtPickle(),)), False),
-        (start_job, (id, (ErrorAtPickle(),)), False),
+        # Check problem occuring while pickling a task in
+        (id, (ExitAtPickle(),), BrokenExecutor),
+        (id, (ErrorAtPickle(),), BrokenExecutor),
         # Check problem occuring while unpickling a task on workers
-        (start_job, (id, (ExitAtUnpickle(),)), False),
-        (start_job, (id, (ErrorAtUnpickle(),)), False),
-        (start_job, (id, (CrashAtUnpickle(),)), False),
+        (id, (ExitAtUnpickle(),), BrokenExecutor),
+        (id, (ErrorAtUnpickle(),), BrokenExecutor),
+        (id, (CrashAtUnpickle(),), BrokenExecutor),
         # Check problem occuring during function execution on workers
-        (start_job, (crash, ()), False),
-        (start_job, (exit, ()), False),
-        (start_job, (raise_error, (RuntimeError, )), False),
-        # Check problem occuring while pickling a task
-        # result on workers
-        (start_job, (return_instance, (CrashAtPickle,)), False),
-        (start_job, (return_instance, (ExitAtPickle,)), False),
-        (start_job, (return_instance, (ErrorAtPickle,)), False),
+        (crash, (), BrokenExecutor),
+        (exit, (), SystemExit),
+        (raise_error, (RuntimeError,), RuntimeError),
+        # Check problem occuring while pickling a task result
+        # on workers
+        (return_instance, (CrashAtPickle,), BrokenExecutor),
+        (return_instance, (ExitAtPickle,), BrokenExecutor),
+        (return_instance, (ErrorAtPickle,), PicklingError),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
-        (start_job, (return_instance, (ExitAtUnpickle,)), False),
-        (start_job, (return_instance, (ErrorAtUnpickle,)), False),
+        (return_instance, (ExitAtUnpickle,), BrokenExecutor),
+        (return_instance, (ErrorAtUnpickle,), UnpicklingError),
     ]
+
+    # # Check problem occuring during function execution on workers
+    # (raise_error, (RuntimeError, ), RuntimeError),
+    # (exit, (), BrokenExecutor),
 
     @pytest.mark.parametrize("func, args, expected_err", crash_cases)
     def test_crashes(self, exit_on_deadlock, func, args, expected_err):
@@ -257,24 +217,30 @@ class TestExecutorDeadLock:
         assert executor.submit(id_sleep, 1, 0.).result() == 1
         executor.shutdown(wait=True)
 
-    @pytest.mark.parametrize("func, args, break_exec", callback_crash_cases)
-    def test_callback(self, exit_on_deadlock, func, args, break_exec):
+    @pytest.mark.parametrize("func, args, expected_exc", crash_cases)
+    def test_callback(self, exit_on_deadlock, func, args, expected_exc):
         """Test the recovery from callback crash"""
         executor = get_reusable_executor(max_workers=2)
-        res = executor.submit(id_sleep, func, 0.1)
-        res.add_done_callback(lambda f: f.result()(*args))
-        res.result()
 
-        # makes sure the callback has finished
-        if break_exec:
-            with pytest.raises(BrokenExecutor):
-                executor.submit(id, 1).result()
-        else:
-            assert executor.submit(id_sleep, 1, 0.).result() == 1
+        def in_callback_submit(future):
+            future2 = get_reusable_executor(max_workers=2).submit(func, *args)
+            # Store the future of the job submitted in the callback to make it
+            # easy to introspect.
+            future.callback_future = future2
+            future.callback_done.set()
+
+        f = executor.submit(id_sleep, 42, 0.)
+        f.callback_done = threading.Event()
+        f.add_done_callback(in_callback_submit)
+        assert f.result() == 42
+        if not f.callback_done.wait(timeout=3):
+            raise AssertionError('callback not done before timeout')
+        with pytest.raises(expected_exc):
+            f.callback_future.result()
 
         # Check that the executor can still be recovered
         executor = get_reusable_executor(max_workers=2)
-        assert executor.submit(id_sleep, 1, 0.).result() == 1
+        assert executor.submit(id_sleep, 42, 0.).result() == 42
         executor.shutdown(wait=True)
 
     def test_deadlock_kill(self, exit_on_deadlock):

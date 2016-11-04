@@ -766,8 +766,9 @@ class ProcessPoolExecutor(_base.Executor):
         return itertools.chain.from_iterable(results)
 
     def shutdown(self, wait=True):
-        mp.util.debug('shuting down the executor')
+        mp.util.debug('shutting down executor %s' % self)
         if self._kill_on_shutdown:
+            # TODO: implement me!
             pass
         with self._shutdown_lock:
             self._shutdown_thread = True
@@ -784,9 +785,6 @@ class ProcessPoolExecutor(_base.Executor):
             self._call_queue.join_thread()
         if self._processes:
             for p in self._processes.values():
-                if p.is_alive():
-                    raise RuntimeError
-                p.terminate()
                 p.join()
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
