@@ -6,7 +6,7 @@ from time import sleep, time
 import pytest
 import threading
 from loky.reusable_executor import get_reusable_executor
-from multiprocessing import util, cpu_count
+from multiprocessing import util
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from pickle import PicklingError, UnpicklingError
 from ._executor_mixin import ReusableExecutorMixin, TIMEOUT
@@ -349,7 +349,8 @@ class TestResizeExecutor(ReusableExecutorMixin):
             if sys.version_info[:2] != (3, 3):
                 # warnings unreliable in python3.3 so we skip the test
                 assert len(w) == 1
-                assert "trying to resize a working pool" in str(w[0].message)
+                expected_msg = "Trying to resize an executor with running jobs"
+                assert expected_msg in str(w[0].message)
             assert res1.result(), ("Resize should wait for current processes "
                                    " to finish")
             assert len(executor._processes) == 1
