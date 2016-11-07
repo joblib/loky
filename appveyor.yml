@@ -40,5 +40,6 @@ test_script:
   # Archive the generated wheel package in the ci.appveyor.com build report.
   #- path: dist\*
 
-#on_success:
-#  - TODO: upload the content of dist/*.whl to a public wheelhouse
+on_success:
+  - "pip install codecov"
+  - "codecov"
