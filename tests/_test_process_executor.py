@@ -392,9 +392,14 @@ class ExecutorTest:
                 if i % 2 == 1 or not f.cancelled():
                     assert f.result(timeout=10) is None
             results[thread_idx] = 'ok'
-        except Exception as e:
+        except Exception:
             # Ensure that py.test can report the content of the exception
             results[thread_idx] = traceback.format_exc()
+
+#
+# The following tests are new additions to the test suite originally backported
+# from the Python 3 concurrent.futures package.
+#
 
     def test_thread_safety(self):
         # Check that our process-pool executor can be shared to schedule work
