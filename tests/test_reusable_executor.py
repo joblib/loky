@@ -263,7 +263,17 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=2)
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
-        sleep(.4)
+
+        # wait for the executor to be able to detect the issue and set itself
+        # in broken state:
+        sleep(.5)
+        with pytest.raises(BrokenExecutor):
+            executor.submit(id_sleep, 42, 0.1).result()
+
+        # the get_reusable_executor factory should be able to create a new
+        # working instance
+        executor = get_reusable_executor(max_workers=2)
+        assert executor.submit(id_sleep, 42, 0.).result() == 42
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, exit_on_deadlock, n_proc):
