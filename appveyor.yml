@@ -41,5 +41,6 @@ test_script:
   #- path: dist\*
 
 on_success:
-  - "pip install codecov"
+  - "pip install coverage codecov"
+  - "coverage combine"
   - "codecov"
