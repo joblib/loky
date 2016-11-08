@@ -11,9 +11,12 @@ AUXFILE=.aux$ver
 DEADLOCK=.exit_on_lock
 
 $PYTHON --version
-coverage run --parallel-mode -m pytest -vs 2>$AUXFILE
-coverage combine
+
+# Run the tests and collect trace coverage data both in the subprocesses
+# and its subprocesses.
+COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" py.test -vs 2>$AUXFILE
 res_test=$?
+coverage combine
 [ $res_test -ne 0 ] &&cat $AUXFILE
 [ -e "$DEADLOCK" ] && cat $DEADLOCK
 rm $AUXFILE

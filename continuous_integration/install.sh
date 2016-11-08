@@ -26,4 +26,6 @@ $PIP install psutil pytest coverage codecov
 [ $ver -lt 33 ] && $PIP install faulthandler
 [ $ver -lt 33 ] && $PIP install futures
 
+# Install support for test coverage reporting for code executed in subprocesses
+$PYTHON continuous_integration/install_coverage_subprocess_pth.py
 $PYTHON setup.py develop
