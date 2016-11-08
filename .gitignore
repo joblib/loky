@@ -10,3 +10,4 @@ __pycache__
 
 # Extra files
 /build
+/htmlcov
