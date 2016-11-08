@@ -41,6 +41,7 @@ test_script:
   #- path: dist\*
 
 on_success:
+  # Each toxenv will append its own coverage data to the toplevel
+  # .coverage file which is then converted to XML for uploading by codecov
   - "pip install coverage codecov"
-  - "coverage combine"
   - "codecov"

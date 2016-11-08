@@ -16,7 +16,7 @@ echo "Testing for python $ver"
 # with built-in openblas under linux
 $PIP install --upgrade pip
 $PIP uninstall -y numpy || echo "numpy not previously installed"
-$PIP install psutil pytest pytest-cov codecov
+$PIP install psutil pytest coverage codecov
 
 # numpy is not available as wheel in Python 3.3 or Python 3.6
 [ $ver -lt 33 ] && $PIP install numpy
