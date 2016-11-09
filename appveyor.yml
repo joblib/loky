@@ -19,26 +19,13 @@ install:
   # not already installed.
   - ps: ./continuous_integration/appveyor/install.ps1
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
-
-  # Install the build and runtime dependencies of the project.
-  - "pip install --trusted-host 28daf2247a33ed269873-7b1aad3fab3cc330e1fd9d109892382a.r6.cf2.rackcdn.com -r continuous_integration/appveyor/requirements.txt"
-  #- ps: "ls dist"
-
-  # Install the genreated wheel package to test it
-  #- "pip install --pre --no-index --find-links dist/ Rpool"
+  - "pip install tox"
 
 # Not a .NET project, we build in the install step instead
 build: false
 
 test_script:
-  # Change to a non-source folder to make sure we run the tests on the
-  # installed library.
-  #- "python continuous_integration/appveyor/tox"
-  - powershell ./continuous_integration/appveyor/test_script.ps1
-
-#artifacts:
-  # Archive the generated wheel package in the ci.appveyor.com build report.
-  #- path: dist\*
+  - powershell ./continuous_integration/appveyor/runtests.ps1
 
 on_success:
   # Each toxenv will append its own coverage data to the toplevel
