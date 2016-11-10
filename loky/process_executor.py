@@ -243,8 +243,8 @@ def _process_worker(call_queue, result_queue, timeout=None):
             evaluated by the worker.
         result_queue: A multiprocessing.Queue of _ResultItems that will written
             to by the worker.
-        shutdown: A multiprocessing.Event that will be set as a signal to the
-            worker that it should exit when call_queue is empty.
+        timeout: maximum time to wait for a new item in the call_queue. If that
+            time is expired, the worker will shutdown.
     """
     mp.util.debug('worker started')
     while True:
@@ -354,54 +354,59 @@ def _queue_management_worker(executor_reference,
     def shutting_down():
         return _shutdown or executor is None or executor._shutdown_thread
 
-    def shutdown_worker():
+    def shutdown_all_workers():
         # This is an upper bound
         nb_children_alive = sum(p.is_alive() for p in processes.values())
         try:
             for i in range(0, nb_children_alive):
                 call_queue.put_nowait(None)
-        except (queue.Full, AssertionError):
+        except (Full, AssertionError):
             pass
         # Release the queue's resources as soon as possible.
         call_queue.close()
+
         # If .join() is not called on the created processes then
         # some multiprocessing.Queue methods may deadlock on Mac OS X.
-
         for p in processes.values():
             p.join()
-        mp.util.debug("queue management thread managed: {}"
+        mp.util.debug("queue management thread shutdown worker processes: {}"
                       .format(processes))
 
-    reader = result_queue._reader
+    result_reader = result_queue._reader
+    _poll_timeout = .001
 
-    _timeout_poll = .001
     while True:
         _add_call_item_to_queue(pending_work_items,
                                 running_work_items,
                                 work_ids_queue,
                                 call_queue)
-        # assert sentinels
+        # Wait for a result to be ready in the result_queue while checking
+        # that worker process are still running. If a worker process
         count = 0
         while not wakeup.get_and_unset():
             if sys.platform == "win32" and sys.version_info < (3, 3):
+                # Process objects do not have a builtin sentinel attribute that
+                # can be passed directly to the 'wait' function (which does a
+                # 'select' under the hood). Instead we check for dead processes
+                # manually from time to time.
                 count += 1
-                ready = wait([reader], timeout=_timeout_poll)
+                ready = wait([result_reader], timeout=_poll_timeout)
                 if count == 10:
                     count = 0
-                    ready += [p for p in processes.values() if not p.is_alive()]
+                    ready += [p for p in processes.values()
+                              if not p.is_alive()]
             else:
-                sentinels = [p.sentinel for p in processes.values()]
-                ready = wait([reader] + sentinels, timeout=_timeout_poll)
+                worker_sentinels = [p.sentinel for p in processes.values()]
+                ready = wait([result_reader] + worker_sentinels,
+                             timeout=_poll_timeout)
             if len(ready) > 0:
                 break
         else:
             ready = []
             result_item = None
-        # broken = not call_queue._thread.is_alive()
-        # broken |= any([p.exitcode for p in processes.values()])
-        if reader in ready:
+        if result_reader in ready:
             try:
-                result_item = reader.recv()
+                result_item = result_reader.recv()
             except Exception as exc:
                 result_item = None
                 for work_id in running_work_items:
@@ -435,17 +440,14 @@ def _queue_management_worker(executor_reference,
                     p.terminate()
                 except ProcessLookupError:
                     pass
-            shutdown_worker()
+            shutdown_all_workers()
             return
         if isinstance(result_item, int):
-            # Clean shutdown of a worker using its PID
-            # (avoids marking the executor broken)
-            assert shutting_down()
+            # Clean shutdown of a worker using its PID, either on request
+            # by the executor.shutdown method or by the timeout of the worker
+            # itself: we should not mark the executor as broken.
             p = processes.pop(result_item)
             p.join()
-            # if not processes:
-            #     shutdown_worker()
-            #     return
         elif result_item is not None:
             work_item = pending_work_items.pop(result_item.work_id, None)
             # work_item can be None if another process terminated
@@ -475,18 +477,13 @@ def _queue_management_worker(executor_reference,
                 # locks may be in a dirty state and block forever.
                 for p in processes.values():
                     p.terminate()
-                shutdown_worker()
+                shutdown_all_workers()
                 return
-            try:
-                # Since no new work items can be added, it is safe to shutdown
-                # this thread if there are no pending work items.
-                if not pending_work_items:
-                    shutdown_worker()
-                    return
-            except Full:
-                # This is not a problem: we will eventually be woken up (in
-                # result_queue.get()) and be able to send a sentinel again.
-                pass
+            # Since no new work items can be added, it is safe to shutdown
+            # this thread if there are no pending work items.
+            if not pending_work_items:
+                shutdown_all_workers()
+                return
         executor = None
 
 
@@ -519,8 +516,8 @@ def _management_worker(executor_reference, queue_management_thread, processes,
             _shutdown_crash(executor_reference, processes, pending_work_items,
                             call_queue, BrokenExecutor(
                                 "The QueueFeederThread was terminated abruptly"
-                                " while feeding a new job. This is due to a "
-                                "job pickling error."
+                                " while feeding a new job. This can be due to "
+                                "a job pickling error."
                             ))
             return
         executor = executor_reference()

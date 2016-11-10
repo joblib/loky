@@ -1,3 +1,5 @@
+from __future__ import print_function
+import psutil
 try:
     import test.support
 
@@ -457,3 +459,65 @@ class ExecutorTest:
             else:
                 patience -= 1
                 time.sleep(0.01)
+
+    @classmethod
+    def check_no_running_workers(cls, patience=5, sleep_duration=0.01):
+        deadline = time.time() + patience
+
+        def _running_children_with_cmdline(p):
+            children_with_cmdline = []
+            for c in p.children():
+                try:
+                    if not c.is_running():
+                        continue
+                    cmdline = " ".join(c.cmdline())
+                    children_with_cmdline.append((c, cmdline))
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            return children_with_cmdline
+
+        while time.time() <= deadline:
+            time.sleep(sleep_duration)
+            p = psutil.Process()
+            all_children = _running_children_with_cmdline(p)
+            workers = [(c, cmdline) for c, cmdline in all_children
+                       if (u'semaphore_tracker' not in cmdline and
+                           u'multiprocessing.forkserver' not in cmdline)]
+
+            forkservers = [c for c, cmdline in all_children
+                           if u'multiprocessing.forkserver' in cmdline]
+            for fs in forkservers:
+                workers.extend(_running_children_with_cmdline(fs))
+            if len(workers) == 0:
+                return
+
+        # Patience exhausted: log the remaining workers command line and
+        # raise error.
+        print("Remaining worker processes command lines:", file=sys.stderr)
+        for w, cmdline in workers:
+            print(cmdline, end='\n\n', file=sys.stderr)
+        raise AssertionError(
+            'Expected no more running worker processes but got %d after'
+            ' waiting %0.3fs.'
+            % (len(workers), patience))
+
+    def test_worker_timeout(self):
+        self.executor.shutdown(wait=True)
+        self.check_no_running_workers(patience=5)
+        try:
+            self.executor = self.executor_type(
+                max_workers=4, context=self.context, timeout=0.01)
+        except NotImplementedError as e:
+            self.skipTest(str(e))
+
+        for i in range(5):
+            # Trigger worker spawn for lazy executor implementations
+            for result in self.executor.map(id, range(8)):
+                pass
+
+            # Check that all workers shutdown (via timeout) when waiting a bit:
+            # note that the effictive time for Python process to completely
+            # shutdown can vary a lot especially on loaded CI machines with and
+            # the atexit callbacks that writes test coverage data to disk.
+            # Let's be patient.
+            self.check_no_running_workers(patience=5)
