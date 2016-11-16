@@ -1,6 +1,5 @@
 [run]
 branch = True
-concurrency = multiprocessing
 parallel = True
 source =
     loky
