@@ -29,31 +29,12 @@ try:
 except ImportError:
     from signal import SIGTERM as SIGKILL
 
-# Compat windows and python2.7
-try:
-    from faulthandler import dump_traceback_later
-    from faulthandler import cancel_dump_traceback_later
-except ImportError:
-    def dump_traceback_later(timeout=None, exit=None, file=None):
-        pass
-
-    def cancel_dump_traceback_later():
-        pass
-
 # Activate multiprocessing logging
 if not util._log_to_stderr:
     import logging
     log = util.log_to_stderr(10)
     log.handlers[0].setFormatter(logging.Formatter(
         '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
-
-
-@pytest.yield_fixture
-def exit_on_deadlock():
-    from sys import stderr
-    dump_traceback_later(timeout=TIMEOUT, exit=True, file=stderr)
-    yield
-    cancel_dump_traceback_later()
 
 
 def wait_dead(worker, n_tries=1000, delay=0.001):
@@ -199,7 +180,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
     ]
 
     @pytest.mark.parametrize("func, args, expected_err", crash_cases)
-    def test_crashes(self, exit_on_deadlock, func, args, expected_err):
+    def test_crashes(self, func, args, expected_err):
         """Test various reusable_executor crash handling"""
         executor = get_reusable_executor(max_workers=2)
         res = executor.submit(func, *args)
@@ -207,7 +188,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
             res.result()
 
     @pytest.mark.parametrize("func, args, expected_exc", crash_cases)
-    def test_callback(self, exit_on_deadlock, func, args, expected_exc):
+    def test_callback(self, func, args, expected_exc):
         """Test the recovery from callback crash"""
         executor = get_reusable_executor(max_workers=2)
 
@@ -231,7 +212,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         with pytest.raises(expected_exc):
             f.callback_future.result()
 
-    def test_callback_crash_on_submit(self, exit_on_deadlock):
+    def test_callback_crash_on_submit(self):
         """Errors in the callback execution directly in queue manager thread.
 
         This case can break the process executor and we want to make sure
@@ -256,7 +237,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         assert f.result() == 42
         assert executor.submit(id_sleep, 42, 0.).result() == 42
 
-    def test_deadlock_kill(self, exit_on_deadlock):
+    def test_deadlock_kill(self):
         """Test deadlock recovery for reusable_executor"""
         executor = get_reusable_executor(max_workers=1)
         worker = next(iter(executor._processes.values()))
@@ -276,7 +257,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         assert executor.submit(id_sleep, 42, 0.).result() == 42
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
-    def test_crash_races(self, exit_on_deadlock, n_proc):
+    def test_crash_races(self, n_proc):
         """Test the race conditions in reusable_executor crash handling"""
         # Test for external crash signal comming from neighbor
         # with various race setup
@@ -292,7 +273,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
-    def test_imap_handle_iterable_exception(self, exit_on_deadlock):
+    def test_imap_handle_iterable_exception(self):
         # The catch of the errors in imap generation depend on the
         # builded version of python
         executor = get_reusable_executor(max_workers=2)
@@ -313,7 +294,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):
-    def test_terminate_kill(self, exit_on_deadlock):
+    def test_terminate_kill(self):
         """Test reusable_executor termination handling"""
         from itertools import repeat
         executor = get_reusable_executor(max_workers=5)
@@ -328,7 +309,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         with pytest.raises(ShutdownExecutor):
             list(res2)
 
-    def test_terminate_deadlock(self, exit_on_deadlock):
+    def test_terminate_deadlock(self):
         """Test recovery if killed after resize call"""
         # Test the executor.shutdown call do not cause deadlock
         executor = get_reusable_executor(max_workers=2)
@@ -337,7 +318,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         sleep(.01)
         executor.shutdown(wait=True)
 
-    def test_terminate(self, exit_on_deadlock):
+    def test_terminate(self):
 
         executor = get_reusable_executor(max_workers=4)
         res = executor.map(
@@ -352,7 +333,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
 
 class TestResizeExecutor(ReusableExecutorMixin):
-    def test_reusable_executor_resize(self, exit_on_deadlock):
+    def test_reusable_executor_resize(self):
         """Test reusable_executor resizing"""
 
         executor = get_reusable_executor(max_workers=2)
@@ -388,7 +369,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
         assert len(executor._processes) == 2
         assert old_pid in list(executor._processes.keys())
 
-    def test_kill_after_resize_call(self, exit_on_deadlock):
+    def test_kill_after_resize_call(self):
         """Test recovery if killed after resize call"""
         # Test the executor resizing called before a kill arrive
         executor = get_reusable_executor(max_workers=2)
@@ -409,7 +390,7 @@ def test_invalid_process_number():
 
 
 @pytest.mark.skipif(np is None, reason="requires numpy")
-def test_osx_accelerate_freeze(exit_on_deadlock):
+def test_osx_accelerate_freeze():
     """Test no freeze on OSX with Accelerate"""
     a = np.random.randn(1000, 1000)
     np.dot(a, a)

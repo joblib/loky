@@ -3,7 +3,6 @@ import multiprocessing as mp
 
 from loky import process_executor
 from ._executor_mixin import ExecutorMixin
-from ._test_process_executor import exit_on_deadlock  # noqa
 
 
 if sys.version_info[:2] > (3, 3) and sys.platform != "win32":

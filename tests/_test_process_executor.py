@@ -39,20 +39,6 @@ def create_future(state=PENDING, exception=None, result=None):
     return f
 
 
-@pytest.yield_fixture
-def exit_on_deadlock():
-    try:
-        TIMEOUT = 5
-        from faulthandler import dump_traceback_later
-        from faulthandler import cancel_dump_traceback_later
-        from sys import stderr
-        dump_traceback_later(timeout=TIMEOUT, exit=True, file=stderr)
-        yield
-        cancel_dump_traceback_later()
-    except ImportError:
-        yield
-
-
 PENDING_FUTURE = create_future(state=PENDING)
 RUNNING_FUTURE = create_future(state=RUNNING)
 CANCELLED_FUTURE = create_future(state=CANCELLED)
@@ -82,14 +68,14 @@ class MyObject(object):
 
 
 class ExecutorShutdownTest:
-    def test_run_after_shutdown(self, exit_on_deadlock):
+    def test_run_after_shutdown(self):
         self.executor.shutdown()
         with pytest.raises(RuntimeError):
             self.executor.submit(pow, 2, 5)
 
     @pytest.mark.skipif(sys.version_info < (3, 4),
                         reason="requires python>3.4")
-    def test_interpreter_shutdown(self, exit_on_deadlock):
+    def test_interpreter_shutdown(self):
         from .script_helper import assert_python_ok
         # Test the atexit hook for shutdown of worker threads and processes
         rc, out, err = assert_python_ok('-c', """if 1:
@@ -105,13 +91,13 @@ class ExecutorShutdownTest:
         assert out.strip() == b"apple"
 
     @pytest.mark.wait_on_shutdown
-    def test_hang_issue12364(self, exit_on_deadlock):
+    def test_hang_issue12364(self):
         fs = [self.executor.submit(time.sleep, 0.1) for _ in range(50)]
         self.executor.shutdown()
         for f in fs:
             f.result()
 
-    def test_processes_terminate(self, exit_on_deadlock):
+    def test_processes_terminate(self):
         self.executor.submit(mul, 21, 2)
         self.executor.submit(mul, 6, 7)
         self.executor.submit(mul, 3, 14)
@@ -122,7 +108,7 @@ class ExecutorShutdownTest:
         for p in processes.values():
             p.join()
 
-    def test_context_manager_shutdown(self, exit_on_deadlock):
+    def test_context_manager_shutdown(self):
         with process_executor.ProcessPoolExecutor(max_workers=5) as e:
             processes = e._processes
             assert list(e.map(abs, range(-5, 5))) == \
@@ -131,7 +117,7 @@ class ExecutorShutdownTest:
         for p in processes.values():
             p.join()
 
-    def test_del_shutdown(self, exit_on_deadlock):
+    def test_del_shutdown(self):
         executor = process_executor.ProcessPoolExecutor(max_workers=5)
         list(executor.map(abs, range(-5, 5)))
         queue_management_thread = executor._queue_management_thread
@@ -145,7 +131,7 @@ class ExecutorShutdownTest:
 
 class WaitTests:
 
-    def test_first_completed(self, exit_on_deadlock):
+    def test_first_completed(self):
         future1 = self.executor.submit(mul, 21, 2)
         future2 = self.executor.submit(time.sleep, 1.5)
 
@@ -156,7 +142,7 @@ class WaitTests:
         assert set([future1]) == done
         assert set([CANCELLED_FUTURE, future2]) == not_done
 
-    def test_first_completed_some_already_completed(self, exit_on_deadlock):
+    def test_first_completed_some_already_completed(self):
         future1 = self.executor.submit(time.sleep, 1.5)
 
         finished, pending = futures.wait(
@@ -167,7 +153,7 @@ class WaitTests:
                 finished)
         assert set([future1]) == pending
 
-    def test_first_exception(self, exit_on_deadlock):
+    def test_first_exception(self):
         future1 = self.executor.submit(mul, 2, 21)
         future2 = self.executor.submit(sleep_and_raise, 1.5)
         future3 = self.executor.submit(time.sleep, 3)
@@ -179,7 +165,7 @@ class WaitTests:
         assert set([future1, future2]) == finished
         assert set([future3]) == pending
 
-    def test_first_exception_some_already_complete(self, exit_on_deadlock):
+    def test_first_exception_some_already_complete(self):
         future1 = self.executor.submit(divmod, 21, 0)
         future2 = self.executor.submit(time.sleep, 1.5)
 
@@ -194,7 +180,7 @@ class WaitTests:
                     future1]) == finished
         assert set([CANCELLED_FUTURE, future2]) == pending
 
-    def test_first_exception_one_already_failed(self, exit_on_deadlock):
+    def test_first_exception_one_already_failed(self):
         future1 = self.executor.submit(time.sleep, 2)
 
         finished, pending = futures.wait(
@@ -204,7 +190,7 @@ class WaitTests:
         assert set([EXCEPTION_FUTURE]) == finished
         assert set([future1]) == pending
 
-    def test_all_completed(self, exit_on_deadlock):
+    def test_all_completed(self):
         future1 = self.executor.submit(divmod, 2, 0)
         future2 = self.executor.submit(mul, 2, 21)
 
@@ -220,7 +206,7 @@ class WaitTests:
                     EXCEPTION_FUTURE, future1, future2]) == finished
         assert set() == pending
 
-    def test_timeout(self, exit_on_deadlock):
+    def test_timeout(self):
         future1 = self.executor.submit(mul, 6, 7)
         future2 = self.executor.submit(time.sleep, 2)
 
@@ -239,7 +225,7 @@ class WaitTests:
 
 class AsCompletedTests:
     # TODO(brian@sweetapp.com): Should have a test with a non-zero timeout.
-    def test_no_timeout(self, exit_on_deadlock):
+    def test_no_timeout(self):
         future1 = self.executor.submit(mul, 2, 21)
         future2 = self.executor.submit(mul, 7, 6)
 
@@ -251,7 +237,7 @@ class AsCompletedTests:
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
                     SUCCESSFUL_FUTURE, future1, future2]) == completed
 
-    def test_zero_timeout(self, exit_on_deadlock):
+    def test_zero_timeout(self):
         future1 = self.executor.submit(time.sleep, 2)
         completed_futures = set()
         try:
@@ -268,7 +254,7 @@ class AsCompletedTests:
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
                     SUCCESSFUL_FUTURE]) == completed_futures
 
-    def test_duplicate_futures(self, exit_on_deadlock):
+    def test_duplicate_futures(self):
         # Issue 20367. Duplicate futures should not raise exceptions or give
         # duplicate responses.
         future1 = self.executor.submit(time.sleep, .2)
@@ -279,26 +265,26 @@ class AsCompletedTests:
 class ExecutorTest:
     # Executor.shutdown() and context manager usage is tested by
     # ExecutorShutdownTest.
-    def test_submit(self, exit_on_deadlock):
+    def test_submit(self):
         future = self.executor.submit(pow, 2, 8)
         assert 256 == future.result()
 
-    def test_submit_keyword(self, exit_on_deadlock):
+    def test_submit_keyword(self):
         future = self.executor.submit(mul, 2, y=8)
         assert 16 == future.result()
 
-    def test_map(self, exit_on_deadlock):
+    def test_map(self):
         assert list(self.executor.map(pow, range(10), range(10))) ==\
             list(map(pow, range(10), range(10)))
 
-    def test_map_exception(self, exit_on_deadlock):
+    def test_map_exception(self):
         i = self.executor.map(divmod, [1, 1, 1, 1], [2, 3, 0, 5])
         assert next(i), (0 == 1)
         assert next(i), (0 == 1)
         with pytest.raises(ZeroDivisionError):
             next(i)
 
-    def test_map_timeout(self, exit_on_deadlock):
+    def test_map_timeout(self):
         results = []
         try:
             for i in self.executor.map(time.sleep,
@@ -312,7 +298,7 @@ class ExecutorTest:
 
         assert [None, None] == results
 
-    def test_shutdown_race_issue12456(self, exit_on_deadlock):
+    def test_shutdown_race_issue12456(self):
         # Issue #12456: race condition at shutdown where trying to post a
         # sentinel in the call queue blocks (the queue is full while processes
         # have exited).
@@ -333,13 +319,13 @@ class ExecutorTest:
         collected = my_object_collected.wait(timeout=5.0)
         assert collected, "Stale reference not collected within timeout."
 
-    def test_max_workers_negative(self, exit_on_deadlock):
+    def test_max_workers_negative(self):
         for number in (0, -1):
             with pytest.raises(ValueError) as infos:
                 self.executor_type(max_workers=number)
             assert infos.value.args[0] == "max_workers must be greater than 0"
 
-    def test_killed_child(self, exit_on_deadlock):
+    def test_killed_child(self):
         # When a child process is abruptly terminated, the whole pool gets
         # "broken".
         future = self.executor.submit(time.sleep, 30)
@@ -352,7 +338,7 @@ class ExecutorTest:
         with pytest.raises(BrokenExecutor):
             self.executor.submit(pow, 2, 8)
 
-    def test_map_chunksize(self, exit_on_deadlock):
+    def test_map_chunksize(self):
         def bad_map():
             list(self.executor.map(pow, range(40), range(40), chunksize=-1))
 
@@ -370,7 +356,7 @@ class ExecutorTest:
     def _test_traceback(cls):
         raise RuntimeError(123)  # some comment
 
-    def test_traceback(self, exit_on_deadlock):
+    def test_traceback(self):
         # We want ensure that the traceback from the child process is
         # contained in the traceback raised in the main process.
         future = self.executor.submit(self._test_traceback)
@@ -410,7 +396,7 @@ class ExecutorTest:
             # Ensure that py.test can report the content of the exception
             results[thread_idx] = traceback.format_exc()
 
-    def test_thread_safety(self, exit_on_deadlock):
+    def test_thread_safety(self):
         # Check that our process-pool executor can be shared to schedule work
         # by concurrent threads
         threads = []
