@@ -22,20 +22,6 @@ EXCEPTION_FUTURE = create_future(state=FINISHED, exception=OSError())
 SUCCESSFUL_FUTURE = create_future(state=FINISHED, result=42)
 
 
-@pytest.yield_fixture
-def exit_on_deadlock():
-    try:
-        TIMEOUT = 5
-        from faulthandler import dump_traceback_later
-        from faulthandler import cancel_dump_traceback_later
-        from sys import stderr
-        dump_traceback_later(timeout=TIMEOUT, exit=True, file=stderr)
-        yield
-        cancel_dump_traceback_later()
-    except ImportError:
-        yield
-
-
 class TestsFuture:
     def test_done_callback_with_result(self):
         callback_result = [None]
@@ -124,7 +110,7 @@ class TestsFuture:
         f.add_done_callback(fn)
         assert was_cancelled[0]
 
-    def test_repr(self, exit_on_deadlock):
+    def test_repr(self):
         import re
         assert re.match('<Future at 0x[0-9a-f]+ state=pending>',
                         repr(PENDING_FUTURE)).pos > -1
@@ -139,7 +125,7 @@ class TestsFuture:
         assert re.match('<Future at 0x[0-9a-f]+ state=finished returned int>',
                         repr(SUCCESSFUL_FUTURE)).pos > -1
 
-    def test_cancel(self, exit_on_deadlock):
+    def test_cancel(self):
         f1 = create_future(state=PENDING)
         f2 = create_future(state=RUNNING)
         f3 = create_future(state=CANCELLED)
@@ -165,7 +151,7 @@ class TestsFuture:
         assert not f6.cancel()
         assert f6._state == FINISHED
 
-    def test_cancelled(self, exit_on_deadlock):
+    def test_cancelled(self):
         assert not PENDING_FUTURE.cancelled()
         assert not RUNNING_FUTURE.cancelled()
         assert CANCELLED_FUTURE.cancelled()
@@ -173,7 +159,7 @@ class TestsFuture:
         assert not EXCEPTION_FUTURE.cancelled()
         assert not SUCCESSFUL_FUTURE.cancelled()
 
-    def test_done(self, exit_on_deadlock):
+    def test_done(self):
         assert not PENDING_FUTURE.done()
         assert not RUNNING_FUTURE.done()
         assert CANCELLED_FUTURE.done()
@@ -181,7 +167,7 @@ class TestsFuture:
         assert EXCEPTION_FUTURE.done()
         assert SUCCESSFUL_FUTURE.done()
 
-    def test_running(self, exit_on_deadlock):
+    def test_running(self):
         assert not PENDING_FUTURE.running()
         assert RUNNING_FUTURE.running()
         assert not CANCELLED_FUTURE.running()
@@ -189,7 +175,7 @@ class TestsFuture:
         assert not EXCEPTION_FUTURE.running()
         assert not SUCCESSFUL_FUTURE.running()
 
-    def test_result_with_timeout(self, exit_on_deadlock):
+    def test_result_with_timeout(self):
         with pytest.raises(futures.TimeoutError):
             PENDING_FUTURE.result(timeout=0)
         with pytest.raises(futures.TimeoutError):
@@ -202,7 +188,7 @@ class TestsFuture:
             EXCEPTION_FUTURE.result(timeout=0)
         assert SUCCESSFUL_FUTURE.result(timeout=0) == 42
 
-    def test_result_with_success(self, exit_on_deadlock):
+    def test_result_with_success(self):
         # TODO(brian@sweetapp.com): This test is timing dependent.
         def notification():
             # Wait until the main thread is waiting for the result.
@@ -215,7 +201,7 @@ class TestsFuture:
 
         assert f1.result(timeout=5) == 42
 
-    def test_result_with_cancel(self, exit_on_deadlock):
+    def test_result_with_cancel(self):
         # TODO(brian@sweetapp.com): This test is timing dependent.
         def notification():
             # Wait until the main thread is waiting for the result.
@@ -229,7 +215,7 @@ class TestsFuture:
         with pytest.raises(futures.CancelledError):
             f1.result(timeout=5)
 
-    def test_exception_with_timeout(self, exit_on_deadlock):
+    def test_exception_with_timeout(self):
         with pytest.raises(futures.TimeoutError):
             PENDING_FUTURE.exception(timeout=0)
         with pytest.raises(futures.TimeoutError):
@@ -241,7 +227,7 @@ class TestsFuture:
         assert isinstance(EXCEPTION_FUTURE.exception(timeout=0), OSError)
         assert SUCCESSFUL_FUTURE.exception(timeout=0) == None
 
-    def test_exception_with_success(self, exit_on_deadlock):
+    def test_exception_with_success(self):
         def notification():
             # Wait until the main thread is waiting for the exception.
             time.sleep(1)
