@@ -34,13 +34,22 @@ if sys.platform != "win32":
         def Condition(*args, **kwargs):
             return synchronize.Condition(*args, ctx=_ctx, **kwargs)
 
+        class LokyContext(mp.context.BaseContext):
+            _name = 'loky'
+            Process = Process
+        mp.context._concrete_contexts['loky'] = LokyContext()
+
 else:
-    from multiprocessing import Event, Process
+    from multiprocessing import Process
+    from multiprocessing.synchronize import *
     if sys.version_info[:2] > (3, 3):
         from multiprocessing import SimpleQueue, Queue
-        from multiprocessing import context, get_context
+        from multiprocessing import context
 
-        context._concrete_contexts['loky'] = get_context('spawn')
+        class LokyContext(context.BaseContext):
+            _name = 'loky'
+            Process = Process
+        mp.context._concrete_contexts['loky'] = LokyContext()
     else:
         from .queues import SimpleQueue, Queue
 
