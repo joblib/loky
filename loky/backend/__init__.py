@@ -9,11 +9,24 @@ if sys.platform != "win32":
         from .queues import Queue, SimpleQueue
     else:
         import multiprocessing as mp
-        from multiprocessing import Event
+        from multiprocessing import synchronize
         from multiprocessing import queues
+        _ctx = mp.get_context('spawn')
 
         def Queue(*args, **kwargs):
-            return queues.Queue(*args, ctx=mp.get_context('spawn'), **kwargs)
+            return queues.Queue(*args, ctx=_ctx, **kwargs)
+
+        def Lock(*args, **kwargs):
+            return synchronize.Lock(*args, ctx=_ctx, **kwargs)
+
+        def RLock(*args, **kwargs):
+            return synchronize.RLock(*args, ctx=_ctx, **kwargs)
+
+        def Event(*args, **kwargs):
+            return synchronize.Event(*args, ctx=_ctx, **kwargs)
+
+        def Condition(*args, **kwargs):
+            return synchronize.Condition(*args, ctx=_ctx, **kwargs)
 
 else:
     from multiprocessing import Event, Process

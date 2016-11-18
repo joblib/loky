@@ -6,13 +6,19 @@ if sys.platform == "darwin" and sys.version_info < (3, 3):
 
 
 def close_fds(keep_fds):  # pragma: no cover
-    keep_fds = set(keep_fds).union([0, 1, 2])
+    """Close all the file descriptors except those in keep_fds."""
+
+    # Make sure to keep stdout and stderr open for logging purpose
+    keep_fds = set(keep_fds).union([1, 2])
+
+    # We try to retrieve all the open fds
     try:
         open_fds = set([int(fd) for fd in os.listdir('/proc/self/fd')])
     except FileNotFoundError:
         import resource
         max_nfds = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
         open_fds = set([fd for fd in range(3, max_nfds)])
+
     for i in open_fds-keep_fds:
         try:
             os.close(i)

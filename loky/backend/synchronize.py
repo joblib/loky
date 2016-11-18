@@ -56,19 +56,23 @@ class SemLock(object):
 
     _rand = tempfile._RandomNameSequence()
 
-    def __init__(self, kind, value, maxvalue):
+    def __init__(self, kind, value, maxvalue, usage="semlock"):
         name = 'loky'
         unlink_now = sys.platform == 'win32' or name == 'fork'
         for i in range(100):
             try:
                 self._semlock = SemLockC(
-                    kind, value, maxvalue, SemLock._make_name(), unlink_now)
+                    kind, value, maxvalue, SemLock._make_name(usage),
+                    unlink_now)
             except FileExistsError:
                 pass
             else:
                 break
         else:
             raise FileExistsError('cannot find name for semaphore')
+
+        util.debug('created semlock with handle %s and name "%s"'
+                   % (self._semlock.handle, self._semlock.name.decode()))
 
         self._make_methods()
 
@@ -115,19 +119,19 @@ class SemLock(object):
     def __setstate__(self, state):
         if sys.version_info < (3, 4):
             h, kind, maxvalue, name = state
-            self._semlock = SemLockC(h, kind, maxvalue, name=name)
+            self._semlock = SemLockC(h, kind, maxvalue, rebuild_name=name)
         else:
             self._semlock = SemLockC._rebuild(*state)
-        util.debug('recreated blocker with handle %r and name %s'
-                   % (state[0], state[3]))
+        util.debug('recreated blocker with handle %r and name "%s"'
+                   % (state[0], state[3].decode()))
         self._make_methods()
 
     @staticmethod
-    def _make_name():
+    def _make_name(usage):
+        name = 'loky-%s-%s' % (usage, next(SemLock._rand))
         if sys.version_info < (3, 4):
-            return None
-        return '%s-%s' % (process.current_process()._config['semprefix'],
-                          next(SemLock._rand))
+            return str.encode(name)
+        return name
 
 #
 # Semaphore
@@ -135,8 +139,9 @@ class SemLock(object):
 
 class Semaphore(SemLock):
 
-    def __init__(self, value=1, ):
-        SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX)
+    def __init__(self, value=1, usage="semaphore"):
+        SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX,
+                         usage=usage)
 
     def get_value(self):
         return self._semlock._get_value()
@@ -154,8 +159,8 @@ class Semaphore(SemLock):
 
 class BoundedSemaphore(Semaphore):
 
-    def __init__(self, value=1):
-        SemLock.__init__(self, SEMAPHORE, value, value)
+    def __init__(self, value=1, usage="bsemaphore"):
+        SemLock.__init__(self, SEMAPHORE, value, value, usage=usage)
 
     def __repr__(self):
         try:
@@ -171,8 +176,8 @@ class BoundedSemaphore(Semaphore):
 
 class Lock(SemLock):
 
-    def __init__(self):
-        super(Lock, self).__init__(SEMAPHORE, 1, 1)
+    def __init__(self, usage="lock"):
+        super(Lock, self).__init__(SEMAPHORE, 1, 1, usage=usage)
         # SemLock.__init__(self, SEMAPHORE, 1, 1)
 
     def __repr__(self):
@@ -197,8 +202,8 @@ class Lock(SemLock):
 
 class RLock(SemLock):
 
-    def __init__(self):
-        SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1)
+    def __init__(self, usage="rlock"):
+        SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1, usage=usage)
 
     def __repr__(self):
         try:
@@ -224,10 +229,10 @@ class RLock(SemLock):
 class Condition(object):
 
     def __init__(self, lock=None):
-        self._lock = lock or RLock()
-        self._sleeping_count = Semaphore(0)
-        self._woken_count = Semaphore(0)
-        self._wait_semaphore = Semaphore(0)
+        self._lock = lock or RLock(usage="cond_lock")
+        self._sleeping_count = Semaphore(0, usage="cond_sc")
+        self._woken_count = Semaphore(0, usage="cond_wc")
+        self._wait_semaphore = Semaphore(0, usage="cond_ws")
         self._make_methods()
 
     def __getstate__(self):
@@ -346,8 +351,8 @@ class Condition(object):
 class Event(object):
 
     def __init__(self):
-        self._cond = Condition(Lock())
-        self._flag = Semaphore(0)
+        self._cond = Condition(Lock(usage="event_lock"))
+        self._flag = Semaphore(0, usage="event_flag")
 
     def is_set(self):
         with self._cond:
