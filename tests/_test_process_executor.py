@@ -31,6 +31,7 @@ import loky._base as futures
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import BrokenExecutor
+from ._executor_mixin import _running_children_with_cmdline
 
 
 def create_future(state=PENDING, exception=None, result=None):
@@ -463,18 +464,6 @@ class ExecutorTest:
     @classmethod
     def check_no_running_workers(cls, patience=5, sleep_duration=0.01):
         deadline = time.time() + patience
-
-        def _running_children_with_cmdline(p):
-            children_with_cmdline = []
-            for c in p.children():
-                try:
-                    if not c.is_running():
-                        continue
-                    cmdline = " ".join(c.cmdline())
-                    children_with_cmdline.append((c, cmdline))
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-            return children_with_cmdline
 
         while time.time() <= deadline:
             time.sleep(sleep_duration)

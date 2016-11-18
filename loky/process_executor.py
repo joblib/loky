@@ -659,7 +659,6 @@ class ProcessPoolExecutor(_base.Executor):
         if self._queue_management_thread is None:
             mp.util.debug('_start_queue_management_thread called')
             # Start the processes so that their sentinels are known.
-            # self._adjust_process_count()
             self._queue_management_thread = threading.Thread(
                 target=_queue_management_worker,
                 args=(weakref.ref(self),

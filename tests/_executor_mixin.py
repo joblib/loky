@@ -24,15 +24,34 @@ except ImportError:
     TIMEOUT = 20
 
 
-def _check_subprocesses_number(executor, expected_process_number):
-    # Check that we have only 2 subprocesses (+ the semaphore tracker)
-    children_pids = set(p.pid for p in psutil.Process().children()
-                        if ("semaphore_tracker" not in " ".join(p.cmdline())
-                            and "forkserver" not in "".join(p.cmdline())))
-    assert len(children_pids) == expected_process_number
+def _running_children_with_cmdline(p):
+    """Helper to fetch cmdline from children process list"""
+    children_with_cmdline = []
+    for c in p.children():
+        try:
+            if not c.is_running():
+                continue
+            cmdline = " ".join(c.cmdline())
+            children_with_cmdline.append((c, cmdline))
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return children_with_cmdline
+
+
+def _check_subprocesses_number(executor, expected_process_number=None,
+                               expected_max_process_number=None):
+    children_cmdlines = _running_children_with_cmdline(psutil.Process())
+    children_pids = set(c.pid for c, cmdline in children_cmdlines
+                        if ("semaphore_tracker" not in cmdline
+                            and "forkserver" not in cmdline))
     worker_pids = set(executor._processes.keys())
-    assert len(worker_pids) == expected_process_number
-    assert worker_pids == children_pids
+    if expected_process_number is not None:
+        assert len(children_pids) == expected_process_number
+        assert len(worker_pids) == expected_process_number
+        assert worker_pids == children_pids
+    if expected_max_process_number is not None:
+        assert len(children_pids) <= expected_max_process_number
+        assert len(worker_pids) <= expected_max_process_number
 
 
 def _check_executor_started(executor):
@@ -87,10 +106,12 @@ class ReusableExecutorMixin:
     def setup_method(self, method):
         executor = get_reusable_executor(max_workers=2)
         _check_executor_started(executor)
-        _check_subprocesses_number(executor, 2)
+        # There can be less than 2 workers because of the worker timeout
+        _check_subprocesses_number(executor, expected_max_process_number=2)
 
     def teardown_method(self, method):
         """Make sure the executor can be recovered after the tests"""
         executor = get_reusable_executor(max_workers=2)
         assert executor.submit(math.sqrt, 1).result() == 1
-        _check_subprocesses_number(executor, 2)
+        # There can be less than 2 workers because of the worker timeout
+        _check_subprocesses_number(executor, expected_max_process_number=2)
