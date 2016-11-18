@@ -44,12 +44,13 @@ else:
     from multiprocessing.synchronize import *
     if sys.version_info[:2] > (3, 3):
         from multiprocessing import SimpleQueue, Queue
-        from multiprocessing import context
+        from multiprocessing import context, get_context
 
-        class LokyContext(context.BaseContext):
-            _name = 'loky'
-            Process = Process
-        mp.context._concrete_contexts['loky'] = LokyContext()
+        _ctx = get_context("spawn")
+
+        def LokyContext():
+            return _ctx
+        context._concrete_contexts['loky'] = LokyContext()
     else:
         from .queues import SimpleQueue, Queue
 
