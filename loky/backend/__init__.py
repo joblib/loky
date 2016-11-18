@@ -5,7 +5,7 @@ if sys.platform != "win32":
     from .process import PosixLokyProcess as Process
 
     if sys.version_info < (3, 4):
-        from .synchronize import Event
+        from .synchronize import *
         from .queues import Queue, SimpleQueue
     else:
         import multiprocessing as mp
@@ -15,6 +15,12 @@ if sys.platform != "win32":
 
         def Queue(*args, **kwargs):
             return queues.Queue(*args, ctx=_ctx, **kwargs)
+
+        def Semaphore(*args, **kwargs):
+            return synchronize.Semaphore(*args, ctx=_ctx, **kwargs)
+
+        def BoundedSemaphore(*args, **kwargs):
+            return synchronize.BoundedSemaphore(*args, ctx=_ctx, **kwargs)
 
         def Lock(*args, **kwargs):
             return synchronize.Lock(*args, ctx=_ctx, **kwargs)
@@ -37,3 +43,6 @@ else:
         context._concrete_contexts['loky'] = get_context('spawn')
     else:
         from .queues import SimpleQueue, Queue
+
+__all__ = ["Process", "Queue", "SimpleQueue", "Lock", "RLock", "Semaphore",
+           "BoundedSemaphore", "Condition", "Event", "Pipe"]

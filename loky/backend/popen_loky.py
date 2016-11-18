@@ -15,7 +15,11 @@ elif sys.version_info[:2] < (3, 3):
     ProcessLookupError = OSError
 
 if sys.platform != "win32":
-    from . import semaphore_tracker
+    if sys.version_info[:2] > (3, 3):
+        from multiprocessing import semaphore_tracker
+    else:
+        from . import semaphore_tracker
+
 
 __all__ = ['Popen']
 
@@ -131,7 +135,7 @@ class Popen(object):
 
     def _launch(self, process_obj):
 
-        tracker_fd = semaphore_tracker._semaphore_tracker._fd
+        tracker_fd = semaphore_tracker._semaphore_tracker.getfd()
 
         fp = BytesIO()
         set_spawning_popen(self)

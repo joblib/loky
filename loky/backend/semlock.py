@@ -89,7 +89,7 @@ class SemLock(object):
 
     def __del__(self):
         try:
-            util.debug("closing semaphore named {}".format(self.name))
+            util.debug("closing semaphore named {}".format(self.name.decode()))
             res = pthread.sem_close(self.handle)
             assert res == 0, "Issue while closing semaphores"
         except AttributeError:

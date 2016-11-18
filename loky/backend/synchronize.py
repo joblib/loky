@@ -7,12 +7,11 @@
 # Licensed to PSF under a Contributor Agreement.
 #
 
-
-import threading
+import os
 import sys
 import tempfile
+import threading
 import _multiprocessing
-
 from time import time as _time
 
 from .popen_loky import is_spawning, get_spawning_popen
@@ -128,7 +127,7 @@ class SemLock(object):
 
     @staticmethod
     def _make_name(usage):
-        name = 'loky-%s-%s' % (usage, next(SemLock._rand))
+        name = 'loky-%i-%s-%s' % (os.getpid(), usage, next(SemLock._rand))
         if sys.version_info < (3, 4):
             return str.encode(name)
         return name

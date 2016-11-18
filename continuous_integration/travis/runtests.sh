@@ -10,4 +10,4 @@ echo $TOXENV
 
 # Run the tests and collect trace coverage data both in the subprocesses
 # and its subprocesses.
-COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- -v
+COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- -vl
