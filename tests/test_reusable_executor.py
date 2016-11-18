@@ -37,6 +37,15 @@ if not util._log_to_stderr:
         '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
 
 
+def clean_warning_registry():
+    """Safe way to reset warnings."""
+    warnings.resetwarnings()
+    reg = "__warningregistry__"
+    for mod_name, mod in list(sys.modules.items()):
+        if hasattr(mod, reg):
+            getattr(mod, reg).clear()
+
+
 def wait_dead(worker, n_tries=1000, delay=0.001):
     """Wait for process pid to die"""
     for i in range(n_tries):
@@ -188,12 +197,13 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
             res.result()
 
     @pytest.mark.parametrize("func, args, expected_exc", crash_cases)
-    def test_callback(self, func, args, expected_exc):
+    def test_in_callback_submit_with_crash(self, func, args, expected_exc):
         """Test the recovery from callback crash"""
-        executor = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2, timeout=12)
 
         def in_callback_submit(future):
-            future2 = get_reusable_executor(max_workers=2).submit(func, *args)
+            future2 = get_reusable_executor(
+                max_workers=2, timeout=12).submit(func, *args)
             # Store the future of the job submitted in the callback to make it
             # easy to introspect.
             future.callback_future = future2
@@ -346,14 +356,14 @@ class TestResizeExecutor(ReusableExecutorMixin):
         # occur while there are on going works.
         pids = list(executor._processes.keys())
         res1 = executor.submit(check_pids_exist_then_sleep, (.3, pids))
-        warnings.filterwarnings("always", category=UserWarning)
+        clean_warning_registry()
         with warnings.catch_warnings(record=True) as w:
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("always")
             executor = get_reusable_executor(max_workers=1, timeout=None)
-            if sys.version_info[:2] != (3, 3):
-                # warnings unreliable in python3.3 so we skip the test
-                assert len(w) == 1
-                expected_msg = "Trying to resize an executor with running jobs"
-                assert expected_msg in str(w[0].message)
+            assert len(w) == 1
+            expected_msg = "Trying to resize an executor with running jobs"
+            assert expected_msg in str(w[0].message)
             assert res1.result(), ("Resize should wait for current processes "
                                    " to finish")
             assert len(executor._processes) == 1
