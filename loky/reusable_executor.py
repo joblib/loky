@@ -56,18 +56,17 @@ def get_reusable_executor(max_workers=None, context=None,
     """
     global _executor, _executor_args
     executor = _executor
+    args = dict(context=context, timeout=timeout,
+                kill_on_shutdown=kill_on_shutdown)
     if executor is None:
         mp.util.debug("Create a executor with max_workers={}."
                       .format(max_workers))
         executor_id = _get_next_executor_id()
-        _executor_args = dict(context=context, timeout=timeout,
-                              kill_on_shutdown=kill_on_shutdown)
+        _executor_args = args
         _executor = executor = ReusablePoolExecutor(
             max_workers=max_workers, context=context, timeout=timeout,
             kill_on_shutdown=kill_on_shutdown, executor_id=executor_id)
     else:
-        args = dict(context=context, timeout=timeout,
-                    kill_on_shutdown=kill_on_shutdown)
         if (executor._broken or executor._shutdown_thread
                 or args != _executor_args):
             if executor._broken:
@@ -77,7 +76,7 @@ def get_reusable_executor(max_workers=None, context=None,
             else:
                 reason = "arguments have changed"
             mp.util.debug("Creating a new executor with max_workers={} as the "
-                          "previous instance was unusable ({})."
+                          "previous instance cannot be reused ({})."
                           .format(max_workers, reason))
             executor.shutdown(wait=True)
             _executor = executor = _executor_args = None
