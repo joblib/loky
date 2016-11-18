@@ -246,18 +246,21 @@ def _process_worker(call_queue, result_queue, timeout=None):
         timeout: maximum time to wait for a new item in the call_queue. If that
             time is expired, the worker will shutdown.
     """
-    mp.util.debug('worker started')
+    mp.util.debug('worker started with timeout=%s' % timeout)
     while True:
         try:
             call_item = call_queue.get(block=True, timeout=timeout)
+            if call_item is None:
+                mp.util.info("shutting down worker on sentinel")
         except Empty:
-            mp.util.info("shutting down worker after timeout")
+            mp.util.info("shutting down worker after timeout %0.3fs"
+                         % timeout)
             call_item = None
         except BaseException as e:
             traceback.print_exc()
             sys.exit(1)
         if call_item is None:
-            # Wake up queue management thread
+            # Notifiy queue management thread about clean worker shutdown
             result_queue.put(os.getpid())
             return
         try:
@@ -269,8 +272,8 @@ def _process_worker(call_queue, result_queue, timeout=None):
             try:
                 result_queue.put(_ResultItem(call_item.work_id, result=r))
             except PicklingError as e:
-                exc = _ExceptionWithTraceback(e, getattr(e, "__traceback__",
-                                                         None))
+                tb = getattr(e, "__traceback__", None)
+                exc = _ExceptionWithTraceback(e, tb)
                 result_queue.put(_ResultItem(call_item.work_id, exception=exc))
             except BaseException as e:
                 traceback.print_exc()
@@ -369,8 +372,8 @@ def _queue_management_worker(executor_reference,
         # some multiprocessing.Queue methods may deadlock on Mac OS X.
         for p in processes.values():
             p.join()
-        mp.util.debug("queue management thread shutdown worker processes: {}"
-                      .format(processes))
+        mp.util.debug("queue management thread clean shutdown of worker "
+                      "processes: {}".format(processes))
 
     result_reader = result_queue._reader
     _poll_timeout = .001
@@ -432,6 +435,7 @@ def _queue_management_worker(executor_reference,
                 # Delete references to object. See issue16284
                 del work_item
             pending_work_items.clear()
+
             # Terminate remaining workers forcibly: the queues or their
             # locks may be in a dirty state and block forever.
             for p in processes.values():
@@ -503,22 +507,19 @@ def _management_worker(executor_reference, queue_management_thread, processes,
                       not call_queue._thread.is_alive())
             broken |= any([p.exitcode for p in processes.values()])
             if not broken:
+                cause_msg = ("The QueueManagerThread was terminated "
+                             "abruptly while the future was running or "
+                             "pending. This can be caused by an "
+                             "unpickling error of a result.")
                 _shutdown_crash(executor_reference, processes,
-                                pending_work_items, call_queue,
-                                BrokenExecutor(
-                                    "The QueueManagerThread was terminated "
-                                    "abruptly while the future was running or "
-                                    "pending. This is due to a result "
-                                    "unpickling error."
-                                ))
+                                pending_work_items, call_queue, cause_msg)
             return
         elif _is_crashed(call_queue._thread):
+            cause_msg = ("The QueueFeederThread was terminated abruptly "
+                         "while feeding a new job. This can be due to "
+                         "a job pickling error.")
             _shutdown_crash(executor_reference, processes, pending_work_items,
-                            call_queue, BrokenExecutor(
-                                "The QueueFeederThread was terminated abruptly"
-                                " while feeding a new job. This can be due to "
-                                "a job pickling error."
-                            ))
+                            call_queue, cause_msg)
             return
         executor = executor_reference()
         if shutting_down():
@@ -528,8 +529,9 @@ def _management_worker(executor_reference, queue_management_thread, processes,
 
 
 def _shutdown_crash(executor_reference, processes, pending_work_items,
-                    call_queue, exc):
-    mp.util.info("shutdown crash")
+                    call_queue, cause_msg):
+    mp.util.info("Crash detected, marking executor as broken and terminating "
+                 "worker processes. " + cause_msg)
     executor = executor_reference()
     if executor is not None:
         executor._broken = True
@@ -543,7 +545,7 @@ def _shutdown_crash(executor_reference, processes, pending_work_items,
         p.join()
     # All futures in flight must be marked failed
     for work_id, work_item in pending_work_items.items():
-        work_item.future.set_exception(exc)
+        work_item.future.set_exception(BrokenExecutor(cause_msg))
         # Delete references to object. See issue16284
         del work_item
     pending_work_items.clear()
