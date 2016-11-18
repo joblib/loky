@@ -9,7 +9,7 @@ from loky.reusable_executor import get_reusable_executor
 from multiprocessing import util
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from pickle import PicklingError, UnpicklingError
-from ._executor_mixin import ReusableExecutorMixin, TIMEOUT
+from ._executor_mixin import ReusableExecutorMixin
 try:
     import numpy as np
 except ImportError:
@@ -58,7 +58,7 @@ def exit():
     sys.exit(1)
 
 
-def work_sleep(arg):
+def check_pids_exist_then_sleep(arg):
     """Sleep for some time before returning
     and check if all the passed pid exist"""
     time, pids = arg
@@ -239,9 +239,10 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
     def test_deadlock_kill(self):
         """Test deadlock recovery for reusable_executor"""
-        executor = get_reusable_executor(max_workers=1)
+        executor = get_reusable_executor(max_workers=1, timeout=None)
+        executor.submit(id, 1)  # trigger the spawning of the worker process
         worker = next(iter(executor._processes.values()))
-        executor = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2, timeout=None)
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
 
@@ -253,7 +254,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
         # the get_reusable_executor factory should be able to create a new
         # working instance
-        executor = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2, timeout=None)
         assert executor.submit(id_sleep, 42, 0.).result() == 42
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
@@ -261,13 +262,14 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         """Test the race conditions in reusable_executor crash handling"""
         # Test for external crash signal comming from neighbor
         # with various race setup
-        util.debug("Test race - # Processes = {}".format(n_proc))
-        executor = get_reusable_executor(max_workers=n_proc)
+        executor = get_reusable_executor(max_workers=n_proc, timeout=None)
+        executor.map(id, range(n_proc))  # trigger the creation of the workers
         pids = list(executor._processes.keys())
         assert len(pids) == n_proc
         assert None not in pids
-        res = executor.map(work_sleep, [(.0001 * (j//2), pids)
-                                        for j in range(2 * n_proc)])
+        res = executor.map(check_pids_exist_then_sleep,
+                           [(.0001 * (j // 2), pids)
+                            for j in range(2 * n_proc)])
         assert all(list(res))
         with pytest.raises(BrokenExecutor):
             res = executor.map(kill_friend, pids[::-1])
@@ -312,14 +314,14 @@ class TestTerminateExecutor(ReusableExecutorMixin):
     def test_terminate_deadlock(self):
         """Test recovery if killed after resize call"""
         # Test the executor.shutdown call do not cause deadlock
-        executor = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2, timeout=None)
+        executor.map(id, range(2))  # start the worker processes
         executor.submit(kill_friend, (next(iter(executor._processes.keys())),
                                       .0))
         sleep(.01)
         executor.shutdown(wait=True)
 
     def test_terminate(self):
-
         executor = get_reusable_executor(max_workers=4)
         res = executor.map(
             sleep, [0.1 for i in range(10000)], chunksize=1
@@ -336,16 +338,17 @@ class TestResizeExecutor(ReusableExecutorMixin):
     def test_reusable_executor_resize(self):
         """Test reusable_executor resizing"""
 
-        executor = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2, timeout=None)
+        executor.map(id, range(2))
 
         # Decreasing the executor should drop a single process and keep one of
         # the old one as it is still in a good shape. The resize should not
         # occur while there are on going works.
         pids = list(executor._processes.keys())
-        res1 = executor.submit(work_sleep, (.3, pids))
+        res1 = executor.submit(check_pids_exist_then_sleep, (.3, pids))
         warnings.filterwarnings("always", category=UserWarning)
         with warnings.catch_warnings(record=True) as w:
-            executor = get_reusable_executor(max_workers=1)
+            executor = get_reusable_executor(max_workers=1, timeout=None)
             if sys.version_info[:2] != (3, 3):
                 # warnings unreliable in python3.3 so we skip the test
                 assert len(w) == 1
@@ -359,24 +362,25 @@ class TestResizeExecutor(ReusableExecutorMixin):
         # Requesting the same number of process should not impact the executor
         # nor kill the processed
         old_pid = next(iter((executor._processes.keys())))
-        unchanged_executor = get_reusable_executor(max_workers=1)
+        unchanged_executor = get_reusable_executor(max_workers=1, timeout=None)
         assert len(unchanged_executor._processes) == 1
         assert unchanged_executor is executor
         assert next(iter(unchanged_executor._processes.keys())) == old_pid
 
         # Growing the executor again should add a single process and keep the
         # old one as it is still in a good shape
-        executor = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=2, timeout=None)
         assert len(executor._processes) == 2
         assert old_pid in list(executor._processes.keys())
 
     def test_kill_after_resize_call(self):
         """Test recovery if killed after resize call"""
         # Test the executor resizing called before a kill arrive
-        executor = get_reusable_executor(max_workers=2)
-        executor.submit(kill_friend, (next(iter(executor._processes.keys())),
-                                      .1))
-        executor = get_reusable_executor(max_workers=1)
+        executor = get_reusable_executor(max_workers=2, timeout=None)
+        executor.map(id, range(2))  # trigger the creation of worker processes
+        pid = next(iter(executor._processes.keys()))
+        executor.submit(kill_friend, (pid, .1))
+        executor = get_reusable_executor(max_workers=1, timeout=None)
         assert executor.submit(id_sleep, 42, 0.).result() == 42
 
 

@@ -30,10 +30,10 @@ def _get_next_executor_id():
 
 
 def get_reusable_executor(max_workers=None, context=None,
-                          timeout=None, kill_on_shutdown=True):
+                          timeout=10, kill_on_shutdown=True):
     """Return the current ReusableExectutor instance.
 
-    Start a new one if it has not been started already or if the previous
+    Start a new instance if it has not been started already or if the previous
     instance was left in a broken state.
 
     If the previous instance does not have the requested number of workers, the
@@ -42,6 +42,17 @@ def get_reusable_executor(max_workers=None, context=None,
 
     Reusing a singleton instance spares the overhead of starting new worker
     processes and importing common python packages each time.
+
+    ``max_workers`` controls the maximum number of tasks that can be running in
+    parallel in worker processes. By default this is set to the number of
+    CPUs on the host.
+
+    Setting ``timeout`` (in seconds) makes idle workers automatically shutdown
+    so as to release system resources. New workers are respawn upon submission
+    of new tasks so that ``max_workers`` are available to accept the newly
+    submitted tasks. Setting ``timeout`` to around 100 times the time required
+    to spawn new processes and import packages in them (on the order of 100ms)
+    ensures that the overhead of spawning workers is negligible.
     """
     global _executor, _executor_args
     executor = _executor
@@ -109,8 +120,6 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         self._adjust_process_count()
         while not all([p.is_alive() for p in self._processes.values()]):
             time.sleep(1e-3)
-
-        return True
 
     def _wait_job_completion(self):
         """Wait for the cache to be empty before resizing the pool."""
