@@ -5,10 +5,8 @@
 import os.path as op
 from distutils.sysconfig import get_python_lib
 
-FILE_CONTENT = u"""
-import os, coverage
-if \"COVERAGE_PROCESS_START\" in os.environ:
-    coverage.process_startup()
+FILE_CONTENT = u"""\
+import coverage; coverage.process_startup()
 """
 
 filename = op.join(get_python_lib(), 'coverage_subprocess.pth')

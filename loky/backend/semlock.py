@@ -37,7 +37,9 @@ pthread.sem_trywait.argtypes = [ctypes.c_void_p]
 pthread.sem_post.argtypes = [ctypes.c_void_p]
 pthread.sem_getvalue.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
 pthread.sem_unlink.argtypes = [ctypes.c_char_p]
-pthread.sem_timedwait.argtypes = [ctypes.c_void_p, ctypes.POINTER(timespec)]
+if sys.platform != "darwin":
+    pthread.sem_timedwait.argtypes = [ctypes.c_void_p,
+                                      ctypes.POINTER(timespec)]
 
 try:
     from threading import get_ident
@@ -63,6 +65,50 @@ def _sem_open(name, o_flag, perm=None, value=None):
         assert value is not None, "Wrong number of argument (either 2 or 4)"
         return pthread.sem_open(ctypes.c_char_p(name), ctypes.c_int(o_flag),
                                 ctypes.c_int(perm), ctypes.c_int(value))
+
+
+def _sem_timedwait(handle, timeout):
+    t_start = time.time()
+    if sys.platform != "darwin":
+        sec = int(timeout)
+        tv_sec = int(t_start)
+        nsec = int(1e9 * (timeout - sec) + .5)
+        tv_nsec = int(1e9 * (t_start - tv_sec) + .5)
+        deadline = timespec(sec+tv_sec, nsec+tv_nsec)
+        deadline.tv_sec += int(deadline.tv_nsec / 1000000000)
+        deadline.tv_nsec %= 1000000000
+        return pthread.sem_timedwait(handle, ctypes.pointer(deadline))
+
+    # PERFORMANCE WARNING
+    # No sem_timedwait on OSX so we implement our own method. This method can
+    # dergade performances has the wait can have a latency up to 20 msecs
+    deadline = t_start + timeout
+    delay = 0
+    now = time.time()
+    while True:
+        # Poll the sem file
+        res = pthread.sem_trywait(handle)
+        if res == 0:
+            return 0
+        else:
+            e = ctypes.get_errno()
+            if e != errno.EAGAIN:
+                raiseFromErrno()
+
+        # check for timeout
+        now = time.time()
+        if now > deadline:
+            ctypes.set_errno(errno.ETIMEDOUT)
+            return -1
+
+        # calculate how much time left and check the delay is not too long
+        # -- maximum is 20 msecs
+        difference = (deadline - now)
+        delay = min(delay, 20e-3, difference)
+
+        # Sleep and increase delay
+        time.sleep(delay/1e-6)
+        delay += 1e-3
 
 
 class SemLock(object):
@@ -102,22 +148,13 @@ class SemLock(object):
         if self.kind == RECURSIVE_MUTEX and self._is_mine():
             self.count += 1
             return True
-        if timeout is not None:
-            t_start = time.time()
-            sec = int(timeout)
-            tv_sec = int(t_start)
-            nsec = int(1e9 * (timeout - sec) + .5)
-            tv_nsec = int(1e9 * (t_start - tv_sec) + .5)
-            deadline = timespec(sec+tv_sec, nsec+tv_nsec)
-            deadline.tv_sec += int(deadline.tv_nsec / 1000000000)
-            deadline.tv_nsec %= 1000000000
 
         if blocking and timeout is None:
             res = pthread.sem_wait(self.handle)
         elif not blocking or timeout <= 0:
             res = pthread.sem_trywait(self.handle)
         else:
-            res = pthread.sem_timedwait(self.handle, ctypes.pointer(deadline))
+            res = _sem_timedwait(self.handle, timeout)
         if res < 0:
             e = ctypes.get_errno()
             if e == errno.EINTR:
