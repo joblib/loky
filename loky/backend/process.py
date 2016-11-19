@@ -1,11 +1,9 @@
 import os
 import sys
-try:
+if sys.version_info > (3, 4):
     from multiprocessing.process import BaseProcess
-    from multiprocessing.context import BaseContext
-except ImportError:
+else:
     from multiprocessing.process import Process as BaseProcess
-    BaseContext = object
 
 
 class PosixLokyProcess(BaseProcess):
@@ -67,11 +65,6 @@ class PosixLokyProcess(BaseProcess):
             self._authkey = AuthenticationKey(authkey)
 
 
-class LokyContext(BaseContext):
-    _name = 'loky'
-    Process = PosixLokyProcess
-
-
 #
 # We subclass bytes to avoid accidental transmission of auth keys over network
 #
@@ -85,9 +78,3 @@ class AuthenticationKey(bytes):
                 'disallowed for security reasons'
                 )
         return AuthenticationKey, (bytes(self),)
-
-try:
-    from multiprocessing import context
-    context._concrete_contexts['loky'] = LokyContext()
-except ImportError:
-    pass

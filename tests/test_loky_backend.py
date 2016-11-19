@@ -17,11 +17,11 @@ class TestLokyBackend:
     Pipe = staticmethod(backend.Pipe)
     Queue = staticmethod(backend.Queue)
     # JoinableQueue = staticmethod(multiprocessing.JoinableQueue)
-    # Lock = staticmethod(multiprocessing.Lock)
-    # RLock = staticmethod(multiprocessing.RLock)
-    # Semaphore = staticmethod(multiprocessing.Semaphore)
-    # BoundedSemaphore = staticmethod(multiprocessing.BoundedSemaphore)
-    # Condition = staticmethod(multiprocessing.Condition)
+    Lock = staticmethod(backend.Lock)
+    RLock = staticmethod(backend.RLock)
+    Semaphore = staticmethod(backend.Semaphore)
+    BoundedSemaphore = staticmethod(backend.BoundedSemaphore)
+    Condition = staticmethod(backend.Condition)
     Event = staticmethod(backend.Event)
     # Barrier = staticmethod(multiprocessing.Barrier)
     # Value = staticmethod(multiprocessing.Value)
@@ -213,7 +213,7 @@ class TestLokyBackend:
         event.wait(10.0)
 
     @pytest.mark.skipif(
-        sys.platform == 'win32' and sys.version_info[:2]<(3, 4),
+        sys.platform == 'win32' and sys.version_info[:2] < (3, 4),
         reason="test require python 3.4+")
     def test_sentinel(self):
         event = self.Event()
@@ -226,7 +226,102 @@ class TestLokyBackend:
         assert not wait_for_handle(sentinel, timeout=0.0)
         event.set()
         p.join()
+        assert p.exitcode == 0
         assert wait_for_handle(sentinel, timeout=1)
+
+    @staticmethod
+    def _generate_high_number_fd():
+        """Open 2 file descriptors with high number"""
+        fds = []
+        for _ in range(25):
+            r, w = os.pipe()
+            fds += [r, w]
+        r, w = os.pipe()
+        for fd in fds:
+            os.close(fd)
+        return r, w
+
+    @classmethod
+    def _test_fd_closed(cls, started, stop):
+        started.set()
+        to_clean_up = [cls.Semaphore(0), cls.BoundedSemaphore(1),
+                       cls.Lock(), cls.RLock(), cls.Condition(), cls.Event()]
+        stop.wait(5)
+        q = cls.Queue()
+
+    @pytest.mark.skipif(sys.platform == 'win32',
+                        reason="No way to evaluate the open handles with win32"
+                        "systems.")
+    def test_fd_closed(self):
+        """Check that all the fds open in the parent process are closed.
+
+        We used `lsof` as it is compatible with OSX and unix systems. Different
+        behaviors are observed with the open fds, in particular:
+        - python2.7 and 3.4 have an open fd for /dev/urandom
+        - python2.7 links stdin to /dev/null even if it is closed beforehand
+        """
+
+        r, w = self._generate_high_number_fd()
+
+        started = self.Event()
+        stop = self.Event()
+        with open("/tmp/foobar", "w"):
+            p = self.Process(target=self._test_fd_closed, args=(started, stop))
+
+            try:
+
+                p.start()
+                assert started.wait(1), "The process took too long to start"
+                import subprocess
+                out = subprocess.check_output(["lsof", "-a", "-Fftn",
+                                               "-p", "{}".format(p.pid),
+                                               "-d", "^txt,^cwd,^rtd"])
+                lines = out.decode().split("\n")[1:-1]
+                print(("fd {} -> ({}) {}\n"*(len(lines)//3)).format(*lines))
+                n_pipe = 0
+                named_sem = []
+                for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
+                    is_std = (fd in ["f1", "f2"])
+                    if sys.version_info[:2] < (3, 3):
+                        if sys.platform != "darwin":
+                            is_std |= (fd == "f0" and name == "n/dev/null")
+                        else:
+                            is_std |= (name == "n/dev/null")
+                    is_pipe = (t in ["tPIPE", "tFIFO"])
+                    is_urand = (name == "n/dev/urandom")
+                    is_mem = (fd in ["fmem", "fDEL"])
+                    if sys.platform == "darwin":
+                        is_mem |= "n/mp-" in name
+                        is_mem |= "nloky-" in name
+                    n_pipe += is_pipe
+                    if "n/dev/shm/sem." in name:
+                        named_sem += [name[1:]]
+
+                    assert (is_pipe or is_std or is_urand or is_mem)
+
+                # there should be one pipe for communication with main process
+                # and the semaphore tracker pipe
+                assert n_pipe == 2
+
+            finally:
+                stop.set()
+                p.join()
+
+                # Clean up
+                os.close(r)
+                os.close(w)
+
+                if sys.platform == "linux" and sys.version_info < (3, 4):
+                    pid = str(os.getpid())
+                    for sem in named_sem:
+                        if pid not in sem:
+                            assert not os.path.exists(sem), (
+                                "Some named semaphore are not properly cleaned"
+                                " up")
+
+                assert len(set("f{}".format(i) for i in [r, w]).intersection(
+                    lines)) == 0
+                assert p.exitcode == 0
 
     @staticmethod
     def assertTimingAlmostEqual(t, g):

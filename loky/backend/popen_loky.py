@@ -7,15 +7,17 @@ from io import BytesIO
 from . import reduction, spawn
 from multiprocessing import util
 
-if sys.version_info[:2] > (3, 3):
-    from multiprocessing import context
-    from .process import LokyContext
-    context._concrete_contexts['loky'] = LokyContext()
-elif sys.version_info[:2] < (3, 3):
+if sys.version_info[:2] < (3, 3):
     ProcessLookupError = OSError
+elif sys.version_info > (3, 4):
+    from multiprocessing import context
 
 if sys.platform != "win32":
-    from . import semaphore_tracker
+    if sys.version_info[:2] > (3, 3):
+        from multiprocessing import semaphore_tracker
+    else:
+        from . import semaphore_tracker
+
 
 __all__ = ['Popen']
 
@@ -43,6 +45,7 @@ def get_spawning_popen():
 class _DupFd(object):
     def __init__(self, fd):
         self.fd = reduction._mk_inheritable(fd)
+
     def detach(self):
         return self.fd
 
@@ -131,7 +134,7 @@ class Popen(object):
 
     def _launch(self, process_obj):
 
-        tracker_fd = semaphore_tracker._semaphore_tracker._fd
+        tracker_fd = semaphore_tracker._semaphore_tracker.getfd()
 
         fp = BytesIO()
         set_spawning_popen(self)
@@ -204,11 +207,6 @@ if __name__ == '__main__':
         r = msvcrt.open_osfhandle(r, os.O_RDONLY)
     else:
         semaphore_tracker._semaphore_tracker._fd = args.semaphore
-
-    if sys.version_info[:2] > (3, 3):
-        from multiprocessing import context
-        from .process import LokyContext
-        context._concrete_contexts['loky'] = LokyContext()
 
     exitcode = 1
     try:
