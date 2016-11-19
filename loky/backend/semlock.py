@@ -107,7 +107,7 @@ def _sem_timedwait(handle, timeout):
         delay = min(delay, 20e-3, difference)
 
         # Sleep and increase delay
-        time.sleep(delay/1e-6)
+        time.sleep(delay)
         delay += 1e-3
 
 

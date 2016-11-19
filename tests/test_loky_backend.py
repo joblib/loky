@@ -265,7 +265,7 @@ class TestLokyBackend:
 
         started = self.Event()
         stop = self.Event()
-        with open("/dev/null"):
+        with open("/tmp/foobar", "w"):
             p = self.Process(target=self._test_fd_closed, args=(started, stop))
 
             try:
@@ -273,20 +273,26 @@ class TestLokyBackend:
                 p.start()
                 assert started.wait(1), "The process took too long to start"
                 import subprocess
-                out = subprocess.check_output(["lsof", "-a", "-Ffn",
+                out = subprocess.check_output(["lsof", "-a", "-Fftn",
                                                "-p", "{}".format(p.pid),
                                                "-d", "^txt,^cwd,^rtd"])
                 lines = out.decode().split("\n")[1:-1]
-                print(("fd {} -> {}\n"*(len(lines)//2)).format(*lines))
+                print(("fd {} -> ({}) {}\n"*(len(lines)//3)).format(*lines))
                 n_pipe = 0
                 named_sem = []
-                for fd, name in zip(lines[::2], lines[1::2]):
+                for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
                     is_std = (fd in ["f1", "f2"])
                     if sys.version_info[:2] < (3, 3):
-                        is_std |= (fd == "f0" and name == "n/dev/null")
-                    is_pipe = (name == "npipe")
+                        if sys.platform != "darwin":
+                            is_std |= (fd == "f0" and name == "n/dev/null")
+                        else:
+                            is_std |= (name == "n/dev/null")
+                    is_pipe = (t in ["tPIPE", "tFIFO"])
                     is_urand = (name == "n/dev/urandom")
                     is_mem = (fd in ["fmem", "fDEL"])
+                    if sys.platform == "darwin":
+                        is_mem |= "n/mp-" in name
+                        is_mem |= "nloky-" in name
                     n_pipe += is_pipe
                     if "n/dev/shm/sem." in name:
                         named_sem += [name[1:]]
