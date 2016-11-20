@@ -67,11 +67,11 @@ def get_reusable_executor(max_workers=None, context=None,
             max_workers=max_workers, context=context, timeout=timeout,
             kill_on_shutdown=kill_on_shutdown, executor_id=executor_id)
     else:
-        if (executor._broken or executor._shutdown_thread
+        if (executor._broken or executor._shutting_down
                 or args != _executor_args):
             if executor._broken:
                 reason = "broken"
-            elif executor._shutdown_thread:
+            elif executor._shutting_down:
                 reason = "shutdown"
             else:
                 reason = "arguments have changed"

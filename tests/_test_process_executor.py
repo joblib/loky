@@ -326,7 +326,7 @@ class ExecutorTest:
         for number in (0, -1):
             with pytest.raises(ValueError) as infos:
                 self.executor_type(max_workers=number)
-            assert infos.value.args[0] == "max_workers must be greater than 0"
+            assert "max_workers must be greater than 0" in infos.value.args[0]
 
     def test_killed_child(self):
         # When a child process is abruptly terminated, the whole pool gets

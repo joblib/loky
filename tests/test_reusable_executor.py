@@ -158,11 +158,6 @@ def id_sleep(x, delay=0):
     return x
 
 
-def is_terminated_properly(executor):
-    """check if an executor was terminated in a proper way"""
-    return executor._broken or executor._shutdown_thread
-
-
 class TestExecutorDeadLock(ReusableExecutorMixin):
 
     crash_cases = [
@@ -305,15 +300,37 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                          chunksize=4)
 
 
-class TestTerminateExecutor(ReusableExecutorMixin):
-    def test_terminate_kill(self):
-        """Test reusable_executor termination handling"""
+class TestExecutorShutdown(ReusableExecutorMixin):
+
+    def test_shutdown_short_running_tasks(self):
+        executor = get_reusable_executor(max_workers=4)
+        res = executor.map(sleep, [0.1 for i in range(10000)], chunksize=1)
+        shutdown = TimingWrapper(executor.shutdown)
+        shutdown(wait=True)
+        assert shutdown.elapsed < 0.5
+
+        with pytest.raises(ShutdownExecutor):
+            list(res)
+
+    def test_shutdown_long_running_tasks(self):
+        # long running tasks are interrupted via SIGTERM
+        executor = get_reusable_executor(max_workers=4)
+        res = executor.map(sleep, [10 for i in range(100)], chunksize=1)
+        shutdown = TimingWrapper(executor.shutdown)
+        shutdown(wait=True)
+        assert shutdown.elapsed < 0.5
+
+        with pytest.raises(ShutdownExecutor):
+            list(res)
+
+    def test_shutdown_incomplete(self):
+        # Check the behavior of shutting down an executor with pending work
         from itertools import repeat
-        executor = get_reusable_executor(max_workers=5)
+        executor = get_reusable_executor(max_workers=4)
         res1 = executor.map(id_sleep, range(50), repeat(.001))
         res2 = executor.map(id_sleep, range(50), repeat(.1))
         assert list(res1) == list(range(50))
-        # We should get an error as the executor.shutdownd before we fetched
+        # We should get an error as the executor.shutdown before we fetched
         # the results from the operation.
         terminate = TimingWrapper(executor.shutdown)
         terminate(wait=True)
@@ -321,27 +338,15 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         with pytest.raises(ShutdownExecutor):
             list(res2)
 
-    def test_terminate_deadlock(self):
-        """Test recovery if killed after resize call"""
-        # Test the executor.shutdown call do not cause deadlock
+    def test_shutdown_no_deadlock_with_broken(self):
+        # Check the executor.shutdown call does not cause a deadlock on an
+        # executor with a crashed worker process.
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))  # start the worker processes
-        executor.submit(kill_friend, (next(iter(executor._processes.keys())),
-                                      .0))
+        worker_pid = next(iter(executor._processes.keys()))
+        executor.submit(kill_friend, (worker_pid, .0))
         sleep(.01)
         executor.shutdown(wait=True)
-
-    def test_terminate(self):
-        executor = get_reusable_executor(max_workers=4)
-        res = executor.map(
-            sleep, [0.1 for i in range(10000)], chunksize=1
-            )
-        shutdown = TimingWrapper(executor.shutdown)
-        shutdown(wait=True)
-        assert shutdown.elapsed < 0.5
-
-        with pytest.raises(ShutdownExecutor):
-            list(res)
 
 
 class TestResizeExecutor(ReusableExecutorMixin):
