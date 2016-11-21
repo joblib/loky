@@ -128,11 +128,11 @@ class TestLokyBackend:
         join = TimingWrapper(p.join)
 
         assert join(0) is None
-        self.assertTimingAlmostEqual(join.elapsed, 0.0)
+        join.assert_timing_almost_zero()
         assert p.is_alive()
 
         assert join(-1) is None
-        self.assertTimingAlmostEqual(join.elapsed, 0.0)
+        join.assert_timing_almost_zero()
         assert p.is_alive()
 
         # XXX maybe terminating too soon causes the problems on Gentoo...
@@ -155,7 +155,7 @@ class TestLokyBackend:
         else:
             assert join() is None
 
-        self.assertTimingAlmostEqual(join.elapsed, 0.0)
+        join.assert_timing_almost_zero()
 
         assert not p.is_alive()
         assert p not in self.active_children()
@@ -350,7 +350,7 @@ class TestLokyBackend:
         # -> can be used on windows
         r, w = self._high_number_Pipe()
 
-        tmp_fname = "/tmp/foobar" if sys.platform !="win32" else ".foobar"
+        tmp_fname = "/tmp/foobar" if sys.platform != "win32" else ".foobar"
         with open(tmp_fname, "w"):
             # Process creating semaphore and pipes before stopping
             started, stop = self.Event(), self.Event()
@@ -396,10 +396,6 @@ class TestLokyBackend:
         p = self.Process(target=parallel_sum, args=(10,))
         p.start()
         p.join()
-
-    @staticmethod
-    def assertTimingAlmostEqual(t, g):
-        assert round(t-g, 1) == 0
 
 
 def wait_for_handle(handle, timeout):

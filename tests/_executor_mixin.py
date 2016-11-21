@@ -133,3 +133,9 @@ class TimingWrapper(object):
             return self.func(*args, **kwds)
         finally:
             self.elapsed = time.time() - t
+
+    def assert_timing_almost_equal(self, delay):
+        assert round(self.elapsed - delay, 1) == 0
+
+    def assert_timing_almost_zero(self):
+        self.assert_timing_almost_equal(0.0)
