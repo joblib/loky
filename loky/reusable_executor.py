@@ -116,7 +116,7 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         while len(self._processes) > max_workers and not self._broken:
             time.sleep(1e-3)
 
-        self._adjust_process_count()
+        self._start_missing_workers()
         while not all([p.is_alive() for p in self._processes.values()]):
             time.sleep(1e-3)
 

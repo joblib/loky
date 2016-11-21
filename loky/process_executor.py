@@ -76,8 +76,16 @@ if sys.version_info < (3, 4):
 else:
     from multiprocessing import get_context
 
-
 __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
+
+
+# Specific exit code to be used by worker processes that stop because of a
+# timeout. This value was chose to be:
+# - outside or reserved exit code:
+#   http://www.tldp.org/LDP/abs/html/exitcodes.html#FTN.AEN23629
+# - outside of codes typically used by C programs /usr/include/sysexits.h
+# - because it's 42 * 2
+WORKER_TIMEOUT_EXIT_CODE = 84
 
 # Workers are created as daemon threads and processes. This is done to allow
 # the interpreter to exit when there are still idle processes in a
@@ -253,17 +261,16 @@ def _process_worker(call_queue, result_queue, timeout=None):
     while True:
         try:
             call_item = call_queue.get(block=True, timeout=timeout)
-            if call_item is None:
-                mp.util.info("shutting down worker on sentinel")
         except Empty:
             mp.util.info("shutting down worker after timeout %0.3fs"
                          % timeout)
-            call_item = None
+            sys.exit(WORKER_TIMEOUT_EXIT_CODE)
         except BaseException as e:
             traceback.print_exc()
             sys.exit(1)
         if call_item is None:
             # Notifiy queue management thread about clean worker shutdown
+            mp.util.info("shutting down worker on sentinel")
             result_queue.put(os.getpid())
             return
         try:
@@ -387,7 +394,8 @@ def _queue_management_worker(executor_reference,
                                 work_ids_queue,
                                 call_queue)
         # Wait for a result to be ready in the result_queue while checking
-        # that worker process are still running. If a worker process
+        # that worker process are still running.
+        result_item = None
         count = 0
         while not wakeup.get_and_unset():
             if sys.platform == "win32" and sys.version_info < (3, 3):
@@ -409,7 +417,6 @@ def _queue_management_worker(executor_reference,
                 break
         else:
             ready = []
-            result_item = None
         if result_reader in ready:
             try:
                 result_item = result_reader.recv()
@@ -420,39 +427,33 @@ def _queue_management_worker(executor_reference,
                     if work_item is not None:
                         work_item.future.set_exception(exc)
                         del work_item
-                _clear_list(running_work_items)
-        elif len(ready) > 0:
-            # Mark the process pool broken so that submits fail right now.
-            executor = executor_reference()
-            if executor is not None:
-                executor._broken = True
-                executor._shutting_down = True
-                executor = None
-            # All futures in flight must be marked failed
-            for work_id, work_item in pending_work_items.items():
-                work_item.future.set_exception(
-                    BrokenExecutor(
-                        "A process in the process pool was terminated abruptly"
-                        " while the future was running or pending."
-                    ))
-                # Delete references to object. See issue16284
-                del work_item
-            pending_work_items.clear()
+                del running_work_items[:]
 
-            # Terminate remaining workers forcibly: the queues or their
-            # locks may be in a dirty state and block forever.
-            for p in processes.values():
-                mp.util.debug('terminate process {}'.format(p.name))
-                try:
-                    p.terminate()
-                except ProcessLookupError:
-                    pass
-            shutdown_all_workers()
-            return
+        stopped_workers = [p for p in processes.values() if not p.is_alive()]
+        executor = executor_reference()
+        for stopped_worker in stopped_workers:
+            if stopped_worker.exitcode == WORKER_TIMEOUT_EXIT_CODE:
+                # Workers stopped by timeout have a specific return code: they
+                # should be collected but the executor should not be marked as
+                # broken
+                processes.pop(stopped_worker.pid).join()
+            elif stopped_worker.exitcode == 0 and shutting_down():
+                # This can happen when shutting down the executor and will
+                # be dealt with later, outside of this loop.
+                pass
+            else:
+                cause_msg = ("A worker process managed by the executor was"
+                             " terminated abruptly while the future was"
+                             " running or pending.")
+                _handle_executor_crash(executor_reference, processes,
+                                       pending_work_items, call_queue,
+                                       cause_msg)
+                return
+
         if isinstance(result_item, int):
-            # Clean shutdown of a worker using its PID, either on request
-            # by the executor.shutdown method or by the timeout of the worker
-            # itself: we should not mark the executor as broken.
+            # Clean shutdown of a worker using its PID on request
+            # by the executor.shutdown method: we should not mark the executor
+            # as broken.
             p = processes.pop(result_item)
             p.join()
         elif result_item is not None:
@@ -466,18 +467,17 @@ def _queue_management_worker(executor_reference,
                 # Delete references to object. See issue16284
                 del work_item
             running_work_items.remove(result_item.work_id)
-        # Check whether we should start shutting down.
-        executor = executor_reference()
+
         # No more work items can be added if:
         #   - The interpreter is shutting down OR
         #   - The executor that owns this worker has been collected OR
         #   - The executor that owns this worker has been shutdown.
         if shutting_down():
-            if kill_on_shutdown:
+            if kill_on_shutdown and executor is None or not executor._broken:
                 while pending_work_items:
                     _, work_item = pending_work_items.popitem()
                     work_item.future.set_exception(ShutdownExecutor(
-                        "The Executor was shutdown before this job could "
+                        "The executor was shutdown before this job could "
                         "complete."))
                     del work_item
                 # Terminate remaining workers forcibly: the queues or their
@@ -486,6 +486,7 @@ def _queue_management_worker(executor_reference,
                     p.terminate()
                 shutdown_all_workers()
                 return
+
             # Since no new work items can be added, it is safe to shutdown
             # this thread if there are no pending work items.
             if not pending_work_items:
@@ -512,19 +513,22 @@ def _management_worker(executor_reference, queue_management_thread, processes,
                 # the queue manager thread has stopped while the feed thread
                 # and all worker process are still running: this is a crash
                 # of the queue manager thread it-self and not a shutdown.
-                cause_msg = ("The QueueManager thread was terminated "
-                             "abruptly while the future was running or "
-                             "pending. This can be caused by an "
-                             "unpickling error of a result.")
-                _shutdown_on_crash(executor_reference, processes,
-                                   pending_work_items, call_queue, cause_msg)
+                cause_msg = ("The executor was terminated abruptly. This can"
+                             " be caused by an unpickling error of a job"
+                             " result received from a worker process.")
+                _handle_executor_crash(executor_reference, processes,
+                                       pending_work_items, call_queue,
+                                       cause_msg)
             return
         elif feeder_thread_stopped:
-            cause_msg = ("The call_queue feeder thread was terminated "
-                         "abruptly while feeding a new job. This can be due "
-                         "to a job pickling error.")
-            _shutdown_on_crash(executor_reference, processes,
-                               pending_work_items, call_queue, cause_msg)
+            # The call queue feature thread was stopped unexpectedly. This is
+            # typically caused by unpicklable jobs.
+            cause_msg = ("The executor was terminated abruptly. This can"
+                         " be caused by an pickling issue when dispatching"
+                         " a job to a worker process.")
+            _handle_executor_crash(executor_reference, processes,
+                                   pending_work_items, call_queue,
+                                   cause_msg)
             return
         executor = executor_reference()
         if shutting_down():
@@ -534,10 +538,9 @@ def _management_worker(executor_reference, queue_management_thread, processes,
         time.sleep(.1)
 
 
-def _shutdown_on_crash(executor_reference, processes, pending_work_items,
-                       call_queue, cause_msg):
-    mp.util.info("Crash detected, marking executor as broken and terminating "
-                 "worker processes. " + cause_msg)
+def _handle_executor_crash(executor_reference, processes, pending_work_items,
+                           call_queue, cause_msg):
+    mp.util.info(cause_msg)
     executor = executor_reference()
     if executor is not None:
         executor._broken = True
@@ -550,7 +553,8 @@ def _shutdown_on_crash(executor_reference, processes, pending_work_items,
         p.terminate()
         p.join()
     # All futures in flight must be marked failed
-    for work_id, work_item in pending_work_items.items():
+    while pending_work_items:
+        _, work_item = pending_work_items.popitem()
         work_item.future.set_exception(BrokenExecutor(cause_msg))
         # Delete references to object. See issue16284
         del work_item
@@ -664,9 +668,9 @@ class ProcessPoolExecutor(_base.Executor):
 
     def _start_queue_management_thread(self):
         if len(self._processes) != self._max_workers:
-            self._adjust_process_count()
+            self._start_missing_workers()
         if self._queue_management_thread is None:
-            mp.util.debug('_start_queue_management_thread called')
+            mp.util.debug('starting queue management thread')
             # Start the processes so that their sentinels are known.
             self._queue_management_thread = threading.Thread(
                 target=_queue_management_worker,
@@ -688,7 +692,7 @@ class ProcessPoolExecutor(_base.Executor):
         def weakref_cb(_, wakeup=self._queue_management_wakeup):
             wakeup.set()
         if self._management_thread is None:
-            mp.util.debug('_start_thread_management_thread called')
+            mp.util.debug('starting thread management thread')
             # Start the processes so that their sentinels are known.
             self._management_thread = threading.Thread(
                 target=_management_worker,
@@ -705,8 +709,9 @@ class ProcessPoolExecutor(_base.Executor):
             _threads_wakeup[
                 self._queue_management_thread] = self._queue_management_wakeup
 
-    def _adjust_process_count(self):
-        for _ in range(len(self._processes), self._max_workers):
+    def _start_missing_workers(self):
+        previous_count = len(self._processes)
+        for _ in range(previous_count, self._max_workers):
             p = self._ctx.Process(
                 target=_process_worker,
                 args=(self._call_queue,
@@ -714,7 +719,9 @@ class ProcessPoolExecutor(_base.Executor):
                       self._timeout))
             p.start()
             self._processes[p.pid] = p
-        mp.util.debug('Adjust process count : {}'.format(self._processes))
+        new_count = len(self._processes)
+        mp.util.debug('starting new worker processes from {} to {}: {}'
+                      .format(previous_count, new_count, self._processes))
 
     def submit(self, fn, *args, **kwargs):
         with self._shutdown_lock:
@@ -779,12 +786,12 @@ class ProcessPoolExecutor(_base.Executor):
             pass
         with self._shutdown_lock:
             self._shutting_down = True
-        if self._queue_management_thread:
+        if self._queue_management_thread is not None:
             # Wake up queue management thread
             self._queue_management_wakeup.set()
             if wait and self._queue_management_thread.is_alive():
                 self._queue_management_thread.join()
-        if self._management_thread:
+        if self._management_thread is not None:
             if wait and self._management_thread.is_alive():
                 self._management_thread.join()
         if self._call_queue:

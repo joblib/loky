@@ -5,6 +5,8 @@ import math
 import psutil
 import threading
 
+
+import loky._base as futures
 from loky.reusable_executor import get_reusable_executor
 from multiprocessing import cpu_count
 
@@ -59,7 +61,7 @@ def _check_executor_started(executor):
     res = executor.submit(id, None)
     try:
         res.result(timeout=TIMEOUT)
-    except TimeoutError:
+    except futures.TimeoutError:
         print('\n'*3, res.done(), executor._call_queue.empty(),
               executor._result_queue.empty())
         print(executor._processes)
