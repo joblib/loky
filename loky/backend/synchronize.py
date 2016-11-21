@@ -116,11 +116,7 @@ class SemLock(object):
         return (h, sl.kind, sl.maxvalue, sl.name)
 
     def __setstate__(self, state):
-        if sys.version_info < (3, 4):
-            h, kind, maxvalue, name = state
-            self._semlock = SemLockC(h, kind, maxvalue, rebuild_name=name)
-        else:
-            self._semlock = SemLockC._rebuild(*state)
+        self._semlock = SemLockC._rebuild(*state)
         util.debug('recreated blocker with handle %r and name "%s"'
                    % (state[0], state[3].decode()))
         self._make_methods()
@@ -129,12 +125,7 @@ class SemLock(object):
     def _make_name(usage):
 
         # OSX does not support long names for semaphores
-        if sys.platform != "darwin":
-            name = '/loky-%i-%s-%s' % (os.getpid(), usage, next(SemLock._rand))
-        else:
-            name = '/loky-%i-%s' % (os.getpid(), next(SemLock._rand))
-        if sys.version_info < (3, 4):
-            return str.encode(name)
+        name = '/loky-%i-%s' % (os.getpid(), next(SemLock._rand))
         return name
 
 
