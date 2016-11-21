@@ -47,6 +47,7 @@ if sys.version_info[:2] < (3, 3):
 RECURSIVE_MUTEX, SEMAPHORE = list(range(2))
 SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 
+
 #
 # Base class for semaphores and mutexes; wraps `_multiprocessing.SemLock`
 #
@@ -55,13 +56,12 @@ class SemLock(object):
 
     _rand = tempfile._RandomNameSequence()
 
-    def __init__(self, kind, value, maxvalue, usage="semlock"):
-        name = 'loky'
-        unlink_now = sys.platform == 'win32' or name == 'fork'
+    def __init__(self, kind, value, maxvalue):
+        unlink_now = sys.platform == 'win32'
         for i in range(100):
             try:
                 self._semlock = SemLockC(
-                    kind, value, maxvalue, SemLock._make_name(usage),
+                    kind, value, maxvalue, SemLock._make_name(),
                     unlink_now)
             except FileExistsError:
                 pass
@@ -85,8 +85,7 @@ class SemLock(object):
             # disabled.  When the object is garbage collected or the
             # process shuts down we unlink the semaphore name
             from .semaphore_tracker import register
-            if sys.version_info < (3, 4):
-                register(self._semlock.name)
+            register(self._semlock.name)
             util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
                           exitpriority=0)
 
@@ -122,8 +121,7 @@ class SemLock(object):
         self._make_methods()
 
     @staticmethod
-    def _make_name(usage):
-
+    def _make_name():
         # OSX does not support long names for semaphores
         name = '/loky-%i-%s' % (os.getpid(), next(SemLock._rand))
         return name
@@ -134,14 +132,9 @@ class SemLock(object):
 #
 
 class Semaphore(SemLock):
-    idx = -1
 
-    def __init__(self, value=1, usage="semaphore"):
-        if usage == "semaphore":
-            Semaphore.idx += 1
-            usage = "semaphore%i" % Semaphore.idx
-        SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX,
-                         usage=usage)
+    def __init__(self, value=1):
+        SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX)
 
     def get_value(self):
         return self._semlock._get_value()
@@ -159,13 +152,9 @@ class Semaphore(SemLock):
 #
 
 class BoundedSemaphore(Semaphore):
-    idx = -1
 
-    def __init__(self, value=1, usage="bounded_sem"):
-        if usage == "bounded_sem":
-            BoundedSemaphore.idx += 1
-            usage = "bounded_sem%i" % BoundedSemaphore.idx
-        SemLock.__init__(self, SEMAPHORE, value, value, usage=usage)
+    def __init__(self, value=1):
+        SemLock.__init__(self, SEMAPHORE, value, value)
 
     def __repr__(self):
         try:
@@ -181,14 +170,9 @@ class BoundedSemaphore(Semaphore):
 #
 
 class Lock(SemLock):
-    idx = -1
 
-    def __init__(self, usage="lock"):
-        if usage == "lock":
-            Lock.idx += 1
-            usage = "lock%i" % Lock.idx
-        super(Lock, self).__init__(SEMAPHORE, 1, 1, usage=usage)
-        # SemLock.__init__(self, SEMAPHORE, 1, 1)
+    def __init__(self):
+        super(Lock, self).__init__(SEMAPHORE, 1, 1)
 
     def __repr__(self):
         try:
@@ -212,13 +196,9 @@ class Lock(SemLock):
 #
 
 class RLock(SemLock):
-    idx = -1
 
-    def __init__(self, usage="rlock"):
-        if usage == "rlock":
-            RLock.idx += 1
-            usage = "rlock%i" % RLock.idx
-        SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1, usage=usage)
+    def __init__(self):
+        super(RLock, self).__init__(RECURSIVE_MUTEX, 1, 1)
 
     def __repr__(self):
         try:
@@ -243,16 +223,12 @@ class RLock(SemLock):
 #
 
 class Condition(object):
-    idx = -1
 
-    def __init__(self, lock=None, usage="cond"):
-        if usage == "cond":
-            Condition.idx += 1
-            usage = "cond%i" % Condition.idx
-        self._lock = lock or RLock(usage="%s-%s" % (usage, "lock"))
-        self._sleeping_count = Semaphore(0, usage="%s-%s" % (usage, "sleep"))
-        self._woken_count = Semaphore(0, usage="%s-%s" % (usage, "woken"))
-        self._wait_semaphore = Semaphore(0, usage="%s-%s" % (usage, "wait"))
+    def __init__(self, lock=None):
+        self._lock = lock or RLock()
+        self._sleeping_count = Semaphore(0)
+        self._woken_count = Semaphore(0)
+        self._wait_semaphore = Semaphore(0)
         self._make_methods()
 
     def __getstate__(self):
@@ -371,15 +347,10 @@ class Condition(object):
 #
 
 class Event(object):
-    idx = -1
 
-    def __init__(self, usage="event"):
-        if usage == "event":
-            Event.idx += 1
-            usage = "event%i" % Event.idx
-        self._cond = Condition(Lock(usage="%s-%s" % (usage, "cd-lock")),
-                               usage="%s-%s" % (usage, "cd"))
-        self._flag = Semaphore(0, usage="%s-%s" % (usage, "flag"))
+    def __init__(self):
+        self._cond = Condition(Lock())
+        self._flag = Semaphore(0)
 
     def is_set(self):
         with self._cond:
