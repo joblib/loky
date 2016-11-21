@@ -352,12 +352,13 @@ class TestLokyBackend:
         # -> can be used on windows
         r, w = self._high_number_Pipe()
 
-        with open("/tmp/foobar", "w"):
+        tmp_fname = "/tmp/foobar" if sys.platform !="win32" else ".foobar"
+        with open(tmp_fname, "w"):
             # Process creating semaphore and pipes before stopping
             started, stop = self.Event(), self.Event()
             p = self.Process(target=self._test_sync_object_handleling,
                              args=(started, stop, r, w.fileno()))
-
+            named_sem = []
             try:
 
                 p.start()
