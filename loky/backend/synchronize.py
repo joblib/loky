@@ -127,18 +127,23 @@ class SemLock(object):
 
     @staticmethod
     def _make_name(usage):
-        name = 'loky-%i-%s-%s' % (os.getpid(), usage, next(SemLock._rand))
+        name = '/loky-%i-%s-%s' % (os.getpid(), usage, next(SemLock._rand))
         if sys.version_info < (3, 4):
             return str.encode(name)
         return name
+
 
 #
 # Semaphore
 #
 
 class Semaphore(SemLock):
+    idx = -1
 
     def __init__(self, value=1, usage="semaphore"):
+        if usage == "semaphore":
+            BoundedSemaphore.idx += 1
+            usage = "semaphore%i" % BoundedSemaphore.idx
         SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX,
                          usage=usage)
 
@@ -152,13 +157,18 @@ class Semaphore(SemLock):
             value = 'unknown'
         return '<%s(value=%s)>' % (self.__class__.__name__, value)
 
+
 #
 # Bounded semaphore
 #
 
 class BoundedSemaphore(Semaphore):
+    idx = -1
 
-    def __init__(self, value=1, usage="bsemaphore"):
+    def __init__(self, value=1, usage="bounded_sem"):
+        if usage == "bounded_sem":
+            BoundedSemaphore.idx += 1
+            usage = "bounded_sem%i" % BoundedSemaphore.idx
         SemLock.__init__(self, SEMAPHORE, value, value, usage=usage)
 
     def __repr__(self):
@@ -169,13 +179,18 @@ class BoundedSemaphore(Semaphore):
         return '<%s(value=%s, maxvalue=%s)>' % \
                (self.__class__.__name__, value, self._semlock.maxvalue)
 
+
 #
 # Non-recursive lock
 #
 
 class Lock(SemLock):
+    idx = -1
 
     def __init__(self, usage="lock"):
+        if usage == "lock":
+            Lock.idx += 1
+            usage = "lock%i" % Lock.idx
         super(Lock, self).__init__(SEMAPHORE, 1, 1, usage=usage)
         # SemLock.__init__(self, SEMAPHORE, 1, 1)
 
@@ -195,13 +210,18 @@ class Lock(SemLock):
             name = 'unknown'
         return '<%s(owner=%s)>' % (self.__class__.__name__, name)
 
+
 #
 # Recursive lock
 #
 
 class RLock(SemLock):
+    idx = -1
 
     def __init__(self, usage="rlock"):
+        if usage == "rlock":
+            Condition.idx += 1
+            usage = "rlock%i" % RLock.idx
         SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1, usage=usage)
 
     def __repr__(self):
@@ -221,17 +241,22 @@ class RLock(SemLock):
             name, count = 'unknown', 'unknown'
         return '<%s(%s, %s)>' % (self.__class__.__name__, name, count)
 
+
 #
 # Condition variable
 #
 
 class Condition(object):
+    idx = -1
 
-    def __init__(self, lock=None):
-        self._lock = lock or RLock(usage="cond_lock")
-        self._sleeping_count = Semaphore(0, usage="cond_sc")
-        self._woken_count = Semaphore(0, usage="cond_wc")
-        self._wait_semaphore = Semaphore(0, usage="cond_ws")
+    def __init__(self, lock=None, usage="cond"):
+        if usage == "cond":
+            Condition.idx += 1
+            usage = "cond%i" % Condition.idx
+        self._lock = lock or RLock(usage="%s-%s" % (usage, "lock"))
+        self._sleeping_count = Semaphore(0, usage="%s-%s" % (usage, "sleep"))
+        self._woken_count = Semaphore(0, usage="%s-%s" % (usage, "woken"))
+        self._wait_semaphore = Semaphore(0, usage="%s-%s" % (usage, "wait"))
         self._make_methods()
 
     def __getstate__(self):
@@ -260,7 +285,8 @@ class Condition(object):
                            self._woken_count._semlock._get_value())
         except Exception:
             num_waiters = 'unknown'
-        return '<%s(%s, %s)>' % (self.__class__.__name__, self._lock, num_waiters)
+        return '<%s(%s, %s)>' % (self.__class__.__name__,
+                                 self._lock, num_waiters)
 
     def wait(self, timeout=None):
         assert self._lock._semlock._is_mine(), \
@@ -343,15 +369,21 @@ class Condition(object):
             result = predicate()
         return result
 
+
 #
 # Event
 #
 
 class Event(object):
+    idx = -1
 
-    def __init__(self):
-        self._cond = Condition(Lock(usage="event_lock"))
-        self._flag = Semaphore(0, usage="event_flag")
+    def __init__(self, usage="event"):
+        if usage == "event":
+            Event.idx += 1
+            usage = "event%i" % Event.idx
+        self._cond = Condition(Lock(usage="%s-%s" % (usage, "cd-lock")),
+                               usage="%s-%s" % (usage, "cd"))
+        self._flag = Semaphore(0, usage="%s-%s" % (usage, "flag"))
 
     def is_set(self):
         with self._cond:
