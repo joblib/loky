@@ -142,8 +142,8 @@ class Semaphore(SemLock):
 
     def __init__(self, value=1, usage="semaphore"):
         if usage == "semaphore":
-            BoundedSemaphore.idx += 1
-            usage = "semaphore%i" % BoundedSemaphore.idx
+            Semaphore.idx += 1
+            usage = "semaphore%i" % Semaphore.idx
         SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX,
                          usage=usage)
 
@@ -220,7 +220,7 @@ class RLock(SemLock):
 
     def __init__(self, usage="rlock"):
         if usage == "rlock":
-            Condition.idx += 1
+            RLock.idx += 1
             usage = "rlock%i" % RLock.idx
         SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1, usage=usage)
 

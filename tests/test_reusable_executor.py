@@ -1,15 +1,17 @@
 import os
 import sys
 import psutil
-import warnings
-from time import sleep, time
 import pytest
+import warnings
 import threading
-from loky.reusable_executor import get_reusable_executor
+from time import sleep
 from multiprocessing import util
-from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from pickle import PicklingError, UnpicklingError
-from ._executor_mixin import ReusableExecutorMixin
+
+from loky.reusable_executor import get_reusable_executor
+from loky.process_executor import BrokenExecutor, ShutdownExecutor
+from ._executor_mixin import ReusableExecutorMixin, TimingWrapper
+
 try:
     import numpy as np
 except ImportError:
@@ -28,13 +30,6 @@ try:
     from signal import SIGKILL
 except ImportError:
     from signal import SIGTERM as SIGKILL
-
-# Activate multiprocessing logging
-if not util._log_to_stderr:
-    import logging
-    log = util.log_to_stderr(10)
-    log.handlers[0].setFormatter(logging.Formatter(
-        '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
 
 
 def clean_warning_registry():
@@ -412,17 +407,3 @@ def test_osx_accelerate_freeze():
     executor = get_reusable_executor(max_workers=2)
     executor.submit(np.dot, (a, a))
     executor.shutdown(wait=True)
-
-
-class TimingWrapper(object):
-
-    def __init__(self, func):
-        self.func = func
-        self.elapsed = None
-
-    def __call__(self, *args, **kwds):
-        t = time()
-        try:
-            return self.func(*args, **kwds)
-        finally:
-            self.elapsed = time() - t

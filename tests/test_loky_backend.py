@@ -1,38 +1,43 @@
 import os
 import sys
 import time
-from loky import backend
-import multiprocessing
 import pytest
 import signal
+import multiprocessing
+
+from loky import backend
+from ._executor_mixin import TimingWrapper
 
 DELTA = 0.1
 
 
 class TestLokyBackend:
+    # loky processes
     Process = backend.Process
     current_process = staticmethod(multiprocessing.current_process)
     active_children = staticmethod(multiprocessing.active_children)
-    # Pool = staticmethod(multiprocessing.Pool)
+
+    # interprocess communication objects
     Pipe = staticmethod(backend.Pipe)
     Queue = staticmethod(backend.Queue)
-    if sys.version_info < (3, 3):
-        from _multiprocessing import Connection
-        Connection = staticmethod(Connection)
-    else:
-        Connection = staticmethod(multiprocessing.connection.Connection)
-    # JoinableQueue = staticmethod(multiprocessing.JoinableQueue)
+
+    # synchronization primitives
     Lock = staticmethod(backend.Lock)
     RLock = staticmethod(backend.RLock)
     Semaphore = staticmethod(backend.Semaphore)
     BoundedSemaphore = staticmethod(backend.BoundedSemaphore)
     Condition = staticmethod(backend.Condition)
     Event = staticmethod(backend.Event)
-    # Barrier = staticmethod(multiprocessing.Barrier)
-    # Value = staticmethod(multiprocessing.Value)
-    # Array = staticmethod(multiprocessing.Array)
-    # RawValue = staticmethod(multiprocessing.RawValue)
-    # RawArray = staticmethod(multiprocessing.RawArray)
+
+    @classmethod
+    def teardown_class(cls):
+        """ teardown any state that was previously setup with a call to
+        setup_class.
+        """
+        # TODO: remove all child processes
+        for child_process in cls.active_children():
+            child_process.terminate()
+            child_process.join()
 
     def test_current(self):
 
@@ -158,7 +163,7 @@ class TestLokyBackend:
         p.join()
 
         # XXX sometimes get p.exitcode == 0 on Windows ...
-        #assert p.exitcode == -signal.SIGTERM
+        # assert p.exitcode == -signal.SIGTERM
 
     def test_cpu_count(self):
         try:
@@ -311,25 +316,24 @@ class TestLokyBackend:
             # named semaphore
             is_mem = (fd in ["fmem", "fDEL"])
             if sys.platform == "darwin":
-                is_mem |= "n/mp-" in name
                 is_mem |= "n/loky-" in name
             if is_mem and "n/dev/shm/sem." in name:
                 named_sem += [name[1:]]
 
+            # no other files should be opened at this stage in the process
             assert (is_pipe or is_std or is_rng or is_mem)
 
         # there should be one pipe for communication with main process
         # and the semaphore tracker pipe and the Connection pipe
-        assert n_pipe == 3
+        assert n_pipe == 3, ("Some pipes were not properly closed during the "
+                             "child process setup.")
 
-        # w should have been closed
+        # assert that the writable part of the Pipe (not passed to child),
+        # have been properly closed.
         assert len(set("f{}".format(w)).intersection(lines)) == 0
 
         return named_sem
 
-    @pytest.mark.skipif(sys.platform == 'win32',
-                        reason="No way to evaluate the open handles with win32"
-                        "systems.")
     def test_sync_object_handleling(self):
         """Check the correct handeling of semaphores and pipes with loky
 
@@ -359,51 +363,22 @@ class TestLokyBackend:
                 p.start()
                 assert started.wait(1), "The process took too long to start"
                 r.close()
-                if sys.platform != "win32":
-                    self._check_fds(p.pid, w.fileno())
-                    # import subprocess
-                    # out = subprocess.check_output(["lsof", "-a", "-Fftn",
-                    #                                "-p", "{}".format(p.pid),
-                    #                                "-d", "^txt,^cwd,^rtd"])
-                    # lines = out.decode().split("\n")[1:-1]
-                    # print(("fd {} -> ({}) {}\n"*(len(lines)//3)).format(*lines))
-                    # n_pipe = 0
-                    # named_sem = []
-                    # for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
-                    #     is_std = (fd in ["f1", "f2"])
-                    #     if sys.version_info[:2] < (3, 3):
-                    #         if sys.platform != "darwin":
-                    #             is_std |= (fd == "f0" and name == "n/dev/null")
-                    #         else:
-                    #             is_std |= (name == "n/dev/null")
-                    #     is_pipe = (t in ["tPIPE", "tFIFO"])
-                    #     is_urand = (name == "n/dev/urandom")
-                    #     is_mem = (fd in ["fmem", "fDEL"])
-                    #     if sys.platform == "darwin":
-                    #         is_mem |= "n/mp-" in name
-                    #         is_mem |= "nloky-" in name
-                    #     n_pipe += is_pipe
-                    #     if "n/dev/shm/sem." in name:
-                    #         named_sem += [name[1:]]
-
-                    #     assert (is_pipe or is_std or is_urand or is_mem)
-
-                    # # there should be one pipe for communication with main process
-                    # # and the semaphore tracker pipe and the Connection pipe
-                    # assert n_pipe == 3
                 w.send_bytes(b"foo")
+                if sys.platform != "win32":
+                    named_sem = self._check_fds(p.pid, w.fileno())
 
             finally:
                 stop.set()
                 p.join()
 
-                # Make sure the r part
-                with pytest.raises(IOError) as e:
+                # ensure that Pipe->r was closed when the child process exited
+                with pytest.raises(IOError):
                     w.send_bytes(b"foo")
-                print(e)
                 w.close()
 
-                if sys.platform == "linux" and sys.version_info < (3, 3):
+                if sys.platform == "linux":
+                    # On linux, check that the named semaphores created in the
+                    # child process have been unlinked when it terminated.
                     pid = str(os.getpid())
                     for sem in named_sem:
                         if pid not in sem:
@@ -411,8 +386,6 @@ class TestLokyBackend:
                                 "Some named semaphore are not properly cleaned"
                                 " up")
 
-                # assert len(set("f{}".format(i) for i in [w]).intersection(
-                #     lines)) == 0
                 assert p.exitcode == 0
 
     @pytest.mark.skipif(sys.version_info[:2] >= (3, 6),
@@ -428,25 +401,6 @@ class TestLokyBackend:
     @staticmethod
     def assertTimingAlmostEqual(t, g):
         assert round(t-g, 1) == 0
-
-
-#
-#
-#
-
-
-class TimingWrapper(object):
-
-    def __init__(self, func):
-        self.func = func
-        self.elapsed = None
-
-    def __call__(self, *args, **kwds):
-        t = time.time()
-        try:
-            return self.func(*args, **kwds)
-        finally:
-            self.elapsed = time.time() - t
 
 
 def wait_for_handle(handle, timeout):

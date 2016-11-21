@@ -115,3 +115,21 @@ class ReusableExecutorMixin:
         assert executor.submit(math.sqrt, 1).result() == 1
         # There can be less than 2 workers because of the worker timeout
         _check_subprocesses_number(executor, expected_max_process_number=2)
+
+
+#
+# Wrapper
+#
+
+class TimingWrapper(object):
+
+    def __init__(self, func):
+        self.func = func
+        self.elapsed = None
+
+    def __call__(self, *args, **kwds):
+        t = time.time()
+        try:
+            return self.func(*args, **kwds)
+        finally:
+            self.elapsed = time.time() - t

@@ -35,7 +35,17 @@ else:
         mp.context._concrete_contexts['loky'] = LokyContext()
 
 if sys.version_info > (3, 4):
+    import os
     from multiprocessing import synchronize
+
+    @staticmethod
+    def _make_name():
+        name = '/loky-%i-%s' % (os.getpid(), next(synchronize.SemLock._rand))
+        if sys.version_info < (3, 4):
+            return str.encode(name)
+        return name
+
+    synchronize.SemLock._make_name = _make_name
 
     def Semaphore(*args, **kwargs):
         return synchronize.Semaphore(*args, ctx=_ctx, **kwargs)
