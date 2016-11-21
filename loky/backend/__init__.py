@@ -41,8 +41,6 @@ if sys.version_info > (3, 4):
     @staticmethod
     def _make_name():
         name = '/loky-%i-%s' % (os.getpid(), next(synchronize.SemLock._rand))
-        if sys.version_info < (3, 4):
-            return str.encode(name)
         return name
 
     synchronize.SemLock._make_name = _make_name
