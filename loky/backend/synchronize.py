@@ -127,7 +127,12 @@ class SemLock(object):
 
     @staticmethod
     def _make_name(usage):
-        name = '/loky-%i-%s-%s' % (os.getpid(), usage, next(SemLock._rand))
+
+        # OSX does not support long names for semaphores
+        if sys.platform != "darwin":
+            name = '/loky-%i-%s-%s' % (os.getpid(), usage, next(SemLock._rand))
+        else:
+            name = '/loky-%i-%s' % (os.getpid(), next(SemLock._rand))
         if sys.version_info < (3, 4):
             return str.encode(name)
         return name

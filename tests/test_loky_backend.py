@@ -306,11 +306,9 @@ class TestLokyBackend:
             is_pipe = (t in ["tPIPE", "tFIFO"])
             n_pipe += is_pipe
 
-            # Check if fd is linked to the rng. This should only be the case in
-            # version 2.7 and 3.4.
-            is_rng = False
-            if sys.version_info[:2] in [(2, 7), (3, 4)]:
-                is_rng = (name == "n/dev/urandom")
+            # Check if fd is open for the rng. This can happen on different
+            # plateform and depending of the python version.
+            is_rng = (name == "n/dev/urandom")
 
             # Check if fd is a semaphore or an open library. Store all the
             # named semaphore
