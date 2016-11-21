@@ -323,9 +323,20 @@ class TestLokyBackend:
                     lines)) == 0
                 assert p.exitcode == 0
 
+    @pytest.mark.skipif(sys.version_info[:2] >= (3, 6),
+                        reason="no wheel for py36. We skip the test to reduce "
+                        " the test running time")
+    def test_compatibility_openmp(self):
+        from ._openmp.parallel_sum import parallel_sum
+        parallel_sum(10)
+        p = self.Process(target=parallel_sum, args=(10,))
+        p.start()
+        p.join()
+
     @staticmethod
     def assertTimingAlmostEqual(t, g):
         assert round(t-g, 1) == 0
+
 
 #
 #
