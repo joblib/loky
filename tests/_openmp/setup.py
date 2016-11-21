@@ -7,7 +7,6 @@ ext_modules = [
     Extension(
         "parallel_sum",
         ["parallel_sum.pyx"],
-        libraries=["m"],
         extra_compile_args=["-ffast-math", "-fopenmp"],
         extra_link_args=['-fopenmp'],
         )
