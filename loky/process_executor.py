@@ -329,6 +329,7 @@ def _queue_management_worker(executor_reference,
                              call_queue,
                              result_queue,
                              wakeup,
+                             manage_processes,
                              kill_on_shutdown=False):
     """Manages the communication between this process and the worker processes.
 
@@ -452,7 +453,8 @@ def _queue_management_worker(executor_reference,
             # Clean shutdown of a worker using its PID, either on request
             # by the executor.shutdown method or by the timeout of the worker
             # itself: we should not mark the executor as broken.
-            p = processes.pop(result_item)
+            with manage_processes:
+                p = processes.pop(result_item)
             p.join()
 
             # Make sure the executor have the right number of worker, event if
@@ -642,6 +644,7 @@ class ProcessPoolExecutor(_base.Executor):
         # Connection to wakeup QueueManagerThread
         self._wakeup = _Sentinel()
         self._work_ids = queue.Queue()
+        self._manage_processes = self._ctx.Lock()
         self._management_thread = None
         self._queue_management_thread = None
 
@@ -686,6 +689,7 @@ class ProcessPoolExecutor(_base.Executor):
                       self._call_queue,
                       self._result_queue,
                       self._wakeup,
+                      self._manage_processes,
                       self._kill_on_shutdown),
                 name="QueueManager")
             self._queue_management_thread.daemon = True
@@ -720,8 +724,9 @@ class ProcessPoolExecutor(_base.Executor):
                 args=(self._call_queue,
                       self._result_queue,
                       self._timeout))
-            p.start()
-            self._processes[p.pid] = p
+            with self._manage_processes:
+                p.start()
+                self._processes[p.pid] = p
         mp.util.debug('Adjust process count : {}'.format(self._processes))
 
     def submit(self, fn, *args, **kwargs):
