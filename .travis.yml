@@ -27,7 +27,6 @@ matrix:
       osx_image: xcode7.3
       language: generic  # https://github.com/travis-ci/travis-ci/issues/2312
       env: TOXENV="py35" PYTHON="python3"
-      compiler: gcc
 
 before_install:
   - |
