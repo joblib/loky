@@ -44,16 +44,18 @@ Process #1..n:
 """
 
 
-import atexit
-import time
 import os
 import sys
-import multiprocessing as mp
-import threading
+import time
+import atexit
 import weakref
-from functools import partial
+import warnings
 import itertools
 import traceback
+import threading
+import multiprocessing as mp
+from functools import partial
+
 from . import _base
 from loky.backend.connection import wait
 
@@ -452,6 +454,16 @@ def _queue_management_worker(executor_reference,
             # itself: we should not mark the executor as broken.
             p = processes.pop(result_item)
             p.join()
+            # Mark the process pool broken so that submits fail right now.
+            if (len(pending_work_items) > 0
+                    or len(running_work_items) > len(processes)):
+                warnings.warn("A worker timeout while some jobs were given to "
+                              "the executor. You might want to use a longer "
+                              "timeout for the executor.", UserWarning)
+                executor = executor_reference()
+                if executor is not None:
+                    executor._adjust_process_count()
+                    executor = None
         elif result_item is not None:
             work_item = pending_work_items.pop(result_item.work_id, None)
             # work_item can be None if another process terminated
