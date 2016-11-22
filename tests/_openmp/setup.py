@@ -6,8 +6,8 @@ from distutils.extension import Extension
 
 
 if sys.platform == "darwin":
-    os.environ["CC"] = "gcc-4.8"
-    os.environ["CXX"] = "g++-4.8"
+    os.environ["CC"] = "gcc-4.9"
+    os.environ["CXX"] = "g++-4.9"
 
 
 ext_modules = [
