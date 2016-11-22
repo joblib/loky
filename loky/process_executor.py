@@ -428,8 +428,18 @@ def _queue_management_worker(executor_reference,
                         work_item.future.set_exception(exc)
                         del work_item
                 del running_work_items[:]
+            ready.pop(ready.index(result_reader))
 
-        stopped_workers = [p for p in processes.values() if not p.is_alive()]
+        if len(ready) > 0:
+            # Fetch the process objects for the recently stopped workers.
+            stopped_workers = [p for p in processes.values()
+                               if not p.is_alive()]
+        else:
+            # Perform worker introspection if the call to wait did not told us
+            # as this could be resource intensive and slow down results
+            # collection.
+            stopped_workers = []
+
         executor = executor_reference()
         for stopped_worker in stopped_workers:
             if stopped_worker.exitcode == WORKER_TIMEOUT_EXIT_CODE:
