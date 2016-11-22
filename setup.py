@@ -1,10 +1,4 @@
-import os
-import sys
 from setuptools import setup, find_packages
-
-if sys.platform == "darwin":
-    os.environ["CC"] = "gcc-4.8"
-    os.environ["CXX"] = "g++-4.8"
 
 packages = find_packages(exclude=['tests', 'tests._openmp', 'benchmark'])
 
