@@ -454,7 +454,11 @@ def _queue_management_worker(executor_reference,
             # itself: we should not mark the executor as broken.
             p = processes.pop(result_item)
             p.join()
-            # Mark the process pool broken so that submits fail right now.
+
+            # Make sure the executor have the right number of worker, event if
+            # a worker timeout while some jobs were submitted. If some work is
+            # pending or there is less processes than runnin items, we need to
+            # start a new Process and raise a warning
             if (len(pending_work_items) > 0
                     or len(running_work_items) > len(processes)):
                 warnings.warn("A worker timeout while some jobs were given to "
