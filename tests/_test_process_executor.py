@@ -493,9 +493,10 @@ class ExecutorTest:
     def test_worker_timeout(self):
         self.executor.shutdown(wait=True)
         self.check_no_running_workers(patience=5)
+        timeout = getattr(self, 'min_worker_timeout', .01)
         try:
             self.executor = self.executor_type(
-                max_workers=4, context=self.context, timeout=0.01)
+                max_workers=4, context=self.context, timeout=timeout)
         except NotImplementedError as e:
             self.skipTest(str(e))
 

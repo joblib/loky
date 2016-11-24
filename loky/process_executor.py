@@ -718,13 +718,13 @@ class ProcessPoolExecutor(_base.Executor):
             _threads_wakeup[self._queue_management_thread] = self._wakeup
 
     def _adjust_process_count(self):
-        for _ in range(len(self._processes), self._max_workers):
-            p = self._ctx.Process(
-                target=_process_worker,
-                args=(self._call_queue,
-                      self._result_queue,
-                      self._timeout))
-            with self._manage_processes:
+        with self._manage_processes:
+            for _ in range(len(self._processes), self._max_workers):
+                p = self._ctx.Process(
+                    target=_process_worker,
+                    args=(self._call_queue,
+                          self._result_queue,
+                          self._timeout))
                 p.start()
                 self._processes[p.pid] = p
         mp.util.debug('Adjust process count : {}'.format(self._processes))
