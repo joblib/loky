@@ -67,11 +67,11 @@ def get_reusable_executor(max_workers=None, context=None,
             max_workers=max_workers, context=context, timeout=timeout,
             kill_on_shutdown=kill_on_shutdown, executor_id=executor_id)
     else:
-        if (executor._broken or executor._shutdown_thread
+        if (executor._broken or executor._shutting_down
                 or args != _executor_args):
             if executor._broken:
                 reason = "broken"
-            elif executor._shutdown_thread:
+            elif executor._shutting_down:
                 reason = "shutdown"
             else:
                 reason = "arguments have changed"
@@ -116,7 +116,7 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         while len(self._processes) > max_workers and not self._broken:
             time.sleep(1e-3)
 
-        self._adjust_process_count()
+        self._start_missing_workers()
         while not all([p.is_alive() for p in self._processes.values()]):
             time.sleep(1e-3)
 
