@@ -44,16 +44,18 @@ Process #1..n:
 """
 
 
-import atexit
-import time
 import os
 import sys
-import multiprocessing as mp
-import threading
+import time
+import atexit
 import weakref
-from functools import partial
+import warnings
 import itertools
 import traceback
+import threading
+import multiprocessing as mp
+from functools import partial
+
 from . import _base
 from loky.backend.connection import wait
 
@@ -327,6 +329,7 @@ def _queue_management_worker(executor_reference,
                              call_queue,
                              result_queue,
                              wakeup,
+                             manage_processes,
                              kill_on_shutdown=False):
     """Manages the communication between this process and the worker processes.
 
@@ -450,8 +453,23 @@ def _queue_management_worker(executor_reference,
             # Clean shutdown of a worker using its PID, either on request
             # by the executor.shutdown method or by the timeout of the worker
             # itself: we should not mark the executor as broken.
-            p = processes.pop(result_item)
+            with manage_processes:
+                p = processes.pop(result_item)
             p.join()
+
+            # Make sure the executor have the right number of worker, event if
+            # a worker timeout while some jobs were submitted. If some work is
+            # pending or there is less processes than runnin items, we need to
+            # start a new Process and raise a warning
+            if (len(pending_work_items) > 0
+                    or len(running_work_items) > len(processes)):
+                warnings.warn("A worker timeout while some jobs were given to "
+                              "the executor. You might want to use a longer "
+                              "timeout for the executor.", UserWarning)
+                executor = executor_reference()
+                if executor is not None:
+                    executor._adjust_process_count()
+                    executor = None
         elif result_item is not None:
             work_item = pending_work_items.pop(result_item.work_id, None)
             # work_item can be None if another process terminated
@@ -626,6 +644,7 @@ class ProcessPoolExecutor(_base.Executor):
         # Connection to wakeup QueueManagerThread
         self._wakeup = _Sentinel()
         self._work_ids = queue.Queue()
+        self._manage_processes = self._ctx.Lock()
         self._management_thread = None
         self._queue_management_thread = None
 
@@ -670,6 +689,7 @@ class ProcessPoolExecutor(_base.Executor):
                       self._call_queue,
                       self._result_queue,
                       self._wakeup,
+                      self._manage_processes,
                       self._kill_on_shutdown),
                 name="QueueManager")
             self._queue_management_thread.daemon = True
@@ -698,14 +718,15 @@ class ProcessPoolExecutor(_base.Executor):
             _threads_wakeup[self._queue_management_thread] = self._wakeup
 
     def _adjust_process_count(self):
-        for _ in range(len(self._processes), self._max_workers):
-            p = self._ctx.Process(
-                target=_process_worker,
-                args=(self._call_queue,
-                      self._result_queue,
-                      self._timeout))
-            p.start()
-            self._processes[p.pid] = p
+        with self._manage_processes:
+            for _ in range(len(self._processes), self._max_workers):
+                p = self._ctx.Process(
+                    target=_process_worker,
+                    args=(self._call_queue,
+                          self._result_queue,
+                          self._timeout))
+                p.start()
+                self._processes[p.pid] = p
         mp.util.debug('Adjust process count : {}'.format(self._processes))
 
     def submit(self, fn, *args, **kwargs):
