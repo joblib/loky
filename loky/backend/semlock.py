@@ -116,26 +116,20 @@ class SemLock(object):
 
     _rand = tempfile._RandomNameSequence()
 
-    def __init__(self, kind, value, maxvalue, name=None, unlink_now=False,
-                 rebuild_name=None):
+    def __init__(self, kind, value, maxvalue, name=None, unlink_now=False):
         self.count = 0
         self.ident = 0
         self.kind = kind
         self.maxvalue = maxvalue
-        if rebuild_name:
-            self.name = rebuild_name
-            self.handle = _sem_open(rebuild_name, 0)
-        else:
-            self.name = name
-            self.handle = _sem_open(
-                self.name, os.O_CREAT | os.O_EXCL, 384, value)
+        self.name = name.encode('ascii')
+        self.handle = _sem_open(
+            self.name, os.O_CREAT | os.O_EXCL, 384, value)
 
         if self.handle == SEM_FAILURE:
             raise FileExistsError('cannot find name for semaphore')
 
     def __del__(self):
         try:
-            util.debug("closing semaphore named {}".format(self.name.decode()))
             res = pthread.sem_close(self.handle)
             assert res == 0, "Issue while closing semaphores"
         except AttributeError:
@@ -234,6 +228,19 @@ class SemLock(object):
 
     def _after_fork(self):
         self.count = 0
+
+    @staticmethod
+    def _rebuild(handle, kind, maxvalue, name):
+        self = SemLock.__new__(SemLock)
+        self.count = 0
+        self.ident = 0
+        self.kind = kind
+        self.maxvalue = maxvalue
+        self.name = name
+        self.handle = _sem_open(name, 0)
+        if self.handle == SEM_FAILURE:
+            raise FileNotFoundError('cannot find semaphore named %s' % name)
+        return self
 
 
 def raiseFromErrno():

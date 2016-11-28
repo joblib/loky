@@ -1,33 +1,43 @@
 import os
 import sys
 import time
-from loky import backend
-import multiprocessing
 import pytest
 import signal
+import multiprocessing
+
+from loky import backend
+from ._executor_mixin import TimingWrapper
 
 DELTA = 0.1
 
 
 class TestLokyBackend:
+    # loky processes
     Process = backend.Process
     current_process = staticmethod(multiprocessing.current_process)
     active_children = staticmethod(multiprocessing.active_children)
-    # Pool = staticmethod(multiprocessing.Pool)
+
+    # interprocess communication objects
     Pipe = staticmethod(backend.Pipe)
     Queue = staticmethod(backend.Queue)
-    # JoinableQueue = staticmethod(multiprocessing.JoinableQueue)
+
+    # synchronization primitives
     Lock = staticmethod(backend.Lock)
     RLock = staticmethod(backend.RLock)
     Semaphore = staticmethod(backend.Semaphore)
     BoundedSemaphore = staticmethod(backend.BoundedSemaphore)
     Condition = staticmethod(backend.Condition)
     Event = staticmethod(backend.Event)
-    # Barrier = staticmethod(multiprocessing.Barrier)
-    # Value = staticmethod(multiprocessing.Value)
-    # Array = staticmethod(multiprocessing.Array)
-    # RawValue = staticmethod(multiprocessing.RawValue)
-    # RawArray = staticmethod(multiprocessing.RawArray)
+
+    @classmethod
+    def teardown_class(cls):
+        """ teardown any state that was previously setup with a call to
+        setup_class.
+        """
+        # TODO: remove all child processes
+        for child_process in cls.active_children():
+            child_process.terminate()
+            child_process.join()
 
     def test_current(self):
 
@@ -118,11 +128,11 @@ class TestLokyBackend:
         join = TimingWrapper(p.join)
 
         assert join(0) is None
-        self.assertTimingAlmostEqual(join.elapsed, 0.0)
+        join.assert_timing_almost_zero()
         assert p.is_alive()
 
         assert join(-1) is None
-        self.assertTimingAlmostEqual(join.elapsed, 0.0)
+        join.assert_timing_almost_zero()
         assert p.is_alive()
 
         # XXX maybe terminating too soon causes the problems on Gentoo...
@@ -145,7 +155,7 @@ class TestLokyBackend:
         else:
             assert join() is None
 
-        self.assertTimingAlmostEqual(join.elapsed, 0.0)
+        join.assert_timing_almost_zero()
 
         assert not p.is_alive()
         assert p not in self.active_children()
@@ -153,7 +163,7 @@ class TestLokyBackend:
         p.join()
 
         # XXX sometimes get p.exitcode == 0 on Windows ...
-        #assert p.exitcode == -signal.SIGTERM
+        # assert p.exitcode == -signal.SIGTERM
 
     def test_cpu_count(self):
         try:
@@ -175,6 +185,7 @@ class TestLokyBackend:
 
         p.join()
         assert p not in self.active_children()
+        assert p.exitcode == 0
 
     @classmethod
     def _test_recursion(cls, wconn, l):
@@ -186,6 +197,7 @@ class TestLokyBackend:
                     )
                 p.start()
                 p.join()
+                assert p.exitcode == 0
 
     def test_recursion(self):
         rconn, wconn = self.Pipe(duplex=False)
@@ -229,89 +241,143 @@ class TestLokyBackend:
         assert p.exitcode == 0
         assert wait_for_handle(sentinel, timeout=1)
 
-    @staticmethod
-    def _generate_high_number_fd():
-        """Open 2 file descriptors with high number"""
+    @classmethod
+    def _high_number_Pipe(cls):
+        """Create a Pipe with 2 high numbered file descriptors"""
         fds = []
-        for _ in range(25):
+        for _ in range(50):
             r, w = os.pipe()
             fds += [r, w]
-        r, w = os.pipe()
+        r, w = cls.Pipe(duplex=False)
         for fd in fds:
             os.close(fd)
         return r, w
 
     @classmethod
-    def _test_fd_closed(cls, started, stop):
-        started.set()
+    def _test_sync_object_handleling(cls, started, stop, conn, w):
+        """Check validity of parents args and Create semaphores to clean up
+
+        started, stop: Event
+            make sure the main Process use lsof when this Process is setup
+        conn: Connection
+            an open pipe that should be closed at exit
+        w: int
+            fileno of the writable end of the Pipe, it should be closed
+        """
         to_clean_up = [cls.Semaphore(0), cls.BoundedSemaphore(1),
                        cls.Lock(), cls.RLock(), cls.Condition(), cls.Event()]
+        started.set()
+        assert conn.recv_bytes() == b"foo"
+        with pytest.raises(OSError):
+            os.fstat(w)
         stop.wait(5)
-        q = cls.Queue()
 
-    @pytest.mark.skipif(sys.platform == 'win32',
-                        reason="No way to evaluate the open handles with win32"
-                        "systems.")
-    def test_fd_closed(self):
-        """Check that all the fds open in the parent process are closed.
+    def _check_fds(self, pid, w):
+        """List all the open files and check no extra files are presents.
 
-        We used `lsof` as it is compatible with OSX and unix systems. Different
-        behaviors are observed with the open fds, in particular:
-        - python2.7 and 3.4 have an open fd for /dev/urandom
-        - python2.7 links stdin to /dev/null even if it is closed beforehand
+        Return a list of open named semaphores
+        """
+        import subprocess
+        try:
+            out = subprocess.check_output(["lsof", "-a", "-Fftn",
+                                           "-p", "{}".format(pid),
+                                           "-d", "^txt,^cwd,^rtd"])
+            lines = out.decode().split("\n")[1:-1]
+        except FileNotFoundError:
+            print("lsof does not exist on this plateform. Skip open files"
+                  "check.")
+            return []
+
+        n_pipe = 0
+        named_sem = []
+        for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
+
+            # Check if fd is a standard IO file. For python2.7, stdin is set
+            # to /dev/null during `Process._boostrap`. For other version, stdin
+            # should be closed.
+            is_std = (fd in ["f1", "f2"])
+            if sys.version_info[:2] < (3, 3):
+                if sys.platform != "darwin":
+                    is_std |= (fd == "f0" and name == "n/dev/null")
+                else:
+                    is_std |= (name == "n/dev/null")
+
+            # Check if fd is a pipe
+            is_pipe = (t in ["tPIPE", "tFIFO"])
+            n_pipe += is_pipe
+
+            # Check if fd is open for the rng. This can happen on different
+            # plateform and depending of the python version.
+            is_rng = (name == "n/dev/urandom")
+
+            # Check if fd is a semaphore or an open library. Store all the
+            # named semaphore
+            is_mem = (fd in ["fmem", "fDEL"])
+            if sys.platform == "darwin":
+                is_mem |= "n/loky-" in name
+            if is_mem and "n/dev/shm/sem." in name:
+                named_sem += [name[1:]]
+
+            # no other files should be opened at this stage in the process
+            assert (is_pipe or is_std or is_rng or is_mem)
+
+        # there should be one pipe for communication with main process
+        # and the semaphore tracker pipe and the Connection pipe
+        assert n_pipe == 3, ("Some pipes were not properly closed during the "
+                             "child process setup.")
+
+        # assert that the writable part of the Pipe (not passed to child),
+        # have been properly closed.
+        assert len(set("f{}".format(w)).intersection(lines)) == 0
+
+        return named_sem
+
+    def test_sync_object_handleling(self):
+        """Check the correct handeling of semaphores and pipes with loky
+
+        We use a Pipe object to check the stated of file descriptors in parent
+        and child. To make sure there is no interference in the fd numbers, we
+        use high number fd, so newly created fd should be inferior.
+
+        To ensure we have the right number of fd in the child Process, we used
+        `lsof` as it is compatible with Unix systems.
+        Different behaviors are observed with the open fds, in particular:
+        - python2.7 and 3.4 have an open fd for /dev/urandom.
+        - python2.7 links stdin to /dev/null even if it is closed beforehand.
         """
 
-        r, w = self._generate_high_number_fd()
+        # TODO generate high numbered multiprocessing.Pipe directly
+        # -> can be used on windows
+        r, w = self._high_number_Pipe()
 
-        started = self.Event()
-        stop = self.Event()
-        with open("/tmp/foobar", "w"):
-            p = self.Process(target=self._test_fd_closed, args=(started, stop))
-
+        tmp_fname = "/tmp/foobar" if sys.platform != "win32" else ".foobar"
+        with open(tmp_fname, "w"):
+            # Process creating semaphore and pipes before stopping
+            started, stop = self.Event(), self.Event()
+            p = self.Process(target=self._test_sync_object_handleling,
+                             args=(started, stop, r, w.fileno()))
+            named_sem = []
             try:
 
                 p.start()
                 assert started.wait(1), "The process took too long to start"
-                import subprocess
-                out = subprocess.check_output(["lsof", "-a", "-Fftn",
-                                               "-p", "{}".format(p.pid),
-                                               "-d", "^txt,^cwd,^rtd"])
-                lines = out.decode().split("\n")[1:-1]
-                print(("fd {} -> ({}) {}\n"*(len(lines)//3)).format(*lines))
-                n_pipe = 0
-                named_sem = []
-                for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
-                    is_std = (fd in ["f1", "f2"])
-                    if sys.version_info[:2] < (3, 3):
-                        if sys.platform != "darwin":
-                            is_std |= (fd == "f0" and name == "n/dev/null")
-                        else:
-                            is_std |= (name == "n/dev/null")
-                    is_pipe = (t in ["tPIPE", "tFIFO"])
-                    is_urand = (name == "n/dev/urandom")
-                    is_mem = (fd in ["fmem", "fDEL"])
-                    if sys.platform == "darwin":
-                        is_mem |= "n/mp-" in name
-                        is_mem |= "nloky-" in name
-                    n_pipe += is_pipe
-                    if "n/dev/shm/sem." in name:
-                        named_sem += [name[1:]]
-
-                    assert (is_pipe or is_std or is_urand or is_mem)
-
-                # there should be one pipe for communication with main process
-                # and the semaphore tracker pipe
-                assert n_pipe == 2
+                r.close()
+                w.send_bytes(b"foo")
+                if sys.platform != "win32":
+                    named_sem = self._check_fds(p.pid, w.fileno())
 
             finally:
                 stop.set()
                 p.join()
 
-                # Clean up
-                os.close(r)
-                os.close(w)
+                # ensure that Pipe->r was closed when the child process exited
+                with pytest.raises(IOError):
+                    w.send_bytes(b"foo")
+                w.close()
 
-                if sys.platform == "linux" and sys.version_info < (3, 4):
+                if sys.platform == "linux":
+                    # On linux, check that the named semaphores created in the
+                    # child process have been unlinked when it terminated.
                     pid = str(os.getpid())
                     for sem in named_sem:
                         if pid not in sem:
@@ -319,8 +385,6 @@ class TestLokyBackend:
                                 "Some named semaphore are not properly cleaned"
                                 " up")
 
-                assert len(set("f{}".format(i) for i in [r, w]).intersection(
-                    lines)) == 0
                 assert p.exitcode == 0
 
     @pytest.mark.skipif(sys.version_info[:2] >= (3, 6),
@@ -332,29 +396,6 @@ class TestLokyBackend:
         p = self.Process(target=parallel_sum, args=(10,))
         p.start()
         p.join()
-
-    @staticmethod
-    def assertTimingAlmostEqual(t, g):
-        assert round(t-g, 1) == 0
-
-
-#
-#
-#
-
-
-class TimingWrapper(object):
-
-    def __init__(self, func):
-        self.func = func
-        self.elapsed = None
-
-    def __call__(self, *args, **kwds):
-        t = time.time()
-        try:
-            return self.func(*args, **kwds)
-        finally:
-            self.elapsed = time.time() - t
 
 
 def wait_for_handle(handle, timeout):

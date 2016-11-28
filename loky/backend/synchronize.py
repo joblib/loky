@@ -47,6 +47,7 @@ if sys.version_info[:2] < (3, 3):
 RECURSIVE_MUTEX, SEMAPHORE = list(range(2))
 SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 
+
 #
 # Base class for semaphores and mutexes; wraps `_multiprocessing.SemLock`
 #
@@ -55,13 +56,12 @@ class SemLock(object):
 
     _rand = tempfile._RandomNameSequence()
 
-    def __init__(self, kind, value, maxvalue, usage="semlock"):
-        name = 'loky'
-        unlink_now = sys.platform == 'win32' or name == 'fork'
+    def __init__(self, kind, value, maxvalue):
+        unlink_now = sys.platform == 'win32'
         for i in range(100):
             try:
                 self._semlock = SemLockC(
-                    kind, value, maxvalue, SemLock._make_name(usage),
+                    kind, value, maxvalue, SemLock._make_name(),
                     unlink_now)
             except FileExistsError:
                 pass
@@ -85,8 +85,7 @@ class SemLock(object):
             # disabled.  When the object is garbage collected or the
             # process shuts down we unlink the semaphore name
             from .semaphore_tracker import register
-            if sys.version_info < (3, 4):
-                register(self._semlock.name)
+            register(self._semlock.name)
             util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
                           exitpriority=0)
 
@@ -116,21 +115,17 @@ class SemLock(object):
         return (h, sl.kind, sl.maxvalue, sl.name)
 
     def __setstate__(self, state):
-        if sys.version_info < (3, 4):
-            h, kind, maxvalue, name = state
-            self._semlock = SemLockC(h, kind, maxvalue, rebuild_name=name)
-        else:
-            self._semlock = SemLockC._rebuild(*state)
+        self._semlock = SemLockC._rebuild(*state)
         util.debug('recreated blocker with handle %r and name "%s"'
                    % (state[0], state[3].decode()))
         self._make_methods()
 
     @staticmethod
-    def _make_name(usage):
-        name = 'loky-%i-%s-%s' % (os.getpid(), usage, next(SemLock._rand))
-        if sys.version_info < (3, 4):
-            return str.encode(name)
+    def _make_name():
+        # OSX does not support long names for semaphores
+        name = '/loky-%i-%s' % (os.getpid(), next(SemLock._rand))
         return name
+
 
 #
 # Semaphore
@@ -138,9 +133,8 @@ class SemLock(object):
 
 class Semaphore(SemLock):
 
-    def __init__(self, value=1, usage="semaphore"):
-        SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX,
-                         usage=usage)
+    def __init__(self, value=1):
+        SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX)
 
     def get_value(self):
         return self._semlock._get_value()
@@ -152,14 +146,15 @@ class Semaphore(SemLock):
             value = 'unknown'
         return '<%s(value=%s)>' % (self.__class__.__name__, value)
 
+
 #
 # Bounded semaphore
 #
 
 class BoundedSemaphore(Semaphore):
 
-    def __init__(self, value=1, usage="bsemaphore"):
-        SemLock.__init__(self, SEMAPHORE, value, value, usage=usage)
+    def __init__(self, value=1):
+        SemLock.__init__(self, SEMAPHORE, value, value)
 
     def __repr__(self):
         try:
@@ -169,15 +164,15 @@ class BoundedSemaphore(Semaphore):
         return '<%s(value=%s, maxvalue=%s)>' % \
                (self.__class__.__name__, value, self._semlock.maxvalue)
 
+
 #
 # Non-recursive lock
 #
 
 class Lock(SemLock):
 
-    def __init__(self, usage="lock"):
-        super(Lock, self).__init__(SEMAPHORE, 1, 1, usage=usage)
-        # SemLock.__init__(self, SEMAPHORE, 1, 1)
+    def __init__(self):
+        super(Lock, self).__init__(SEMAPHORE, 1, 1)
 
     def __repr__(self):
         try:
@@ -195,14 +190,15 @@ class Lock(SemLock):
             name = 'unknown'
         return '<%s(owner=%s)>' % (self.__class__.__name__, name)
 
+
 #
 # Recursive lock
 #
 
 class RLock(SemLock):
 
-    def __init__(self, usage="rlock"):
-        SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1, usage=usage)
+    def __init__(self):
+        super(RLock, self).__init__(RECURSIVE_MUTEX, 1, 1)
 
     def __repr__(self):
         try:
@@ -221,6 +217,7 @@ class RLock(SemLock):
             name, count = 'unknown', 'unknown'
         return '<%s(%s, %s)>' % (self.__class__.__name__, name, count)
 
+
 #
 # Condition variable
 #
@@ -228,10 +225,10 @@ class RLock(SemLock):
 class Condition(object):
 
     def __init__(self, lock=None):
-        self._lock = lock or RLock(usage="cond_lock")
-        self._sleeping_count = Semaphore(0, usage="cond_sc")
-        self._woken_count = Semaphore(0, usage="cond_wc")
-        self._wait_semaphore = Semaphore(0, usage="cond_ws")
+        self._lock = lock or RLock()
+        self._sleeping_count = Semaphore(0)
+        self._woken_count = Semaphore(0)
+        self._wait_semaphore = Semaphore(0)
         self._make_methods()
 
     def __getstate__(self):
@@ -260,7 +257,8 @@ class Condition(object):
                            self._woken_count._semlock._get_value())
         except Exception:
             num_waiters = 'unknown'
-        return '<%s(%s, %s)>' % (self.__class__.__name__, self._lock, num_waiters)
+        return '<%s(%s, %s)>' % (self.__class__.__name__,
+                                 self._lock, num_waiters)
 
     def wait(self, timeout=None):
         assert self._lock._semlock._is_mine(), \
@@ -343,6 +341,7 @@ class Condition(object):
             result = predicate()
         return result
 
+
 #
 # Event
 #
@@ -350,8 +349,8 @@ class Condition(object):
 class Event(object):
 
     def __init__(self):
-        self._cond = Condition(Lock(usage="event_lock"))
-        self._flag = Semaphore(0, usage="event_flag")
+        self._cond = Condition(Lock())
+        self._flag = Semaphore(0)
 
     def is_set(self):
         with self._cond:

@@ -227,6 +227,5 @@ if __name__ == '__main__':
     finally:
         if from_parent is not None:
             from_parent.close()
-        util.debug('proper close')
 
         sys.exit(exitcode)
