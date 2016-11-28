@@ -1,8 +1,6 @@
 # Copyright 2009 Brian Quinlan. All Rights Reserved.
 # Licensed to PSF under a Contributor Agreement.
 
-__author__ = 'Brian Quinlan (brian@sweetapp.com)'
-
 import sys
 import collections
 import logging
@@ -42,17 +40,23 @@ _STATE_TO_DESCRIPTION_MAP = {
 # Logger for internal use by the futures package.
 LOGGER = logging.getLogger("concurrent.futures")
 
-class Error(Exception):
-    """Base class for all future-related exceptions."""
-    pass
 
-class CancelledError(Error):
-    """The Future was cancelled."""
-    pass
+if sys.version_info[:2] < (3, 3):
 
-class TimeoutError(Error):
-    """The operation exceeded the given deadline."""
-    pass
+    class Error(Exception):
+        """Base class for all future-related exceptions."""
+        pass
+
+    class CancelledError(Error):
+        """The Future was cancelled."""
+        pass
+
+    class TimeoutError(Error):
+        """The operation exceeded the given deadline."""
+        pass
+else:
+    from concurrent.futures import CancelledError, TimeoutError
+
 
 class _Waiter(object):
     """Provides the event that wait() and as_completed() block on."""
@@ -68,6 +72,7 @@ class _Waiter(object):
 
     def add_cancelled(self, future):
         self.finished_futures.append(future)
+
 
 class _AsCompletedWaiter(_Waiter):
     """Used by as_completed()."""
@@ -91,6 +96,7 @@ class _AsCompletedWaiter(_Waiter):
             super(_AsCompletedWaiter, self).add_cancelled(future)
             self.event.set()
 
+
 class _FirstCompletedWaiter(_Waiter):
     """Used by wait(return_when=FIRST_COMPLETED)."""
 
@@ -105,6 +111,7 @@ class _FirstCompletedWaiter(_Waiter):
     def add_cancelled(self, future):
         super(_FirstCompletedWaiter, self).add_cancelled(future)
         self.event.set()
+
 
 class _AllCompletedWaiter(_Waiter):
     """Used by wait(return_when=FIRST_EXCEPTION and ALL_COMPLETED)."""
@@ -136,6 +143,7 @@ class _AllCompletedWaiter(_Waiter):
         super(_AllCompletedWaiter, self).add_cancelled(future)
         self._decrement_pending_calls()
 
+
 class _AcquireFutures(object):
     """A context manager that does an ordered acquire of Future conditions."""
 
@@ -149,6 +157,7 @@ class _AcquireFutures(object):
     def __exit__(self, *args):
         for future in self.futures:
             future._condition.release()
+
 
 def _create_and_install_waiters(fs, return_when):
     if return_when == _AS_COMPLETED:
@@ -171,12 +180,13 @@ def _create_and_install_waiters(fs, return_when):
 
     return waiter
 
+
 def as_completed(fs, timeout=None):
     """An iterator over the given futures that yields each as it completes.
 
     Args:
-        fs: The sequence of Futures (possibly created by different Executors) to
-            iterate over.
+        fs: The sequence of Futures (possibly created by different Executors)
+            to iterate over.
         timeout: The maximum number of seconds to wait. If None, then there
             is no limit on the wait time.
 
@@ -210,9 +220,8 @@ def as_completed(fs, timeout=None):
             else:
                 wait_timeout = end_time - time.time()
                 if wait_timeout < 0:
-                    raise TimeoutError(
-                            '%d (of %d) futures unfinished' % (
-                            len(pending), len(fs)))
+                    raise TimeoutError('%d (of %d) futures unfinished' % (
+                        len(pending), len(fs)))
 
             waiter.event.wait(wait_timeout)
 
@@ -232,12 +241,14 @@ def as_completed(fs, timeout=None):
 
 DoneAndNotDoneFutures = collections.namedtuple(
         'DoneAndNotDoneFutures', 'done not_done')
+
+
 def wait(fs, timeout=None, return_when=ALL_COMPLETED):
     """Wait for the futures in the given sequence to complete.
 
     Args:
-        fs: The sequence of Futures (possibly created by different Executors) to
-            wait upon.
+        fs: The sequence of Futures (possibly created by different Executors)
+            to wait upon.
         timeout: The maximum number of seconds to wait. If None, then there
             is no limit on the wait time.
         return_when: Indicates when this function should return. The options
@@ -280,6 +291,7 @@ def wait(fs, timeout=None, return_when=ALL_COMPLETED):
 
     done.update(waiter.finished_futures)
     return DoneAndNotDoneFutures(done, set(fs) - done)
+
 
 class Future(object):
     """Represents the result of an asynchronous computation."""
@@ -508,14 +520,15 @@ class Future(object):
             self._condition.notify_all()
         self._invoke_callbacks()
 
+
 class Executor(object):
     """This is an abstract base class for concrete asynchronous executors."""
 
     def submit(self, fn, *args, **kwargs):
         """Submits a callable to be executed with the given arguments.
 
-        Schedules the callable to be executed as fn(*args, **kwargs) and returns
-        a Future instance representing the execution of the callable.
+        Schedules the callable to be executed as fn(*args, **kwargs) and
+        returns a Future instance representing the execution of the callable.
 
         Returns:
             A Future representing the given call.

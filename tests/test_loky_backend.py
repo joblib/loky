@@ -6,7 +6,7 @@ import signal
 import multiprocessing
 
 from loky import backend
-from ._executor_mixin import TimingWrapper
+from .utils import TimingWrapper
 
 DELTA = 0.1
 
@@ -392,10 +392,14 @@ class TestLokyBackend:
                         " the test running time")
     def test_compatibility_openmp(self):
         from ._openmp.parallel_sum import parallel_sum
+        # Use openMP before launching subprocesses. With fork backend, some fds
+        # are nto correctly clean up, causing a freeze. No freeze should be
+        # detected with loky.
         parallel_sum(10)
         p = self.Process(target=parallel_sum, args=(10,))
         p.start()
         p.join()
+        assert p.exitcode == 0
 
 
 def wait_for_handle(handle, timeout):

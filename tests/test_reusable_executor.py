@@ -10,7 +10,8 @@ from pickle import PicklingError, UnpicklingError
 
 from loky.reusable_executor import get_reusable_executor
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
-from ._executor_mixin import ReusableExecutorMixin, TimingWrapper
+from ._executor_mixin import ReusableExecutorMixin
+from .utils import TimingWrapper
 
 try:
     import numpy as np
