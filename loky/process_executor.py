@@ -322,6 +322,14 @@ def _add_call_item_to_queue(pending_work_items,
                 continue
 
 
+def _worker_crashed(processes, ready):
+    """check if any process crashed"""
+    for p in processes.values():
+        if p.exitcode not in [None, 0]:
+            return True
+    return False
+
+
 def _queue_management_worker(executor_reference,
                              processes,
                              pending_work_items,
@@ -358,7 +366,8 @@ def _queue_management_worker(executor_reference,
     running_work_items = []
 
     def shutting_down():
-        return _shutdown or executor is None or executor._shutdown_thread
+        return (_shutdown or executor is None
+                or (executor._shutdown_thread and not executor._broken))
 
     def shutdown_all_workers():
         # This is an upper bound
@@ -421,7 +430,7 @@ def _queue_management_worker(executor_reference,
                         work_item.future.set_exception(exc)
                         del work_item
                 _clear_list(running_work_items)
-        elif len(ready) > 0:
+        elif len(ready) > 0 and _worker_crashed(processes, ready):
             # Mark the process pool broken so that submits fail right now.
             executor = executor_reference()
             if executor is not None:
@@ -480,7 +489,7 @@ def _queue_management_worker(executor_reference,
                     work_item.future.set_result(result_item.result)
                 # Delete references to object. See issue16284
                 del work_item
-            running_work_items.remove(result_item.work_id)
+                running_work_items.remove(result_item.work_id)
         # Check whether we should start shutting down.
         executor = executor_reference()
         # No more work items can be added if:
