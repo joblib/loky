@@ -533,6 +533,10 @@ def _management_worker(executor_reference, queue_management_thread, processes,
                                 pending_work_items, call_queue, cause_msg)
             return
         elif _is_crashed(call_queue._thread):
+            executor = executor_reference()
+            if shutting_down():
+                return
+            executor = None
             cause_msg = ("The QueueFeederThread was terminated abruptly "
                          "while feeding a new job. This can be due to "
                          "a job pickling error.")
@@ -544,6 +548,8 @@ def _management_worker(executor_reference, queue_management_thread, processes,
             return
         executor = None
         time.sleep(.1)
+
+    mp.util.debug("_management_worker returning")
 
 
 def _shutdown_crash(executor_reference, processes, pending_work_items,

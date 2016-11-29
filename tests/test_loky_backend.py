@@ -20,6 +20,7 @@ class TestLokyBackend:
     # interprocess communication objects
     Pipe = staticmethod(backend.Pipe)
     Queue = staticmethod(backend.Queue)
+    Manager = staticmethod(backend.Manager)
 
     # synchronization primitives
     Lock = staticmethod(backend.Lock)
@@ -112,12 +113,17 @@ class TestLokyBackend:
         assert p not in self.active_children()
 
     @classmethod
-    def _test_terminate(cls):
+    def _test_terminate(cls, ev):
+        # Notify the main process that child process started
+        ev.set()
         time.sleep(100)
 
     def test_terminate(self):
 
-        p = self.Process(target=self._test_terminate)
+        mgr = self.Manager()
+        ev = mgr.Event()
+
+        p = self.Process(target=self._test_terminate, args=(ev, ))
         p.daemon = True
         p.start()
 
@@ -135,8 +141,8 @@ class TestLokyBackend:
         join.assert_timing_almost_zero()
         assert p.is_alive()
 
-        # XXX maybe terminating too soon causes the problems on Gentoo...
-        time.sleep(1)
+        # wait for child process to be fully setup
+        ev.wait(1)
 
         p.terminate()
 

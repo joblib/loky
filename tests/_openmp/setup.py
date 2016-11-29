@@ -12,7 +12,7 @@ if sys.platform == "darwin":
 
 ext_modules = [
     Extension(
-        "parallel_sum",
+        "tests._openmp.parallel_sum",
         ["parallel_sum.pyx"],
         extra_compile_args=["-ffast-math", "-fopenmp"],
         extra_link_args=['-fopenmp'],

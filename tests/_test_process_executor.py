@@ -319,8 +319,7 @@ class ExecutorTest:
         # references.
         my_object = MyObject()
         my_object_collected = threading.Event()
-        my_object_callback = weakref.ref(
-            my_object, lambda obj: my_object_collected.set())
+        _ = weakref.ref(my_object, lambda obj: my_object_collected.set())
         # Deliberately discarding the future.
         self.executor.submit(my_object.my_method)
         del my_object
