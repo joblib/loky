@@ -155,8 +155,8 @@ class WaitTests:
                 finished)
         assert set([future1]) == pending
 
-    @staticmethod
-    def wait_and_raise(ev, t):
+    @classmethod
+    def wait_and_raise(cls, ev, t):
         ev.wait(t)
         raise Exception('this is an exception')
 

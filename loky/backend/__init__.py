@@ -1,7 +1,7 @@
 import sys
 
 import multiprocessing as mp
-from multiprocessing import Pipe
+from multiprocessing import Pipe, Manager
 if sys.platform != "win32":
     from .process import PosixLokyProcess as Process
 
@@ -64,4 +64,4 @@ if sys.version_info > (3, 4):
         return synchronize.Condition(*args, ctx=_ctx, **kwargs)
 
 __all__ = ["Process", "Queue", "SimpleQueue", "Lock", "RLock", "Semaphore",
-           "BoundedSemaphore", "Condition", "Event", "Pipe"]
+           "BoundedSemaphore", "Condition", "Event", "Pipe", "Manager"]
