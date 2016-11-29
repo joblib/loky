@@ -434,8 +434,9 @@ def _queue_management_worker(executor_reference,
             # Mark the process pool broken so that submits fail right now.
             executor = executor_reference()
             if executor is not None:
-                executor._broken = True
-                executor._shutdown_thread = True
+                with executor._shutdown_lock:
+                    executor._broken = True
+                    executor._shutdown_thread = True
                 executor = None
             # All futures in flight must be marked failed
             for work_id, work_item in pending_work_items.items():
@@ -567,8 +568,9 @@ def _shutdown_crash(executor_reference, processes, pending_work_items,
                  "worker processes. " + cause_msg)
     executor = executor_reference()
     if executor is not None:
-        executor._broken = True
-        executor._shutdown_thread = True
+        with executor._shutdown_lock:
+            executor._broken = True
+            executor._shutdown_thread = True
         executor = None
     call_queue.close()
     # Terminate remaining workers forcibly: the queues or their

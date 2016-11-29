@@ -31,6 +31,7 @@ from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import BrokenExecutor
 from ._executor_mixin import _running_children_with_cmdline
+from .utils import id_sleep
 
 if sys.version_info[:2] < (3, 3):
     import loky._base as futures
@@ -222,6 +223,11 @@ class WaitTests:
         assert set() == pending
 
     def test_timeout(self):
+
+        # Make sure the executor has already started to avoid timeout happens
+        # before future1 returns
+        assert self.executor.submit(id_sleep, 42).result() == 42
+
         future1 = self.executor.submit(mul, 6, 7)
         future2 = self.executor.submit(time.sleep, 2)
 

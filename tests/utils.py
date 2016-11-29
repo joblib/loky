@@ -57,3 +57,13 @@ class TimingWrapper(object):
 
     def assert_timing_almost_zero(self):
         self.assert_timing_almost_equal(0.0)
+
+
+#
+# helper functions
+#
+
+def id_sleep(x, delay=0):
+    """sleep for delay seconds and return its first argument"""
+    time.sleep(delay)
+    return x
