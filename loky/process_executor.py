@@ -787,9 +787,6 @@ class ProcessPoolExecutor(_base.Executor):
 
     def shutdown(self, wait=True):
         mp.util.debug('shutting down executor %s' % self)
-        if self._kill_on_shutdown:
-            # TODO: implement me!
-            pass
         with self._shutdown_lock:
             self._shutdown_thread = True
         if self._queue_management_thread:

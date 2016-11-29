@@ -27,11 +27,15 @@ from math import sqrt
 from collections import defaultdict
 from threading import Thread
 import traceback
-import loky._base as futures
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import BrokenExecutor
 from ._executor_mixin import _running_children_with_cmdline
+
+if sys.version_info[:2] < (3, 3):
+    import loky._base as futures
+else:
+    from concurrent import futures
 
 
 def create_future(state=PENDING, exception=None, result=None):
@@ -52,11 +56,6 @@ SUCCESSFUL_FUTURE = create_future(state=FINISHED, result=42)
 
 def mul(x, y):
     return x * y
-
-
-def sleep_and_raise(t):
-    time.sleep(t)
-    raise Exception('this is an exception')
 
 
 def sleep_and_print(t, msg):
@@ -95,7 +94,7 @@ class ExecutorShutdownTest:
 
     @pytest.mark.wait_on_shutdown
     def test_hang_issue12364(self):
-        fs = [self.executor.submit(time.sleep, 0.1) for _ in range(50)]
+        fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
         self.executor.shutdown()
         for f in fs:
             f.result()
@@ -112,7 +111,7 @@ class ExecutorShutdownTest:
             p.join()
 
     def test_context_manager_shutdown(self):
-        with process_executor.ProcessPoolExecutor(max_workers=5) as e:
+        with self.executor_type(max_workers=5, context=self.context) as e:
             processes = e._processes
             assert list(e.map(abs, range(-5, 5))) == \
                 [5, 4, 3, 2, 1, 0, 1, 2, 3, 4]
@@ -121,7 +120,7 @@ class ExecutorShutdownTest:
             p.join()
 
     def test_del_shutdown(self):
-        executor = process_executor.ProcessPoolExecutor(max_workers=5)
+        executor = self.executor_type(max_workers=5, context=self.context)
         list(executor.map(abs, range(-5, 5)))
         queue_management_thread = executor._queue_management_thread
         processes = executor._processes
@@ -156,14 +155,27 @@ class WaitTests:
                 finished)
         assert set([future1]) == pending
 
+    @staticmethod
+    def wait_and_raise(ev, t):
+        ev.wait(t)
+        raise Exception('this is an exception')
+
     def test_first_exception(self):
+        mgr = self.context.Manager()
+        ev = mgr.Event()
         future1 = self.executor.submit(mul, 2, 21)
-        future2 = self.executor.submit(sleep_and_raise, 1.5)
+        future2 = self.executor.submit(self.wait_and_raise, ev, 1.5)
         future3 = self.executor.submit(time.sleep, 3)
+
+        def cb_done(f):
+            ev.set()
+        future1.add_done_callback(cb_done)
 
         finished, pending = futures.wait(
                 [future1, future2, future3],
                 return_when=futures.FIRST_EXCEPTION)
+
+        assert ev.is_set()
 
         assert set([future1, future2]) == finished
         assert set([future3]) == pending
@@ -218,7 +230,7 @@ class WaitTests:
                  EXCEPTION_FUTURE,
                  SUCCESSFUL_FUTURE,
                  future1, future2],
-                timeout=1,
+                timeout=.5,
                 return_when=futures.ALL_COMPLETED)
 
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
@@ -243,7 +255,7 @@ class AsCompletedTests:
     def test_zero_timeout(self):
         future1 = self.executor.submit(time.sleep, 2)
         completed_futures = set()
-        try:
+        with pytest.raises(futures.TimeoutError):
             for future in futures.as_completed(
                     [CANCELLED_AND_NOTIFIED_FUTURE,
                      EXCEPTION_FUTURE,
@@ -251,8 +263,6 @@ class AsCompletedTests:
                      future1],
                     timeout=0):
                 completed_futures.add(future)
-        except futures.TimeoutError:
-            pass
 
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
                     SUCCESSFUL_FUTURE]) == completed_futures
@@ -260,7 +270,7 @@ class AsCompletedTests:
     def test_duplicate_futures(self):
         # Issue 20367. Duplicate futures should not raise exceptions or give
         # duplicate responses.
-        future1 = self.executor.submit(time.sleep, .2)
+        future1 = self.executor.submit(time.sleep, .1)
         completed = [f for f in futures.as_completed([future1, future1])]
         assert len(completed) == 1
 
@@ -289,15 +299,11 @@ class ExecutorTest:
 
     def test_map_timeout(self):
         results = []
-        try:
+        with pytest.raises(futures.TimeoutError):
             for i in self.executor.map(time.sleep,
                                        [0, 0, 3],
-                                       timeout=1):
+                                       timeout=.5):
                 results.append(i)
-        except futures.TimeoutError:
-            pass
-        else:
-            self.fail('expected TimeoutError')
 
         assert [None, None] == results
 
@@ -328,6 +334,7 @@ class ExecutorTest:
                 self.executor_type(max_workers=number)
             assert infos.value.args[0] == "max_workers must be greater than 0"
 
+    @pytest.mark.broken_pool
     def test_killed_child(self):
         # When a child process is abruptly terminated, the whole pool gets
         # "broken".
