@@ -10,7 +10,8 @@ from pickle import PicklingError, UnpicklingError
 
 from loky.reusable_executor import get_reusable_executor
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
-from ._executor_mixin import ReusableExecutorMixin, TimingWrapper
+from ._executor_mixin import ReusableExecutorMixin
+from .utils import TimingWrapper, id_sleep
 
 try:
     import numpy as np
@@ -145,12 +146,6 @@ class ErrorAtUnpickle(object):
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
         return raise_error, (UnpicklingError, )
-
-
-def id_sleep(x, delay=0):
-    """sleep for delay seconds and return its first argument"""
-    sleep(delay)
-    return x
 
 
 def is_terminated_properly(executor):

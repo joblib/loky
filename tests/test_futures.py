@@ -1,9 +1,17 @@
+import sys
 import time
 import pytest
 import threading
-import loky._base as futures
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
+from .utils import captured_stderr
+
+if sys.version_info[:2] < (3, 3):
+    import loky._base as futures
+else:
+    # This makes sure of the compatibility of the Error raised by loky with
+    # the ones from concurrent.futures
+    from concurrent import futures
 
 
 def create_future(state=PENDING, exception=None, result=None):
@@ -56,26 +64,30 @@ class TestsFuture:
         assert f.cancel()
         assert was_cancelled[0]
 
-    # @pytest.mark.skip(reason="Known failure")
     def test_done_callback_raises(self):
-        # with captured_stderr() as stderr:
-        raising_was_called = [False]
-        fn_was_called = [False]
+        with captured_stderr() as stderr:
+            import logging
+            log = logging.getLogger("concurrent.futures")
+            log.addHandler(logging.StreamHandler())
+            raising_was_called = [False]
+            fn_was_called = [False]
 
-        def raising_fn(callback_future):
-            raising_was_called[0] = True
-            raise Exception('doh!')
+            def raising_fn(callback_future):
+                raising_was_called[0] = True
+                raise Exception('foobar')
 
-        def fn(callback_future):
-            fn_was_called[0] = True
+            def fn(callback_future):
+                fn_was_called[0] = True
 
-        f = Future()
-        f.add_done_callback(raising_fn)
-        f.add_done_callback(fn)
-        f.set_result(5)
-        assert raising_was_called
-        assert fn_was_called
-        # assert 'Exception: doh!' in stderr.getvalue()
+            f = Future()
+            f.add_done_callback(raising_fn)
+            f.add_done_callback(fn)
+            f.set_result(5)
+            assert raising_was_called[0]
+            assert fn_was_called[0]
+            assert 'Exception: foobar' in stderr.getvalue()
+
+            del log.handlers[:]
 
     def test_done_callback_already_successful(self):
         callback_result = [None]
@@ -190,27 +202,33 @@ class TestsFuture:
 
     def test_result_with_success(self):
         # TODO(brian@sweetapp.com): This test is timing dependent.
-        def notification():
+        def notification(ready):
             # Wait until the main thread is waiting for the result.
-            time.sleep(1)
+            ready.wait(1)
+            time.sleep(.1)
             f1.set_result(42)
 
+        ready = threading.Event()
         f1 = create_future(state=PENDING)
-        t = threading.Thread(target=notification)
+        t = threading.Thread(target=notification, args=(ready,))
         t.start()
+        ready.set()
 
         assert f1.result(timeout=5) == 42
 
     def test_result_with_cancel(self):
         # TODO(brian@sweetapp.com): This test is timing dependent.
-        def notification():
+        def notification(ready):
             # Wait until the main thread is waiting for the result.
-            time.sleep(1)
+            ready.wait(1)
+            time.sleep(.1)
             f1.cancel()
 
+        ready = threading.Event()
         f1 = create_future(state=PENDING)
-        t = threading.Thread(target=notification)
+        t = threading.Thread(target=notification, args=(ready,))
         t.start()
+        ready.set()
 
         with pytest.raises(futures.CancelledError):
             f1.result(timeout=5)
@@ -228,16 +246,19 @@ class TestsFuture:
         assert SUCCESSFUL_FUTURE.exception(timeout=0) == None
 
     def test_exception_with_success(self):
-        def notification():
+        def notification(ready):
             # Wait until the main thread is waiting for the exception.
-            time.sleep(1)
+            ready.wait(1)
+            time.sleep(.1)
             with f1._condition:
                 f1._state = FINISHED
                 f1._exception = OSError()
                 f1._condition.notify_all()
 
+        ready = threading.Event()
         f1 = create_future(state=PENDING)
-        t = threading.Thread(target=notification)
+        t = threading.Thread(target=notification, args=(ready,))
         t.start()
+        ready.set()
 
         assert isinstance(f1.exception(timeout=5), OSError)

@@ -322,6 +322,14 @@ def _add_call_item_to_queue(pending_work_items,
                 continue
 
 
+def _worker_crashed(processes, ready):
+    """check if any process crashed"""
+    for p in processes.values():
+        if p.exitcode not in [None, 0]:
+            return True
+    return False
+
+
 def _queue_management_worker(executor_reference,
                              processes,
                              pending_work_items,
@@ -358,7 +366,8 @@ def _queue_management_worker(executor_reference,
     running_work_items = []
 
     def shutting_down():
-        return _shutdown or executor is None or executor._shutdown_thread
+        return (_shutdown or executor is None
+                or (executor._shutdown_thread and not executor._broken))
 
     def shutdown_all_workers():
         # This is an upper bound
@@ -421,12 +430,13 @@ def _queue_management_worker(executor_reference,
                         work_item.future.set_exception(exc)
                         del work_item
                 _clear_list(running_work_items)
-        elif len(ready) > 0:
+        elif len(ready) > 0 and _worker_crashed(processes, ready):
             # Mark the process pool broken so that submits fail right now.
             executor = executor_reference()
             if executor is not None:
-                executor._broken = True
-                executor._shutdown_thread = True
+                with executor._shutdown_lock:
+                    executor._broken = True
+                    executor._shutdown_thread = True
                 executor = None
             # All futures in flight must be marked failed
             for work_id, work_item in pending_work_items.items():
@@ -480,7 +490,7 @@ def _queue_management_worker(executor_reference,
                     work_item.future.set_result(result_item.result)
                 # Delete references to object. See issue16284
                 del work_item
-            running_work_items.remove(result_item.work_id)
+                running_work_items.remove(result_item.work_id)
         # Check whether we should start shutting down.
         executor = executor_reference()
         # No more work items can be added if:
@@ -533,6 +543,10 @@ def _management_worker(executor_reference, queue_management_thread, processes,
                                 pending_work_items, call_queue, cause_msg)
             return
         elif _is_crashed(call_queue._thread):
+            executor = executor_reference()
+            if shutting_down():
+                return
+            executor = None
             cause_msg = ("The QueueFeederThread was terminated abruptly "
                          "while feeding a new job. This can be due to "
                          "a job pickling error.")
@@ -545,6 +559,8 @@ def _management_worker(executor_reference, queue_management_thread, processes,
         executor = None
         time.sleep(.1)
 
+    mp.util.debug("_management_worker returning")
+
 
 def _shutdown_crash(executor_reference, processes, pending_work_items,
                     call_queue, cause_msg):
@@ -552,8 +568,9 @@ def _shutdown_crash(executor_reference, processes, pending_work_items,
                  "worker processes. " + cause_msg)
     executor = executor_reference()
     if executor is not None:
-        executor._broken = True
-        executor._shutdown_thread = True
+        with executor._shutdown_lock:
+            executor._broken = True
+            executor._shutdown_thread = True
         executor = None
     call_queue.close()
     # Terminate remaining workers forcibly: the queues or their
@@ -787,9 +804,6 @@ class ProcessPoolExecutor(_base.Executor):
 
     def shutdown(self, wait=True):
         mp.util.debug('shutting down executor %s' % self)
-        if self._kill_on_shutdown:
-            # TODO: implement me!
-            pass
         with self._shutdown_lock:
             self._shutdown_thread = True
         if self._queue_management_thread:
