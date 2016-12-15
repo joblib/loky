@@ -1,5 +1,6 @@
 import os
 import sys
+import ctypes
 import psutil
 import pytest
 import warnings
@@ -13,10 +14,14 @@ from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep
 
-# load libc for c_exit
-import ctypes
-from ctypes.util import find_library
-libc = ctypes.CDLL(find_library("libc"))
+# Compat windows
+if os.plateform == "win32":
+    from signal import SIGTERM as SIGKILL
+    libc = ctypes.cdll.msvcrt
+else:
+    from signal import SIGKILL
+    from ctypes.util import find_library
+    libc = ctypes.CDLL(find_library("libc"))
 
 
 try:
@@ -31,12 +36,6 @@ try:
     PICKLING_ERRORS += (cPickle.PicklingError,)
 except ImportError:
     pass
-
-# Compat windows
-try:
-    from signal import SIGKILL
-except ImportError:
-    from signal import SIGTERM as SIGKILL
 
 
 def clean_warning_registry():
