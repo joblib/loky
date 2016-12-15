@@ -113,6 +113,46 @@ class ExecutorShutdownTest:
         for p in processes.values():
             p.join()
 
+    @classmethod
+    def _sleep_and_return(cls, delay, x):
+        time.sleep(delay)
+        return x
+
+    @pytest.mark.wait_on_shutdown
+    def test_processes_terminate_on_executor_gc(self):
+        results = self.executor.map(self._sleep_and_return,
+                                    [0.1] * 10, range(10))
+        assert len(self.executor._processes) == 5
+        processes = self.executor._processes
+
+        # The following should trigger GC and therefore shutdown of workers.
+        # However the shutdown wait for all the pending jobs to complete
+        # first.
+        executor_reference = weakref.ref(self.executor)
+        self.executor = None
+
+        # Make sure that there is not other reference to the executor object.
+        assert executor_reference() == None
+
+        # The remaining jobs should still be processed in the background
+        for result, expected in zip(results, range(10)):
+            assert result == expected
+
+        # Once all pending jobs have completed the executor and threads should
+        # terminate automatically.
+        patience = 10
+        while True:
+            if len(processes) == 0:
+                break
+            patience -= 1
+            if patience < 0:
+                raise AssertionError("queue management thread should have"
+                                     " stopped processes on executor GC:"
+                                     % processes)
+            time.sleep(0.1)
+
+        assert len(processes) == 0
+
     def test_context_manager_shutdown(self):
         with self.executor_type(max_workers=5, context=self.context) as e:
             processes = e._processes

@@ -87,12 +87,14 @@ class ExecutorMixin:
 
     def teardown_method(self, method):
         # Make sure is not broken if it should not be
-        assert hasattr(method, 'broken_pool') != (not self.executor._broken)
-        t_start = time.time()
-        self.executor.shutdown(wait=True)
-        dt = time.time() - t_start
-        assert dt < 10, "Executor took too long to shutdown"
-        _check_subprocesses_number(self.executor, 0)
+        executor = getattr(self, 'executor', None)
+        if executor is not None:
+            assert hasattr(method, 'broken_pool') != (not executor._broken)
+            t_start = time.time()
+            executor.shutdown(wait=True)
+            dt = time.time() - t_start
+            assert dt < 10, "Executor took too long to shutdown"
+            _check_subprocesses_number(executor, 0)
 
     def _prime_executor(self):
         # Make sure that the executor is ready to do work before running the
