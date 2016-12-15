@@ -85,13 +85,15 @@ class ExecutorShutdownTest:
             from loky.process_executor import {executor_type}
             from time import sleep
             from tests._test_process_executor import sleep_and_print
-            t = {executor_type}(5)
-            t.submit(sleep_and_print, 1.0, "apple")
+            t = {executor_type}(4)
+            t.submit(id, 42).result()
+            t.map(sleep_and_print, [0.1] * 10, range(10))
             """.format(executor_type=self.executor_type.__name__))
         # Errors in atexit hooks don't change the process exit code, check
         # stderr manually.
         assert not err
-        assert out.strip() == b"apple"
+        unique_out_bytes = set(out.replace(b"\r\n", b"").replace(b"\n", b""))
+        assert len(unique_out_bytes) == 10
 
     @pytest.mark.wait_on_shutdown
     def test_hang_issue12364(self):
