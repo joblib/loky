@@ -76,8 +76,7 @@ class ExecutorMixin:
     def setup_method(self, method):
         try:
             self.executor = self.executor_type(
-                max_workers=self.worker_count, context=self.context,
-                kill_on_shutdown=not hasattr(method, 'wait_on_shutdown'))
+                max_workers=self.worker_count, context=self.context)
         except NotImplementedError as e:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
@@ -87,9 +86,11 @@ class ExecutorMixin:
 
     def teardown_method(self, method):
         # Make sure is not broken if it should not be
-        assert hasattr(method, 'broken_pool') != (not self.executor._broken)
+        assert hasattr(method, 'broken_pool') != (
+            not self.executor._flags.broken)
         t_start = time.time()
-        self.executor.shutdown(wait=True)
+        self.executor.shutdown(
+            wait=True, kill_workers=not hasattr(method, 'wait_on_shutdown'))
         dt = time.time() - t_start
         assert dt < 10, "Executor took too long to shutdown"
         _check_subprocesses_number(self.executor, 0)

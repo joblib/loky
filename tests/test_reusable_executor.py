@@ -13,6 +13,12 @@ from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep
 
+# load libc for c_exit
+import ctypes
+from ctypes.util import find_library
+libc = ctypes.CDLL(find_library("libc"))
+
+
 try:
     import numpy as np
 except ImportError:
@@ -59,8 +65,13 @@ def crash():
 
 
 def exit():
-    """Induces a sys exit with exitcode 1"""
-    sys.exit(1)
+    """Induces a sys exit with exitcode 0"""
+    sys.exit(0)
+
+
+def c_exit():
+    """Induces a libc exit with exitcode 0"""
+    libc.exit(0)
 
 
 def check_pids_exist_then_sleep(arg):
@@ -136,6 +147,18 @@ class ExitAtUnpickle(object):
         return exit, ()
 
 
+class CExitAtPickle(object):
+    """Bad object that triggers a segfault at pickling time."""
+    def __reduce__(self):
+        c_exit()
+
+
+class CExitAtUnpickle(object):
+    """Bad object that triggers a process exit at unpickling time."""
+    def __reduce__(self):
+        return c_exit, ()
+
+
 class ErrorAtPickle(object):
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
@@ -161,16 +184,19 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         (id, (ErrorAtPickle(),), BrokenExecutor),
         # Check problem occuring while unpickling a task on workers
         (id, (ExitAtUnpickle(),), BrokenExecutor),
+        (id, (CExitAtUnpickle(),), BrokenExecutor),
         (id, (ErrorAtUnpickle(),), BrokenExecutor),
         (id, (CrashAtUnpickle(),), BrokenExecutor),
         # Check problem occuring during function execution on workers
         (crash, (), BrokenExecutor),
         (exit, (), SystemExit),
+        (c_exit, (), BrokenExecutor),
         (raise_error, (RuntimeError,), RuntimeError),
         # Check problem occuring while pickling a task result
         # on workers
         (return_instance, (CrashAtPickle,), BrokenExecutor),
         (return_instance, (ExitAtPickle,), BrokenExecutor),
+        (return_instance, (CExitAtPickle,), BrokenExecutor),
         (return_instance, (ErrorAtPickle,), PicklingError),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
@@ -303,10 +329,10 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         res1 = executor.map(id_sleep, range(50), repeat(.001))
         res2 = executor.map(id_sleep, range(50), repeat(.1))
         assert list(res1) == list(range(50))
-        # We should get an error as the executor.shutdownd before we fetched
+        # We should get an error as the executor shutdowned before we fetched
         # the results from the operation.
         terminate = TimingWrapper(executor.shutdown)
-        terminate(wait=True)
+        terminate(wait=True, kill_workers=True)
         assert terminate.elapsed < .5
         with pytest.raises(ShutdownExecutor):
             list(res2)
@@ -327,7 +353,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
             sleep, [0.1 for i in range(10000)], chunksize=1
             )
         shutdown = TimingWrapper(executor.shutdown)
-        shutdown(wait=True)
+        shutdown(wait=True, kill_workers=True)
         assert shutdown.elapsed < 0.5
 
         with pytest.raises(ShutdownExecutor):

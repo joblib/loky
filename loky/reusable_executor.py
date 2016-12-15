@@ -30,7 +30,7 @@ def _get_next_executor_id():
 
 
 def get_reusable_executor(max_workers=None, context=None,
-                          timeout=10, kill_on_shutdown=True):
+                          timeout=10):
     """Return the current ReusableExectutor instance.
 
     Start a new instance if it has not been started already or if the previous
@@ -56,8 +56,7 @@ def get_reusable_executor(max_workers=None, context=None,
     """
     global _executor, _executor_args
     executor = _executor
-    args = dict(context=context, timeout=timeout,
-                kill_on_shutdown=kill_on_shutdown)
+    args = dict(context=context, timeout=timeout)
     if executor is None:
         mp.util.debug("Create a executor with max_workers={}."
                       .format(max_workers))
@@ -65,13 +64,13 @@ def get_reusable_executor(max_workers=None, context=None,
         _executor_args = args
         _executor = executor = ReusablePoolExecutor(
             max_workers=max_workers, context=context, timeout=timeout,
-            kill_on_shutdown=kill_on_shutdown, executor_id=executor_id)
+            executor_id=executor_id)
     else:
-        if (executor._broken or executor._shutdown_thread
+        if (executor._flags.broken or executor._flags.shutdown
                 or args != _executor_args):
-            if executor._broken:
+            if executor._flags.broken:
                 reason = "broken"
-            elif executor._shutdown_thread:
+            elif executor._flags.shutdown:
                 reason = "shutdown"
             else:
                 reason = "arguments have changed"
@@ -97,12 +96,11 @@ def get_reusable_executor(max_workers=None, context=None,
 
 class ReusablePoolExecutor(ProcessPoolExecutor):
     def __init__(self, max_workers=None, context=None, timeout=None,
-                 kill_on_shutdown=True, executor_id=0):
+                 executor_id=0):
         if context is None and sys.version_info[:2] > (3, 3):
             context = mp.get_context('spawn')
         super(ReusablePoolExecutor, self).__init__(
-            max_workers=max_workers, context=context, timeout=timeout,
-            kill_on_shutdown=kill_on_shutdown)
+            max_workers=max_workers, context=context, timeout=timeout)
         self.executor_id = executor_id
 
     def _resize(self, max_workers):
@@ -113,7 +111,7 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         self._max_workers = max_workers
         for _ in range(max_workers, mw):
             self._call_queue.put(None)
-        while len(self._processes) > max_workers and not self._broken:
+        while len(self._processes) > max_workers and not self._flags.broken:
             time.sleep(1e-3)
 
         self._adjust_process_count()
