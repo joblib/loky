@@ -830,9 +830,6 @@ class ProcessPoolExecutor(_base.Executor):
         if self._call_queue:
             self._call_queue.close()
             self._call_queue.join_thread()
-        if self._result_queue:
-            self._result_queue.close()
-            self._result_queue.join_thread()
         if self._processes:
             for p in self._processes.values():
                 p.join()
