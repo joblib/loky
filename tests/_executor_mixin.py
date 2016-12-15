@@ -5,6 +5,7 @@ import math
 import psutil
 import threading
 
+from loky._base import TimeoutError
 from loky.reusable_executor import get_reusable_executor
 from multiprocessing import cpu_count
 

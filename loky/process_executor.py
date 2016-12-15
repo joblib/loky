@@ -405,11 +405,16 @@ def _queue_management_worker(executor_reference,
                 # 'select' under the hood). Instead we check for dead processes
                 # manually from time to time.
                 count += 1
-                ready = wait([result_reader], timeout=_poll_timeout)
+                ready = []
                 if count == 10:
                     count = 0
                     ready += [p for p in processes.values()
                               if not p.is_alive()]
+
+                # If a process timed out, it should have written in the queue,
+                # so it is important to select the queue after processes
+                # introspection
+                ready += wait([result_reader], timeout=_poll_timeout)
             else:
                 worker_sentinels = [p.sentinel for p in processes.values()]
                 ready = wait([result_reader] + worker_sentinels,
@@ -419,6 +424,7 @@ def _queue_management_worker(executor_reference,
         else:
             ready = []
             result_item = None
+
         if result_reader in ready:
             try:
                 result_item = result_reader.recv()
@@ -430,7 +436,7 @@ def _queue_management_worker(executor_reference,
                         work_item.future.set_exception(exc)
                         del work_item
                 _clear_list(running_work_items)
-        elif len(ready) > 0 and _worker_crashed(processes, ready):
+        elif len(ready) > 0:  # and _worker_crashed(processes, ready):
             # Mark the process pool broken so that submits fail right now.
             executor = executor_reference()
             if executor is not None:
@@ -491,6 +497,7 @@ def _queue_management_worker(executor_reference,
                 # Delete references to object. See issue16284
                 del work_item
                 running_work_items.remove(result_item.work_id)
+
         # Check whether we should start shutting down.
         executor = executor_reference()
         # No more work items can be added if:
