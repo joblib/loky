@@ -15,7 +15,7 @@ from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep
 
 # Compat windows
-if os.plateform == "win32":
+if sys.platform == "win32":
     from signal import SIGTERM as SIGKILL
     libc = ctypes.cdll.msvcrt
 else:
