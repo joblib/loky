@@ -96,7 +96,7 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 # threads/processes finish.
 
 _threads_wakeup = weakref.WeakKeyDictionary()
-_shutdown = False
+_global_shutdown = False
 
 
 class _Sentinel:
@@ -133,8 +133,8 @@ def _clear_list(ll):
 
 
 def _python_exit():
-    global _shutdown
-    _shutdown = True
+    global _global_shutdown
+    _global_shutdown = True
     items = list(_threads_wakeup.items())
     for t, wakeup in items:
         if t.is_alive():
@@ -331,14 +331,14 @@ def _worker_crashed(processes, ready):
 
 
 def _queue_management_worker(executor_reference,
+                             executor_flags,
                              processes,
                              pending_work_items,
                              work_ids_queue,
                              call_queue,
                              result_queue,
                              wakeup,
-                             manage_processes,
-                             kill_on_shutdown=False):
+                             processes_management_lock):
     """Manages the communication between this process and the worker processes.
 
     This function is run in a local thread.
@@ -347,6 +347,9 @@ def _queue_management_worker(executor_reference,
         executor_reference: A weakref.ref to the ProcessPoolExecutor that owns
             this thread. Used to determine if the ProcessPoolExecutor has been
             garbage collected and that this function can exit.
+        executor_flags: A ExecutorFlags holding internal states of the
+            ProcessPoolExecutor. It permits to know if the executor is broken
+            even the object has been gc.
         process: A list of the multiprocessing.Process instances used as
             workers.
         pending_work_items: A dict mapping work ids to _WorkItems e.g.
@@ -358,16 +361,20 @@ def _queue_management_worker(executor_reference,
             process workers.
         wakeup: A multiprocessing.Connection for communication purposes
             between the main Thread and this one, to avoid deadlock.
-        kill_on_shutdown: A bool modifying the behavior of the executor. If
-            set to True, all pending jobs will be canceled on shutdown for an
-            immediate completion.
     """
     executor = None
     running_work_items = []
 
-    def shutting_down():
-        return (_shutdown or executor is None
-                or (executor._shutdown_thread and not executor._broken))
+    def is_shutting_down():
+        # No more work items can be added if:
+        #   - The interpreter is shutting down OR
+        #   - The executor that own this worker is not broken AND
+        #        * The executor that owns this worker has been collected OR
+        #        * The executor that owns this worker has been shutdown.
+        # If the executor is broken, it should be detected in the next loop.
+        return (_global_shutdown or
+                ((executor is None or executor_flags.shutdown)
+                 and not executor_flags.broken))
 
     def shutdown_all_workers():
         # This is an upper bound
@@ -406,11 +413,16 @@ def _queue_management_worker(executor_reference,
                 # 'select' under the hood). Instead we check for dead processes
                 # manually from time to time.
                 count += 1
-                ready = wait([result_reader], timeout=_poll_timeout)
+                ready = []
                 if count == 10:
                     count = 0
                     ready += [p for p in processes.values()
                               if not p.is_alive()]
+
+                # If a process timed out, it should have written in the queue,
+                # so it is important to select the queue after processes
+                # introspection
+                ready += wait([result_reader], timeout=_poll_timeout)
             else:
                 worker_sentinels = [p.sentinel for p in processes.values()]
                 ready = wait([result_reader] + worker_sentinels,
@@ -420,6 +432,7 @@ def _queue_management_worker(executor_reference,
         else:
             ready = []
             result_item = None
+
         if result_reader in ready:
             try:
                 result_item = result_reader.recv()
@@ -431,13 +444,13 @@ def _queue_management_worker(executor_reference,
                         work_item.future.set_exception(exc)
                         del work_item
                 _clear_list(running_work_items)
-        elif len(ready) > 0 and _worker_crashed(processes, ready):
+        elif len(ready) > 0:  # and _worker_crashed(processes, ready):
             # Mark the process pool broken so that submits fail right now.
             executor = executor_reference()
             if executor is not None:
                 with executor._shutdown_lock:
-                    executor._broken = True
-                    executor._shutdown_thread = True
+                    executor._flags.broken = True
+                    executor._flags.shutdown = True
                 executor = None
             # All futures in flight must be marked failed
             for work_id, work_item in pending_work_items.items():
@@ -464,7 +477,7 @@ def _queue_management_worker(executor_reference,
             # Clean shutdown of a worker using its PID, either on request
             # by the executor.shutdown method or by the timeout of the worker
             # itself: we should not mark the executor as broken.
-            with manage_processes:
+            with processes_management_lock:
                 p = processes.pop(result_item)
             p.join()
 
@@ -492,14 +505,11 @@ def _queue_management_worker(executor_reference,
                 # Delete references to object. See issue16284
                 del work_item
                 running_work_items.remove(result_item.work_id)
+
         # Check whether we should start shutting down.
         executor = executor_reference()
-        # No more work items can be added if:
-        #   - The interpreter is shutting down OR
-        #   - The executor that owns this worker has been collected OR
-        #   - The executor that owns this worker has been shutdown.
-        if shutting_down():
-            if kill_on_shutdown:
+        if is_shutting_down():
+            if executor_flags.kill_workers:
                 while pending_work_items:
                     _, work_item = pending_work_items.popitem()
                     work_item.future.set_exception(ShutdownExecutor(
@@ -520,13 +530,15 @@ def _queue_management_worker(executor_reference,
         executor = None
 
 
-def _management_worker(executor_reference, queue_management_thread, processes,
-                       pending_work_items, work_ids, call_queue, result_queue):
+def _management_worker(executor_reference, executor_flags,
+                       queue_management_thread, processes, pending_work_items,
+                       work_ids, call_queue, result_queue):
 
     executor = None
 
-    def shutting_down():
-        return _shutdown or executor is None or executor._shutdown_thread
+    def is_shutting_down():
+        return (_global_shutdown or executor_flags.shutdown or
+                (executor is None and not queue_management_thread.is_alive()))
 
     while True:
         broken_qm = not queue_management_thread.is_alive()
@@ -545,7 +557,7 @@ def _management_worker(executor_reference, queue_management_thread, processes,
             return
         elif _is_crashed(call_queue._thread):
             executor = executor_reference()
-            if shutting_down():
+            if is_shutting_down():
                 return
             executor = None
             cause_msg = ("The QueueFeederThread was terminated abruptly "
@@ -555,12 +567,10 @@ def _management_worker(executor_reference, queue_management_thread, processes,
                             call_queue, cause_msg)
             return
         executor = executor_reference()
-        if shutting_down():
+        if is_shutting_down():
             return
         executor = None
         time.sleep(.1)
-
-    mp.util.debug("_management_worker returning")
 
 
 def _shutdown_crash(executor_reference, processes, pending_work_items,
@@ -570,8 +580,8 @@ def _shutdown_crash(executor_reference, processes, pending_work_items,
     executor = executor_reference()
     if executor is not None:
         with executor._shutdown_lock:
-            executor._broken = True
-            executor._shutdown_thread = True
+            executor._flags.broken = True
+            executor._flags.shutdown = True
         executor = None
     call_queue.close()
     # Terminate remaining workers forcibly: the queues or their
@@ -633,8 +643,7 @@ class ShutdownExecutor(RuntimeError):
 
 class ProcessPoolExecutor(_base.Executor):
 
-    def __init__(self, max_workers=None, context=None,
-                 timeout=None, kill_on_shutdown=False):
+    def __init__(self, max_workers=None, context=None, timeout=None):
         """Initializes a new ProcessPoolExecutor instance.
 
         Args:
@@ -655,14 +664,13 @@ class ProcessPoolExecutor(_base.Executor):
         # Parameters of this executor
         self._ctx = context or get_context()
         mp.util.debug("using context {}".format(self._ctx))
-        self._kill_on_shutdown = kill_on_shutdown
         self._timeout = timeout
 
         self._setup_queue()
         # Connection to wakeup QueueManagerThread
         self._wakeup = _Sentinel()
         self._work_ids = queue.Queue()
-        self._manage_processes = self._ctx.Lock()
+        self._processes_management_lock = self._ctx.Lock()
         self._management_thread = None
         self._queue_management_thread = None
 
@@ -670,9 +678,8 @@ class ProcessPoolExecutor(_base.Executor):
         self._processes = {}
 
         # Shutdown is a two-step process.
-        self._shutdown_thread = False
+        self._flags = _ExecutorFlags()
         self._shutdown_lock = threading.Lock()
-        self._broken = False
         self._queue_count = 0
         self._pending_work_items = {}
         mp.util.debug('PoolProcessExecutor is setup')
@@ -693,37 +700,40 @@ class ProcessPoolExecutor(_base.Executor):
             self._result_queue = mp.queues.SimpleQueue()
 
     def _start_queue_management_thread(self):
-        if len(self._processes) != self._max_workers:
-            self._adjust_process_count()
         if self._queue_management_thread is None:
             mp.util.debug('_start_queue_management_thread called')
+
+            # When the executor gets lost, the weakref callback will wake up
+            # the queue management thread.
+            def weakref_cb(_, wakeup=self._wakeup):
+                wakeup.set()
+
             # Start the processes so that their sentinels are known.
             self._queue_management_thread = threading.Thread(
                 target=_queue_management_worker,
-                args=(weakref.ref(self),
+                args=(weakref.ref(self, weakref_cb), self._flags,
                       self._processes,
                       self._pending_work_items,
                       self._work_ids,
                       self._call_queue,
                       self._result_queue,
                       self._wakeup,
-                      self._manage_processes,
-                      self._kill_on_shutdown),
+                      self._processes_management_lock),
                 name="QueueManager")
             self._queue_management_thread.daemon = True
             self._queue_management_thread.start()
 
+            # register this executor in a mecanism that ensures it will wakeup
+            # when the interpreter is exiting.
+            _threads_wakeup[self._queue_management_thread] = self._wakeup
+
     def _start_thread_management_thread(self):
-        # When the executor gets lost, the weakref callback will wake up
-        # the queue management thread.
-        def weakref_cb(_, wakeup=self._wakeup):
-            wakeup.set()
         if self._management_thread is None:
             mp.util.debug('_start_thread_management_thread called')
             # Start the processes so that their sentinels are known.
             self._management_thread = threading.Thread(
                 target=_management_worker,
-                args=(weakref.ref(self, weakref_cb),
+                args=(weakref.ref(self), self._flags,
                       self._queue_management_thread,
                       self._processes,
                       self._pending_work_items,
@@ -733,10 +743,9 @@ class ProcessPoolExecutor(_base.Executor):
                 name="ThreadManager")
             self._management_thread.daemon = True
             self._management_thread.start()
-            _threads_wakeup[self._queue_management_thread] = self._wakeup
 
     def _adjust_process_count(self):
-        with self._manage_processes:
+        with self._processes_management_lock:
             for _ in range(len(self._processes), self._max_workers):
                 p = self._ctx.Process(
                     target=_process_worker,
@@ -747,12 +756,20 @@ class ProcessPoolExecutor(_base.Executor):
                 self._processes[p.pid] = p
         mp.util.debug('Adjust process count : {}'.format(self._processes))
 
+    def _ensure_executor_running(self):
+        """ensures all workers and management thread are running
+        """
+        if len(self._processes) != self._max_workers:
+            self._adjust_process_count()
+        self._start_queue_management_thread()
+        self._start_thread_management_thread()
+
     def submit(self, fn, *args, **kwargs):
         with self._shutdown_lock:
-            if self._broken:
+            if self._flags.broken:
                 raise BrokenExecutor('A child process terminated abruptly, '
                                      'the process pool is not usable anymore')
-            if self._shutdown_thread:
+            if self._flags.shutdown:
                 raise RuntimeError(
                     'cannot schedule new futures after shutdown')
 
@@ -765,8 +782,7 @@ class ProcessPoolExecutor(_base.Executor):
             # Wake up queue management thread
             self._wakeup.set()
 
-            self._start_queue_management_thread()
-            self._start_thread_management_thread()
+            self._ensure_executor_running()
             return f
     submit.__doc__ = _base.Executor.submit.__doc__
 
@@ -803,10 +819,11 @@ class ProcessPoolExecutor(_base.Executor):
             timeout=timeout)
         return itertools.chain.from_iterable(results)
 
-    def shutdown(self, wait=True):
+    def shutdown(self, wait=True, kill_workers=False):
         mp.util.debug('shutting down executor %s' % self)
         with self._shutdown_lock:
-            self._shutdown_thread = True
+            self._flags.shutdown = True
+            self._flags.kill_workers = kill_workers
         if self._queue_management_thread:
             # Wake up queue management thread
             self._wakeup.set()
@@ -831,3 +848,17 @@ class ProcessPoolExecutor(_base.Executor):
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
 
 atexit.register(_python_exit)
+
+
+class _ExecutorFlags(object):
+    """necessary references to maintain executor states without preventing gc
+
+    It permits to keep the information needed by queue_management_thread
+    and management_thread to maintain the pool without preventing the garbage
+    collection of unreferenced executors.
+    """
+    def __init__(self):
+
+        self.shutdown = False
+        self.broken = False
+        self.kill_workers = False

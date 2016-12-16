@@ -5,6 +5,7 @@ import math
 import psutil
 import threading
 
+from loky._base import TimeoutError
 from loky.reusable_executor import get_reusable_executor
 from multiprocessing import cpu_count
 
@@ -76,8 +77,7 @@ class ExecutorMixin:
     def setup_method(self, method):
         try:
             self.executor = self.executor_type(
-                max_workers=self.worker_count, context=self.context,
-                kill_on_shutdown=not hasattr(method, 'wait_on_shutdown'))
+                max_workers=self.worker_count, context=self.context)
         except NotImplementedError as e:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
@@ -89,9 +89,11 @@ class ExecutorMixin:
         # Make sure is not broken if it should not be
         executor = getattr(self, 'executor', None)
         if executor is not None:
-            assert hasattr(method, 'broken_pool') != (not executor._broken)
+            assert hasattr(method, 'broken_pool') != (
+                not self.executor._flags.broken)
             t_start = time.time()
-            executor.shutdown(wait=True)
+            executor.shutdown(
+              wait=True, kill_workers=not hasattr(method, 'wait_on_shutdown'))
             dt = time.time() - t_start
             assert dt < 10, "Executor took too long to shutdown"
             _check_subprocesses_number(executor, 0)
