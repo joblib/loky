@@ -389,7 +389,8 @@ def _queue_management_worker(executor_reference,
 
         # If .join() is not called on the created processes then
         # some multiprocessing.Queue methods may deadlock on Mac OS X.
-        for p in processes.values():
+        while processes:
+            _, p = processes.popitem()
             p.join()
         mp.util.debug("queue management thread clean shutdown of worker "
                       "processes: {}".format(processes))
