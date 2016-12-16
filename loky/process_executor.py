@@ -347,7 +347,9 @@ def _queue_management_worker(executor_reference,
         executor_reference: A weakref.ref to the ProcessPoolExecutor that owns
             this thread. Used to determine if the ProcessPoolExecutor has been
             garbage collected and that this function can exit.
-        executor_flags: TODO
+        executor_flags: A ExecutorFlags holding internal states of the
+            ProcessPoolExecutor. It permits to know if the executor is broken
+            even the object has been gc.
         process: A list of the multiprocessing.Process instances used as
             workers.
         pending_work_items: A dict mapping work ids to _WorkItems e.g.
@@ -364,7 +366,12 @@ def _queue_management_worker(executor_reference,
     running_work_items = []
 
     def is_shutting_down():
-        # TODO: explain logic
+        # No more work items can be added if:
+        #   - The interpreter is shutting down OR
+        #   - The executor that own this worker is not broken AND
+        #        * The executor that owns this worker has been collected OR
+        #        * The executor that owns this worker has been shutdown.
+        # If the executor is broken, it should be detected in the next loop.
         return (_global_shutdown or
                 ((executor is None or executor_flags.shutdown)
                  and not executor_flags.broken))
@@ -500,10 +507,6 @@ def _queue_management_worker(executor_reference,
 
         # Check whether we should start shutting down.
         executor = executor_reference()
-        # No more work items can be added if:
-        #   - The interpreter is shutting down OR
-        #   - The executor that owns this worker has been collected OR
-        #   - The executor that owns this worker has been shutdown.
         if is_shutting_down():
             if executor_flags.kill_workers:
                 while pending_work_items:
@@ -719,7 +722,8 @@ class ProcessPoolExecutor(_base.Executor):
             self._queue_management_thread.daemon = True
             self._queue_management_thread.start()
 
-            # TODO: explain mecanism
+            # register this executor in a mecanism that ensures it will wakeup
+            # when the interpreter is exiting.
             _threads_wakeup[self._queue_management_thread] = self._wakeup
 
     def _start_thread_management_thread(self):
