@@ -859,7 +859,6 @@ class _ExecutorFlags(object):
     """
     def __init__(self):
 
-        # queue state
         self.shutdown = False
         self.broken = False
         self.kill_workers = False
