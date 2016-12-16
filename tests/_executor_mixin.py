@@ -92,8 +92,7 @@ class ExecutorMixin:
             assert hasattr(method, 'broken_pool') != (
                 not self.executor._flags.broken)
             t_start = time.time()
-            executor.shutdown(
-              wait=True, kill_workers=not hasattr(method, 'wait_on_shutdown'))
+            executor.shutdown(wait=True, kill_workers=True)
             dt = time.time() - t_start
             assert dt < 10, "Executor took too long to shutdown"
             _check_subprocesses_number(executor, 0)

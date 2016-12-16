@@ -95,7 +95,6 @@ class ExecutorShutdownTest:
         unique_out_bytes = set(out.replace(b"\r\n", b"").replace(b"\n", b""))
         assert len(unique_out_bytes) == 10
 
-    @pytest.mark.wait_on_shutdown
     def test_hang_issue12364(self):
         fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
         self.executor.shutdown()
@@ -118,7 +117,6 @@ class ExecutorShutdownTest:
         time.sleep(delay)
         return x
 
-    @pytest.mark.wait_on_shutdown
     def test_processes_terminate_on_executor_gc(self):
         results = self.executor.map(self._sleep_and_return,
                                     [0.1] * 10, range(10))
