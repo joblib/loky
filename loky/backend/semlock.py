@@ -12,15 +12,22 @@ import errno
 import ctypes
 import tempfile
 import threading
-from multiprocessing import util
 from ctypes.util import find_library
 
-SEM_FAILURE = 0
+# As we need to use ctypes return types for semlock object, failure value
+# needs to be cast to proper python value. Unix failure convention is to
+# return 0, whereas OSX returns -1
+SEM_FAILURE = ctypes.c_void_p(0).value
 if sys.platform == 'darwin':
-    SEM_FAILURE = -1
+    SEM_FAILURE = ctypes.c_void_p(-1).value
 
+# Semaphore types
 RECURSIVE_MUTEX = 0
 SEMAPHORE = 1
+
+# Semaphore constants
+SEM_OFLAG = ctypes.c_int(os.O_CREAT | os.O_EXCL)
+SEM_PERM = ctypes.c_int(384)
 
 
 class timespec(ctypes.Structure):
@@ -28,8 +35,6 @@ class timespec(ctypes.Structure):
 
 
 pthread = ctypes.CDLL(find_library('pthread'), use_errno=True)
-# pthread.sem_open.argtypes = [ctypes.c_char_p, ctypes.c_int,
-#                              ctypes.c_int, ctypes.c_int]
 pthread.sem_open.restype = ctypes.c_void_p
 pthread.sem_close.argtypes = [ctypes.c_void_p]
 pthread.sem_wait.argtypes = [ctypes.c_void_p]
@@ -49,7 +54,8 @@ except ImportError:
 
 
 if sys.version_info[:2] < (3, 3):
-    FileExistsError = OSError
+    class FileExistsError(OSError):
+        pass
 
 
 def sem_unlink(name):
@@ -57,14 +63,30 @@ def sem_unlink(name):
         raiseFromErrno()
 
 
-def _sem_open(name, o_flag, perm=None, value=None):
-    if perm is None:
-        assert value is None, "Wrong number of argument (either 2 or 4)"
-        return pthread.sem_open(ctypes.c_char_p(name), o_flag)
+def _sem_open(name, value=None):
+    """ Construct or retrieve a semaphore with the given name
+
+    If value is None, try to retrieve an existing named semaphore.
+    Else create a new semaphore with the given value
+    """
+    if value is None:
+        handle = pthread.sem_open(ctypes.c_char_p(name), 0)
     else:
-        assert value is not None, "Wrong number of argument (either 2 or 4)"
-        return pthread.sem_open(ctypes.c_char_p(name), ctypes.c_int(o_flag),
-                                ctypes.c_int(perm), ctypes.c_int(value))
+        handle = pthread.sem_open(ctypes.c_char_p(name), SEM_OFLAG, SEM_PERM,
+                                  ctypes.c_int(value))
+    if handle == SEM_FAILURE:
+        e = ctypes.get_errno()
+        if e == errno.EEXIST:
+            raise FileExistsError('cannot find name for semaphore')
+        elif e == errno.ENOENT:
+            raise FileNotFoundError('cannot find semaphore named %s' % name)
+        elif e == errno.ENOSYS:
+            raise NotImplementedError('No semaphore implementation on this '
+                                      'system')
+        else:
+            raiseFromErrno()
+
+    return handle
 
 
 def _sem_timedwait(handle, timeout):
@@ -122,11 +144,7 @@ class SemLock(object):
         self.kind = kind
         self.maxvalue = maxvalue
         self.name = name.encode('ascii')
-        self.handle = _sem_open(
-            self.name, os.O_CREAT | os.O_EXCL, 384, value)
-
-        if self.handle == SEM_FAILURE:
-            raise FileExistsError('cannot find name for semaphore')
+        self.handle = _sem_open(self.name, value)
 
     def __del__(self):
         try:
@@ -237,9 +255,7 @@ class SemLock(object):
         self.kind = kind
         self.maxvalue = maxvalue
         self.name = name
-        self.handle = _sem_open(name, 0)
-        if self.handle == SEM_FAILURE:
-            raise FileNotFoundError('cannot find semaphore named %s' % name)
+        self.handle = _sem_open(name)
         return self
 
 
