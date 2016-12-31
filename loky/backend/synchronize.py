@@ -26,10 +26,10 @@ __all__ = [
 # See issue 3770
 try:
     if sys.platform != 'win32' and sys.version_info < (3, 4):
-        from .semlock import SemLock as SemLockC
+        from .semlock import SemLock as _SemLock
         from .semlock import sem_unlink
     else:
-        from _multiprocessing import SemLock as SemLockC
+        from _multiprocessing import SemLock as _SemLock
         from _multiprocessing import sem_unlink
 except (ImportError):
     raise ImportError("This platform lacks a functioning sem_open" +
@@ -60,7 +60,7 @@ class SemLock(object):
         unlink_now = sys.platform == 'win32'
         for i in range(100):
             try:
-                self._semlock = SemLockC(
+                self._semlock = _SemLock(
                     kind, value, maxvalue, SemLock._make_name(),
                     unlink_now)
             except FileExistsError:
@@ -115,7 +115,7 @@ class SemLock(object):
         return (h, sl.kind, sl.maxvalue, sl.name)
 
     def __setstate__(self, state):
-        self._semlock = SemLockC._rebuild(*state)
+        self._semlock = _SemLock._rebuild(*state)
         util.debug('recreated blocker with handle %r and name "%s"'
                    % (state[0], state[3].decode()))
         self._make_methods()

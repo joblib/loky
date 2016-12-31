@@ -57,6 +57,9 @@ if sys.version_info[:2] < (3, 3):
     class FileExistsError(OSError):
         pass
 
+    class FileNotFoundError(OSError):
+        pass
+
 
 def sem_unlink(name):
     if pthread.sem_unlink(name) < 0:
@@ -74,6 +77,7 @@ def _sem_open(name, value=None):
     else:
         handle = pthread.sem_open(ctypes.c_char_p(name), SEM_OFLAG, SEM_PERM,
                                   ctypes.c_int(value))
+
     if handle == SEM_FAILURE:
         e = ctypes.get_errno()
         if e == errno.EEXIST:
@@ -103,7 +107,7 @@ def _sem_timedwait(handle, timeout):
 
     # PERFORMANCE WARNING
     # No sem_timedwait on OSX so we implement our own method. This method can
-    # dergade performances has the wait can have a latency up to 20 msecs
+    # degrade performances has the wait can have a latency up to 20 msecs
     deadline = t_start + timeout
     delay = 0
     now = time.time()
