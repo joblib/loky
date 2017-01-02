@@ -81,7 +81,7 @@ def _sem_open(name, value=None):
     if handle == SEM_FAILURE:
         e = ctypes.get_errno()
         if e == errno.EEXIST:
-            raise FileExistsError('cannot find name for semaphore')
+            raise FileExistsError("a semaphore named %s already exists" % name)
         elif e == errno.ENOENT:
             raise FileNotFoundError('cannot find semaphore named %s' % name)
         elif e == errno.ENOSYS:

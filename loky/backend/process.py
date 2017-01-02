@@ -1,6 +1,6 @@
 import os
 import sys
-if sys.version_info > (3, 4):
+if sys.version_info >= (3, 4):
     from multiprocessing.process import BaseProcess
 else:
     from multiprocessing.process import Process as BaseProcess
