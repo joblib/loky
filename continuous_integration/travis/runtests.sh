@@ -10,4 +10,5 @@ echo $TOXENV
 
 # Run the tests and collect trace coverage data both in the subprocesses
 # and its subprocesses.
-COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- -vl --timeout=15
+COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- -vl --timeout=15 \
+	--maxfail=5
