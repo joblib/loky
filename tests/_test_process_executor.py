@@ -538,7 +538,8 @@ class ExecutorTest:
         # raise error.
         print("Remaining worker processes command lines:", file=sys.stderr)
         for w, cmdline in workers:
-            print(cmdline, end='\n\n', file=sys.stderr)
+            print(cmdline, end='\n', file=sys.stderr)
+            print(w.status(), end='\n\n', file=sys.stderr)
         raise AssertionError(
             'Expected no more running worker processes but got %d after'
             ' waiting %0.3fs.'
