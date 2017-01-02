@@ -8,6 +8,11 @@ import multiprocessing
 from loky import backend
 from .utils import TimingWrapper
 
+try:
+    from ._openmp.parallel_sum import parallel_sum
+except ImportError:
+    parallel_sum = None
+
 DELTA = 0.1
 
 
@@ -393,11 +398,9 @@ class TestLokyBackend:
 
                 assert p.exitcode == 0
 
-    @pytest.mark.skipif(sys.version_info[:2] >= (3, 6),
-                        reason="no wheel for py36. We skip the test to reduce "
-                        " the test running time")
+    @pytest.mark.skipif(parallel_sum is None,
+                        reason="cython is not installed on this system.")
     def test_compatibility_openmp(self):
-        from ._openmp.parallel_sum import parallel_sum
         # Use openMP before launching subprocesses. With fork backend, some fds
         # are nto correctly clean up, causing a freeze. No freeze should be
         # detected with loky.
