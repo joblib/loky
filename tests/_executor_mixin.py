@@ -30,7 +30,12 @@ def _direct_children_with_cmdline(p):
     for c in p.children():
         try:
             cmdline = " ".join(c.cmdline())
-            if not c.is_running():
+            if not c.is_running() or not cmdline:
+                # Under linux is_running() can return True even though
+                # the command line data can no longer be read from
+                # /proc/<pid>/cmdline. This looks like a race condition
+                # between /proc/<pid>/stat and /proc/<pid>/cmdline
+                # when the process is being terminated by the OS.
                 continue
             children_with_cmdline.append((c, cmdline))
         except (psutil.NoSuchProcess, psutil.AccessDenied):
