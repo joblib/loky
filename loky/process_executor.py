@@ -378,6 +378,7 @@ def _queue_management_worker(executor_reference,
 
     def shutdown_all_workers():
         mp.util.debug("queue management thread shutting down")
+        executor_flags.flag_as_shutting_down()
         # This is an upper bound
         nb_children_alive = sum(p.is_alive() for p in processes.values())
         try:
@@ -453,9 +454,7 @@ def _queue_management_worker(executor_reference,
             # Mark the process pool broken so that submits fail right now.
             executor = executor_reference()
             if executor is not None:
-                with executor._shutdown_lock:
-                    executor._flags.broken = True
-                    executor._flags.shutdown = True
+                executor._flags.flag_as_broken()
                 executor = None
             # All futures in flight must be marked failed
             for work_id, work_item in pending_work_items.items():
@@ -565,6 +564,7 @@ def _management_worker(executor_reference, executor_flags,
         elif _is_crashed(call_queue._thread):
             executor = executor_reference()
             if is_shutting_down():
+                mp.util.debug("shutting down")
                 return
             executor = None
             cause_msg = ("The QueueFeederThread was terminated abruptly "
@@ -575,6 +575,7 @@ def _management_worker(executor_reference, executor_flags,
             return
         executor = executor_reference()
         if is_shutting_down():
+            mp.util.debug("shutting down")
             return
         executor = None
         time.sleep(.1)
@@ -586,9 +587,7 @@ def _shutdown_crash(executor_reference, processes, pending_work_items,
                  "worker processes. " + cause_msg)
     executor = executor_reference()
     if executor is not None:
-        with executor._shutdown_lock:
-            executor._flags.broken = True
-            executor._flags.shutdown = True
+        executor._flags.flag_as_broken()
         executor = None
     call_queue.close()
     # Terminate remaining workers forcibly: the queues or their
@@ -687,7 +686,6 @@ class ProcessPoolExecutor(_base.Executor):
 
         # Shutdown is a two-step process.
         self._flags = _ExecutorFlags()
-        self._shutdown_lock = threading.Lock()
         self._queue_count = 0
         self._pending_work_items = {}
         mp.util.debug('PoolProcessExecutor is setup')
@@ -773,7 +771,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._start_thread_management_thread()
 
     def submit(self, fn, *args, **kwargs):
-        with self._shutdown_lock:
+        with self._flags.shutdown_lock:
             if self._flags.broken:
                 raise BrokenExecutor('A child process terminated abruptly, '
                                      'the process pool is not usable anymore')
@@ -829,9 +827,7 @@ class ProcessPoolExecutor(_base.Executor):
 
     def shutdown(self, wait=True, kill_workers=False):
         mp.util.debug('shutting down executor %s' % self)
-        with self._shutdown_lock:
-            self._flags.shutdown = True
-            self._flags.kill_workers = kill_workers
+        self._flags.flag_as_shutting_down(kill_workers)
         if self._queue_management_thread:
             # Wake up queue management thread
             self._wakeup.set()
@@ -870,3 +866,14 @@ class _ExecutorFlags(object):
         self.shutdown = False
         self.broken = False
         self.kill_workers = False
+        self.shutdown_lock = threading.Lock()
+
+    def flag_as_shutting_down(self, kill_workers=False):
+        with self.shutdown_lock:
+            self.shutdown = True
+            self.kill_workers = kill_workers
+
+    def flag_as_broken(self):
+        with self.shutdown_lock:
+            self.shutdown = True
+            self.broken = True
