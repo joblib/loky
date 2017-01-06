@@ -377,16 +377,21 @@ def _queue_management_worker(executor_reference,
                  and not executor_flags.broken))
 
     def shutdown_all_workers():
+        mp.util.debug("queue management thread shutting down")
         # This is an upper bound
         nb_children_alive = sum(p.is_alive() for p in processes.values())
         try:
             for i in range(0, nb_children_alive):
                 call_queue.put_nowait(None)
         except (Full, AssertionError):
+            mp.util.debug("Some sentinel were not sent, i=%d" % i)
             pass
+
+        mp.util.debug("closing call_queue")
         # Release the queue's resources as soon as possible.
         call_queue.close()
 
+        mp.util.debug("joining processes")
         # If .join() is not called on the created processes then
         # some multiprocessing.Queue methods may deadlock on Mac OS X.
         while processes:
@@ -527,6 +532,8 @@ def _queue_management_worker(executor_reference,
             if not pending_work_items:
                 shutdown_all_workers()
                 return
+        elif executor_flags.broken:
+            return
         executor = None
 
 
