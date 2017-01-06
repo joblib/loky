@@ -1,4 +1,6 @@
+from __future__ import print_function
 import os
+import sys
 import time
 import math
 import psutil
@@ -123,6 +125,28 @@ class ExecutorMixin:
                    for _ in range(self.worker_count)]
         for f in futures:
             f.result()
+
+    @classmethod
+    def check_no_running_workers(cls, patience=5, sleep_duration=0.01):
+        deadline = time.time() + patience
+
+        while time.time() <= deadline:
+            time.sleep(sleep_duration)
+            p = psutil.Process()
+            workers = _running_children_with_cmdline(p)
+            if len(workers) == 0:
+                return
+
+        # Patience exhausted: log the remaining workers command line and
+        # raise error.
+        print("Remaining worker processes command lines:", file=sys.stderr)
+        for w, cmdline in workers:
+            print(w.pid, w.status(), end='\n', file=sys.stderr)
+            print(cmdline, end='\n\n', file=sys.stderr)
+        raise AssertionError(
+            'Expected no more running worker processes but got %d after'
+            ' waiting %0.3fs.'
+            % (len(workers), patience))
 
 
 class ReusableExecutorMixin:

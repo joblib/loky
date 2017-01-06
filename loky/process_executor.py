@@ -452,10 +452,8 @@ def _queue_management_worker(executor_reference,
                 _clear_list(running_work_items)
         elif len(ready) > 0:  # and _worker_crashed(processes, ready):
             # Mark the process pool broken so that submits fail right now.
-            executor = executor_reference()
-            if executor is not None:
-                executor._flags.flag_as_broken()
-                executor = None
+            executor_flags.flag_as_broken()
+
             # All futures in flight must be marked failed
             for work_id, work_item in pending_work_items.items():
                 work_item.future.set_exception(
@@ -558,7 +556,7 @@ def _management_worker(executor_reference, executor_flags,
                              "abruptly while the future was running or "
                              "pending. This can be caused by an "
                              "unpickling error of a result.")
-                _shutdown_crash(executor_reference, processes,
+                _shutdown_crash(executor_flags, processes,
                                 pending_work_items, call_queue, cause_msg)
             return
         elif _is_crashed(call_queue._thread):
@@ -570,7 +568,7 @@ def _management_worker(executor_reference, executor_flags,
             cause_msg = ("The QueueFeederThread was terminated abruptly "
                          "while feeding a new job. This can be due to "
                          "a job pickling error.")
-            _shutdown_crash(executor_reference, processes, pending_work_items,
+            _shutdown_crash(executor_flags, processes, pending_work_items,
                             call_queue, cause_msg)
             return
         executor = executor_reference()
@@ -581,14 +579,11 @@ def _management_worker(executor_reference, executor_flags,
         time.sleep(.1)
 
 
-def _shutdown_crash(executor_reference, processes, pending_work_items,
+def _shutdown_crash(executor_flags, processes, pending_work_items,
                     call_queue, cause_msg):
     mp.util.info("Crash detected, marking executor as broken and terminating "
                  "worker processes. " + cause_msg)
-    executor = executor_reference()
-    if executor is not None:
-        executor._flags.flag_as_broken()
-        executor = None
+    executor_flags.flag_as_broken()
     call_queue.close()
     # Terminate remaining workers forcibly: the queues or their
     # locks may be in a dirty state and block forever.

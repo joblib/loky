@@ -118,17 +118,17 @@ class TestLokyBackend:
         assert p not in self.active_children()
 
     @classmethod
-    def _test_terminate(cls, ev):
+    def _test_terminate(cls, event):
         # Notify the main process that child process started
-        ev.set()
+        event.set()
         time.sleep(100)
 
     def test_terminate(self):
 
-        mgr = self.Manager()
-        ev = mgr.Event()
+        manager = self.Manager()
+        event = manager.Event()
 
-        p = self.Process(target=self._test_terminate, args=(ev, ))
+        p = self.Process(target=self._test_terminate, args=(event,))
         p.daemon = True
         p.start()
 
@@ -147,7 +147,7 @@ class TestLokyBackend:
         assert p.is_alive()
 
         # wait for child process to be fully setup
-        ev.wait(1)
+        event.wait(1)
 
         p.terminate()
 
@@ -172,6 +172,7 @@ class TestLokyBackend:
         assert p not in self.active_children()
 
         p.join()
+        manager.shutdown()
 
         # XXX sometimes get p.exitcode == 0 on Windows ...
         # assert p.exitcode == -signal.SIGTERM
