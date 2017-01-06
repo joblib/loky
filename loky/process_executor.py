@@ -586,7 +586,8 @@ def _shutdown_crash(executor_reference, processes, pending_work_items,
     call_queue.close()
     # Terminate remaining workers forcibly: the queues or their
     # locks may be in a dirty state and block forever.
-    for p in processes.values():
+    while processes:
+        _, p = processes.popitem()
         p.terminate()
         p.join()
     # All futures in flight must be marked failed
