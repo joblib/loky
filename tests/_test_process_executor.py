@@ -520,15 +520,7 @@ class ExecutorTest:
         while time.time() <= deadline:
             time.sleep(sleep_duration)
             p = psutil.Process()
-            all_children = _running_children_with_cmdline(p)
-            workers = [(c, cmdline) for c, cmdline in all_children
-                       if (u'semaphore_tracker' not in cmdline and
-                           u'multiprocessing.forkserver' not in cmdline)]
-
-            forkservers = [c for c, cmdline in all_children
-                           if u'multiprocessing.forkserver' in cmdline]
-            for fs in forkservers:
-                workers.extend(_running_children_with_cmdline(fs))
+            workers = _running_children_with_cmdline(p)
             if len(workers) == 0:
                 return
 
