@@ -23,6 +23,7 @@ import threading
 import time
 import pytest
 import weakref
+import faulthandler
 from math import sqrt
 from collections import defaultdict
 from threading import Thread
@@ -30,7 +31,6 @@ import traceback
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import BrokenExecutor
-from ._executor_mixin import _running_children_with_cmdline
 from .utils import id_sleep
 
 if sys.version_info[:2] < (3, 3):
@@ -122,6 +122,7 @@ class ExecutorShutdownTest:
                                     [0.1] * 10, range(10))
         assert len(self.executor._processes) == 5
         processes = self.executor._processes
+        executor_flags = self.executor._flags
 
         # The following should trigger GC and therefore shutdown of workers.
         # However the shutdown wait for all the pending jobs to complete
@@ -138,18 +139,59 @@ class ExecutorShutdownTest:
 
         # Once all pending jobs have completed the executor and threads should
         # terminate automatically.
-        patience = 10
-        while True:
-            if len(processes) == 0:
-                break
-            patience -= 1
-            if patience < 0:
-                raise AssertionError("queue management thread should have"
-                                     " stopped processes on executor GC: %s"
-                                     % processes)
-            time.sleep(0.1)
+        self.check_no_running_workers(patience=2)
+        assert executor_flags.shutdown, processes
+        assert not executor_flags.broken, processes
 
-        assert len(processes) == 0
+    @classmethod
+    def _wait_and_crash(cls, event):
+        event.wait()
+        faulthandler._sigsegv()
+
+    def test_processes_crash_handling_after_executor_gc(self):
+        # Start 5 easy jobs on 5 workers
+        results = self.executor.map(self._sleep_and_return,
+                                    [0.01] * 5, range(5))
+
+        # Enqueue a job that will trigger a crash of one of the workers
+        # make sure this crash does happen before the non-failing jobs
+        # have returned their results by using and multiprocessing event
+        # instance
+        manager = self.context.Manager()
+        event = manager.Event()
+        crash_result = self.executor.submit(self._wait_and_crash, event)
+        assert len(self.executor._processes) == 5
+        processes = self.executor._processes
+        executor_flags = self.executor._flags
+
+        # The following should trigger GC and therefore shutdown of workers.
+        # However the shutdown wait for all the pending jobs to complete
+        # first.
+        executor_reference = weakref.ref(self.executor)
+        self.executor = None
+
+        # Make sure that there is not other reference to the executor object.
+        assert executor_reference() is None
+
+        # The remaining jobs should still be processed in the background
+        for result, expected in zip(results, range(5)):
+            assert result == expected
+
+        # Let the crash job know that it can crash now
+        event.set()
+
+        # The crashing job should be executed after the non-failing jobs
+        # have completed. The crash should be detected.
+        with pytest.raises(BrokenExecutor):
+            crash_result.result()
+        manager.shutdown()
+
+        # The executor flag should have been set at this point.
+        assert executor_flags.broken, processes
+
+        # Once all pending jobs have completed the executor and threads should
+        # terminate automatically.
+        self.check_no_running_workers(patience=2)
 
     def test_context_manager_shutdown(self):
         with self.executor_type(max_workers=5, context=self.context) as e:
@@ -202,24 +244,25 @@ class WaitTests:
         raise Exception('this is an exception')
 
     def test_first_exception(self):
-        mgr = self.context.Manager()
-        ev = mgr.Event()
+        manager = self.context.Manager()
+        event = manager.Event()
         future1 = self.executor.submit(mul, 2, 21)
-        future2 = self.executor.submit(self.wait_and_raise, ev, 1.5)
+        future2 = self.executor.submit(self.wait_and_raise, event, 1.5)
         future3 = self.executor.submit(time.sleep, 3)
 
         def cb_done(f):
-            ev.set()
+            event.set()
         future1.add_done_callback(cb_done)
 
         finished, pending = futures.wait(
                 [future1, future2, future3],
                 return_when=futures.FIRST_EXCEPTION)
 
-        assert ev.is_set()
+        assert event.is_set()
 
         assert set([future1, future2]) == finished
         assert set([future3]) == pending
+        manager.shutdown()
 
     def test_first_exception_some_already_complete(self):
         future1 = self.executor.submit(divmod, 21, 0)
@@ -512,28 +555,6 @@ class ExecutorTest:
             else:
                 patience -= 1
                 time.sleep(0.01)
-
-    @classmethod
-    def check_no_running_workers(cls, patience=5, sleep_duration=0.01):
-        deadline = time.time() + patience
-
-        while time.time() <= deadline:
-            time.sleep(sleep_duration)
-            p = psutil.Process()
-            workers = _running_children_with_cmdline(p)
-            if len(workers) == 0:
-                return
-
-        # Patience exhausted: log the remaining workers command line and
-        # raise error.
-        print("Remaining worker processes command lines:", file=sys.stderr)
-        for w, cmdline in workers:
-            print(cmdline, end='\n', file=sys.stderr)
-            print(w.status(), end='\n\n', file=sys.stderr)
-        raise AssertionError(
-            'Expected no more running worker processes but got %d after'
-            ' waiting %0.3fs.'
-            % (len(workers), patience))
 
     def test_worker_timeout(self):
         self.executor.shutdown(wait=True)
