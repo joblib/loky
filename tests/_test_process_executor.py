@@ -145,7 +145,7 @@ class ExecutorShutdownTest:
             patience -= 1
             if patience < 0:
                 raise AssertionError("queue management thread should have"
-                                     " stopped processes on executor GC:"
+                                     " stopped processes on executor GC: %s"
                                      % processes)
             time.sleep(0.1)
 
