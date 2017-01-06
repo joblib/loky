@@ -29,9 +29,9 @@ def _direct_children_with_cmdline(p):
     children_with_cmdline = []
     for c in p.children():
         try:
+            cmdline = " ".join(c.cmdline())
             if not c.is_running():
                 continue
-            cmdline = " ".join(c.cmdline())
             children_with_cmdline.append((c, cmdline))
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
