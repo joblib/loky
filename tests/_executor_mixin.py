@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 import math
 import psutil
@@ -25,7 +24,7 @@ except ImportError:
     TIMEOUT = 20
 
 
-def _running_children_with_cmdline(p):
+def _direct_children_with_cmdline(p):
     """Helper to fetch cmdline from children process list"""
     children_with_cmdline = []
     for c in p.children():
@@ -39,20 +38,37 @@ def _running_children_with_cmdline(p):
     return children_with_cmdline
 
 
+def _running_children_with_cmdline(p):
+    all_children = _direct_children_with_cmdline(p)
+    workers = [(c, cmdline) for c, cmdline in all_children
+               if (u'semaphore_tracker' not in cmdline and
+                   u'multiprocessing.forkserver' not in cmdline)]
+
+    forkservers = [c for c, cmdline in all_children
+                   if u'multiprocessing.forkserver' in cmdline]
+    for fs in forkservers:
+        workers.extend(_direct_children_with_cmdline(fs))
+    return workers
+
+
 def _check_subprocesses_number(executor, expected_process_number=None,
                                expected_max_process_number=None):
     children_cmdlines = _running_children_with_cmdline(psutil.Process())
-    children_pids = set(c.pid for c, cmdline in children_cmdlines
-                        if ("semaphore_tracker" not in cmdline
-                            and "forkserver" not in cmdline))
-    worker_pids = set(executor._processes.keys())
+    pids_cmdlines = [(c.pid, cmdline) for c, cmdline in children_cmdlines]
+    children_pids = set(pid for pid, _ in pids_cmdlines)
+    if executor is not None:
+        worker_pids = set(executor._processes.keys())
+    else:
+        # Bypass pids checks when executor has been garbage
+        # collected
+        worker_pids = children_pids
     if expected_process_number is not None:
-        assert len(children_pids) == expected_process_number
-        assert len(worker_pids) == expected_process_number
-        assert worker_pids == children_pids
+        assert len(children_pids) == expected_process_number, pids_cmdlines
+        assert len(worker_pids) == expected_process_number, pids_cmdlines
+        assert worker_pids == children_pids, pids_cmdlines
     if expected_max_process_number is not None:
-        assert len(children_pids) <= expected_max_process_number
-        assert len(worker_pids) <= expected_max_process_number
+        assert len(children_pids) <= expected_max_process_number, pids_cmdlines
+        assert len(worker_pids) <= expected_max_process_number, pids_cmdlines
 
 
 def _check_executor_started(executor):
@@ -81,9 +97,7 @@ class ExecutorMixin:
         except NotImplementedError as e:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
-        if (sys.version_info < (3, 4)
-                or self.context.get_start_method() != "forkserver"):
-            _check_subprocesses_number(self.executor, self.worker_count)
+        _check_subprocesses_number(self.executor, self.worker_count)
 
     def teardown_method(self, method):
         # Make sure is not broken if it should not be
@@ -95,7 +109,7 @@ class ExecutorMixin:
             executor.shutdown(wait=True, kill_workers=True)
             dt = time.time() - t_start
             assert dt < 10, "Executor took too long to shutdown"
-            _check_subprocesses_number(executor, 0)
+        _check_subprocesses_number(executor, 0)
 
     def _prime_executor(self):
         # Make sure that the executor is ready to do work before running the
