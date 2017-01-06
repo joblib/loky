@@ -130,7 +130,7 @@ class ExecutorShutdownTest:
         self.executor = None
 
         # Make sure that there is not other reference to the executor object.
-        assert executor_reference() == None
+        assert executor_reference() is None
 
         # The remaining jobs should still be processed in the background
         for result, expected in zip(results, range(10)):
