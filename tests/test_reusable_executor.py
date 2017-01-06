@@ -358,6 +358,21 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         with pytest.raises(ShutdownExecutor):
             list(res)
 
+    def test_kill_workers_on_new_options(self):
+        # submit a long running job with no timeout
+        executor = get_reusable_executor(max_workers=2, timeout=None)
+        f = executor.submit(sleep, 10000)
+
+        # change the constructor parameter while requesting not to wait
+        # for the long running task to complete (the workers will get
+        # terminated forcibly)
+        executor = get_reusable_executor(max_workers=2, timeout=5,
+                                         kill_workers=True)
+        with pytest.raises(ShutdownExecutor):
+            f.result()
+        f2 = executor.submit(id_sleep, 42, 0)
+        assert f2.result() == 42
+
 
 class TestResizeExecutor(ReusableExecutorMixin):
     def test_reusable_executor_resize(self):

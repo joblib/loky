@@ -30,7 +30,7 @@ def _get_next_executor_id():
 
 
 def get_reusable_executor(max_workers=None, context=None,
-                          timeout=10):
+                          timeout=10, kill_workers=False):
     """Return the current ReusableExectutor instance.
 
     Start a new instance if it has not been started already or if the previous
@@ -53,6 +53,10 @@ def get_reusable_executor(max_workers=None, context=None,
     submitted tasks. Setting ``timeout`` to around 100 times the time required
     to spawn new processes and import packages in them (on the order of 100ms)
     ensures that the overhead of spawning workers is negligible.
+
+    Setting ``kill_workers=True`` makes it possible to forcibly interrupt
+    previously spawned jobs to get a new instance of the reusable executor
+    with new constructor argument values.
     """
     global _executor, _executor_args
     executor = _executor
@@ -77,7 +81,7 @@ def get_reusable_executor(max_workers=None, context=None,
             mp.util.debug("Creating a new executor with max_workers={} as the "
                           "previous instance cannot be reused ({})."
                           .format(max_workers, reason))
-            executor.shutdown(wait=True)
+            executor.shutdown(wait=True, kill_workers=kill_workers)
             _executor = executor = _executor_args = None
             # Recursive call to build a new instance
             return get_reusable_executor(max_workers=max_workers, **args)
