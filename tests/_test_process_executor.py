@@ -153,9 +153,9 @@ class ExecutorShutdownTest:
         results = self.executor.map(self._sleep_and_return,
                                     [0.01] * 5, range(5))
 
-        # Enqueue a job that will trigger a crash of one of the workers
-        # make sure this crash does happen before the non-failing jobs
-        # have returned their results by using and multiprocessing event
+        # Enqueue a job that will trigger a crash of one of the workers.
+        # Make sure this crash does not happen before the non-failing jobs
+        # have returned their results by using and multiprocessing Event
         # instance
         manager = self.context.Manager()
         event = manager.Event()
@@ -164,9 +164,9 @@ class ExecutorShutdownTest:
         processes = self.executor._processes
         executor_flags = self.executor._flags
 
-        # The following should trigger GC and therefore shutdown of workers.
-        # However the shutdown wait for all the pending jobs to complete
-        # first.
+        # The following should trigger the GC and therefore shutdown of
+        # workers. However the shutdown wait for all the pending jobs to
+        # complete first.
         executor_reference = weakref.ref(self.executor)
         self.executor = None
 
