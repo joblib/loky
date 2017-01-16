@@ -184,6 +184,7 @@ class ExecutorShutdownTest:
         # have completed. The crash should be detected.
         with pytest.raises(BrokenExecutor):
             crash_result.result()
+
         manager.shutdown()
 
         # The executor flag should have been set at this point.
@@ -220,9 +221,8 @@ class WaitTests:
         future1 = self.executor.submit(mul, 21, 2)
         future2 = self.executor.submit(time.sleep, 1.5)
 
-        done, not_done = futures.wait(
-                [CANCELLED_FUTURE, future1, future2],
-                return_when=futures.FIRST_COMPLETED)
+        done, not_done = futures.wait([CANCELLED_FUTURE, future1, future2],
+                                      return_when=futures.FIRST_COMPLETED)
 
         assert set([future1]) == done
         assert set([CANCELLED_FUTURE, future2]) == not_done
@@ -230,9 +230,9 @@ class WaitTests:
     def test_first_completed_some_already_completed(self):
         future1 = self.executor.submit(time.sleep, 1.5)
 
-        finished, pending = futures.wait(
-                 [CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE, future1],
-                 return_when=futures.FIRST_COMPLETED)
+        finished, pending = futures.wait([CANCELLED_AND_NOTIFIED_FUTURE,
+                                          SUCCESSFUL_FUTURE, future1],
+                                         return_when=futures.FIRST_COMPLETED)
 
         assert (set([CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE]) ==
                 finished)
@@ -254,26 +254,24 @@ class WaitTests:
             event.set()
         future1.add_done_callback(cb_done)
 
-        finished, pending = futures.wait(
-                [future1, future2, future3],
-                return_when=futures.FIRST_EXCEPTION)
+        finished, pending = futures.wait([future1, future2, future3],
+                                         return_when=futures.FIRST_EXCEPTION)
 
         assert event.is_set()
 
         assert set([future1, future2]) == finished
         assert set([future3]) == pending
+
         manager.shutdown()
 
     def test_first_exception_some_already_complete(self):
         future1 = self.executor.submit(divmod, 21, 0)
         future2 = self.executor.submit(time.sleep, 1.5)
 
-        finished, pending = futures.wait(
-                [SUCCESSFUL_FUTURE,
-                 CANCELLED_FUTURE,
-                 CANCELLED_AND_NOTIFIED_FUTURE,
-                 future1, future2],
-                return_when=futures.FIRST_EXCEPTION)
+        finished, pending = futures.wait([SUCCESSFUL_FUTURE, CANCELLED_FUTURE,
+                                          CANCELLED_AND_NOTIFIED_FUTURE,
+                                          future1, future2],
+                                         return_when=futures.FIRST_EXCEPTION)
 
         assert set([SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
                     future1]) == finished
@@ -282,9 +280,8 @@ class WaitTests:
     def test_first_exception_one_already_failed(self):
         future1 = self.executor.submit(time.sleep, 2)
 
-        finished, pending = futures.wait(
-                 [EXCEPTION_FUTURE, future1],
-                 return_when=futures.FIRST_EXCEPTION)
+        finished, pending = futures.wait([EXCEPTION_FUTURE, future1],
+                                         return_when=futures.FIRST_EXCEPTION)
 
         assert set([EXCEPTION_FUTURE]) == finished
         assert set([future1]) == pending
@@ -293,13 +290,10 @@ class WaitTests:
         future1 = self.executor.submit(divmod, 2, 0)
         future2 = self.executor.submit(mul, 2, 21)
 
-        finished, pending = futures.wait(
-                [SUCCESSFUL_FUTURE,
-                 CANCELLED_AND_NOTIFIED_FUTURE,
-                 EXCEPTION_FUTURE,
-                 future1,
-                 future2],
-                return_when=futures.ALL_COMPLETED)
+        finished, pending = futures.wait([SUCCESSFUL_FUTURE, EXCEPTION_FUTURE,
+                                          CANCELLED_AND_NOTIFIED_FUTURE,
+                                          future1, future2],
+                                         return_when=futures.ALL_COMPLETED)
 
         assert set([SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
                     EXCEPTION_FUTURE, future1, future2]) == finished
@@ -314,13 +308,11 @@ class WaitTests:
         future1 = self.executor.submit(mul, 6, 7)
         future2 = self.executor.submit(time.sleep, 2)
 
-        finished, pending = futures.wait(
-                [CANCELLED_AND_NOTIFIED_FUTURE,
-                 EXCEPTION_FUTURE,
-                 SUCCESSFUL_FUTURE,
-                 future1, future2],
-                timeout=.5,
-                return_when=futures.ALL_COMPLETED)
+        finished, pending = futures.wait([CANCELLED_AND_NOTIFIED_FUTURE,
+                                          EXCEPTION_FUTURE, SUCCESSFUL_FUTURE,
+                                          future1, future2],
+                                         timeout=.5,
+                                         return_when=futures.ALL_COMPLETED)
 
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
                     SUCCESSFUL_FUTURE, future1]) == finished
@@ -333,11 +325,10 @@ class AsCompletedTests:
         future1 = self.executor.submit(mul, 2, 21)
         future2 = self.executor.submit(mul, 7, 6)
 
-        completed = set(futures.as_completed(
-                [CANCELLED_AND_NOTIFIED_FUTURE,
-                 EXCEPTION_FUTURE,
-                 SUCCESSFUL_FUTURE,
-                 future1, future2]))
+        completed = set(futures.as_completed([CANCELLED_AND_NOTIFIED_FUTURE,
+                                              EXCEPTION_FUTURE,
+                                              SUCCESSFUL_FUTURE,
+                                              future1, future2]))
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
                     SUCCESSFUL_FUTURE, future1, future2]) == completed
 
@@ -407,13 +398,13 @@ class ExecutorTest:
         # Issue #16284: check that the executors don't unnecessarily hang onto
         # references.
         my_object = MyObject()
-        my_object_collected = threading.Event()
-        _ = weakref.ref(my_object, lambda obj: my_object_collected.set())
+        collect = threading.Event()
+        _ = weakref.ref(my_object, lambda obj: collect.set())  # noqa
         # Deliberately discarding the future.
         self.executor.submit(my_object.my_method)
         del my_object
 
-        collected = my_object_collected.wait(timeout=5.0)
+        collected = collect.wait(timeout=5.0)
         assert collected, "Stale reference not collected within timeout."
 
     def test_max_workers_negative(self):

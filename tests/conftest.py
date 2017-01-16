@@ -11,6 +11,7 @@ def pytest_addoption(parser):
 
 @pytest.fixture(scope="session")
 def log_lvl(request):
+    """Choose logging level for multiprocessing"""
     return request.config.getoption("--verbosity")
 
 
