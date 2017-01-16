@@ -71,8 +71,10 @@ class PosixLokyProcess(BaseProcess):
 
 class AuthenticationKey(bytes):
     def __reduce__(self):
-        from .popen_loky import is_spawning
-        if not is_spawning():
+        from .context import assert_spawning
+        try:
+            assert_spawning(self)
+        except AssertionError:
             raise TypeError(
                 'Pickling an AuthenticationKey object is '
                 'disallowed for security reasons'

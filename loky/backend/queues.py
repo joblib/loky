@@ -19,29 +19,8 @@ from multiprocessing import connection
 
 from multiprocessing.util import debug, info, Finalize, register_after_fork,\
     is_exiting
-
-if sys.platform != 'win32':
-    from .reduction import LokyPickler
-    from .popen_loky import is_spawning
-    if sys.version_info[:2] < (3, 4):
-        from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
-    else:
-        from multiprocessing import Lock, BoundedSemaphore, Semaphore,\
-            Condition
-
-else:
-    from multiprocessing import Lock, BoundedSemaphore, Semaphore, Condition
-
-    if sys.version_info[:2] < (3, 4):
-        from multiprocessing.forking import assert_spawning
-        from .reduction import LokyPickler
-    else:
-        from multiprocessing.context import assert_spawning
-        from multiprocessing.reduction import ForkingPickler as LokyPickler
-
-    def is_spawning():
-        assert_spawning("SimpleQueue")
-        return True
+from .reduction import CustomizableLokyPickler
+from .context import assert_spawning, get_context
 
 
 if sys.version_info < (3, 3):
@@ -59,19 +38,23 @@ __all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
 
 class Queue(object):
 
-    def __init__(self, maxsize=0):
+    def __init__(self, maxsize=0, reducers=None, ctx=None):
         if maxsize <= 0:
             # Can raise ImportError (see issues #3770 and #23400)
             from multiprocessing.synchronize import SEM_VALUE_MAX as maxsize
+        if ctx is None:
+            ctx = get_context()
         self._maxsize = maxsize
         self._reader, self._writer = connection.Pipe(duplex=False)
-        self._rlock = Lock()
+        self._reducers = reducers
+        self._rlock = ctx.Lock()
         self._opid = os.getpid()
         if sys.platform == 'win32':
             self._wlock = None
         else:
-            self._wlock = Lock()
-        self._sem = BoundedSemaphore(maxsize)
+            self._wlock = ctx.Lock()
+        self._sem = ctx.BoundedSemaphore(maxsize)
+
         # For use by concurrent.futures
         self._ignore_epipe = False
 
@@ -81,13 +64,15 @@ class Queue(object):
             register_after_fork(self, Queue._after_fork)
 
     def __getstate__(self):
-        assert is_spawning()
+        assert_spawning(self)
         return (self._ignore_epipe, self._maxsize, self._reader, self._writer,
-                self._rlock, self._wlock, self._sem, self._opid)
+                self._reducers, self._rlock, self._wlock, self._sem,
+                self._opid)
 
     def __setstate__(self, state):
         (self._ignore_epipe, self._maxsize, self._reader, self._writer,
-         self._rlock, self._wlock, self._sem, self._opid) = state
+         self._reducers, self._rlock, self._wlock, self._sem,
+         self._opid) = state
         self._after_fork()
 
     def _after_fork(self):
@@ -104,6 +89,7 @@ class Queue(object):
         self._poll = self._reader.poll
 
     def put(self, obj, block=True, timeout=None):
+
         assert not self._closed
         if not self._sem.acquire(block, timeout):
             raise Full
@@ -136,7 +122,7 @@ class Queue(object):
             finally:
                 self._rlock.release()
         # unserialize the data after having released the lock
-        return LokyPickler.loads(res)
+        return CustomizableLokyPickler.loads(res)
 
     def qsize(self):
         # Raises NotImplementedError on Mac OSX because of broken sem
@@ -187,9 +173,10 @@ class Queue(object):
         self._thread = threading.Thread(
             target=Queue._feed,
             args=(self._buffer, self._notempty, self._send_bytes,
-                  self._wlock, self._writer.close, self._ignore_epipe),
+                  self._wlock, self._writer.close, self._reducers,
+                  self._ignore_epipe),
             name='QueueFeederThread'
-            )
+        )
         self._thread.daemon = True
 
         debug('doing self._thread.start()')
@@ -208,14 +195,14 @@ class Queue(object):
                 self._thread, Queue._finalize_join,
                 [weakref.ref(self._thread)],
                 exitpriority=-5
-                )
+            )
 
         # Send sentinel to the thread queue object when garbage collected
         self._close = Finalize(
             self, Queue._finalize_close,
             [self._buffer, self._notempty],
             exitpriority=10
-            )
+        )
 
     @staticmethod
     def _finalize_join(twr):
@@ -235,7 +222,8 @@ class Queue(object):
             notempty.notify()
 
     @staticmethod
-    def _feed(buffer, notempty, send_bytes, writelock, close, ignore_epipe):
+    def _feed(buffer, notempty, send_bytes, writelock, close, reducers,
+              ignore_epipe):
         debug('starting thread to feed data to pipe')
         nacquire = notempty.acquire
         nrelease = notempty.release
@@ -265,7 +253,8 @@ class Queue(object):
                             return
 
                         # serialize the data before acquiring the lock
-                        obj = LokyPickler.dumps(obj)
+                        obj = CustomizableLokyPickler.dumps(
+                            obj, reducers=reducers)
                         if wacquire is None:
                             send_bytes(obj)
                         else:
@@ -292,6 +281,7 @@ class Queue(object):
             except Exception:
                 pass
 
+
 _sentinel = object()
 
 #
@@ -305,10 +295,12 @@ _sentinel = object()
 
 class JoinableQueue(Queue):
 
-    def __init__(self, maxsize=0):
-        Queue.__init__(self, maxsize)
-        self._unfinished_tasks = Semaphore(0)
-        self._cond = Condition()
+    def __init__(self, maxsize=0, reducers=None, ctx=None):
+        if ctx is None:
+            ctx = get_context()
+        Queue.__init__(self, maxsize, reducers=reducers, ctx=ctx)
+        self._unfinished_tasks = ctx.Semaphore(0)
+        self._cond = ctx.Condition()
 
     def __getstate__(self):
         return Queue.__getstate__(self) + (self._cond, self._unfinished_tasks)
@@ -348,34 +340,39 @@ class JoinableQueue(Queue):
 
 class SimpleQueue(object):
 
-    def __init__(self):
+    def __init__(self, reducers=None, ctx=None):
+        if ctx is None:
+            ctx = get_context()
         self._reader, self._writer = connection.Pipe(duplex=False)
-        self._rlock = Lock()
+        self._reducers = reducers
+        self._rlock = ctx.Lock()
         self._poll = self._reader.poll
         if sys.platform == 'win32':
             self._wlock = None
         else:
-            self._wlock = Lock()
+            self._wlock = ctx.Lock()
 
     def empty(self):
         return not self._poll()
 
     def __getstate__(self):
-        assert is_spawning()
-        return (self._reader, self._writer, self._rlock, self._wlock)
+        assert_spawning(self)
+        return (self._reader, self._writer, self._reducers, self._rlock,
+                self._wlock)
 
     def __setstate__(self, state):
-        (self._reader, self._writer, self._rlock, self._wlock) = state
+        (self._reader, self._writer, self._reducers, self._rlock,
+         self._wlock) = state
 
     def get(self):
         with self._rlock:
             res = self._reader.recv_bytes()
         # unserialize the data after having released the lock
-        return LokyPickler.loads(res)
+        return CustomizableLokyPickler.loads(res)
 
     def put(self, obj):
         # serialize the data before acquiring the lock
-        obj = LokyPickler.dumps(obj)
+        obj = CustomizableLokyPickler.dumps(obj, reducers=self._reducers)
         if self._wlock is None:
             # writes to a message oriented win32 pipe are atomic
             self._writer.send_bytes(obj)

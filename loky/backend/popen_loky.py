@@ -5,12 +5,11 @@ import pickle
 from io import BytesIO
 
 from . import reduction, spawn
+from .context import get_spawning_popen, set_spawning_popen
 from multiprocessing import util
 
 if sys.version_info[:2] < (3, 3):
     ProcessLookupError = OSError
-elif sys.version_info > (3, 4):
-    from multiprocessing import context
 
 if sys.platform != "win32":
     if sys.version_info[:2] > (3, 3):
@@ -21,26 +20,10 @@ if sys.platform != "win32":
 
 __all__ = ['Popen']
 
-_spawning_popen = None
-
-
-def is_spawning():
-    return _spawning_popen is not None
-
-
-def set_spawning_popen(popen):
-    global _spawning_popen
-    _spawning_popen = popen
-
-
-def get_spawning_popen():
-    global _spawning_popen
-    return _spawning_popen
 
 #
 # Wrapper for an fd used while launching a process
 #
-
 
 class _DupFd(object):
     def __init__(self, fd):
@@ -48,6 +31,7 @@ class _DupFd(object):
 
     def detach(self):
         return self.fd
+
 
 #
 # Start child process using subprocess.Popen
@@ -138,8 +122,6 @@ class Popen(object):
 
         fp = BytesIO()
         set_spawning_popen(self)
-        if sys.version_info[:2] > (3, 3):
-            context.set_spawning_popen(self)
         try:
             prep_data = spawn.get_preparation_data(process_obj._name)
             reduction.dump(prep_data, fp)
@@ -147,8 +129,6 @@ class Popen(object):
 
         finally:
             set_spawning_popen(None)
-            if sys.version_info[:2] > (3, 3):
-                context.set_spawning_popen(None)
 
         try:
             parent_r, child_w = os.pipe()
@@ -218,12 +198,12 @@ if __name__ == '__main__':
         from_parent = None
         exitcode = process_obj._bootstrap()
     except Exception as e:
-        print('\n\n'+'-'*80)
+        print('\n\n' + '-' * 80)
         print('Process failed with traceback: ')
-        print('-'*80)
+        print('-' * 80)
         import traceback
         print(traceback.format_exc())
-        print('\n'+'-'*80)
+        print('\n' + '-' * 80)
     finally:
         if from_parent is not None:
             from_parent.close()

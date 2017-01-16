@@ -57,6 +57,7 @@ import multiprocessing as mp
 from functools import partial
 
 from . import _base
+from .backend.queues import Queue, SimpleQueue
 from loky.backend.connection import wait
 
 # Compatibility for python2.7
@@ -74,7 +75,7 @@ if sys.version_info < (3, 4):
     from loky import backend
 
     def get_context():
-        return backend
+        return backend.LokyContext()
 else:
     from multiprocessing import get_context
 
@@ -645,13 +646,20 @@ class ShutdownExecutor(RuntimeError):
 
 class ProcessPoolExecutor(_base.Executor):
 
-    def __init__(self, max_workers=None, context=None, timeout=None):
+    def __init__(self, max_workers=None, context=None, job_reducers=None,
+                 result_reducers=None, timeout=None):
         """Initializes a new ProcessPoolExecutor instance.
 
         Args:
-            max_workers: The maximum number of processes that can be used to
-                execute the given calls. If None or not given then as many
-                worker processes will be created as the machine has processors.
+            max_workers: int, optional (default: os.cpu_count())
+                The maximum number of processes that can be used to execute the
+                given calls. If None or not given then as many worker processes
+                will be created as the machine has processors.
+            job_reducers, result_reducers: dict(type: reducer_func)
+                Custom reducer for pickling the jobs and the results from the
+                Executor. If only `job_reducers` is provided, `result_reducer`
+                will use the same reducers
+
         """
         _check_system_limits()
 
@@ -663,12 +671,15 @@ class ProcessPoolExecutor(_base.Executor):
 
             self._max_workers = max_workers
 
+        if result_reducers is None:
+            result_reducers = job_reducers
+
         # Parameters of this executor
         self._ctx = context or get_context()
         mp.util.debug("using context {}".format(self._ctx))
         self._timeout = timeout
 
-        self._setup_queue()
+        self._setup_queue(job_reducers, result_reducers)
         # Connection to wakeup QueueManagerThread
         self._wakeup = _Sentinel()
         self._work_ids = queue.Queue()
@@ -685,20 +696,19 @@ class ProcessPoolExecutor(_base.Executor):
         self._pending_work_items = {}
         mp.util.debug('PoolProcessExecutor is setup')
 
-    def _setup_queue(self):
+    def _setup_queue(self, job_reducers, result_reducers):
         # Make the call queue slightly larger than the number of processes to
         # prevent the worker processes from idling. But don't make it too big
         # because futures in the call queue cannot be cancelled.
-        self._call_queue = self._ctx.Queue(2 * self._max_workers +
-                                           EXTRA_QUEUED_CALLS)
+        self._call_queue = Queue(2 * self._max_workers + EXTRA_QUEUED_CALLS,
+                                 reducers=job_reducers, ctx=self._ctx)
         # Killed worker processes can produce spurious "broken pipe"
         # tracebacks in the queue's own worker thread. But we detect killed
         # processes anyway, so silence the tracebacks.
         self._call_queue._ignore_epipe = True
-        try:
-            self._result_queue = self._ctx.SimpleQueue()
-        except AttributeError:
-            self._result_queue = mp.queues.SimpleQueue()
+
+        self._result_queue = SimpleQueue(reducers=result_reducers,
+                                         ctx=self._ctx)
 
     def _start_queue_management_thread(self):
         if self._queue_management_thread is None:

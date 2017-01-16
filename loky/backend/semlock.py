@@ -182,7 +182,7 @@ class SemLock(object):
         self.ident = get_ident()
         return True
 
-    def release(self, *args):
+    def release(self):
         if self.kind == RECURSIVE_MUTEX:
             assert self._is_mine(), (
                 "attempt to release recursive lock not owned by thread")
