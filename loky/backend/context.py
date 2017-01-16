@@ -71,6 +71,15 @@ class LokyContext(BaseContext):
         def Event(self):
             from .synchronize import Event
             return Event()
+    else:
+        if sys.version_info[:2] < (3, 4):
+            from multiprocessing import synchronize
+            Semaphore = synchronize.Semaphore
+            BoundedSemaphore = synchronize.BoundedSemaphore
+            Lock = synchronize.Lock
+            RLock = synchronize.RLock
+            Condition = synchronize.Condition
+            Event = synchronize.Event
 
     if sys.version_info[:2] < (3, 4):
         def get_context(self):
