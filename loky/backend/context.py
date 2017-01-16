@@ -77,7 +77,12 @@ class LokyContext(BaseContext):
             return self
 
         def Manager(self):
-            return mp.Manager()
+            if sys.platform == "win32":
+                return mp.Manager()
+            from .managers import LokyManager
+            m = LokyManager()
+            m.start()
+            return m
 
         def Pipe(self, duplex=True):
             '''Returns two connection object connected by a pipe'''
