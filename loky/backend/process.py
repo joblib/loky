@@ -78,5 +78,5 @@ class AuthenticationKey(bytes):
             raise TypeError(
                 'Pickling an AuthenticationKey object is '
                 'disallowed for security reasons'
-                )
+            )
         return AuthenticationKey, (bytes(self),)

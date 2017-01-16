@@ -15,8 +15,8 @@ def log_lvl(request):
     return request.config.getoption("--verbosity")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_logging(log_lvl):
+@pytest.yield_fixture(scope="session", autouse=True)
+def logging_setup(log_lvl):
     """Setup multiprocessing logging for loky testing"""
     if sys.version_info >= (3, 4):
         logging._levelToName[5] = "SUBDEBUG"

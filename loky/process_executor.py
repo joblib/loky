@@ -454,6 +454,8 @@ def _queue_management_worker(executor_reference,
         elif len(ready) > 0:  # and _worker_crashed(processes, ready):
             # Mark the process pool broken so that submits fail right now.
             executor_flags.flag_as_broken()
+            mp.util.debug('The executor is broken as at least one process '
+                          'terminated abruptly')
 
             # All futures in flight must be marked failed
             for work_id, work_item in pending_work_items.items():

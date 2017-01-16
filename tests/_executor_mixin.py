@@ -4,11 +4,13 @@ import sys
 import time
 import math
 import psutil
+import pytest
 import threading
 
 from loky._base import TimeoutError
 from loky.reusable_executor import get_reusable_executor
 from multiprocessing import cpu_count
+from .conftest import logging_setup
 
 
 # Compat Travis
@@ -84,7 +86,7 @@ def _check_executor_started(executor):
     try:
         res.result(timeout=TIMEOUT)
     except TimeoutError:
-        print('\n'*3, res.done(), executor._call_queue.empty(),
+        print('\n' * 3, res.done(), executor._call_queue.empty(),
               executor._result_queue.empty())
         print(executor._processes)
         print(threading.enumerate())
@@ -97,7 +99,8 @@ def _check_executor_started(executor):
 class ExecutorMixin:
     worker_count = 5
 
-    def setup_method(self, method):
+    @pytest.fixture(autouse=True)
+    def setup_method(self, logging_setup):
         try:
             self.executor = self.executor_type(
                 max_workers=self.worker_count, context=self.context)

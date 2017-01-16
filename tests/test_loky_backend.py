@@ -86,7 +86,7 @@ class TestLokyBackend:
         name = 'SomeProcess'
         p = self.Process(
             target=self._test_process, args=args, kwargs=kwargs, name=name
-            )
+        )
         p.daemon = True
         current = self.current_process()
 

@@ -137,6 +137,7 @@ class Popen(object):
             #     _mk_inheritable(fd)
 
             cmd_python = [sys.executable, '-m', 'loky.backend.popen_loky']
+            cmd_python += ['--name-process', str(process_obj.name)]
             cmd_python += ['--pipe',
                            str(reduction._mk_inheritable(child_r))]
             reduction._mk_inheritable(child_w)
@@ -175,8 +176,8 @@ if __name__ == '__main__':
                         help='File handle numbers for the pipe')
     parser.add_argument('--semaphore', type=int, default=None,
                         help='File handle name for the semaphore tracker')
-    parser.add_argument('--strat', type=str, default='buff',
-                        help='Strategy for communication dump')
+    parser.add_argument('--name-process', type=str, default=None,
+                        help='Identifiant for debuggging purpose')
 
     args = parser.parse_args()
 
