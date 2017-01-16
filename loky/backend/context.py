@@ -12,16 +12,21 @@ if sys.version_info > (3, 4):
     from multiprocessing.context import get_spawning_popen, BaseContext
 
 else:
-    import threading
-
-    # Mecanism to check that the current thread is spawning a child process
-    _tls = threading.local()
+    if sys.platform != 'win32':
+        import threading
+        # Mecanism to check that the current thread is spawning a child process
+        _tls = threading.local()
+        popen_attr = 'spawning_popen'
+    else:
+        from multiprocessing.forking import Popen
+        _tls = Popen._tls
+        popen_attr = 'process_handle'
 
     def get_spawning_popen():
-        return getattr(_tls, 'spawning_popen', None)
+        return getattr(_tls, popen_attr, None)
 
     def set_spawning_popen(popen):
-        _tls.spawning_popen = popen
+        setattr(_tls, popen_attr, popen)
 
     def assert_spawning(obj):
         if get_spawning_popen() is None:
