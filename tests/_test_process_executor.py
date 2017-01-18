@@ -66,6 +66,9 @@ def sleep_and_print(t, msg):
 
 
 class MyObject(object):
+    def __init__(self, value=0):
+        self.value = value
+
     def my_method(self):
         pass
 
@@ -184,6 +187,7 @@ class ExecutorShutdownTest:
         # have completed. The crash should be detected.
         with pytest.raises(BrokenExecutor):
             crash_result.result()
+
         manager.shutdown()
 
         # The executor flag should have been set at this point.
@@ -220,9 +224,8 @@ class WaitTests:
         future1 = self.executor.submit(mul, 21, 2)
         future2 = self.executor.submit(time.sleep, 1.5)
 
-        done, not_done = futures.wait(
-                [CANCELLED_FUTURE, future1, future2],
-                return_when=futures.FIRST_COMPLETED)
+        done, not_done = futures.wait([CANCELLED_FUTURE, future1, future2],
+                                      return_when=futures.FIRST_COMPLETED)
 
         assert set([future1]) == done
         assert set([CANCELLED_FUTURE, future2]) == not_done
@@ -230,9 +233,9 @@ class WaitTests:
     def test_first_completed_some_already_completed(self):
         future1 = self.executor.submit(time.sleep, 1.5)
 
-        finished, pending = futures.wait(
-                 [CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE, future1],
-                 return_when=futures.FIRST_COMPLETED)
+        finished, pending = futures.wait([CANCELLED_AND_NOTIFIED_FUTURE,
+                                          SUCCESSFUL_FUTURE, future1],
+                                         return_when=futures.FIRST_COMPLETED)
 
         assert (set([CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE]) ==
                 finished)
@@ -254,26 +257,24 @@ class WaitTests:
             event.set()
         future1.add_done_callback(cb_done)
 
-        finished, pending = futures.wait(
-                [future1, future2, future3],
-                return_when=futures.FIRST_EXCEPTION)
+        finished, pending = futures.wait([future1, future2, future3],
+                                         return_when=futures.FIRST_EXCEPTION)
 
         assert event.is_set()
 
         assert set([future1, future2]) == finished
         assert set([future3]) == pending
+
         manager.shutdown()
 
     def test_first_exception_some_already_complete(self):
         future1 = self.executor.submit(divmod, 21, 0)
         future2 = self.executor.submit(time.sleep, 1.5)
 
-        finished, pending = futures.wait(
-                [SUCCESSFUL_FUTURE,
-                 CANCELLED_FUTURE,
-                 CANCELLED_AND_NOTIFIED_FUTURE,
-                 future1, future2],
-                return_when=futures.FIRST_EXCEPTION)
+        finished, pending = futures.wait([SUCCESSFUL_FUTURE, CANCELLED_FUTURE,
+                                          CANCELLED_AND_NOTIFIED_FUTURE,
+                                          future1, future2],
+                                         return_when=futures.FIRST_EXCEPTION)
 
         assert set([SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
                     future1]) == finished
@@ -282,9 +283,8 @@ class WaitTests:
     def test_first_exception_one_already_failed(self):
         future1 = self.executor.submit(time.sleep, 2)
 
-        finished, pending = futures.wait(
-                 [EXCEPTION_FUTURE, future1],
-                 return_when=futures.FIRST_EXCEPTION)
+        finished, pending = futures.wait([EXCEPTION_FUTURE, future1],
+                                         return_when=futures.FIRST_EXCEPTION)
 
         assert set([EXCEPTION_FUTURE]) == finished
         assert set([future1]) == pending
@@ -293,13 +293,10 @@ class WaitTests:
         future1 = self.executor.submit(divmod, 2, 0)
         future2 = self.executor.submit(mul, 2, 21)
 
-        finished, pending = futures.wait(
-                [SUCCESSFUL_FUTURE,
-                 CANCELLED_AND_NOTIFIED_FUTURE,
-                 EXCEPTION_FUTURE,
-                 future1,
-                 future2],
-                return_when=futures.ALL_COMPLETED)
+        finished, pending = futures.wait([SUCCESSFUL_FUTURE, EXCEPTION_FUTURE,
+                                          CANCELLED_AND_NOTIFIED_FUTURE,
+                                          future1, future2],
+                                         return_when=futures.ALL_COMPLETED)
 
         assert set([SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
                     EXCEPTION_FUTURE, future1, future2]) == finished
@@ -314,13 +311,11 @@ class WaitTests:
         future1 = self.executor.submit(mul, 6, 7)
         future2 = self.executor.submit(time.sleep, 2)
 
-        finished, pending = futures.wait(
-                [CANCELLED_AND_NOTIFIED_FUTURE,
-                 EXCEPTION_FUTURE,
-                 SUCCESSFUL_FUTURE,
-                 future1, future2],
-                timeout=.5,
-                return_when=futures.ALL_COMPLETED)
+        finished, pending = futures.wait([CANCELLED_AND_NOTIFIED_FUTURE,
+                                          EXCEPTION_FUTURE, SUCCESSFUL_FUTURE,
+                                          future1, future2],
+                                         timeout=.5,
+                                         return_when=futures.ALL_COMPLETED)
 
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
                     SUCCESSFUL_FUTURE, future1]) == finished
@@ -333,11 +328,10 @@ class AsCompletedTests:
         future1 = self.executor.submit(mul, 2, 21)
         future2 = self.executor.submit(mul, 7, 6)
 
-        completed = set(futures.as_completed(
-                [CANCELLED_AND_NOTIFIED_FUTURE,
-                 EXCEPTION_FUTURE,
-                 SUCCESSFUL_FUTURE,
-                 future1, future2]))
+        completed = set(futures.as_completed([CANCELLED_AND_NOTIFIED_FUTURE,
+                                              EXCEPTION_FUTURE,
+                                              SUCCESSFUL_FUTURE,
+                                              future1, future2]))
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
                     SUCCESSFUL_FUTURE, future1, future2]) == completed
 
@@ -407,13 +401,13 @@ class ExecutorTest:
         # Issue #16284: check that the executors don't unnecessarily hang onto
         # references.
         my_object = MyObject()
-        my_object_collected = threading.Event()
-        _ = weakref.ref(my_object, lambda obj: my_object_collected.set())
+        collect = threading.Event()
+        _ = weakref.ref(my_object, lambda obj: collect.set())  # noqa
         # Deliberately discarding the future.
         self.executor.submit(my_object.my_method)
         del my_object
 
-        collected = my_object_collected.wait(timeout=5.0)
+        collected = collect.wait(timeout=5.0)
         assert collected, "Stale reference not collected within timeout."
 
     def test_max_workers_negative(self):
@@ -468,6 +462,11 @@ class ExecutorTest:
         assert type(cause) is process_executor._RemoteTraceback
         assert 'raise RuntimeError(123)  # some comment' in cause.tb
 
+    #
+    # The following tests are new additions to the test suite originally
+    # backported from the Python 3 concurrent.futures package.
+    #
+
     def _test_thread_safety(self, thread_idx, results):
         try:
             # submit a mix of very simple tasks with map and submit,
@@ -493,11 +492,6 @@ class ExecutorTest:
         except Exception:
             # Ensure that py.test can report the content of the exception
             results[thread_idx] = traceback.format_exc()
-
-#
-# The following tests are new additions to the test suite originally backported
-# from the Python 3 concurrent.futures package.
-#
 
     def test_thread_safety(self):
         # Check that our process-pool executor can be shared to schedule work
@@ -577,3 +571,38 @@ class ExecutorTest:
             # the atexit callbacks that writes test coverage data to disk.
             # Let's be patient.
             self.check_no_running_workers(patience=5)
+
+    @classmethod
+    def reducer_in(cls, obj):
+        return MyObject, (obj.value + 5, )
+
+    @classmethod
+    def reducer_out(cls, obj):
+        return MyObject, (7 * obj.value, )
+
+    def test_serialization(self):
+        """Test custom serialization for process_executor"""
+        self.executor.shutdown(wait=True)
+
+        # Use non commutative operation to check correct order
+        job_reducers = {}
+        job_reducers[MyObject] = self.reducer_in
+        result_reducers = {}
+        result_reducers[MyObject] = self.reducer_out
+
+        # Create a new executor to ensure that we did not mess with the
+        # existing module level serialization
+        executor = self.executor_type(
+            max_workers=2, context=self.context, job_reducers=job_reducers,
+            result_reducers=result_reducers
+        )
+        self.executor = self.executor_type(max_workers=2, context=self.context)
+
+        obj = MyObject(1)
+        ret_obj = self.executor.submit(self.return_inputs, obj).result()[0]
+        ret_obj_custom = executor.submit(self.return_inputs, obj).result()[0]
+
+        assert ret_obj.value == 1
+        assert ret_obj_custom.value == 42
+
+        executor.shutdown(wait=True)

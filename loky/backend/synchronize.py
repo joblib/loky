@@ -14,7 +14,7 @@ import threading
 import _multiprocessing
 from time import time as _time
 
-from .popen_loky import is_spawning, get_spawning_popen
+from .context import assert_spawning, get_spawning_popen
 from multiprocessing import process
 from multiprocessing import util
 
@@ -28,9 +28,11 @@ try:
     if sys.platform != 'win32' and sys.version_info < (3, 4):
         from .semlock import SemLock as _SemLock
         from .semlock import sem_unlink
+        from . import semaphore_tracker
     else:
         from _multiprocessing import SemLock as _SemLock
         from _multiprocessing import sem_unlink
+        from multiprocessing import semaphore_tracker
 except (ImportError):
     raise ImportError("This platform lacks a functioning sem_open" +
                       " implementation, therefore, the required" +
@@ -71,7 +73,7 @@ class SemLock(object):
             raise FileExistsError('cannot find name for semaphore')
 
         util.debug('created semlock with handle %s and name "%s"'
-                   % (self._semlock.handle, self._semlock.name.decode()))
+                   % (self._semlock.handle, self._semlock.name))
 
         self._make_methods()
 
@@ -84,16 +86,14 @@ class SemLock(object):
             # We only get here if we are on Unix with forking
             # disabled.  When the object is garbage collected or the
             # process shuts down we unlink the semaphore name
-            from .semaphore_tracker import register
-            register(self._semlock.name)
+            semaphore_tracker.register(self._semlock.name)
             util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
                           exitpriority=0)
 
     @staticmethod
     def _cleanup(name):
-        from .semaphore_tracker import unregister
         sem_unlink(name)
-        unregister(name)
+        semaphore_tracker.unregister(name)
 
     def _make_methods(self):
         self.acquire = self._semlock.acquire
@@ -103,10 +103,10 @@ class SemLock(object):
         return self._semlock.acquire()
 
     def __exit__(self, *args):
-        return self._semlock.release(*args)
+        return self._semlock.release()
 
     def __getstate__(self):
-        assert is_spawning()
+        assert_spawning(self)
         sl = self._semlock
         if sys.platform == 'win32':
             h = get_spawning_popen().duplicate_for_child(sl.handle)
@@ -117,7 +117,7 @@ class SemLock(object):
     def __setstate__(self, state):
         self._semlock = _SemLock._rebuild(*state)
         util.debug('recreated blocker with handle %r and name "%s"'
-                   % (state[0], state[3].decode()))
+                   % (state[0], state[3]))
         self._make_methods()
 
     @staticmethod
@@ -232,7 +232,7 @@ class Condition(object):
         self._make_methods()
 
     def __getstate__(self):
-        assert is_spawning()
+        assert_spawning(self)
         return (self._lock, self._sleeping_count,
                 self._woken_count, self._wait_semaphore)
 

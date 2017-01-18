@@ -3,9 +3,10 @@ import sys
 import time
 import pytest
 import signal
+import pickle
 import multiprocessing
 
-from loky import backend
+from loky.backend import get_context
 from .utils import TimingWrapper
 
 try:
@@ -14,26 +15,28 @@ except ImportError:
     parallel_sum = None
 
 DELTA = 0.1
+ctx_loky = get_context("loky")
 
 
 class TestLokyBackend:
     # loky processes
-    Process = backend.Process
+    Process = staticmethod(ctx_loky.Process)
     current_process = staticmethod(multiprocessing.current_process)
     active_children = staticmethod(multiprocessing.active_children)
 
     # interprocess communication objects
-    Pipe = staticmethod(backend.Pipe)
-    Queue = staticmethod(backend.Queue)
-    Manager = staticmethod(backend.Manager)
+    Pipe = staticmethod(ctx_loky.Pipe)
+    Manager = staticmethod(ctx_loky.Manager)
 
     # synchronization primitives
-    Lock = staticmethod(backend.Lock)
-    RLock = staticmethod(backend.RLock)
-    Semaphore = staticmethod(backend.Semaphore)
-    BoundedSemaphore = staticmethod(backend.BoundedSemaphore)
-    Condition = staticmethod(backend.Condition)
-    Event = staticmethod(backend.Event)
+    Lock = staticmethod(ctx_loky.Lock)
+    RLock = staticmethod(ctx_loky.RLock)
+    Semaphore = staticmethod(ctx_loky.Semaphore)
+    BoundedSemaphore = staticmethod(ctx_loky.BoundedSemaphore)
+    Condition = staticmethod(ctx_loky.Condition)
+    Event = staticmethod(ctx_loky.Event)
+    Queue = staticmethod(ctx_loky.Queue)
+    SimpleQueue = staticmethod(ctx_loky.SimpleQueue)
 
     @classmethod
     def teardown_class(cls):
@@ -70,25 +73,25 @@ class TestLokyBackend:
         assert not proc2.daemon
 
     @classmethod
-    def _test_process(cls, q, *args, **kwds):
-        multiprocessing.util.debug("Start test properly")
+    def _test_process(cls, q, sq, *args, **kwds):
         current = cls.current_process()
-        q.put(args)
+        q.put(args, timeout=1)
+        sq.put(args)
+
         q.put(kwds, timeout=1)
         q.put(current.name, timeout=1)
         q.put(bytes(current.authkey))
         q.put(current.pid)
-        multiprocessing.util.debug("Finishe test properly")
 
-    # @pytest.mark.skip(reason="Known failure")
     def test_process(self):
         q = self.Queue()
-        args = (q, 1, 2)
+        sq = self.SimpleQueue()
+        args = (q, sq, 1, 2)
         kwargs = {'hello': 23, 'bye': 2.54}
         name = 'SomeProcess'
         p = self.Process(
             target=self._test_process, args=args, kwargs=kwargs, name=name
-            )
+        )
         p.daemon = True
         current = self.current_process()
 
@@ -99,13 +102,23 @@ class TestLokyBackend:
         assert type(self.active_children()) is list
         assert p.exitcode is None
 
+        # Make sure we do not break security
+        with pytest.raises(TypeError):
+            pickle.dumps(p.authkey)
+
+        # Make sure we detect bad pickling
+        with pytest.raises(RuntimeError):
+            pickle.dumps(q)
+
         p.start()
 
         assert p.exitcode is None
         assert p.is_alive()
         assert p in self.active_children()
 
-        assert q.get() == args[1:]
+        assert q.get() == args[2:]
+        assert sq.get() == args[2:]
+
         assert q.get() == kwargs
         assert q.get() == p.name
         assert q.get() == current.authkey

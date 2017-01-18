@@ -49,11 +49,13 @@ def get_preparation_data(name):
     d = dict(
         log_to_stderr=util._log_to_stderr,
         authkey=bytes(process.current_process().authkey),
-        )
+    )
 
     if util._logger is not None:
         d['log_level'] = util._logger.getEffectiveLevel()
-
+        if len(util._logger.handlers) > 0:
+            h = util._logger.handlers[0]
+            d['log_fmt'] = h.formatter._fmt
 
     sys_path = [p for p in sys.path]
     try:
@@ -90,10 +92,10 @@ def get_preparation_data(name):
 
     return d
 
+
 #
 # Prepare current process
 #
-
 old_main_modules = []
 
 
@@ -112,6 +114,12 @@ def prepare(data):
 
     if 'log_level' in data:
         util.get_logger().setLevel(data['log_level'])
+
+    if 'log_fmt' in data:
+        import logging
+        util.get_logger().handlers[0].setFormatter(
+            logging.Formatter(data['log_fmt'])
+        )
 
     if 'sys_path' in data:
         sys.path = data['sys_path']

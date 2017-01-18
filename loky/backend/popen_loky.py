@@ -5,12 +5,11 @@ import pickle
 from io import BytesIO
 
 from . import reduction, spawn
+from .context import get_spawning_popen, set_spawning_popen
 from multiprocessing import util
 
 if sys.version_info[:2] < (3, 3):
     ProcessLookupError = OSError
-elif sys.version_info > (3, 4):
-    from multiprocessing import context
 
 if sys.platform != "win32":
     if sys.version_info[:2] > (3, 3):
@@ -21,26 +20,10 @@ if sys.platform != "win32":
 
 __all__ = ['Popen']
 
-_spawning_popen = None
-
-
-def is_spawning():
-    return _spawning_popen is not None
-
-
-def set_spawning_popen(popen):
-    global _spawning_popen
-    _spawning_popen = popen
-
-
-def get_spawning_popen():
-    global _spawning_popen
-    return _spawning_popen
 
 #
 # Wrapper for an fd used while launching a process
 #
-
 
 class _DupFd(object):
     def __init__(self, fd):
@@ -48,6 +31,7 @@ class _DupFd(object):
 
     def detach(self):
         return self.fd
+
 
 #
 # Start child process using subprocess.Popen
@@ -138,8 +122,6 @@ class Popen(object):
 
         fp = BytesIO()
         set_spawning_popen(self)
-        if sys.version_info[:2] > (3, 3):
-            context.set_spawning_popen(self)
         try:
             prep_data = spawn.get_preparation_data(process_obj._name)
             reduction.dump(prep_data, fp)
@@ -147,8 +129,6 @@ class Popen(object):
 
         finally:
             set_spawning_popen(None)
-            if sys.version_info[:2] > (3, 3):
-                context.set_spawning_popen(None)
 
         try:
             parent_r, child_w = os.pipe()
@@ -157,6 +137,7 @@ class Popen(object):
             #     _mk_inheritable(fd)
 
             cmd_python = [sys.executable, '-m', 'loky.backend.popen_loky']
+            cmd_python += ['--name-process', str(process_obj.name)]
             cmd_python += ['--pipe',
                            str(reduction._mk_inheritable(child_r))]
             reduction._mk_inheritable(child_w)
@@ -195,8 +176,8 @@ if __name__ == '__main__':
                         help='File handle numbers for the pipe')
     parser.add_argument('--semaphore', type=int, default=None,
                         help='File handle name for the semaphore tracker')
-    parser.add_argument('--strat', type=str, default='buff',
-                        help='Strategy for communication dump')
+    parser.add_argument('--name-process', type=str, default=None,
+                        help='Identifiant for debuggging purpose')
 
     args = parser.parse_args()
 
@@ -218,12 +199,12 @@ if __name__ == '__main__':
         from_parent = None
         exitcode = process_obj._bootstrap()
     except Exception as e:
-        print('\n\n'+'-'*80)
+        print('\n\n' + '-' * 80)
         print('Process failed with traceback: ')
-        print('-'*80)
+        print('-' * 80)
         import traceback
         print(traceback.format_exc())
-        print('\n'+'-'*80)
+        print('\n' + '-' * 80)
     finally:
         if from_parent is not None:
             from_parent.close()
