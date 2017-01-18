@@ -108,5 +108,5 @@ if sys.version_info > (3, 4):
     from multiprocessing import get_context
 
 else:
-    def get_context():
+    def get_context(method="loky"):
         return LokyContext()

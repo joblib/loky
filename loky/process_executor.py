@@ -71,13 +71,7 @@ else:
     from pickle import PicklingError
     ProcessLookupError = OSError
 
-if sys.version_info < (3, 4):
-    from loky import backend
-
-    def get_context():
-        return backend.LokyContext()
-else:
-    from multiprocessing import get_context
+from loky.backend import get_context
 
 
 __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
@@ -323,14 +317,6 @@ def _add_call_item_to_queue(pending_work_items,
                 continue
 
 
-def _worker_crashed(processes, ready):
-    """check if any process crashed"""
-    for p in processes.values():
-        if p.exitcode not in [None, 0]:
-            return True
-    return False
-
-
 def _queue_management_worker(executor_reference,
                              executor_flags,
                              processes,
@@ -451,7 +437,7 @@ def _queue_management_worker(executor_reference,
                         work_item.future.set_exception(exc)
                         del work_item
                 _clear_list(running_work_items)
-        elif len(ready) > 0:  # and _worker_crashed(processes, ready):
+        elif len(ready) > 0:
             # Mark the process pool broken so that submits fail right now.
             executor_flags.flag_as_broken()
             mp.util.debug('The executor is broken as at least one process '

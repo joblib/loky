@@ -3,9 +3,10 @@ import sys
 import time
 import pytest
 import signal
+import pickle
 import multiprocessing
 
-from loky.backend import LokyContext
+from loky.backend import get_context
 from .utils import TimingWrapper
 
 try:
@@ -14,7 +15,7 @@ except ImportError:
     parallel_sum = None
 
 DELTA = 0.1
-ctx_loky = LokyContext()
+ctx_loky = get_context("loky")
 
 
 class TestLokyBackend:
@@ -35,6 +36,7 @@ class TestLokyBackend:
     Condition = staticmethod(ctx_loky.Condition)
     Event = staticmethod(ctx_loky.Event)
     Queue = staticmethod(ctx_loky.Queue)
+    SimpleQueue = staticmethod(ctx_loky.SimpleQueue)
 
     @classmethod
     def teardown_class(cls):
@@ -71,9 +73,11 @@ class TestLokyBackend:
         assert not proc2.daemon
 
     @classmethod
-    def _test_process(cls, q, *args, **kwds):
+    def _test_process(cls, q, sq, *args, **kwds):
         current = cls.current_process()
         q.put(args, timeout=1)
+        sq.put(args)
+
         q.put(kwds, timeout=1)
         q.put(current.name, timeout=1)
         q.put(bytes(current.authkey))
@@ -81,7 +85,8 @@ class TestLokyBackend:
 
     def test_process(self):
         q = self.Queue()
-        args = (q, 1, 2)
+        sq = self.SimpleQueue()
+        args = (q, sq, 1, 2)
         kwargs = {'hello': 23, 'bye': 2.54}
         name = 'SomeProcess'
         p = self.Process(
@@ -97,13 +102,23 @@ class TestLokyBackend:
         assert type(self.active_children()) is list
         assert p.exitcode is None
 
+        # Make sure we do not break security
+        with pytest.raises(TypeError):
+            pickle.dumps(p.authkey)
+
+        # Make sure we detect bad pickling
+        with pytest.raises(RuntimeError):
+            pickle.dumps(q)
+
         p.start()
 
         assert p.exitcode is None
         assert p.is_alive()
         assert p in self.active_children()
 
-        assert q.get() == args[1:]
+        assert q.get() == args[2:]
+        assert sq.get() == args[2:]
+
         assert q.get() == kwargs
         assert q.get() == p.name
         assert q.get() == current.authkey

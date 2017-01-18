@@ -1,7 +1,7 @@
 import sys
 
 from loky import process_executor
-from loky.backend import LokyContext
+from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
 
 
@@ -11,7 +11,7 @@ if (sys.version_info[:2] > (3, 3) and sys.platform != "win32") or (
     class ProcessPoolLokyMixin(ExecutorMixin):
         # Makes sure that the context is defined
         executor_type = process_executor.ProcessPoolExecutor
-        context = LokyContext()
+        context = get_context("loky")
 
     from ._test_process_executor import ExecutorShutdownTest
 

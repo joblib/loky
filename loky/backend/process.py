@@ -74,7 +74,7 @@ class AuthenticationKey(bytes):
         from .context import assert_spawning
         try:
             assert_spawning(self)
-        except AssertionError:
+        except RuntimeError:
             raise TypeError(
                 'Pickling an AuthenticationKey object is '
                 'disallowed for security reasons'

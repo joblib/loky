@@ -183,12 +183,3 @@ if sys.platform == "win32":
     from . import _win_reduction  # noqa: F401
 else:
     from . import _posix_reduction  # noqa: F401
-
-
-def test(f):
-    print("ok")
-
-
-# print("weirdo")
-# f = lambda f: 1
-# register(type(f), test)

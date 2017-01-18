@@ -1,6 +1,6 @@
 import sys
 
-from .context import LokyContext
+from .context import get_context
 
 if sys.version_info > (3, 4):
     import os
@@ -14,5 +14,4 @@ if sys.version_info > (3, 4):
     from multiprocessing import synchronize
     synchronize.SemLock._make_name = _make_name
 
-
-__all__ = ["LokyContext"]
+__all__ = ["get_context"]
