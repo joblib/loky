@@ -92,13 +92,13 @@ class LokyContext(BaseContext):
             multiprocessing objects as it does not rely on fork.
             """
             from multiprocessing import synchronize
-            Semaphore = synchronize.Semaphore
-            BoundedSemaphore = synchronize.BoundedSemaphore
-            Lock = synchronize.Lock
-            RLock = synchronize.RLock
-            Condition = synchronize.Condition
-            Event = synchronize.Event
-            Manager = mp.Manager
+            Semaphore = staticmethod(synchronize.Semaphore)
+            BoundedSemaphore = staticmethod(synchronize.BoundedSemaphore)
+            Lock = staticmethod(synchronize.Lock)
+            RLock = staticmethod(synchronize.RLock)
+            Condition = staticmethod(synchronize.Condition)
+            Event = staticmethod(synchronize.Event)
+            Manager = staticmethod(mp.Manager)
 
     if sys.platform != "win32":
         """For Unix platform, use our custom implementation of synchronize
