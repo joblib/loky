@@ -116,7 +116,7 @@ def main(fd):
         except Exception:
             pass
 
-    if VERBOSE:
+    if VERBOSE:  # pragma: no cover
         sys.stderr.write("Main semaphore tracker is running\n")
         sys.stderr.flush()
 
@@ -129,14 +129,14 @@ def main(fd):
                     cmd, name = line.strip().split(b':')
                     if cmd == b'REGISTER':
                         cache.add(name)
-                        if VERBOSE:
+                        if VERBOSE:  # pragma: no cover
                             name = name.decode('ascii')
                             sys.stderr.write("[SemaphoreTracker] register {}\n"
                                              .format(name))
                             sys.stderr.flush()
                     elif cmd == b'UNREGISTER':
                         cache.remove(name)
-                        if VERBOSE:
+                        if VERBOSE:  # pragma: no cover
                             name = name.decode('ascii')
                             sys.stderr.write("[SemaphoreTracker] unregister {}"
                                              ": cache({})\n"
@@ -165,7 +165,7 @@ def main(fd):
             try:
                 try:
                     sem_unlink(name)
-                    if VERBOSE:
+                    if VERBOSE:  # pragma: no cover
                         name = name.decode('ascii')
                         sys.stderr.write("[SemaphoreTracker] unregister {}\n"
                                          .format(name))
@@ -175,7 +175,7 @@ def main(fd):
             finally:
                 pass
 
-    if VERBOSE:
+    if VERBOSE:  # pragma: no cover
         sys.stderr.write("semaphore tracker shut down\n")
         sys.stderr.flush()
 

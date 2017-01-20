@@ -177,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument('--semaphore', type=int, default=None,
                         help='File handle name for the semaphore tracker')
     parser.add_argument('--name-process', type=str, default=None,
-                        help='Identifiant for debuggging purpose')
+                        help='Identifier for debuggging purpose')
 
     args = parser.parse_args()
 

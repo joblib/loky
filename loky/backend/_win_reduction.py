@@ -17,8 +17,12 @@ if sys.version_info[:2] < (3, 3):
 
     from _multiprocessing import win32
     _winapi.OpenProcess = win32.OpenProcess
+
+    from _multiprocessing import Connection, PipeConnection
 else:
     import _winapi
+
+    from multiprocessing.connection import Connection, PipeConnection
 
 
 class DupHandle(object):
@@ -50,12 +54,6 @@ class DupHandle(object):
             _winapi.CloseHandle(proc)
 
 
-if sys.version_info >= (3, 3):
-    from multiprocessing.connection import Connection, PipeConnection
-else:
-    from _multiprocessing import Connection, PipeConnection
-
-
 # make Connection pickable
 def reduce_connection(conn):
     rh = DupHandle(conn.fileno(), _winapi.DUPLICATE_SAME_ACCESS)
@@ -65,6 +63,7 @@ def reduce_connection(conn):
 def rebuild_connection(reduced_handle, readable, writable):
     handle = reduced_handle.detach()
     return Connection(handle, readable=readable, writable=writable)
+
 
 register(Connection, reduce_connection)
 
@@ -81,6 +80,7 @@ def rebuild_pipe_connection(dh, readable, writable):
     handle = dh.detach()
     return PipeConnection(handle, readable, writable)
 
+
 register(PipeConnection, reduce_pipe_connection)
 
 
@@ -92,5 +92,6 @@ def _reduce_socket(s):
 
 def _rebuild_socket(ds):
     return ds.detach()
+
 
 register(socket.socket, _reduce_socket)

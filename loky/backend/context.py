@@ -1,3 +1,13 @@
+###############################################################################
+# compat for UNIX 2.7 and 3.3
+# Context with LokyContext server.
+# This avoids having a Manager using fork and breaks the fd.
+#
+# This just update the start method to use LokyProcess instead of the default
+# Process that use a fork.
+#
+
+
 import sys
 import multiprocessing as mp
 
@@ -8,6 +18,7 @@ else:
     from .process import PosixLokyProcess as Process
 
 if sys.version_info > (3, 4):
+    from multiprocessing import get_context
     from multiprocessing.context import assert_spawning, set_spawning_popen
     from multiprocessing.context import get_spawning_popen, BaseContext
 
@@ -22,6 +33,8 @@ else:
         _tls = Popen._tls
         popen_attr = 'process_handle'
 
+    BaseContext = object
+
     def get_spawning_popen():
         return getattr(_tls, popen_attr, None)
 
@@ -35,10 +48,12 @@ else:
                 ' through inheritance' % type(obj).__name__
             )
 
-    BaseContext = object
+    def get_context(method="loky"):
+        return LokyContext()
 
 
 class LokyContext(BaseContext):
+    """Context relying on the LokyProcess."""
     _name = 'loky'
     Process = Process
 
@@ -52,32 +67,30 @@ class LokyContext(BaseContext):
         '''Returns a queue object'''
         from .queues import SimpleQueue
         return SimpleQueue(reducers=reducers, ctx=self.get_context())
-    if sys.platform != "win32":
-        def Semaphore(self, value=1):
-            from . import synchronize
-            return synchronize.Semaphore(value=value)
 
-        def BoundedSemaphore(self, value):
-            from .synchronize import BoundedSemaphore
-            return BoundedSemaphore(value)
+    if sys.version_info[:2] < (3, 4):
+        """Compat for python2.7/3.3 for necessary methods in Context"""
+        def get_context(self):
+            return self
 
-        def Lock(self):
-            from .synchronize import Lock
-            return Lock()
+        def Pipe(self, duplex=True):
+            '''Returns two connection object connected by a pipe'''
+            return mp.Pipe(duplex)
 
-        def RLock(self):
-            from .synchronize import RLock
-            return RLock()
-
-        def Condition(self, lock=None):
-            from .synchronize import Condition
-            return Condition(lock)
-
-        def Event(self):
-            from .synchronize import Event
-            return Event()
-    else:
-        if sys.version_info[:2] < (3, 4):
+        if sys.platform != "win32":
+            """Use the compat Manager for python2.7/3.3 on UNIX to avoid
+            relying on fork processes
+            """
+            def Manager(self):
+                """Returns a manager object"""
+                from .managers import LokyManager
+                m = LokyManager()
+                m.start()
+                return m
+        else:
+            """Compat for context on Windows and python2.7/3.3. Using regular
+            multiprocessing objects as it does not rely on fork.
+            """
             from multiprocessing import synchronize
             Semaphore = synchronize.Semaphore
             BoundedSemaphore = synchronize.BoundedSemaphore
@@ -85,28 +98,43 @@ class LokyContext(BaseContext):
             RLock = synchronize.RLock
             Condition = synchronize.Condition
             Event = synchronize.Event
+            Manager = mp.Manager
 
-    if sys.version_info[:2] < (3, 4):
-        def get_context(self):
-            return self
+    if sys.platform != "win32":
+        """For Unix platform, use our custom implementation of synchronize
+        relying on ctypes to interface with pthread semaphores.
+        """
+        def Semaphore(self, value=1):
+            """Returns a semaphore object"""
+            from . import synchronize
+            return synchronize.Semaphore(value=value)
 
-        def Manager(self):
-            if sys.platform == "win32":
-                return mp.Manager()
-            from .managers import LokyManager
-            m = LokyManager()
-            m.start()
-            return m
+        def BoundedSemaphore(self, value):
+            """Returns a bounded semaphore object"""
+            from .synchronize import BoundedSemaphore
+            return BoundedSemaphore(value)
 
-        def Pipe(self, duplex=True):
-            '''Returns two connection object connected by a pipe'''
-            return mp.Pipe(duplex)
+        def Lock(self):
+            """Returns a lock object"""
+            from .synchronize import Lock
+            return Lock()
+
+        def RLock(self):
+            """Returns a recurrent lock object"""
+            from .synchronize import RLock
+            return RLock()
+
+        def Condition(self, lock=None):
+            """Returns a condition object"""
+            from .synchronize import Condition
+            return Condition(lock)
+
+        def Event(self):
+            """Returns an event object"""
+            from .synchronize import Event
+            return Event()
 
 
 if sys.version_info > (3, 4):
+    """Register loky context so it works with multiprocessing.get_context"""
     mp.context._concrete_contexts['loky'] = LokyContext()
-    from multiprocessing import get_context
-
-else:
-    def get_context(method="loky"):
-        return LokyContext()
