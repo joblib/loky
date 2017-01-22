@@ -88,7 +88,7 @@ class TestLokyBackend:
         sq = self.SimpleQueue()
         args = (q, sq, 1, 2)
         kwargs = {'hello': 23, 'bye': 2.54}
-        name = 'SomeProcess'
+        name = 'TestLokyProcess'
         p = self.Process(
             target=self._test_process, args=args, kwargs=kwargs, name=name
         )
