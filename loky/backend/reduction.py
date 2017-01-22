@@ -2,6 +2,8 @@ import io
 import os
 import sys
 import functools
+import warnings
+from multiprocessing import util
 try:
     # Python 2 compat
     from cPickle import loads
@@ -9,7 +11,37 @@ except ImportError:
     from pickle import loads
     import copyreg
 
-from pickle import Pickler, HIGHEST_PROTOCOL
+from pickle import HIGHEST_PROTOCOL
+from . import LOKY_PICKLER
+
+Pickler = None
+try:
+    if LOKY_PICKLER is None or LOKY_PICKLER == "cloudpickle":
+        from cloudpickle import CloudPickler as Pickler
+    elif LOKY_PICKLER == "dill":
+        from dill import Pickler
+    elif LOKY_PICKLER != "pickle":
+        from importlib import import_module
+        mpickle = import_module(LOKY_PICKLER)
+        Pickler = mpickle.Pickler
+    util.debug("Using default backend {} for pickling."
+               .format(LOKY_PICKLER if LOKY_PICKLER is not None
+                       else "cloudpickle"))
+except ImportError:
+    if LOKY_PICKLER is not None:
+        warnings.warn("Failed to import {} as asked in LOKY_PICKLER. Make sure"
+                      " it is correctly installed on your system. Falling back"
+                      " to default builtin pickle.".format(LOKY_PICKLER))
+except AttributeError:  # pragma: no cover
+    if LOKY_PICKLER is not None:
+        warnings.warn("Failed to find Pickler object in module {}. The module "
+                      "specified in LOKY_PICKLER should implement a Pickler "
+                      "object. Falling back to default builtin pickle."
+                      .format(LOKY_PICKLER))
+
+
+if Pickler is None:
+    from pickle import Pickler
 
 
 def _mk_inheritable(fd):

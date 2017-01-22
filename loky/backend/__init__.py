@@ -1,9 +1,11 @@
+import os
 import sys
 
 from .context import get_context
 
+LOKY_PICKLER = os.environ.get("LOKY_PICKLER")
+
 if sys.version_info > (3, 4):
-    import os
 
     @staticmethod
     def _make_name():
