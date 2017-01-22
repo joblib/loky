@@ -14,5 +14,6 @@ exclude_lines =
     raise NotImplementedError
     if __name__ == .__main__.:
     except Exception
+    def __repr__
 ignore_errors = True
 
