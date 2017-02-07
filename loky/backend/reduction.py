@@ -16,7 +16,9 @@ from . import LOKY_PICKLER
 
 Pickler = None
 try:
-    if LOKY_PICKLER is None or LOKY_PICKLER == "cloudpickle":
+    if LOKY_PICKLER is None or LOKY_PICKLER == "":
+        from pickle import Pickler
+    elif LOKY_PICKLER == "cloudpickle":
         from cloudpickle import CloudPickler as Pickler
     elif LOKY_PICKLER == "dill":
         from dill import Pickler
@@ -26,18 +28,16 @@ try:
         Pickler = mpickle.Pickler
     util.debug("Using default backend {} for pickling."
                .format(LOKY_PICKLER if LOKY_PICKLER is not None
-                       else "cloudpickle"))
+                       else "pickle"))
 except ImportError:
-    if LOKY_PICKLER is not None:
-        warnings.warn("Failed to import {} as asked in LOKY_PICKLER. Make sure"
-                      " it is correctly installed on your system. Falling back"
-                      " to default builtin pickle.".format(LOKY_PICKLER))
+    warnings.warn("Failed to import {} as asked in LOKY_PICKLER. Make sure"
+                  " it is correctly installed on your system. Falling back"
+                  " to default builtin pickle.".format(LOKY_PICKLER))
 except AttributeError:  # pragma: no cover
-    if LOKY_PICKLER is not None:
-        warnings.warn("Failed to find Pickler object in module {}. The module "
-                      "specified in LOKY_PICKLER should implement a Pickler "
-                      "object. Falling back to default builtin pickle."
-                      .format(LOKY_PICKLER))
+    warnings.warn("Failed to find Pickler object in module {}. The module "
+                  "specified in LOKY_PICKLER should implement a Pickler "
+                  "object. Falling back to default builtin pickle."
+                  .format(LOKY_PICKLER))
 
 
 if Pickler is None:
@@ -76,7 +76,8 @@ def _mk_inheritable(fd):
 # Enable custom pickling in Loky.
 # To allow instance customization of the pickling process, we use 2 classes.
 # _LokyPickler gives module level customization and CustomizablePickler permits
-# to use instance base custom reducers.  Only CustomizablePickler should be use
+# to use instance base custom reducers.  Only CustomizablePickler should be
+# used.
 
 class _LokyPickler(Pickler):
     """Pickler that uses custom reducers.
@@ -119,9 +120,6 @@ class _LokyPickler(Pickler):
             cls.dispatch_table[type] = reduce_func
 
 
-register = _LokyPickler.register
-
-
 class CustomizableLokyPickler(Pickler):
     def __init__(self, writer, reducers=None, protocol=HIGHEST_PROTOCOL):
         Pickler.__init__(self, writer, protocol=protocol)
@@ -159,7 +157,8 @@ class CustomizableLokyPickler(Pickler):
     @classmethod
     def dumps(cls, obj, reducers=None, protocol=None):
         buf = io.BytesIO()
-        cls(buf, reducers=reducers, protocol=protocol).dump(obj)
+        p = cls(buf, reducers=reducers, protocol=protocol)
+        p.dump(obj)
         if sys.version_info < (3, 3):
             return buf.getvalue()
         return buf.getbuffer()
@@ -169,6 +168,12 @@ def dump(obj, file, reducers=None, protocol=None):
     '''Replacement for pickle.dump() using LokyPickler.'''
     CustomizableLokyPickler(file, reducers=reducers,
                             protocol=protocol).dump(obj)
+
+
+###############################################################################
+# Registers extra pickling routines to improve picklization  for loky
+
+register = _LokyPickler.register
 
 
 # make methods picklable

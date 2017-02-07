@@ -204,6 +204,28 @@ class _CallItem(object):
         return "CallItem({}, {}, {}, {})".format(
             self.work_id, self.fn, self.args, self.kwargs)
 
+    try:
+        # If cloudpickle is present on the system, use it to pickle the
+        # function. This permits to use interactive terminal for loky calls.
+        # TODO: Add option to deactivate, as it increases pickling time.
+        from .backend import LOKY_PICKLER
+        assert LOKY_PICKLER is None or LOKY_PICKLER == ""
+
+        import cloudpickle  # noqa: F401
+
+        def __getstate__(self):
+            from cloudpickle import dumps
+            fn = dumps(self.fn)
+            return (self.work_id, self.args, self.kwargs, fn)
+
+        def __setstate__(self, state):
+            from cloudpickle import loads
+            self.work_id, self.args, self.kwargs = state[:3]
+            self.fn = loads(state[3])
+
+    except (ImportError, AssertionError) as e:
+        pass
+
 
 def _get_chunks(chunksize, *iterables):
     """ Iterates over zip()ed iterables in chunks. """
