@@ -10,7 +10,7 @@ if sys.platform == "darwin":
     os.environ["CXX"] = "g++-4.9"
 
 if sys.platform != "win32":
-    extra_compile_args = ["-ffast-math", "-fopenmp"],
+    extra_compile_args = ["-ffast-math", "-fopenmp"]
     extra_link_args = ['-fopenmp']
 else:
     extra_compile_args = ["/openmp"]
@@ -21,7 +21,7 @@ ext_modules = [
         "parallel_sum",
         ["parallel_sum.pyx"],
         extra_compile_args=extra_compile_args,
-        extra_link_args=extra_link_args,
+        extra_link_args=extra_link_args
         )
 ]
 
