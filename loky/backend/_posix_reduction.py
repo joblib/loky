@@ -4,22 +4,36 @@ import socket
 from .reduction import register
 
 
-def DupFd(fd):
+HAVE_SEND_HANDLE = (hasattr(socket, 'CMSG_LEN') and
+                    hasattr(socket, 'SCM_RIGHTS') and
+                    hasattr(socket.socket, 'sendmsg'))
+
+
+def DupFd(fd, type="file descriptor"):
     '''Return a wrapper for an fd.'''
 
-    from .popen_loky import get_spawning_popen
-    popen = get_spawning_popen()
-    return popen.DupFd(popen.duplicate_for_child(fd))
+    from .context import get_spawning_popen
+    popen_obj = get_spawning_popen()
+    if popen_obj is not None:
+        return popen_obj.DupFd(popen_obj.duplicate_for_child(fd))
+    elif HAVE_SEND_HANDLE:
+        from multiprocessing import resource_sharer
+        return resource_sharer.DupFd(fd)
+    else:
+        raise TypeError(
+                'Cannot pickle {} object. This object can only be passed when '
+                'spawning a new process'.format(type)
+            )
 
 
 def _reduce_socket(s):
-    df = DupFd(s.fileno())
+    df = DupFd(s.fileno(), type="socket")
     return _rebuild_socket, (df, s.family, s.type, s.proto)
 
 
 def _rebuild_socket(df, family, type, proto):
     fd = df.detach()
-    return socket.socket(family, type, proto, fileno=fd)
+    return socket.fromfd(fd, family, type, proto)
 
 
 register(socket.socket, _reduce_socket)
@@ -32,7 +46,7 @@ else:
 
 
 def reduce_connection(conn):
-    df = DupFd(conn.fileno())
+    df = DupFd(conn.fileno(), type="connection")
     return rebuild_connection, (df, conn.readable, conn.writable)
 
 

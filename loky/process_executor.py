@@ -389,7 +389,8 @@ def _queue_management_worker(executor_reference,
         mp.util.debug("queue management thread shutting down")
         executor_flags.flag_as_shutting_down()
         # This is an upper bound
-        nb_children_alive = sum(p.is_alive() for p in processes.values())
+        with processes_management_lock:
+            nb_children_alive = sum(p.is_alive() for p in processes.values())
         try:
             for i in range(0, nb_children_alive):
                 call_queue.put_nowait(None)

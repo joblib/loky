@@ -131,6 +131,75 @@ class TestLokyBackend:
         assert p not in self.active_children()
 
     @classmethod
+    def _test_socket(cls, socket):
+        conn, addr = socket.accept()
+        a = conn.recv(1)
+        conn.send(a)
+        conn.close()
+
+    def test_socket(self):
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((socket.gethostname(), 8080))
+        s.listen(1)
+
+        p = self.Process(target=self._test_socket, args=(s,))
+        p.start()
+
+        s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s1.connect((socket.gethostname(), 8080))
+        s1.send(b'0')
+        assert s1.recv(1) == b'0'
+
+        s1.shutdown(socket.SHUT_RDWR)
+        s1.close()
+        p.join()
+        s.shutdown(socket.SHUT_RDWR)
+        s.close()
+
+    @classmethod
+    def _test_connection(cls, conn):
+        a = conn.recv_bytes()
+        conn.send_bytes(a)
+        conn.close()
+
+    def test_connection(self):
+        from multiprocessing.connection import Pipe
+        wrt, rd = Pipe(duplex=True)
+
+        p = self.Process(target=self._test_connection, args=(wrt,))
+        p.start()
+
+        rd.send_bytes(b'0')
+        assert rd.recv_bytes() == b'0'
+
+        p.join()
+        wrt.close()
+
+    @classmethod
+    def _test_pipe(cls, conn):
+        conn.send_bytes(b'0')
+        conn.close()
+
+    @pytest.mark.skipif(sys.platform != 'win32',
+                        reason="test only for windows")
+    def test_pipe(self):
+        from multiprocessing.connection import PipeConnection
+        r, w = os.pipe()
+        wrt = PipeConnection(w)
+        rd = PipeConnection(r)
+
+        p = self.Process(target=self._test_pipe, args=(wrt,))
+        p.start()
+
+        rd.send_bytes(b'0')
+        assert rd.recv_bytes() == b'0'
+
+        p.join()
+        wrt.close()
+
+    @classmethod
     def _test_terminate(cls, event):
         # Notify the main process that child process started
         event.set()
