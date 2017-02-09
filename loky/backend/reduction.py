@@ -216,7 +216,7 @@ def _rebuild_partial(func, args, keywords):
 
 register(functools.partial, _reduce_partial)
 
-if sys.platform == "win32":
-    from . import _win_reduction  # noqa: F401
-else:
+if sys.platform != "win32":
     from . import _posix_reduction  # noqa: F401
+else:
+    from . import _win_reduction  # noqa: F401
