@@ -43,6 +43,8 @@ else:
 
 
 register(socket.socket, _reduce_socket)
+import _socket
+register(_socket.socket, _reduce_socket)
 
 
 if sys.version_info[:2] != (3, 3):

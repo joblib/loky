@@ -141,7 +141,6 @@ class TestLokyBackend:
         if hasattr(conn, "get"):
             conn = conn.get()
         if hasattr(conn, "accept"):
-            conn, addr = conn.accept()
             msg = conn.recv(2)
             conn.send(msg)
         else:
@@ -151,28 +150,24 @@ class TestLokyBackend:
 
     @pytest.mark.skipif(
         sys.platform == "win32" and sys.version_info[:2] < (3, 3),
-        reason="socket are not picklelable with python2.7 and vanilla"
+        reason="socket are not picklelable with python2.7 and multiprocessing"
         " ForkingPickler")
     def test_socket(self):
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((socket.gethostname(), 8080))
-        server.listen(1)
+        server, client = socket.socketpair()
 
         p = self.Process(target=self._test_connection, args=(server,))
         p.start()
 
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.settimeout(5)
-        client.connect((socket.gethostname(), 8080))
 
         msg = b'42'
         client.send(msg)
         assert client.recv(2) == msg
 
-        client.shutdown(socket.SHUT_RDWR)
-        client.close()
         p.join()
+        assert p.exitcode == 0
+
+        client.close()
         server.close()
 
     @pytest.mark.skipif(not HAVE_SEND_HANDLE or not HAVE_FROM_FD,
@@ -181,23 +176,19 @@ class TestLokyBackend:
     def test_socket_queue(self):
         q = self.SimpleQueue()
 
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((socket.gethostname(), 8080))
-        server.listen(1)
+        server, client = socket.socketpair()
         p = self.Process(target=self._test_connection, args=(q,))
         p.start()
         q.put(server)
 
         msg = b'42'
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.settimeout(5)
-        client.connect((socket.gethostname(), 8080))
         client.send(msg)
         assert client.recv(2) == msg
 
         p.join()
-        client.shutdown(socket.SHUT_RDWR)
+        assert p.exitcode == 0
+
         client.close()
         server.close()
 
@@ -212,6 +203,7 @@ class TestLokyBackend:
         assert rd.recv_bytes() == msg
 
         p.join()
+        assert p.exitcode == 0
         rd.close()
         wrt.close()
 
@@ -232,6 +224,7 @@ class TestLokyBackend:
         assert rd.recv_bytes() == msg
 
         p.join()
+        assert p.exitcode == 0
         rd.close()
         wrt.close()
 
