@@ -70,8 +70,9 @@ else:
 
 
 if sys.version_info[:2] < (3, 3):
-    from _multiprocessing.win32 import CloseHandle as close
+    from _multiprocessing import win32
     from multiprocessing.reduction import reduce_handle, rebuild_handle
+    close = win32.CloseHandle
 
     def fromfd(handle, family, type_, proto=0):
         s = socket.socket(family, type_, proto, fileno=handle)
