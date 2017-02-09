@@ -17,6 +17,9 @@ except ImportError:
 
 DELTA = 0.1
 ctx_loky = get_context("loky")
+HAVE_SEND_HANDLE = (hasattr(socket, 'CMSG_LEN') and
+                    hasattr(socket, 'SCM_RIGHTS') and
+                    hasattr(socket.socket, 'sendmsg'))
 
 
 class TestLokyBackend:
@@ -169,6 +172,9 @@ class TestLokyBackend:
         p.join()
         s.close()
 
+    @pytest.mark.skipif(not HAVE_SEND_HANDLE,
+                        reason="This system cannot send handle between. "
+                        "Connections object should be shared at spawning.")
     def test_socket_queue(self):
         q = self.SimpleQueue()
 
@@ -205,6 +211,9 @@ class TestLokyBackend:
         rd.close()
         wrt.close()
 
+    @pytest.mark.skipif(not HAVE_SEND_HANDLE,
+                        reason="This system cannot send handle between. "
+                        "Connections object should be shared at spawning.")
     def test_connection_queue(self):
         q = self.SimpleQueue()
         print(q)

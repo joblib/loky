@@ -9,7 +9,7 @@ HAVE_SEND_HANDLE = (hasattr(socket, 'CMSG_LEN') and
                     hasattr(socket.socket, 'sendmsg'))
 
 
-def DupFd(fd, type="file descriptor"):
+def DupFd(fd):
     '''Return a wrapper for an fd.'''
 
     from .context import get_spawning_popen
@@ -21,13 +21,13 @@ def DupFd(fd, type="file descriptor"):
         return resource_sharer.DupFd(fd)
     else:
         raise TypeError(
-                'Cannot pickle {} object. This object can only be passed when '
-                'spawning a new process'.format(type)
+                'Cannot pickle connection object. This object can only be '
+                'passed when spawning a new process'
             )
 
 
 def _reduce_socket(s):
-    df = DupFd(s.fileno(), type="socket")
+    df = DupFd(s.fileno())
     return _rebuild_socket, (df, s.family, s.type, s.proto)
 
 
@@ -46,7 +46,7 @@ else:
 
 
 def reduce_connection(conn):
-    df = DupFd(conn.fileno(), type="connection")
+    df = DupFd(conn.fileno())
     return rebuild_connection, (df, conn.readable, conn.writable)
 
 
