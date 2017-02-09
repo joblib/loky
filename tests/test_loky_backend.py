@@ -140,7 +140,7 @@ class TestLokyBackend:
     def _test_connection(cls, conn):
         if hasattr(conn, "get"):
             conn = conn.get()
-        if type(conn) is socket.socket:
+        if hasattr(conn, "accept"):
             conn, addr = conn.accept()
             msg = conn.recv(2)
             conn.send(msg)
