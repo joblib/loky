@@ -209,7 +209,7 @@ class TestLokyBackend:
 
         msg = b'42'
         rd.send_bytes(msg)
-        # assert rd.recv_bytes() == msg
+        assert rd.recv_bytes() == msg
 
         p.join()
         rd.close()
@@ -229,7 +229,7 @@ class TestLokyBackend:
 
         msg = b'42'
         rd.send_bytes(msg)
-        # assert rd.recv_bytes() == msg
+        assert rd.recv_bytes() == msg
 
         p.join()
         rd.close()
