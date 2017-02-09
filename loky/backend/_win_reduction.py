@@ -75,49 +75,52 @@ class DupHandle(object):
 # register(Connection, reduce_connection)
 
 
-def reduce_pipe_connection(conn):
-    access = ((_winapi.FILE_GENERIC_READ if conn.readable else 0) |
-              (_winapi.FILE_GENERIC_WRITE if conn.writable else 0))
-    print(access)
-    dh = DupHandle(conn.fileno(), access)
-    return rebuild_pipe_connection, (dh, conn.readable, conn.writable)
-
-
-def rebuild_pipe_connection(dh, readable, writable):
-    from multiprocessing.connection import PipeConnection
-    handle = dh.detach()
-    return PipeConnection(handle, readable, writable)
-
-
-register(PipeConnection, reduce_pipe_connection)
-
-
-# make sockets pickable
 if sys.version_info[:2] > (2, 7):
+    def reduce_pipe_connection(conn):
+        access = ((_winapi.FILE_GENERIC_READ if conn.readable else 0) |
+                  (_winapi.FILE_GENERIC_WRITE if conn.writable else 0))
+        print(access)
+        dh = DupHandle(conn.fileno(), access)
+        return rebuild_pipe_connection, (dh, conn.readable, conn.writable)
+
+
+    def rebuild_pipe_connection(dh, readable, writable):
+        from multiprocessing.connection import PipeConnection
+        handle = dh.detach()
+        return PipeConnection(handle, readable, writable)
+    register(PipeConnection, reduce_pipe_connection)
+
+    # make sockets pickable
     def _reduce_socket(s):
         from multiprocessing.resource_sharer import DupSocket
         return _rebuild_socket, (DupSocket(s),)
 
     def _rebuild_socket(ds):
         return ds.detach()
+    register(socket.socket, _reduce_socket)
 else:
-    from multiprocessing.reduction import reduce_socket as _reduce_socket
-    # def fromfd(handle, family, type_, proto=0):
-    #     s = socket.fromfd(handle, family, type_, proto)
-    #     if s.__class__ is not socket.socket:
-    #         s = socket.socket(_sock=s)
-    #     return s
+    from multiprocessing.reduction import reduce_pipe_connection
+    register(PipeConnection, reduce_pipe_connection)
 
-    # def _reduce_socket(s):
-    #     access = _winapi.FILE_GENERIC_READ | _winapi.FILE_GENERIC_WRITE
-    #     reduced_handle = DupHandle(s.fileno(), 0)
-    #     return _rebuild_socket, (reduced_handle, s.family, s.type, s.proto)
+    from multiprocessing.reduction import reduce_handle, rebuild_handle
 
-    # def _rebuild_socket(reduced_handle, family, type_, proto):
-    #     handle = reduced_handle.detach()
-    #     s = fromfd(handle, family, type_, proto)
-    #     _winapi.CloseHandle(handle)
-    #     return s
+    def fromfd(handle, family, type_, proto=0):
+        s = socket.socket(family, type_, proto, fileno=handle)
+        if s.__class__ is not socket.socket:
+            s = socket.socket(_sock=s)
+        return s
+
+    def reduce_socket(s):
+        if not hasattr(socket, "fromfd"):
+            raise TypeError("sockets cannot be pickled on this system.")
+        reduced_handle = reduce_handle(s.fileno())
+        return _rebuild_socket, (reduced_handle, s.family, s.type, s.proto)
+
+    def _rebuild_socket(reduced_handle, family, type_, proto):
+        handle = rebuild_handle(reduced_handle)
+        s = fromfd(handle, family, type_, proto)
+        _winapi.CloseHandle(handle)
+        return s
 
 
-register(socket.socket, _reduce_socket)
+    register(socket.socket, reduce_socket)

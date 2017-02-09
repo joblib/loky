@@ -17,9 +17,11 @@ except ImportError:
 
 DELTA = 0.1
 ctx_loky = get_context("loky")
-HAVE_SEND_HANDLE = (hasattr(socket, 'CMSG_LEN') and
-                    hasattr(socket, 'SCM_RIGHTS') and
-                    hasattr(socket.socket, 'sendmsg'))
+HAVE_SEND_HANDLE = (sys.platform == "win32" or
+                    (hasattr(socket, 'CMSG_LEN') and
+                     hasattr(socket, 'SCM_RIGHTS') and
+                     hasattr(socket.socket, 'sendmsg')))
+HAVE_FROM_FD = hasattr(socket, "fromfd")
 
 
 class TestLokyBackend:
@@ -152,27 +154,28 @@ class TestLokyBackend:
         reason="socket are not picklelable with python2.7 and vanilla"
         " ForkingPickler")
     def test_socket(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((socket.gethostname(), 8080))
-        s.listen(1)
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((socket.gethostname(), 8080))
+        server.listen(1)
 
-        p = self.Process(target=self._test_connection, args=(s,))
+        p = self.Process(target=self._test_connection, args=(server,))
         p.start()
 
-        s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s1.connect((socket.gethostname(), 8080))
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.settimeout(5)
+        client.connect((socket.gethostname(), 8080))
 
         msg = b'42'
-        s1.send(msg)
-        # assert s1.recv(2) == msg
+        client.send(msg)
+        assert client.recv(2) == msg
 
-        s1.shutdown(socket.SHUT_RDWR)
-        s1.close()
+        client.shutdown(socket.SHUT_RDWR)
+        client.close()
         p.join()
-        s.close()
+        server.close()
 
-    @pytest.mark.skipif(not HAVE_SEND_HANDLE,
+    @pytest.mark.skipif(not HAVE_SEND_HANDLE or not HAVE_FROM_FD,
                         reason="This system cannot send handle between. "
                         "Connections object should be shared at spawning.")
     def test_socket_queue(self):
@@ -188,9 +191,10 @@ class TestLokyBackend:
 
         msg = b'42'
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.settimeout(5)
         client.connect((socket.gethostname(), 8080))
         client.send(msg)
-        # assert client.recv(2) == msg
+        assert client.recv(2) == msg
 
         p.join()
         client.shutdown(socket.SHUT_RDWR)
