@@ -15,6 +15,19 @@ try:
 except ImportError:
     parallel_sum = None
 
+if not hasattr(socket, "socketpair"):
+    def socketpair():
+        s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s1.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s1.bind((socket.gethostname(), 8080))
+        s1.listen(1)
+        s2.connect((socket.gethostname(), 8080))
+        conn, addr = s1.accept()
+        return conn, s2
+
+    socket.socketpair = socketpair
+
 DELTA = 0.1
 ctx_loky = get_context("loky")
 HAVE_SEND_HANDLE = (sys.platform == "win32" or
