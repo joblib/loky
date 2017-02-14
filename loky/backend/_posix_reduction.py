@@ -1,3 +1,4 @@
+import os
 import sys
 import socket
 
@@ -13,6 +14,12 @@ else:
 HAVE_SEND_HANDLE = (hasattr(socket, 'CMSG_LEN') and
                     hasattr(socket, 'SCM_RIGHTS') and
                     hasattr(socket.socket, 'sendmsg'))
+
+
+def _mk_inheritable(fd):
+    if sys.version_info[:2] > (3, 3):
+        os.set_inheritable(fd, True)
+    return fd
 
 
 def DupFd(fd):

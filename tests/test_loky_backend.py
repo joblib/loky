@@ -162,8 +162,9 @@ class TestLokyBackend:
         conn.close()
 
     @pytest.mark.skipif(
-        sys.platform == "win32" and sys.version_info[:2] < (3, 3),
-        reason="socket are not picklelable with python2.7 and multiprocessing"
+        sys.platform in ["win32"] and
+        sys.version_info[:2] < (3, 3),
+        reason="socket are not picklelable with python2.7 and vanilla"
         " ForkingPickler")
     def test_socket(self):
         server, client = socket.socketpair()

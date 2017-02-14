@@ -44,34 +44,6 @@ if Pickler is None:
     from pickle import Pickler
 
 
-def _mk_inheritable(fd):
-    if sys.version_info[:2] > (3, 3):
-        if sys.platform == 'win32':
-            # Change to Windwos file handle
-            import msvcrt
-            fdh = msvcrt.get_osfhandle(fd)
-            os.set_handle_inheritable(fdh, True)
-            return fdh
-        else:
-            os.set_inheritable(fd, True)
-            return fd
-    elif sys.platform == 'win32':
-        # TODO: find a hack??
-        # Not yet working
-        import msvcrt
-        import _subprocess
-
-        curproc = _subprocess.GetCurrentProcess()
-        fdh = msvcrt.get_osfhandle(fd)
-        fdh = _subprocess.DuplicateHandle(
-            curproc, fdh, curproc, 0,
-            True,  # set inheritable FLAG
-            _subprocess.DUPLICATE_SAME_ACCESS)
-        return fdh
-    else:
-        return fd
-
-
 ###############################################################################
 # Enable custom pickling in Loky.
 # To allow instance customization of the pickling process, we use 2 classes.
@@ -102,9 +74,6 @@ class _LokyPickler(Pickler):
         # Under Python 3 initialize the dispatch table with a copy of the
         # default registry
         dispatch_table = copyreg.dispatch_table.copy()
-
-    def __init__(self, writer, protocol=HIGHEST_PROTOCOL):
-        Pickler.__init__(self, writer, protocol=protocol)
 
     @classmethod
     def register(cls, type, reduce_func):
@@ -217,6 +186,6 @@ def _rebuild_partial(func, args, keywords):
 register(functools.partial, _reduce_partial)
 
 if sys.platform != "win32":
-    from . import _posix_reduction  # noqa: F401
+    from ._posix_reduction import _mk_inheritable # noqa: F401
 else:
     from . import _win_reduction  # noqa: F401
