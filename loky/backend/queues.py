@@ -1,13 +1,14 @@
+###############################################################################
+# Queue and SimpleQueue implementation for loky
 #
-# Module tweaking queues for loky backend.
-# It permits to implement queues objects in python2.7/3.3 with the right sync
-# primitives.
-# It also allows to add custom reducers to customize the pickling process for
-# the queues.
+# authors: Thomas Moreau, Olivier Grisel
 #
-# Authors: Thomas Moreau and Olivier Grisel
+# based on multiprocessing/queues.py (16/02/2017)
+# * Add some compatibility function for python2.7 and 3.3 and makes sure
+#   it uses the right synchronization primitive.
+# * Add some custom reducers for the Queues/SimpleQueue to tweak the
+#   pickling process. (overload Queue._feed/SimpleQueue.put)
 #
-
 import os
 import sys
 import errno

@@ -1,3 +1,14 @@
+###############################################################################
+# Server process to keep track of unlinked semaphores and clean them.
+#
+# author: Thomas Moreau
+#
+# adapted from multiprocessing/semaphore_tracker.py  (17/02/2017)
+#  * include custom spawnv_passfds to start the process
+#  * use custom unlink from our own SemLock implementation
+#  * add some VERBOSE logging
+#
+
 #
 # On Unix we run a server process which keeps track of unlinked
 # semaphores. The server ignores SIGINT and SIGTERM and reads from a

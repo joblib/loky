@@ -1,5 +1,14 @@
+###############################################################################
+# Customizable Pickler with some basic reducers
+#
+# author: Thomas Moreau
+#
+# adapted from multiprocessing/reduction.py (17/02/2017)
+#  * Replace the ForkingPickler with a similar _LokyPickler,
+#  * Add CustomizableLokyPickler to allow customizing pickling process
+#    on the fly.
+#
 import io
-import os
 import sys
 import functools
 import warnings
@@ -186,6 +195,6 @@ def _rebuild_partial(func, args, keywords):
 register(functools.partial, _reduce_partial)
 
 if sys.platform != "win32":
-    from ._posix_reduction import _mk_inheritable # noqa: F401
+    from ._posix_reduction import _mk_inheritable  # noqa: F401
 else:
     from . import _win_reduction  # noqa: F401

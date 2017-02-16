@@ -1,10 +1,10 @@
+###############################################################################
+# Extra reducers for Windows system and connections objects
 #
-# Module which deals with pickling of objects.
+# author: Thomas Moreau and Olivier Grisel
 #
-# multiprocessing/reduction.py
-#
-# Copyright (c) 2006-2008, R Oudkerk
-# Licensed to PSF under a Contributor Agreement.
+# adapted from multiprocessing/reduction.py (17/02/2017)
+#  * Add adapted reduction for LokyProcesses and socket/PipeConnection
 #
 import os
 import sys

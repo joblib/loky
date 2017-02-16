@@ -1,3 +1,11 @@
+###############################################################################
+# PosixLokyProcess implementation
+#
+# authors: Thomas Moreau and Olivier Grisel
+#
+# based on multiprocessing/process.py  (17/02/2017)
+# * Add some compatibility function for python2.7 and 3.3
+#
 import os
 import sys
 if sys.version_info >= (3, 4):

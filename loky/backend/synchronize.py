@@ -1,10 +1,13 @@
+###############################################################################
+# Synchronization primitives based on our SemLock implementation
 #
-# Module implementing synchronization primitives
+# author: Thomas Moreau and Olivier Grisel
 #
-# multiprocessing/synchronize.py
-#
-# Copyright (c) 2006-2008, R Oudkerk
-# Licensed to PSF under a Contributor Agreement.
+# adapted from multiprocessing/synchronize.py (17/02/2017)
+#  * Remove ctx argument for compatibility reason
+#  * Implementation of Condition/Event are necessary for compatibility
+#    with python2.7/3.3, Barrier should be reimplemented to for those
+#    version (but it is not used in loky).
 #
 
 import os
@@ -14,7 +17,7 @@ import threading
 import _multiprocessing
 from time import time as _time
 
-from .context import assert_spawning, get_spawning_popen
+from .context import assert_spawning
 from multiprocessing import process
 from multiprocessing import util
 

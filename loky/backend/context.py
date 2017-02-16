@@ -1,12 +1,15 @@
 ###############################################################################
+# Basic context management with LokyContext and  provides
 # compat for UNIX 2.7 and 3.3
-# Context with LokyContext server.
-# This avoids having a Manager using fork and breaks the fd.
 #
-# This just update the start method to use LokyProcess instead of the default
-# Process that use a fork.
+# author: Thomas Moreau and Olivier Grisel
 #
-
+# adapted from multiprocessing/context.py
+#  * Create a context ensuring loky uses only objects that are compatible
+#  * Add LokyContext to the list of context of multiprocessing so loky can be
+#    used with multiprocessing.set_start_method
+#  * Add some compat function for python2.7 and 3.3. 
+#
 
 import sys
 import multiprocessing as mp

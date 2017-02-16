@@ -1,3 +1,8 @@
+###############################################################################
+# Reusable ProcessPoolExecutor
+#
+# author: Thomas Moreau and Olivier Grisel
+#
 import sys
 import time
 import warnings

@@ -1,3 +1,8 @@
+###############################################################################
+# Popen for LokyProcess.
+#
+# author: Thomas Moreau and Olivier Grisel
+#
 import os
 import sys
 import signal

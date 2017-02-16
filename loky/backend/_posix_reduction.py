@@ -1,3 +1,11 @@
+###############################################################################
+# Extra reducers for Unix based system and connections objects
+#
+# author: Thomas Moreau and Olivier Grisel
+#
+# adapted from multiprocessing/reduction.py (17/02/2017)
+#  * Add adapted reduction for LokyProcesses and socket/Connection
+#
 import os
 import sys
 import socket

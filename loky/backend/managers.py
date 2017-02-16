@@ -3,8 +3,10 @@
 # Manager with LokyContext server.
 # This avoids having a Manager using fork and breaks the fd.
 #
-# This just update the start method to use LokyProcess instead of the default
-# Process that use a fork.
+# author: Thomas Moreau and Olivier Grisel
+#
+# based on multiprocessing/managers.py (17/02/2017)
+#  * Overload the start method to use LokyContext and launch a loky subprocess
 #
 
 import multiprocessing as mp

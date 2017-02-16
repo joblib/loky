@@ -1,17 +1,30 @@
+###############################################################################
+# Re-implementation of the ProcessPoolExecutor to robustify its fault tolerance
+#
+# author: Thomas Moreau and Olivier Grisel
+#
+# adapted from concurrent/futures/process_pool_executor.py (17/02/2017)
+#  * Backport for python2.7/3.3,
+#  * Add an extra management thread to detect queue_management_thread failures,
+#  * Improve the shutdown process to avoid deadlocks,
+#  * Add timeout for workers,
+#  * More robust pickling process.
+#
 # Copyright 2009 Brian Quinlan. All Rights Reserved.
 # Licensed to PSF under a Contributor Agreement.
-
 """Implements ProcessPoolExecutor.
 
 The follow diagram and text describe the data-flow through the system:
 
 |======================= In-process =====================|== Out-of-process ==|
-
-+----------+     +----------+       +--------+     +-----------+    +---------+
-|          |  => | Work Ids |    => |        |  => | Call Q    | => |         |
-|          |     +----------+       |        |     +-----------+    |         |
-|          |     | ...      |       |        |     | ...       |    |         |
-|          |     | 6        |       |        |     | 5, call() |    |         |
+                               +------------------+
+                               |  Thread watcher  |
+                               +------------------+
++----------+     +----------+           |          +-----------+    +---------+
+|          |  => | Work Ids |           v          | Call Q    |    | Process |
+|          |     +----------+       +--------+     +-----------+    |  Pool   |
+|          |     | ...      |       |        |     | ...       |    +---------+
+|          |     | 6        |    => |        |  => | 5, call() | => |         |
 |          |     | 7        |       |        |     | ...       |    |         |
 | Process  |     | ...      |       | Local  |     +-----------+    | Process |
 |  Pool    |     +----------+       | Worker |                      |  #1..n  |
@@ -20,9 +33,9 @@ The follow diagram and text describe the data-flow through the system:
 |          | <=> | Work Items | <=> |        | <=  | Result Q  | <= |         |
 |          |     +------------+     |        |     +-----------+    |         |
 |          |     | 6: call()  |     |        |     | ...       |    |         |
-|          |     |    future  |     |        |     | 4, result |    |         |
-|          |     | ...        |     |        |     | 3, except |    |         |
-+----------+     +------------+     +--------+     +-----------+    +---------+
+|          |     |    future  |     +--------+     | 4, result |    |         |
+|          |     | ...        |                    | 3, except |    |         |
++----------+     +------------+                    +-----------+    +---------+
 
 Executor.submit() called:
 - creates a uniquely numbered _WorkItem and adds it to the "Work Items" dict

@@ -1,8 +1,14 @@
+###############################################################################
+# Launch a subprocess using forkexec and make sure only the needed fd are
+# shared in the two process.
+#
+# author: Thomas Moreau and Olivier Grisel
+#
 import os
 import sys
 
 if sys.platform == "darwin" and sys.version_info < (3, 3):
-     FileNotFoundError = OSError
+    FileNotFoundError = OSError
 
 
 def close_fds(keep_fds):  # pragma: no cover
@@ -20,7 +26,7 @@ def close_fds(keep_fds):  # pragma: no cover
         open_fds = set(fd for fd in range(3, max_nfds))
         open_fds.add(0)
 
-    for i in open_fds-keep_fds:
+    for i in open_fds - keep_fds:
         try:
             os.close(i)
         except OSError:
