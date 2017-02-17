@@ -1,5 +1,11 @@
-""" Windows systems wait compat for python2.7
-"""
+###############################################################################
+# Compat for wait function on Windows system
+#
+# author: Thomas Moreau and Olivier Grisel
+#
+# adapted from multiprocessing/connection.py (17/02/2017)
+#  * Backport wait function to python2.7
+#
 
 from time import sleep
 import ctypes

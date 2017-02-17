@@ -1,10 +1,13 @@
+###############################################################################
+# Synchronization primitives based on our SemLock implementation
 #
-# Module implementing synchronization primitives
+# author: Thomas Moreau and Olivier Grisel
 #
-# multiprocessing/synchronize.py
-#
-# Copyright (c) 2006-2008, R Oudkerk
-# Licensed to PSF under a Contributor Agreement.
+# adapted from multiprocessing/synchronize.py (17/02/2017)
+#  * Remove ctx argument for compatibility reason
+#  * Implementation of Condition/Event are necessary for compatibility
+#    with python2.7/3.3, Barrier should be reimplemented to for those
+#    version (but it is not used in loky).
 #
 
 import os
@@ -14,7 +17,7 @@ import threading
 import _multiprocessing
 from time import time as _time
 
-from .context import assert_spawning, get_spawning_popen
+from .context import assert_spawning
 from multiprocessing import process
 from multiprocessing import util
 
@@ -25,7 +28,7 @@ __all__ = [
 # raise ImportError for platforms lacking a working sem_open implementation.
 # See issue 3770
 try:
-    if sys.platform != 'win32' and sys.version_info < (3, 4):
+    if sys.version_info < (3, 4):
         from .semlock import SemLock as _SemLock
         from .semlock import sem_unlink
         from . import semaphore_tracker
@@ -59,17 +62,18 @@ class SemLock(object):
     _rand = tempfile._RandomNameSequence()
 
     def __init__(self, kind, value, maxvalue):
-        unlink_now = sys.platform == 'win32'
+        # unlink_now is only used on win32 or when we are using fork.
+        unlink_now = False 
         for i in range(100):
             try:
                 self._semlock = _SemLock(
                     kind, value, maxvalue, SemLock._make_name(),
                     unlink_now)
-            except FileExistsError:
+            except FileExistsError:  # pragma: no cover
                 pass
             else:
                 break
-        else:
+        else:  # pragma: no cover
             raise FileExistsError('cannot find name for semaphore')
 
         util.debug('created semlock with handle %s and name "%s"'
@@ -77,18 +81,16 @@ class SemLock(object):
 
         self._make_methods()
 
-        if sys.platform != 'win32':
-            def _after_fork(obj):
-                obj._semlock._after_fork()
-            util.register_after_fork(self, _after_fork)
+        def _after_fork(obj):
+            obj._semlock._after_fork()
 
-        if self._semlock.name is not None:
-            # We only get here if we are on Unix with forking
-            # disabled.  When the object is garbage collected or the
-            # process shuts down we unlink the semaphore name
-            semaphore_tracker.register(self._semlock.name)
-            util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
-                          exitpriority=0)
+        util.register_after_fork(self, _after_fork)
+
+        # When the object is garbage collected or the
+        # process shuts down we unlink the semaphore name
+        semaphore_tracker.register(self._semlock.name)
+        util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
+                      exitpriority=0)
 
     @staticmethod
     def _cleanup(name):
@@ -108,10 +110,7 @@ class SemLock(object):
     def __getstate__(self):
         assert_spawning(self)
         sl = self._semlock
-        if sys.platform == 'win32':
-            h = get_spawning_popen().duplicate_for_child(sl.handle)
-        else:
-            h = sl.handle
+        h = sl.handle
         return (h, sl.kind, sl.maxvalue, sl.name)
 
     def __setstate__(self, state):

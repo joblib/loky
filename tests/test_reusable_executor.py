@@ -9,7 +9,7 @@ from time import sleep
 from multiprocessing import util
 from pickle import PicklingError, UnpicklingError
 
-from loky.reusable_executor import get_reusable_executor
+from loky import get_reusable_executor
 from loky.process_executor import BrokenExecutor, ShutdownExecutor
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep

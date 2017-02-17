@@ -1,6 +1,14 @@
 ###############################################################################
-# compat for 2.7 and 3.3 Manager with LokyContext
+# compat for UNIX 2.7 and 3.3
+# Manager with LokyContext server.
+# This avoids having a Manager using fork and breaks the fd.
 #
+# author: Thomas Moreau and Olivier Grisel
+#
+# based on multiprocessing/managers.py (17/02/2017)
+#  * Overload the start method to use LokyContext and launch a loky subprocess
+#
+
 import multiprocessing as mp
 from multiprocessing.managers import SyncManager, State
 from .process import PosixLokyProcess as Process

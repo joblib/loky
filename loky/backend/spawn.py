@@ -1,3 +1,11 @@
+###############################################################################
+# Prepares and processes the data to setup the new process environment
+#
+# author: Thomas Moreau and Olivier Grisel
+#
+# adapted from multiprocessing/spawn.py (17/02/2017)
+#  * Improve logging data
+#
 import os
 import sys
 import runpy

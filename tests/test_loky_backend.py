@@ -4,6 +4,7 @@ import time
 import pytest
 import signal
 import pickle
+import socket
 import multiprocessing
 
 from loky.backend import get_context
@@ -14,8 +15,26 @@ try:
 except ImportError:
     parallel_sum = None
 
+if not hasattr(socket, "socketpair"):
+    def socketpair():
+        s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s1.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s1.bind((socket.gethostname(), 8080))
+        s1.listen(1)
+        s2.connect((socket.gethostname(), 8080))
+        conn, addr = s1.accept()
+        return conn, s2
+
+    socket.socketpair = socketpair
+
 DELTA = 0.1
 ctx_loky = get_context("loky")
+HAVE_SEND_HANDLE = (sys.platform == "win32" or
+                    (hasattr(socket, 'CMSG_LEN') and
+                     hasattr(socket, 'SCM_RIGHTS') and
+                     hasattr(socket.socket, 'sendmsg')))
+HAVE_FROM_FD = hasattr(socket, "fromfd")
 
 
 class TestLokyBackend:
@@ -88,7 +107,7 @@ class TestLokyBackend:
         sq = self.SimpleQueue()
         args = (q, sq, 1, 2)
         kwargs = {'hello': 23, 'bye': 2.54}
-        name = 'SomeProcess'
+        name = 'TestLokyProcess'
         p = self.Process(
             target=self._test_process, args=args, kwargs=kwargs, name=name
         )
@@ -129,6 +148,100 @@ class TestLokyBackend:
         assert p.exitcode == 0
         assert not p.is_alive()
         assert p not in self.active_children()
+
+    @classmethod
+    def _test_connection(cls, conn):
+        if hasattr(conn, "get"):
+            conn = conn.get()
+        if hasattr(conn, "accept"):
+            msg = conn.recv(2)
+            conn.send(msg)
+        else:
+            msg = conn.recv_bytes()
+            conn.send_bytes(msg)
+        conn.close()
+
+    @pytest.mark.skipif(
+        sys.platform in ["win32"] and
+        sys.version_info[:2] < (3, 3),
+        reason="socket are not picklelable with python2.7 and vanilla"
+        " ForkingPickler")
+    def test_socket(self):
+        server, client = socket.socketpair()
+
+        p = self.Process(target=self._test_connection, args=(server,))
+        p.start()
+
+        client.settimeout(5)
+
+        msg = b'42'
+        client.send(msg)
+        assert client.recv(2) == msg
+
+        p.join()
+        assert p.exitcode == 0
+
+        client.close()
+        server.close()
+
+    @pytest.mark.skipif(not HAVE_SEND_HANDLE or not HAVE_FROM_FD,
+                        reason="This system cannot send handle between. "
+                        "Connections object should be shared at spawning.")
+    def test_socket_queue(self):
+        q = self.SimpleQueue()
+
+        server, client = socket.socketpair()
+        p = self.Process(target=self._test_connection, args=(q,))
+        p.start()
+        q.put(server)
+
+        msg = b'42'
+        client.settimeout(5)
+        client.send(msg)
+        assert client.recv(2) == msg
+
+        p.join()
+        assert p.exitcode == 0
+
+        client.close()
+        server.close()
+
+    def test_connection(self):
+        wrt, rd = self.Pipe(duplex=True)
+
+        p = self.Process(target=self._test_connection, args=(wrt,))
+        p.start()
+
+        msg = b'42'
+        rd.send_bytes(msg)
+        assert rd.recv_bytes() == msg
+
+        p.join()
+        assert p.exitcode == 0
+        rd.close()
+        wrt.close()
+
+    @pytest.mark.skipif(not HAVE_SEND_HANDLE,
+                        reason="This system cannot send handle between. "
+                        "Connections object should be shared at spawning.")
+    def test_connection_queue(self):
+        q = self.SimpleQueue()
+        print(q)
+        wrt, rd = self.Pipe(duplex=True)
+        p = self.Process(target=self._test_connection, args=(q,))
+        p.start()
+        q.put(wrt)
+        print("ok")
+
+        msg = b'42'
+        rd.send_bytes(msg)
+        assert rd.recv_bytes() == msg
+
+        p.join()
+        assert p.exitcode == 0
+        rd.close()
+        wrt.close()
+
 
     @classmethod
     def _test_terminate(cls, event):

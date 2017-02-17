@@ -1,3 +1,14 @@
+###############################################################################
+# Server process to keep track of unlinked semaphores and clean them.
+#
+# author: Thomas Moreau
+#
+# adapted from multiprocessing/semaphore_tracker.py  (17/02/2017)
+#  * include custom spawnv_passfds to start the process
+#  * use custom unlink from our own SemLock implementation
+#  * add some VERBOSE logging
+#
+
 #
 # On Unix we run a server process which keeps track of unlinked
 # semaphores. The server ignores SIGINT and SIGTERM and reads from a
@@ -116,7 +127,7 @@ def main(fd):
         except Exception:
             pass
 
-    if VERBOSE:
+    if VERBOSE:  # pragma: no cover
         sys.stderr.write("Main semaphore tracker is running\n")
         sys.stderr.flush()
 
@@ -129,14 +140,14 @@ def main(fd):
                     cmd, name = line.strip().split(b':')
                     if cmd == b'REGISTER':
                         cache.add(name)
-                        if VERBOSE:
+                        if VERBOSE:  # pragma: no cover
                             name = name.decode('ascii')
                             sys.stderr.write("[SemaphoreTracker] register {}\n"
                                              .format(name))
                             sys.stderr.flush()
                     elif cmd == b'UNREGISTER':
                         cache.remove(name)
-                        if VERBOSE:
+                        if VERBOSE:  # pragma: no cover
                             name = name.decode('ascii')
                             sys.stderr.write("[SemaphoreTracker] unregister {}"
                                              ": cache({})\n"
@@ -165,7 +176,7 @@ def main(fd):
             try:
                 try:
                     sem_unlink(name)
-                    if VERBOSE:
+                    if VERBOSE:  # pragma: no cover
                         name = name.decode('ascii')
                         sys.stderr.write("[SemaphoreTracker] unregister {}\n"
                                          .format(name))
@@ -175,7 +186,7 @@ def main(fd):
             finally:
                 pass
 
-    if VERBOSE:
+    if VERBOSE:  # pragma: no cover
         sys.stderr.write("semaphore tracker shut down\n")
         sys.stderr.flush()
 

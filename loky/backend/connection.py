@@ -1,3 +1,8 @@
+###############################################################################
+# Compat file to load the correct wait function
+# 
+# author: Thomas Moreau and Olivier grisel
+#
 import sys
 
 if sys.version_info < (3, 3):

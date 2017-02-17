@@ -1,17 +1,30 @@
+###############################################################################
+# Re-implementation of the ProcessPoolExecutor to robustify its fault tolerance
+#
+# author: Thomas Moreau and Olivier Grisel
+#
+# adapted from concurrent/futures/process_pool_executor.py (17/02/2017)
+#  * Backport for python2.7/3.3,
+#  * Add an extra management thread to detect queue_management_thread failures,
+#  * Improve the shutdown process to avoid deadlocks,
+#  * Add timeout for workers,
+#  * More robust pickling process.
+#
 # Copyright 2009 Brian Quinlan. All Rights Reserved.
 # Licensed to PSF under a Contributor Agreement.
-
 """Implements ProcessPoolExecutor.
 
 The follow diagram and text describe the data-flow through the system:
 
 |======================= In-process =====================|== Out-of-process ==|
-
-+----------+     +----------+       +--------+     +-----------+    +---------+
-|          |  => | Work Ids |    => |        |  => | Call Q    | => |         |
-|          |     +----------+       |        |     +-----------+    |         |
-|          |     | ...      |       |        |     | ...       |    |         |
-|          |     | 6        |       |        |     | 5, call() |    |         |
+                               +------------------+
+                               |  Thread watcher  |
+                               +------------------+
++----------+     +----------+           |          +-----------+    +---------+
+|          |  => | Work Ids |           v          | Call Q    |    | Process |
+|          |     +----------+       +--------+     +-----------+    |  Pool   |
+|          |     | ...      |       |        |     | ...       |    +---------+
+|          |     | 6        |    => |        |  => | 5, call() | => |         |
 |          |     | 7        |       |        |     | ...       |    |         |
 | Process  |     | ...      |       | Local  |     +-----------+    | Process |
 |  Pool    |     +----------+       | Worker |                      |  #1..n  |
@@ -20,9 +33,9 @@ The follow diagram and text describe the data-flow through the system:
 |          | <=> | Work Items | <=> |        | <=  | Result Q  | <= |         |
 |          |     +------------+     |        |     +-----------+    |         |
 |          |     | 6: call()  |     |        |     | ...       |    |         |
-|          |     |    future  |     |        |     | 4, result |    |         |
-|          |     | ...        |     |        |     | 3, except |    |         |
-+----------+     +------------+     +--------+     +-----------+    +---------+
+|          |     |    future  |     +--------+     | 4, result |    |         |
+|          |     | ...        |                    | 3, except |    |         |
++----------+     +------------+                    +-----------+    +---------+
 
 Executor.submit() called:
 - creates a uniquely numbered _WorkItem and adds it to the "Work Items" dict
@@ -204,6 +217,28 @@ class _CallItem(object):
         return "CallItem({}, {}, {}, {})".format(
             self.work_id, self.fn, self.args, self.kwargs)
 
+    try:
+        # If cloudpickle is present on the system, use it to pickle the
+        # function. This permits to use interactive terminal for loky calls.
+        # TODO: Add option to deactivate, as it increases pickling time.
+        from .backend import LOKY_PICKLER
+        assert LOKY_PICKLER is None or LOKY_PICKLER == ""
+
+        import cloudpickle  # noqa: F401
+
+        def __getstate__(self):
+            from cloudpickle import dumps
+            fn = dumps(self.fn)
+            return (self.work_id, self.args, self.kwargs, fn)
+
+        def __setstate__(self, state):
+            from cloudpickle import loads
+            self.work_id, self.args, self.kwargs = state[:3]
+            self.fn = loads(state[3])
+
+    except (ImportError, AssertionError) as e:
+        pass
+
 
 def _get_chunks(chunksize, *iterables):
     """ Iterates over zip()ed iterables in chunks. """
@@ -367,7 +402,8 @@ def _queue_management_worker(executor_reference,
         mp.util.debug("queue management thread shutting down")
         executor_flags.flag_as_shutting_down()
         # This is an upper bound
-        nb_children_alive = sum(p.is_alive() for p in processes.values())
+        with processes_management_lock:
+            nb_children_alive = sum(p.is_alive() for p in processes.values())
         try:
             for i in range(0, nb_children_alive):
                 call_queue.put_nowait(None)

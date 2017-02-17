@@ -1,7 +1,18 @@
+###############################################################################
+# Customizable Pickler with some basic reducers
+#
+# author: Thomas Moreau
+#
+# adapted from multiprocessing/reduction.py (17/02/2017)
+#  * Replace the ForkingPickler with a similar _LokyPickler,
+#  * Add CustomizableLokyPickler to allow customizing pickling process
+#    on the fly.
+#
 import io
-import os
 import sys
 import functools
+import warnings
+from multiprocessing import util
 try:
     # Python 2 compat
     from cPickle import loads
@@ -9,42 +20,45 @@ except ImportError:
     from pickle import loads
     import copyreg
 
-from pickle import Pickler, HIGHEST_PROTOCOL
+from pickle import HIGHEST_PROTOCOL
+from . import LOKY_PICKLER
+
+Pickler = None
+try:
+    if LOKY_PICKLER is None or LOKY_PICKLER == "":
+        from pickle import Pickler
+    elif LOKY_PICKLER == "cloudpickle":
+        from cloudpickle import CloudPickler as Pickler
+    elif LOKY_PICKLER == "dill":
+        from dill import Pickler
+    elif LOKY_PICKLER != "pickle":
+        from importlib import import_module
+        mpickle = import_module(LOKY_PICKLER)
+        Pickler = mpickle.Pickler
+    util.debug("Using default backend {} for pickling."
+               .format(LOKY_PICKLER if LOKY_PICKLER is not None
+                       else "pickle"))
+except ImportError:
+    warnings.warn("Failed to import {} as asked in LOKY_PICKLER. Make sure"
+                  " it is correctly installed on your system. Falling back"
+                  " to default builtin pickle.".format(LOKY_PICKLER))
+except AttributeError:  # pragma: no cover
+    warnings.warn("Failed to find Pickler object in module {}. The module "
+                  "specified in LOKY_PICKLER should implement a Pickler "
+                  "object. Falling back to default builtin pickle."
+                  .format(LOKY_PICKLER))
 
 
-def _mk_inheritable(fd):
-    if sys.version_info[:2] > (3, 3):
-        if sys.platform == 'win32':
-            # Change to Windwos file handle
-            import msvcrt
-            fdh = msvcrt.get_osfhandle(fd)
-            os.set_handle_inheritable(fdh, True)
-            return fdh
-        else:
-            os.set_inheritable(fd, True)
-            return fd
-    elif sys.platform == 'win32':
-        # TODO: find a hack??
-        # Not yet working
-        import msvcrt
-        import _subprocess
-
-        curproc = _subprocess.GetCurrentProcess()
-        fdh = msvcrt.get_osfhandle(fd)
-        fdh = _subprocess.DuplicateHandle(
-            curproc, fdh, curproc, 0,
-            True,  # set inheritable FLAG
-            _subprocess.DUPLICATE_SAME_ACCESS)
-        return fdh
-    else:
-        return fd
+if Pickler is None:
+    from pickle import Pickler
 
 
 ###############################################################################
 # Enable custom pickling in Loky.
 # To allow instance customization of the pickling process, we use 2 classes.
 # _LokyPickler gives module level customization and CustomizablePickler permits
-# to use instance base custom reducers.  Only CustomizablePickler should be use
+# to use instance base custom reducers.  Only CustomizablePickler should be
+# used.
 
 class _LokyPickler(Pickler):
     """Pickler that uses custom reducers.
@@ -70,9 +84,6 @@ class _LokyPickler(Pickler):
         # default registry
         dispatch_table = copyreg.dispatch_table.copy()
 
-    def __init__(self, writer, protocol=HIGHEST_PROTOCOL):
-        Pickler.__init__(self, writer, protocol=protocol)
-
     @classmethod
     def register(cls, type, reduce_func):
         """Attach a reducer function to a given type in the dispatch table."""
@@ -85,9 +96,6 @@ class _LokyPickler(Pickler):
             cls.dispatch[type] = dispatcher
         else:
             cls.dispatch_table[type] = reduce_func
-
-
-register = _LokyPickler.register
 
 
 class CustomizableLokyPickler(Pickler):
@@ -127,7 +135,8 @@ class CustomizableLokyPickler(Pickler):
     @classmethod
     def dumps(cls, obj, reducers=None, protocol=None):
         buf = io.BytesIO()
-        cls(buf, reducers=reducers, protocol=protocol).dump(obj)
+        p = cls(buf, reducers=reducers, protocol=protocol)
+        p.dump(obj)
         if sys.version_info < (3, 3):
             return buf.getvalue()
         return buf.getbuffer()
@@ -137,6 +146,12 @@ def dump(obj, file, reducers=None, protocol=None):
     '''Replacement for pickle.dump() using LokyPickler.'''
     CustomizableLokyPickler(file, reducers=reducers,
                             protocol=protocol).dump(obj)
+
+
+###############################################################################
+# Registers extra pickling routines to improve picklization  for loky
+
+register = _LokyPickler.register
 
 
 # make methods picklable
@@ -179,7 +194,7 @@ def _rebuild_partial(func, args, keywords):
 
 register(functools.partial, _reduce_partial)
 
-if sys.platform == "win32":
-    from . import _win_reduction  # noqa: F401
+if sys.platform != "win32":
+    from ._posix_reduction import _mk_inheritable  # noqa: F401
 else:
-    from . import _posix_reduction  # noqa: F401
+    from . import _win_reduction  # noqa: F401

@@ -1,10 +1,15 @@
-"""Ctypes implementation for posix semaphore
-
-only work for fork_exec
-OSX -> no semaphore with value > 1
-
-"""
-
+###############################################################################
+# Ctypes implementation for posix semaphore.
+#
+# author: Thomas Moreau and Olivier Grisel
+#
+# adapted from cpython/Modules/_multiprocessing/semaphore.c (17/02/2017)
+#  * use ctypes to access pthread semaphores and provide a full python
+#    semaphore management.
+#  * For OSX, as no sem_getvalue is not implemented, Semaphore with value > 1
+#    are not guaranteed to work.
+#  * Only work with PosixLokyProcess
+#
 import os
 import sys
 import time

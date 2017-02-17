@@ -1,3 +1,12 @@
+###############################################################################
+# Backport concurrent.futures for python2.7/3.3
+#
+# author: Thomas Moreau and Olivier Grisel
+#
+# adapted from concurrent/futures/_base.py (17/02/2017)
+#  * Do not use yield from
+#  * Use old super syntax
+#
 # Copyright 2009 Brian Quinlan. All Rights Reserved.
 # Licensed to PSF under a Contributor Agreement.
 
