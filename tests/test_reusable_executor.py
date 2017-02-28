@@ -170,11 +170,6 @@ class ErrorAtUnpickle(object):
         return raise_error, (UnpicklingError, )
 
 
-def is_terminated_properly(executor):
-    """check if an executor was terminated in a proper way"""
-    return executor._broken or executor._shutdown_thread
-
-
 class TestExecutorDeadLock(ReusableExecutorMixin):
 
     crash_cases = [
@@ -321,7 +316,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):
-    def test_terminate_kill(self):
+    def test_shutdown_kill(self):
         """Test reusable_executor termination handling"""
         from itertools import repeat
         executor = get_reusable_executor(max_workers=5)
@@ -330,13 +325,13 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         assert list(res1) == list(range(50))
         # We should get an error as the executor shutdowned before we fetched
         # the results from the operation.
-        terminate = TimingWrapper(executor.shutdown)
-        terminate(wait=True, kill_workers=True)
-        assert terminate.elapsed < .5
+        shutdown = TimingWrapper(executor.shutdown)
+        shutdown(wait=True, kill_workers=True)
+        assert shutdown.elapsed < .5
         with pytest.raises(ShutdownExecutor):
             list(res2)
 
-    def test_terminate_deadlock(self):
+    def test_shutdown_deadlock(self):
         """Test recovery if killed after resize call"""
         # Test the executor.shutdown call do not cause deadlock
         executor = get_reusable_executor(max_workers=2, timeout=None)
@@ -346,7 +341,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         sleep(.01)
         executor.shutdown(wait=True)
 
-    def test_terminate(self):
+    def test_shutdown(self):
         executor = get_reusable_executor(max_workers=4)
         res = executor.map(
             sleep, [0.1 for i in range(10000)], chunksize=1
@@ -365,7 +360,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
         # change the constructor parameter while requesting not to wait
         # for the long running task to complete (the workers will get
-        # terminated forcibly)
+        # shutdown forcibly)
         executor = get_reusable_executor(max_workers=2, timeout=5,
                                          kill_workers=True)
         with pytest.raises(ShutdownExecutor):
