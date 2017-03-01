@@ -405,7 +405,7 @@ def _queue_management_worker(executor_reference,
         with processes_management_lock:
             nb_children_alive = sum(p.is_alive() for p in processes.values())
         for i in range(0, nb_children_alive):
-            call_queue.put_nowait(None)
+            call_queue.put(None)
 
         mp.util.debug("closing call_queue")
         # Release the queue's resources as soon as possible.
@@ -509,8 +509,9 @@ def _queue_management_worker(executor_reference,
             # a worker timeout while some jobs were submitted. If some work is
             # pending or there is less processes than runnin items, we need to
             # start a new Process and raise a warning
-            if (len(pending_work_items) > 0
-                    or len(running_work_items) > len(processes)):
+            if ((len(pending_work_items) > 0
+                or len(running_work_items) > len(processes))
+               and not is_shutting_down()):
                 warnings.warn("A worker timeout while some jobs were given to "
                               "the executor. You might want to use a longer "
                               "timeout for the executor.", UserWarning)

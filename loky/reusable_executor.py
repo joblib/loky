@@ -116,9 +116,14 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         if max_workers is None or max_workers == self._max_workers:
             return True
         self._wait_job_completion()
-        mw = self._max_workers
+
+        # Some process migh have return due to timeout so check how many
+        # children are still alive.
+        with self._processes_management_lock:
+            nb_children_alive = sum(p.is_alive()
+                                    for p in self._processes.values())
         self._max_workers = max_workers
-        for _ in range(max_workers, mw):
+        for _ in range(max_workers, nb_children_alive):
             self._call_queue.put(None)
         while len(self._processes) > max_workers and not self._flags.broken:
             time.sleep(1e-3)
