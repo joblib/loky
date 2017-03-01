@@ -550,6 +550,7 @@ class ExecutorTest:
                 patience -= 1
                 time.sleep(0.01)
 
+    @pytest.mark.timeout(30 if sys.platform == "win32" else 15)
     def test_worker_timeout(self):
         self.executor.shutdown(wait=True)
         self.check_no_running_workers(patience=5)
