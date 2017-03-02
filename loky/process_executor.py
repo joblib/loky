@@ -493,13 +493,15 @@ def _queue_management_worker(executor_reference,
 
             # Terminate remaining workers forcibly: the queues or their
             # locks may be in a dirty state and block forever.
-            for p in processes.values():
+            while processes:
+                _, p = processes.popitem()
                 mp.util.debug('terminate process {}'.format(p.name))
                 try:
                     p.terminate()
                     p.join()
                 except ProcessLookupError:
                     pass
+
             shutdown_all_workers()
             return
         if isinstance(result_item, int):
@@ -548,7 +550,8 @@ def _queue_management_worker(executor_reference,
                     del work_item
                 # Terminate remaining workers forcibly: the queues or their
                 # locks may be in a dirty state and block forever.
-                for p in processes.values():
+                while processes:
+                    _, p = processes.popitem()
                     p.terminate()
                     p.join()
                 shutdown_all_workers()
@@ -606,8 +609,9 @@ def _thread_management_worker(executor_reference, executor_flags,
             mp.util.debug("shutting down")
             return
 
-        nb_workers_alive = len([p.is_alive() for p in processes.values()])
-        if (executor is not None and nb_workers_alive == 0 and
+        # Detect if all the worker timed out while a new job was submitted and
+        # launch new workers if it is the case.
+        if (executor is not None and len(processes) == 0 and
                 len(executor._pending_work_items) > 0):
             executor._adjust_process_count()
         executor = None
@@ -886,7 +890,8 @@ class ProcessPoolExecutor(_base.Executor):
             self._call_queue.close()
             self._call_queue.join_thread()
         if self._processes:
-            for p in self._processes.values():
+            while self._processes:
+                _, p = self._processes.popitem()
                 p.join()
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
@@ -894,7 +899,6 @@ class ProcessPoolExecutor(_base.Executor):
         self._thread_management_thread = None
         self._call_queue = None
         self._result_queue = None
-        self._processes.clear()
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
 
 
