@@ -366,6 +366,9 @@ class TestResizeExecutor(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))
 
+        import warnings
+        warnings.simplefilter('always')
+
         # Decreasing the executor should drop a single process and keep one of
         # the old one as it is still in a good shape. The resize should not
         # occur while there are on going works.
@@ -386,7 +389,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
         assert next(iter(executor._processes.keys())) in pids
 
         # Requesting the same number of process should not impact the executor
-        # nor kill the processed
+        # nor kill the processes
         old_pid = next(iter((executor._processes.keys())))
         unchanged_executor = get_reusable_executor(max_workers=1, timeout=None)
         assert len(unchanged_executor._processes) == 1
