@@ -8,6 +8,7 @@ from ._executor_mixin import ExecutorMixin
 if sys.version_info[:2] > (3, 3) and sys.platform != "win32":
     class ProcessPoolForkMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
+        start_method = "fork"
         context = mp.get_context('fork')
         # Increase the minimal worker timeout for OSX with fork as some weird
         # behaviors occurs in with this case. This should be investigated but

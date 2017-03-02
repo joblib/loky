@@ -603,6 +603,11 @@ def _management_worker(executor_reference, executor_flags,
         if is_shutting_down():
             mp.util.debug("shutting down")
             return
+
+        nb_workers_alive = len([p.is_alive() for p in processes.values()])
+        if (executor is not None and nb_workers_alive == 0 and
+                len(executor._pending_work_items) > 0):
+            executor._adjust_process_count()
         executor = None
         time.sleep(.1)
 

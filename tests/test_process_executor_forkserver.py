@@ -8,6 +8,7 @@ from ._executor_mixin import ExecutorMixin
 if sys.version_info[:2] > (3, 3) and sys.platform != "win32":
     class ProcessPoolForkserverMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
+        start_method = "forkserver"
         context = mp.get_context('forkserver')
 
     from ._test_process_executor import ExecutorShutdownTest

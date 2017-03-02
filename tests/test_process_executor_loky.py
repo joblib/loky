@@ -11,6 +11,7 @@ if (sys.version_info[:2] > (3, 3) and sys.platform != "win32") or (
     class ProcessPoolLokyMixin(ExecutorMixin):
         # Makes sure that the context is defined
         executor_type = process_executor.ProcessPoolExecutor
+        start_method = "loky"
         context = get_context("loky")
 
     from ._test_process_executor import ExecutorShutdownTest

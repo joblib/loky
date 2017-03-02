@@ -160,8 +160,12 @@ class ExecutorShutdownTest:
         # Make sure this crash does not happen before the non-failing jobs
         # have returned their results by using and multiprocessing Event
         # instance
-        manager = self.context.Manager()
-        event = manager.Event()
+        if self.start_method != "fork":
+            manager = self.context.Manager()
+            event = manager.Event()
+        else:
+            manager = None
+            event = self.context.Event()
         crash_result = self.executor.submit(self._wait_and_crash, event)
         assert len(self.executor._processes) == 5
         processes = self.executor._processes
@@ -188,7 +192,9 @@ class ExecutorShutdownTest:
         with pytest.raises(BrokenExecutor):
             crash_result.result()
 
-        manager.shutdown()
+        if manager is not None:
+            manager.shutdown()
+            manager.join()
 
         # The executor flag should have been set at this point.
         assert executor_flags.broken, processes
@@ -550,7 +556,7 @@ class ExecutorTest:
                 patience -= 1
                 time.sleep(0.01)
 
-    @pytest.mark.timeout(30 if sys.platform == "win32" else 15)
+    @pytest.mark.timeout(50 if sys.platform == "win32" else 25)
     def test_worker_timeout(self):
         self.executor.shutdown(wait=True)
         self.check_no_running_workers(patience=5)
