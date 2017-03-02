@@ -889,10 +889,6 @@ class ProcessPoolExecutor(_base.Executor):
         if self._call_queue:
             self._call_queue.close()
             self._call_queue.join_thread()
-        if self._processes:
-            while self._processes:
-                _, p = self._processes.popitem()
-                p.join()
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
         self._queue_management_thread = None
