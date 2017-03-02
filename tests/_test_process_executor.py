@@ -160,12 +160,13 @@ class ExecutorShutdownTest:
         # Make sure this crash does not happen before the non-failing jobs
         # have returned their results by using and multiprocessing Event
         # instance
-        if self.start_method != "fork":
+        if self.context.get_start_method() != "fork":
             manager = self.context.Manager()
             event = manager.Event()
         else:
             manager = None
             event = self.context.Event()
+
         crash_result = self.executor.submit(self._wait_and_crash, event)
         assert len(self.executor._processes) == 5
         processes = self.executor._processes

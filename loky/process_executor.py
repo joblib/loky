@@ -265,7 +265,8 @@ def _process_chunk(fn, chunk):
     return [fn(*args) for args in chunk]
 
 
-def _process_worker(call_queue, result_queue, timeout_lock, timeout=None):
+def _process_worker(call_queue, result_queue, processes_management_lock,
+                    timeout=None):
     """Evaluates calls from call_queue and places the results in result_queue.
 
     This worker is run in a separate process.
@@ -287,8 +288,8 @@ def _process_worker(call_queue, result_queue, timeout_lock, timeout=None):
         except Empty:
             mp.util.info("shutting down worker after timeout %0.3fs"
                          % timeout)
-            if timeout_lock.acquire(block=False):
-                timeout_lock.release()
+            if processes_management_lock.acquire(block=False):
+                processes_management_lock.release()
                 call_item = None
             else:
                 continue

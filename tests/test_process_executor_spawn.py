@@ -8,7 +8,6 @@ from ._executor_mixin import ExecutorMixin
 if sys.version_info[:2] > (3, 3):
     class ProcessPoolSpawnMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
-        start_method = "spawn"
         context = mp.get_context('spawn')
 
     from ._test_process_executor import ExecutorShutdownTest
