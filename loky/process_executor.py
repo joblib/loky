@@ -563,9 +563,10 @@ def _queue_management_worker(executor_reference,
         executor = None
 
 
-def _management_worker(executor_reference, executor_flags,
-                       queue_management_thread, processes, pending_work_items,
-                       work_ids, call_queue, result_queue):
+def _thread_management_worker(executor_reference, executor_flags,
+                              queue_management_thread, processes,
+                              pending_work_items, work_ids, call_queue,
+                              result_queue):
 
     executor = None
 
@@ -723,7 +724,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._wakeup = _Sentinel()
         self._work_ids = queue.Queue()
         self._processes_management_lock = self._ctx.Lock()
-        self._management_thread = None
+        self._thread_management_thread = None
         self._queue_management_thread = None
 
         # Map of pids to processes
@@ -778,11 +779,11 @@ class ProcessPoolExecutor(_base.Executor):
             _threads_wakeup[self._queue_management_thread] = self._wakeup
 
     def _start_thread_management_thread(self):
-        if self._management_thread is None:
+        if self._thread_management_thread is None:
             mp.util.debug('_start_thread_management_thread called')
             # Start the processes so that their sentinels are known.
-            self._management_thread = threading.Thread(
-                target=_management_worker,
+            self._thread_management_thread = threading.Thread(
+                target=_thread_management_worker,
                 args=(weakref.ref(self), self._flags,
                       self._queue_management_thread,
                       self._processes,
@@ -791,8 +792,8 @@ class ProcessPoolExecutor(_base.Executor):
                       self._call_queue,
                       self._result_queue),
                 name="ThreadManager")
-            self._management_thread.daemon = True
-            self._management_thread.start()
+            self._thread_management_thread.daemon = True
+            self._thread_management_thread.start()
 
     def _adjust_process_count(self):
         for _ in range(len(self._processes), self._max_workers):
@@ -878,9 +879,9 @@ class ProcessPoolExecutor(_base.Executor):
             self._wakeup.set()
             if wait and self._queue_management_thread.is_alive():
                 self._queue_management_thread.join()
-        if self._management_thread:
-            if wait and self._management_thread.is_alive():
-                self._management_thread.join()
+        if self._thread_management_thread:
+            if wait and self._thread_management_thread.is_alive():
+                self._thread_management_thread.join()
         if self._call_queue:
             self._call_queue.close()
             self._call_queue.join_thread()
@@ -890,7 +891,7 @@ class ProcessPoolExecutor(_base.Executor):
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
         self._queue_management_thread = None
-        self._management_thread = None
+        self._thread_management_thread = None
         self._call_queue = None
         self._result_queue = None
         self._processes.clear()
@@ -904,8 +905,8 @@ class _ExecutorFlags(object):
     """necessary references to maintain executor states without preventing gc
 
     It permits to keep the information needed by queue_management_thread
-    and management_thread to maintain the pool without preventing the garbage
-    collection of unreferenced executors.
+    and thread_management_thread to maintain the pool without preventing the
+    garbage collection of unreferenced executors.
     """
     def __init__(self):
 

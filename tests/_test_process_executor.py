@@ -134,6 +134,11 @@ class ExecutorShutdownTest:
         self.executor = None
 
         # Make sure that there is not other reference to the executor object.
+        # We have to be patient as _thread_management_worker might have a
+        # reference when we deleted self.executor.
+        t_deadline = time.time() + 1
+        while executor_reference() is not None and time.time() < t_deadline:
+            pass
         assert executor_reference() is None
 
         # The remaining jobs should still be processed in the background
