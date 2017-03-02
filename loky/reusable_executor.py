@@ -117,14 +117,15 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
             return True
         self._wait_job_completion()
 
-        # Some process migh have return due to timeout so check how many
-        # children are still alive.
+        # Some process might have returned due to timeout so check how many
+        # children are still alive. Use the _process_management_lock to
+        # ensure that no process are spwaned or timeout during the resize.
         with self._processes_management_lock:
             nb_children_alive = sum(p.is_alive()
                                     for p in self._processes.values())
-        self._max_workers = max_workers
-        for _ in range(max_workers, nb_children_alive):
-            self._call_queue.put(None)
+            self._max_workers = max_workers
+            for _ in range(max_workers, nb_children_alive):
+                self._call_queue.put(None)
         while len(self._processes) > max_workers and not self._flags.broken:
             time.sleep(1e-3)
 

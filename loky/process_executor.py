@@ -265,7 +265,7 @@ def _process_chunk(fn, chunk):
     return [fn(*args) for args in chunk]
 
 
-def _process_worker(call_queue, result_queue, timeout=None):
+def _process_worker(call_queue, result_queue, timeout_lock, timeout=None):
     """Evaluates calls from call_queue and places the results in result_queue.
 
     This worker is run in a separate process.
@@ -287,7 +287,11 @@ def _process_worker(call_queue, result_queue, timeout=None):
         except Empty:
             mp.util.info("shutting down worker after timeout %0.3fs"
                          % timeout)
-            call_item = None
+            if timeout_lock.acquire(block=False):
+                timeout_lock.release()
+                call_item = None
+            else:
+                continue
         except BaseException as e:
             traceback.print_exc()
             sys.exit(1)
@@ -704,6 +708,8 @@ class ProcessPoolExecutor(_base.Executor):
         # Parameters of this executor
         self._ctx = context or get_context()
         mp.util.debug("using context {}".format(self._ctx))
+
+        # Timeout and its lock.
         self._timeout = timeout
 
         self._setup_queue(job_reducers, result_reducers)
@@ -783,24 +789,25 @@ class ProcessPoolExecutor(_base.Executor):
             self._management_thread.start()
 
     def _adjust_process_count(self):
-        with self._processes_management_lock:
-            for _ in range(len(self._processes), self._max_workers):
-                p = self._ctx.Process(
-                    target=_process_worker,
-                    args=(self._call_queue,
-                          self._result_queue,
-                          self._timeout))
-                p.start()
-                self._processes[p.pid] = p
+        for _ in range(len(self._processes), self._max_workers):
+            p = self._ctx.Process(
+                target=_process_worker,
+                args=(self._call_queue,
+                      self._result_queue,
+                      self._processes_management_lock,
+                      self._timeout))
+            p.start()
+            self._processes[p.pid] = p
         mp.util.debug('Adjust process count : {}'.format(self._processes))
 
     def _ensure_executor_running(self):
         """ensures all workers and management thread are running
         """
-        if len(self._processes) != self._max_workers:
-            self._adjust_process_count()
-        self._start_queue_management_thread()
-        self._start_thread_management_thread()
+        with self._processes_management_lock:
+            if len(self._processes) != self._max_workers:
+                self._adjust_process_count()
+            self._start_queue_management_thread()
+            self._start_thread_management_thread()
 
     def submit(self, fn, *args, **kwargs):
         with self._flags.shutdown_lock:
