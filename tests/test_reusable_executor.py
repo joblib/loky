@@ -3,7 +3,6 @@ import sys
 import ctypes
 import psutil
 import pytest
-import warnings
 import threading
 from time import sleep
 from multiprocessing import util
@@ -36,15 +35,6 @@ try:
     PICKLING_ERRORS += (cPickle.PicklingError,)
 except ImportError:
     pass
-
-
-def clean_warning_registry():
-    """Safe way to reset warnings."""
-    warnings.resetwarnings()
-    reg = "__warningregistry__"
-    for mod_name, mod in list(sys.modules.items()):
-        if hasattr(mod, reg):
-            getattr(mod, reg).clear()
 
 
 def wait_dead(worker, n_tries=1000, delay=0.001):
@@ -380,19 +370,20 @@ class TestResizeExecutor(ReusableExecutorMixin):
         # the old one as it is still in a good shape. The resize should not
         # occur while there are on going works.
         pids = list(executor._processes.keys())
-        res1 = executor.submit(check_pids_exist_then_sleep, (.3, pids))
-        clean_warning_registry()
-        with warnings.catch_warnings(record=True) as w:
+        res1 = executor.submit(check_pids_exist_then_sleep, (.5, pids))
+
+        with pytest.warns(None) as warninfo:
             # Cause all warnings to always be triggered.
-            warnings.simplefilter("always")
             executor = get_reusable_executor(max_workers=1, timeout=None)
-            assert len(w) == 1
-            expected_msg = "Trying to resize an executor with running jobs"
-            assert expected_msg in str(w[0].message)
-            assert res1.result(), ("Resize should wait for current processes "
-                                   " to finish")
-            assert len(executor._processes) == 1
-            assert next(iter(executor._processes.keys())) in pids
+
+        assert len(warninfo) == 1
+        w = warninfo[0]
+        expected_msg = "Trying to resize an executor with running jobs"
+        assert expected_msg in str(w.message)
+        assert res1.result(), ("Resize should wait for current processes "
+                               " to finish")
+        assert len(executor._processes) == 1
+        assert next(iter(executor._processes.keys())) in pids
 
         # Requesting the same number of process should not impact the executor
         # nor kill the processed
