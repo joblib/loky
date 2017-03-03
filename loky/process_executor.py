@@ -229,10 +229,14 @@ class _CallItem(object):
 
         def __getstate__(self):
             from cloudpickle import dumps
-            if isinstance(self.fn, types.FunctionType):
+            print(type(self.fn))
+            if isinstance(self.fn, (types.FunctionType,
+                                    types.LambdaType,
+                                    partial)):
                 cp = True
                 fn = dumps(self.fn)
             else:
+                cp = False
                 fn = self.fn
             return (self.work_id, self.args, self.kwargs, fn, cp)
 
