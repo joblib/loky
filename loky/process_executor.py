@@ -60,6 +60,7 @@ Process #1..n:
 import os
 import sys
 import time
+import types
 import atexit
 import weakref
 import warnings
@@ -228,13 +229,18 @@ class _CallItem(object):
 
         def __getstate__(self):
             from cloudpickle import dumps
-            fn = dumps(self.fn)
-            return (self.work_id, self.args, self.kwargs, fn)
+            if isinstance(self.fn, types.FunctionType):
+                cp = True
+                fn = dumps(self.fn)
+            else:
+                fn = self.fn
+            return (self.work_id, self.args, self.kwargs, fn, cp)
 
         def __setstate__(self, state):
-            from cloudpickle import loads
-            self.work_id, self.args, self.kwargs = state[:3]
-            self.fn = loads(state[3])
+            self.work_id, self.args, self.kwargs, self.fn, cp = state
+            if cp:
+                from cloudpickle import loads
+                self.fn = loads(self.fn)
 
     except (ImportError, AssertionError) as e:
         pass
