@@ -165,14 +165,14 @@ class SemLock(object):
     def _is_mine(self):
         return self.count > 0 and get_ident() == self.ident
 
-    def acquire(self, blocking=True, timeout=None):
+    def acquire(self, block=True, timeout=None):
         if self.kind == RECURSIVE_MUTEX and self._is_mine():
             self.count += 1
             return True
 
-        if blocking and timeout is None:
+        if block and timeout is None:
             res = pthread.sem_wait(self.handle)
-        elif not blocking or timeout <= 0:
+        elif not block or timeout <= 0:
             res = pthread.sem_trywait(self.handle)
         else:
             res = _sem_timedwait(self.handle, timeout)

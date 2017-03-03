@@ -76,6 +76,9 @@ class LokyContext(BaseContext):
         def get_context(self):
             return self
 
+        def get_start_method(self):
+            return "loky"
+
         def Pipe(self, duplex=True):
             '''Returns two connection object connected by a pipe'''
             return mp.Pipe(duplex)

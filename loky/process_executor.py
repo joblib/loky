@@ -265,7 +265,8 @@ def _process_chunk(fn, chunk):
     return [fn(*args) for args in chunk]
 
 
-def _process_worker(call_queue, result_queue, timeout=None):
+def _process_worker(call_queue, result_queue, processes_management_lock,
+                    timeout=None):
     """Evaluates calls from call_queue and places the results in result_queue.
 
     This worker is run in a separate process.
@@ -287,7 +288,11 @@ def _process_worker(call_queue, result_queue, timeout=None):
         except Empty:
             mp.util.info("shutting down worker after timeout %0.3fs"
                          % timeout)
-            call_item = None
+            if processes_management_lock.acquire(block=False):
+                processes_management_lock.release()
+                call_item = None
+            else:
+                continue
         except BaseException as e:
             traceback.print_exc()
             sys.exit(1)
@@ -405,7 +410,7 @@ def _queue_management_worker(executor_reference,
         with processes_management_lock:
             nb_children_alive = sum(p.is_alive() for p in processes.values())
         for i in range(0, nb_children_alive):
-            call_queue.put_nowait(None)
+            call_queue.put(None)
 
         mp.util.debug("closing call_queue")
         # Release the queue's resources as soon as possible.
@@ -488,13 +493,15 @@ def _queue_management_worker(executor_reference,
 
             # Terminate remaining workers forcibly: the queues or their
             # locks may be in a dirty state and block forever.
-            for p in processes.values():
+            while processes:
+                _, p = processes.popitem()
                 mp.util.debug('terminate process {}'.format(p.name))
                 try:
                     p.terminate()
                     p.join()
                 except ProcessLookupError:
                     pass
+
             shutdown_all_workers()
             return
         if isinstance(result_item, int):
@@ -509,8 +516,9 @@ def _queue_management_worker(executor_reference,
             # a worker timeout while some jobs were submitted. If some work is
             # pending or there is less processes than runnin items, we need to
             # start a new Process and raise a warning
-            if (len(pending_work_items) > 0
-                    or len(running_work_items) > len(processes)):
+            if ((len(pending_work_items) > 0
+                or len(running_work_items) > len(processes))
+               and not is_shutting_down()):
                 warnings.warn("A worker timeout while some jobs were given to "
                               "the executor. You might want to use a longer "
                               "timeout for the executor.", UserWarning)
@@ -542,7 +550,8 @@ def _queue_management_worker(executor_reference,
                     del work_item
                 # Terminate remaining workers forcibly: the queues or their
                 # locks may be in a dirty state and block forever.
-                for p in processes.values():
+                while processes:
+                    _, p = processes.popitem()
                     p.terminate()
                     p.join()
                 shutdown_all_workers()
@@ -557,9 +566,10 @@ def _queue_management_worker(executor_reference,
         executor = None
 
 
-def _management_worker(executor_reference, executor_flags,
-                       queue_management_thread, processes, pending_work_items,
-                       work_ids, call_queue, result_queue):
+def _thread_management_worker(executor_reference, executor_flags,
+                              queue_management_thread, processes,
+                              pending_work_items, work_ids, call_queue,
+                              result_queue):
 
     executor = None
 
@@ -598,6 +608,12 @@ def _management_worker(executor_reference, executor_flags,
         if is_shutting_down():
             mp.util.debug("shutting down")
             return
+
+        # Detect if all the worker timed out while a new job was submitted and
+        # launch new workers if it is the case.
+        if (executor is not None and len(processes) == 0 and
+                len(executor._pending_work_items) > 0):
+            executor._adjust_process_count()
         executor = None
         time.sleep(.1)
 
@@ -703,6 +719,8 @@ class ProcessPoolExecutor(_base.Executor):
         # Parameters of this executor
         self._ctx = context or get_context()
         mp.util.debug("using context {}".format(self._ctx))
+
+        # Timeout and its lock.
         self._timeout = timeout
 
         self._setup_queue(job_reducers, result_reducers)
@@ -710,7 +728,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._wakeup = _Sentinel()
         self._work_ids = queue.Queue()
         self._processes_management_lock = self._ctx.Lock()
-        self._management_thread = None
+        self._thread_management_thread = None
         self._queue_management_thread = None
 
         # Map of pids to processes
@@ -765,11 +783,11 @@ class ProcessPoolExecutor(_base.Executor):
             _threads_wakeup[self._queue_management_thread] = self._wakeup
 
     def _start_thread_management_thread(self):
-        if self._management_thread is None:
+        if self._thread_management_thread is None:
             mp.util.debug('_start_thread_management_thread called')
             # Start the processes so that their sentinels are known.
-            self._management_thread = threading.Thread(
-                target=_management_worker,
+            self._thread_management_thread = threading.Thread(
+                target=_thread_management_worker,
                 args=(weakref.ref(self), self._flags,
                       self._queue_management_thread,
                       self._processes,
@@ -778,28 +796,29 @@ class ProcessPoolExecutor(_base.Executor):
                       self._call_queue,
                       self._result_queue),
                 name="ThreadManager")
-            self._management_thread.daemon = True
-            self._management_thread.start()
+            self._thread_management_thread.daemon = True
+            self._thread_management_thread.start()
 
     def _adjust_process_count(self):
-        with self._processes_management_lock:
-            for _ in range(len(self._processes), self._max_workers):
-                p = self._ctx.Process(
-                    target=_process_worker,
-                    args=(self._call_queue,
-                          self._result_queue,
-                          self._timeout))
-                p.start()
-                self._processes[p.pid] = p
+        for _ in range(len(self._processes), self._max_workers):
+            p = self._ctx.Process(
+                target=_process_worker,
+                args=(self._call_queue,
+                      self._result_queue,
+                      self._processes_management_lock,
+                      self._timeout))
+            p.start()
+            self._processes[p.pid] = p
         mp.util.debug('Adjust process count : {}'.format(self._processes))
 
     def _ensure_executor_running(self):
         """ensures all workers and management thread are running
         """
-        if len(self._processes) != self._max_workers:
-            self._adjust_process_count()
-        self._start_queue_management_thread()
-        self._start_thread_management_thread()
+        with self._processes_management_lock:
+            if len(self._processes) != self._max_workers:
+                self._adjust_process_count()
+            self._start_queue_management_thread()
+            self._start_thread_management_thread()
 
     def submit(self, fn, *args, **kwargs):
         with self._flags.shutdown_lock:
@@ -864,22 +883,18 @@ class ProcessPoolExecutor(_base.Executor):
             self._wakeup.set()
             if wait and self._queue_management_thread.is_alive():
                 self._queue_management_thread.join()
-        if self._management_thread:
-            if wait and self._management_thread.is_alive():
-                self._management_thread.join()
+        if self._thread_management_thread:
+            if wait and self._thread_management_thread.is_alive():
+                self._thread_management_thread.join()
         if self._call_queue:
             self._call_queue.close()
             self._call_queue.join_thread()
-        if self._processes:
-            for p in self._processes.values():
-                p.join()
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
         self._queue_management_thread = None
-        self._management_thread = None
+        self._thread_management_thread = None
         self._call_queue = None
         self._result_queue = None
-        self._processes.clear()
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
 
 
@@ -890,8 +905,8 @@ class _ExecutorFlags(object):
     """necessary references to maintain executor states without preventing gc
 
     It permits to keep the information needed by queue_management_thread
-    and management_thread to maintain the pool without preventing the garbage
-    collection of unreferenced executors.
+    and thread_management_thread to maintain the pool without preventing the
+    garbage collection of unreferenced executors.
     """
     def __init__(self):
 

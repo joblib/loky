@@ -73,7 +73,7 @@ class SemaphoreTracker(object):
                 # process will out live us, so no need to wait on pid
                 exe = spawn.get_executable()
                 args = [exe] + util._args_from_interpreter_flags()
-                if len(args[-1]) > 100:
+                if len(args[-1]) > 100:  # pragma: no cover
                     warnings.warn(
                         "args_from_flag returned -R+ -> why??", RuntimeWarning)
                     import re

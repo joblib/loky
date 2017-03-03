@@ -134,6 +134,11 @@ class ExecutorShutdownTest:
         self.executor = None
 
         # Make sure that there is not other reference to the executor object.
+        # We have to be patient as _thread_management_worker might have a
+        # reference when we deleted self.executor.
+        t_deadline = time.time() + 1
+        while executor_reference() is not None and time.time() < t_deadline:
+            pass
         assert executor_reference() is None
 
         # The remaining jobs should still be processed in the background
@@ -160,8 +165,13 @@ class ExecutorShutdownTest:
         # Make sure this crash does not happen before the non-failing jobs
         # have returned their results by using and multiprocessing Event
         # instance
-        manager = self.context.Manager()
-        event = manager.Event()
+        if self.context.get_start_method() != "fork":
+            manager = self.context.Manager()
+            event = manager.Event()
+        else:
+            manager = None
+            event = self.context.Event()
+
         crash_result = self.executor.submit(self._wait_and_crash, event)
         assert len(self.executor._processes) == 5
         processes = self.executor._processes
@@ -188,7 +198,9 @@ class ExecutorShutdownTest:
         with pytest.raises(BrokenExecutor):
             crash_result.result()
 
-        manager.shutdown()
+        if manager is not None:
+            manager.shutdown()
+            manager.join()
 
         # The executor flag should have been set at this point.
         assert executor_flags.broken, processes
@@ -550,6 +562,7 @@ class ExecutorTest:
                 patience -= 1
                 time.sleep(0.01)
 
+    @pytest.mark.timeout(50 if sys.platform == "win32" else 25)
     def test_worker_timeout(self):
         self.executor.shutdown(wait=True)
         self.check_no_running_workers(patience=5)

@@ -418,6 +418,17 @@ class TestResizeExecutor(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=1, timeout=None)
         assert executor.submit(id_sleep, 42, 0.).result() == 42
 
+    @pytest.mark.timeout(30 if sys.platform == "win32" else 15)
+    def test_resize_after_timeout(self):
+        executor = get_reusable_executor(max_workers=2, timeout=.001)
+        assert executor.submit(id_sleep, 42, 0.).result() == 42
+        sleep(.1)
+        executor = get_reusable_executor(max_workers=8, timeout=.001)
+        assert executor.submit(id_sleep, 42, 0.).result() == 42
+        sleep(.1)
+        executor = get_reusable_executor(max_workers=2, timeout=.001)
+        assert executor.submit(id_sleep, 42, 0.).result() == 42
+
 
 def test_invalid_process_number():
     """Raise error on invalid process number"""
