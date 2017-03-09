@@ -201,7 +201,6 @@ class TestsFuture:
         assert SUCCESSFUL_FUTURE.result(timeout=0) == 42
 
     def test_result_with_success(self):
-        # TODO(brian@sweetapp.com): This test is timing dependent.
         def notification(ready):
             # Wait until the main thread is waiting for the result.
             ready.wait(1)
@@ -217,7 +216,6 @@ class TestsFuture:
         assert f1.result(timeout=5) == 42
 
     def test_result_with_cancel(self):
-        # TODO(brian@sweetapp.com): This test is timing dependent.
         def notification(ready):
             # Wait until the main thread is waiting for the result.
             ready.wait(1)

@@ -34,8 +34,9 @@ def _get_next_executor_id():
         return executor_id
 
 
-def get_reusable_executor(max_workers=None, context=None,
-                          timeout=10, kill_workers=False):
+def get_reusable_executor(max_workers=None, context=None, timeout=10,
+                          kill_workers=False, job_reducers=None,
+                          result_reducers=None):
     """Return the current ReusableExectutor instance.
 
     Start a new instance if it has not been started already or if the previous
@@ -62,6 +63,9 @@ def get_reusable_executor(max_workers=None, context=None,
     Setting ``kill_workers=True`` makes it possible to forcibly interrupt
     previously spawned jobs to get a new instance of the reusable executor
     with new constructor argument values.
+
+    The job_reducers and result_reducers are used to customize the pickling
+    of tasks and results send to the executor.
     """
     global _executor, _executor_args
     executor = _executor
@@ -73,7 +77,8 @@ def get_reusable_executor(max_workers=None, context=None,
         _executor_args = args
         _executor = executor = ReusablePoolExecutor(
             max_workers=max_workers, context=context, timeout=timeout,
-            executor_id=executor_id)
+            executor_id=executor_id, job_reducers=job_reducers,
+            result_reducers=result_reducers)
     else:
         if (executor._flags.broken or executor._flags.shutdown
                 or args != _executor_args):
@@ -105,11 +110,13 @@ def get_reusable_executor(max_workers=None, context=None,
 
 class ReusablePoolExecutor(ProcessPoolExecutor):
     def __init__(self, max_workers=None, context=None, timeout=None,
-                 executor_id=0):
+                 executor_id=0, job_reducers=None, result_reducers=None):
         if context is None and sys.version_info[:2] > (3, 3):
             context = mp.get_context('spawn')
         super(ReusablePoolExecutor, self).__init__(
-            max_workers=max_workers, context=context, timeout=timeout)
+            max_workers=max_workers, context=context, timeout=timeout,
+            job_reducers=job_reducers,
+            result_reducers=result_reducers)
         self.executor_id = executor_id
 
     def _resize(self, max_workers):
