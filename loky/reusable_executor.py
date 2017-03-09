@@ -94,7 +94,10 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
             executor.shutdown(wait=True, kill_workers=kill_workers)
             _executor = executor = _executor_args = None
             # Recursive call to build a new instance
-            return get_reusable_executor(max_workers=max_workers, **args)
+            return get_reusable_executor(max_workers=max_workers,
+                                         job_reducers=job_reducers,
+                                         result_reducers=result_reducers,
+                                         **args)
         else:
             if max_workers is not None and max_workers <= 0:
                 raise ValueError("max_workers must be greater than 0, got {}."
