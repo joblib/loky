@@ -325,6 +325,10 @@ def _process_worker(call_queue, result_queue, processes_management_lock,
                 traceback.print_exc()
                 sys.exit(1)
 
+        # Liberate the resource as soon as possible, to avoid holding onto
+        # open files or shared memory that is not needed anymore
+        del call_item
+
 
 def _add_call_item_to_queue(pending_work_items,
                             running_work_items,
