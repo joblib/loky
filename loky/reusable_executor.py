@@ -141,7 +141,8 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
             time.sleep(1e-3)
 
         self._adjust_process_count()
-        while not all([p.is_alive() for p in self._processes.values()]):
+        # materialize values quickly to avoid concurrent dictionary mutation
+        while not all([p.is_alive() for p in list(self._processes.values())]):
             time.sleep(1e-3)
 
     def _wait_job_completion(self):
