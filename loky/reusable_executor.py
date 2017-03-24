@@ -37,7 +37,7 @@ def _get_next_executor_id():
 
 def get_reusable_executor(max_workers=None, context=None, timeout=10,
                           kill_workers=False, job_reducers=None,
-                          result_reducers=None):
+                          result_reducers=None, reuse="auto"):
     """Return the current ReusableExectutor instance.
 
     Start a new instance if it has not been started already or if the previous
@@ -70,7 +70,8 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     """
     global _executor, _executor_args
     executor = _executor
-    args = dict(context=context, timeout=timeout)
+    args = dict(context=context, timeout=timeout, job_reducers=job_reducers,
+                result_reducers=result_reducers)
     if executor is None:
         mp.util.debug("Create a executor with max_workers={}."
                       .format(max_workers))
@@ -81,8 +82,9 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
             executor_id=executor_id, job_reducers=job_reducers,
             result_reducers=result_reducers)
     else:
-        if (executor._flags.broken or executor._flags.shutdown
-                or args != _executor_args):
+        if reuse == 'auto':
+            reuse = args == _executor_args
+        if (executor._flags.broken or executor._flags.shutdown or not reuse):
             if executor._flags.broken:
                 reason = "broken"
             elif executor._flags.shutdown:
@@ -96,8 +98,6 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
             _executor = executor = _executor_args = None
             # Recursive call to build a new instance
             return get_reusable_executor(max_workers=max_workers,
-                                         job_reducers=job_reducers,
-                                         result_reducers=result_reducers,
                                          **args)
         else:
             if max_workers is not None and max_workers <= 0:
@@ -141,7 +141,8 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
             time.sleep(1e-3)
 
         self._adjust_process_count()
-        while not all([p.is_alive() for p in self._processes.values()]):
+        # materialize values quickly to avoid concurrent dictionary mutation
+        while not all([p.is_alive() for p in list(self._processes.values())]):
             time.sleep(1e-3)
 
     def _wait_job_completion(self):

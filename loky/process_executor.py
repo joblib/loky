@@ -459,7 +459,9 @@ def _queue_management_worker(executor_reference,
                 ready = []
                 if count == 10:
                     count = 0
-                    ready += [p for p in processes.values()
+                    # materialize values quickly to avoid concurrent dictionary
+                    # mutation
+                    ready += [p for p in list(processes.values())
                               if not p.is_alive()]
 
                 # If a process timed out, it should have written in the queue,

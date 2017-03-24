@@ -61,7 +61,8 @@ def _running_children_with_cmdline(p):
 
 
 def _check_subprocesses_number(executor, expected_process_number=None,
-                               expected_max_process_number=None):
+                               expected_max_process_number=None, patience=100):
+    # Wait for terminating processes to disappear
     children_cmdlines = _running_children_with_cmdline(psutil.Process())
     pids_cmdlines = [(c.pid, cmdline) for c, cmdline in children_cmdlines]
     children_pids = set(pid for pid, _ in pids_cmdlines)
@@ -72,9 +73,24 @@ def _check_subprocesses_number(executor, expected_process_number=None,
         # collected
         worker_pids = children_pids
     if expected_process_number is not None:
-        assert len(children_pids) == expected_process_number, pids_cmdlines
-        assert len(worker_pids) == expected_process_number, pids_cmdlines
-        assert worker_pids == children_pids, pids_cmdlines
+        try:
+            assert len(children_pids) == expected_process_number, pids_cmdlines
+            assert len(worker_pids) == expected_process_number, pids_cmdlines
+            assert worker_pids == children_pids, pids_cmdlines
+        except AssertionError:
+            if expected_process_number != 0:
+                raise
+            # there is a race condition with the /proc/<pid>/ system clean up
+            # and our utilisation of psutil. The Process is considered alive by
+            # psutil even though it have been terminated. Wait for the system
+            # clean up in this case.
+            for _ in range(patience):
+                if len(_running_children_with_cmdline(psutil.Process())) == 0:
+                    break
+                time.sleep(.1)
+            else:
+                raise
+
     if expected_max_process_number is not None:
         assert len(children_pids) <= expected_max_process_number, pids_cmdlines
         assert len(worker_pids) <= expected_max_process_number, pids_cmdlines
