@@ -26,31 +26,30 @@ cross-version implementation of the `ProcessPoolExecutor` class of
 ```python
 import os
 from time import sleep
-from loky.reusable_executor import get_reusable_executor
+from loky import get_reusable_executor
 
 
 def say_hello(k):
     pid = os.getpid()
-    print("hello from {} with arg {}".format(pid, k))
+    print("Hello from {} with arg {}".format(pid, k))
     sleep(.01)
     return pid
 
 
 if __name__ == "__main__":
-    # Create an executor with max_workers workers, that will shutdown after 2s
-    max_workers = 4
-    executor = get_reusable_executor(max_workers=max_workers, timeout=2)
+    # Create an executor with 4 worker processes, that will 
+    # automatically shutdown after idling for 2s
+    executor = get_reusable_executor(max_workers=4, timeout=2)
 
     res = executor.submit(say_hello, 1)
-    print("got result", res.result())
+    print("Got results:", res.result())
 
     results = executor.map(say_hello, range(50))
     n_workers = len(set(results))
-    print("# used processes:", n_workers)
-    assert n_workers == max_workers
+    print("Number of used processes:", n_workers)
+    assert n_workers == 4
 
     executor.shutdown(wait=True)
-
 ```
 
 ### Acknowledgement
