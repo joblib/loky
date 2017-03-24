@@ -9,7 +9,8 @@ import warnings
 import threading
 import multiprocessing as mp
 
-from .process_executor import ProcessPoolExecutor
+from .process_executor import ProcessPoolExecutor, EXTRA_QUEUED_CALLS
+from .backend.queues import Queue, SimpleQueue
 
 __all__ = ['get_reusable_executor']
 
@@ -155,3 +156,13 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         # Wait for the completion of the jobs
         while len(self._pending_work_items) > 0:
             time.sleep(1e-3)
+
+    def _setup_queue(self, job_reducers, result_reducers):
+        # As this executor can be resized, use a large queue size to avoid
+        # underestimating capacity and introducing overhead
+        self._call_queue = Queue(2 * mp.cpu_count() + EXTRA_QUEUED_CALLS,
+                                 reducers=job_reducers, ctx=self._ctx)
+        self._call_queue._ignore_epipe = True
+
+        self._result_queue = SimpleQueue(reducers=result_reducers,
+                                         ctx=self._ctx)
