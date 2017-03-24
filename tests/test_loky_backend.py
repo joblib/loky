@@ -59,10 +59,8 @@ class TestLokyBackend:
 
     @classmethod
     def teardown_class(cls):
-        """ teardown any state that was previously setup with a call to
-        setup_class.
+        """Clean up the test environment from any remaining subprocesses.
         """
-        # TODO: remove all child processes
         for child_process in cls.active_children():
             child_process.terminate()
             child_process.join()
@@ -103,6 +101,8 @@ class TestLokyBackend:
         q.put(current.pid)
 
     def test_process(self):
+        """behavior of Process variables and functionnal connection objects
+        """
         q = self.Queue()
         sq = self.SimpleQueue()
         args = (q, sq, 1, 2)
@@ -151,6 +151,8 @@ class TestLokyBackend:
 
     @classmethod
     def _test_connection(cls, conn):
+        """make sure a connection object is functionnal
+        """
         if hasattr(conn, "get"):
             conn = conn.get()
         if hasattr(conn, "accept"):
@@ -162,11 +164,11 @@ class TestLokyBackend:
         conn.close()
 
     @pytest.mark.skipif(
-        sys.platform in ["win32"] and
-        sys.version_info[:2] < (3, 3),
-        reason="socket are not picklelable with python2.7 and vanilla"
-        " ForkingPickler")
+        sys.platform == "win32" and sys.version_info[:2] < (3, 3),
+        reason="socket are not picklable with python2.7 and vanilla"
+        " ForkingPickler on windows")
     def test_socket(self):
+        """sockets can be pickled at spawn and are able to send/recv"""
         server, client = socket.socketpair()
 
         p = self.Process(target=self._test_connection, args=(server,))
@@ -185,14 +187,16 @@ class TestLokyBackend:
         server.close()
 
     @pytest.mark.skipif(not HAVE_SEND_HANDLE or not HAVE_FROM_FD,
-                        reason="This system cannot send handle between. "
-                        "Connections object should be shared at spawning.")
+                        reason="This system cannot send handle between process"
+                        ". Connections object should be shared at spawning.")
     def test_socket_queue(self):
+        """sockets can be pickled in a queue and are able to send/recv"""
         q = self.SimpleQueue()
 
-        server, client = socket.socketpair()
         p = self.Process(target=self._test_connection, args=(q,))
         p.start()
+
+        server, client = socket.socketpair()
         q.put(server)
 
         msg = b'42'
@@ -207,41 +211,42 @@ class TestLokyBackend:
         server.close()
 
     def test_connection(self):
-        wrt, rd = self.Pipe(duplex=True)
+        """connections can be pickled at spawn and are able to send/recv"""
+        parent_connection, child_connection = self.Pipe(duplex=True)
 
-        p = self.Process(target=self._test_connection, args=(wrt,))
+        p = self.Process(target=self._test_connection,
+                         args=(child_connection,))
         p.start()
 
         msg = b'42'
-        rd.send_bytes(msg)
-        assert rd.recv_bytes() == msg
+        parent_connection.send(msg)
+        assert parent_connection.recv() == msg
 
         p.join()
         assert p.exitcode == 0
-        rd.close()
-        wrt.close()
+        parent_connection.close()
+        child_connection.close()
 
     @pytest.mark.skipif(not HAVE_SEND_HANDLE,
                         reason="This system cannot send handle between. "
                         "Connections object should be shared at spawning.")
     def test_connection_queue(self):
+        """connections can be pickled in a queue and are able to send/recv"""
         q = self.SimpleQueue()
-        print(q)
-        wrt, rd = self.Pipe(duplex=True)
         p = self.Process(target=self._test_connection, args=(q,))
         p.start()
-        q.put(wrt)
-        print("ok")
+
+        parent_connection, child_connection = self.Pipe(duplex=True)
+        q.put(child_connection)
 
         msg = b'42'
-        rd.send_bytes(msg)
-        assert rd.recv_bytes() == msg
+        parent_connection.send(msg)
+        assert parent_connection.recv() == msg
 
         p.join()
         assert p.exitcode == 0
-        rd.close()
-        wrt.close()
-
+        parent_connection.close()
+        child_connection.close()
 
     @classmethod
     def _test_terminate(cls, event):
@@ -331,8 +336,8 @@ class TestLokyBackend:
         if len(l) < 2:
             for i in range(2):
                 p = cls.Process(
-                    target=cls._test_recursion, args=(wconn, l+[i])
-                    )
+                    target=cls._test_recursion, args=(wconn, l + [i])
+                )
                 p.start()
                 p.join()
                 assert p.exitcode == 0
@@ -355,7 +360,7 @@ class TestLokyBackend:
             [1],
             [1, 0],
             [1, 1]
-            ]
+        ]
         assert result == expected
 
     @classmethod
