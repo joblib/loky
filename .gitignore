@@ -1,6 +1,7 @@
 # General ignore rules
 .*
 *sublime*
+tags
 
 # Python running files
 __pycache__
