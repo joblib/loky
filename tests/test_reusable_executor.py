@@ -10,7 +10,7 @@ from multiprocessing import util
 from pickle import PicklingError, UnpicklingError
 
 from loky import get_reusable_executor
-from loky.process_executor import BrokenExecutor, ShutdownExecutor
+from loky.process_executor import BrokenExecutor, ShutdownExecutorError
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep
 
@@ -328,7 +328,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         shutdown = TimingWrapper(executor.shutdown)
         shutdown(wait=True, kill_workers=True)
         assert shutdown.elapsed < .5
-        with pytest.raises(ShutdownExecutor):
+        with pytest.raises(ShutdownExecutorError):
             list(res2)
 
     def test_shutdown_deadlock(self):
@@ -345,12 +345,12 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=4)
         res = executor.map(
             sleep, [0.1 for i in range(10000)], chunksize=1
-            )
+        )
         shutdown = TimingWrapper(executor.shutdown)
         shutdown(wait=True, kill_workers=True)
         assert shutdown.elapsed < 0.5
 
-        with pytest.raises(ShutdownExecutor):
+        with pytest.raises(ShutdownExecutorError):
             list(res)
 
     def test_kill_workers_on_new_options(self):
@@ -363,7 +363,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # shutdown forcibly)
         executor = get_reusable_executor(max_workers=2, timeout=5,
                                          kill_workers=True)
-        with pytest.raises(ShutdownExecutor):
+        with pytest.raises(ShutdownExecutorError):
             f.result()
         f2 = executor.submit(id_sleep, 42, 0)
         assert f2.result() == 42

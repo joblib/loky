@@ -151,6 +151,7 @@ def _python_exit():
     for t, _ in items:
         t.join()
 
+
 # Controls how many more calls than processes will be queued in the call queue.
 # A smaller number will mean that processes spend more time idle waiting for
 # work while a larger number will make Future.cancel() succeed less frequently
@@ -285,6 +286,8 @@ def _process_worker(call_queue, result_queue, processes_management_lock,
             evaluated by the worker.
         result_queue: A ctx.Queue of _ResultItems that will written
             to by the worker.
+        process_management_lock: A ctx.Lock avoiding worker timeout while some
+            workers are being spawned.
         timeout: maximum time to wait for a new item in the call_queue. If that
             time is expired, the worker will shutdown.
     """
@@ -559,7 +562,7 @@ def _queue_management_worker(executor_reference,
             if executor_flags.kill_workers:
                 while pending_work_items:
                     _, work_item = pending_work_items.popitem()
-                    work_item.future.set_exception(ShutdownExecutor(
+                    work_item.future.set_exception(ShutdownExecutorError(
                         "The Executor was shutdown before this job could "
                         "complete."))
                     del work_item
@@ -689,7 +692,7 @@ class BrokenExecutor(RuntimeError):
     """
 
 
-class ShutdownExecutor(RuntimeError):
+class ShutdownExecutorError(RuntimeError):
 
     """
     Raised when a ProcessPoolExecutor is shutdown while a future was in the
@@ -716,6 +719,8 @@ class ProcessPoolExecutor(_base.Executor):
                 Idle workers exit after timeout seconds. If a new job is
                 submitted after the timeout, the executor will launch enough
                 job to make sure the pool of worker is full.
+            context: A multiprocessing context to launch the workers. This
+                object should provide SimpleQueue, Queue and Process.
 
         """
         _check_system_limits()
@@ -781,7 +786,8 @@ class ProcessPoolExecutor(_base.Executor):
             # Start the processes so that their sentinels are known.
             self._queue_management_thread = threading.Thread(
                 target=_queue_management_worker,
-                args=(weakref.ref(self, weakref_cb), self._flags,
+                args=(weakref.ref(self, weakref_cb),
+                      self._flags,
                       self._processes,
                       self._pending_work_items,
                       self._work_ids,
@@ -858,7 +864,6 @@ class ProcessPoolExecutor(_base.Executor):
     submit.__doc__ = _base.Executor.submit.__doc__
 
     def map(self, fn, *iterables, **kwargs):
-        # timeout=None, chunksize=1):
         """Returns an iterator equivalent to map(fn, iter).
 
         Args:
