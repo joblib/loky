@@ -6,7 +6,7 @@ import pytest
 import warnings
 import threading
 from time import sleep
-from multiprocessing import util
+from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
 
 from loky import get_reusable_executor
@@ -159,7 +159,7 @@ class CExitAtUnpickle(object):
 
 
 class ErrorAtPickle(object):
-    """Bad object that triggers a segfault at pickling time."""
+    """Bad object that raises an error at pickling time."""
     def __reduce__(self):
         raise PicklingError("Error in pickle")
 
@@ -168,6 +168,20 @@ class ErrorAtUnpickle(object):
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
         return raise_error, (UnpicklingError, )
+
+
+class CrashAtGCInWorker(object):
+    """Bad object that triggers a segfault at call item GC time"""
+    def __del__(self):
+        if current_process().name != "MainProcess":
+            crash()
+
+
+class CExitAtGCInWorker(object):
+    """Exit worker at call item GC time"""
+    def __del__(self):
+        if current_process().name != "MainProcess":
+            c_exit()
 
 
 class TestExecutorDeadLock(ReusableExecutorMixin):
@@ -448,3 +462,19 @@ def test_osx_accelerate_freeze():
     executor = get_reusable_executor(max_workers=2)
     executor.submit(np.dot, (a, a))
     executor.shutdown(wait=True)
+
+
+def test_call_item_gc_crash_or_exit():
+    for bad_object in [CrashAtGCInWorker(), CExitAtGCInWorker()]:
+        executor = get_reusable_executor(max_workers=2)
+        f = executor.submit(id, bad_object)
+
+        # The worker will sucessfully send back its result to the master
+        # process before crashing so this future can always be collected:
+        assert f.result() is not None
+
+        # The executor should automatically detect that one worker has crashed
+        # when processing subsequently dispatched tasks:
+        with pytest.raises(BrokenExecutor):
+            for r in executor.map(sleep, [.1] * 100):
+                pass
