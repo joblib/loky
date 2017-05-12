@@ -107,6 +107,10 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 _threads_wakeup = weakref.WeakKeyDictionary()
 _global_shutdown = False
 
+# TODO: comment - Max depth
+MAX_DEPTH = int(os.environ.get("LOKY_MAX_DEPTH", 10))
+_CURRENT_DEPTH = 0
+
 
 class _Sentinel:
     __slot__ = ["_state"]
@@ -301,7 +305,7 @@ def _process_chunk(fn, chunk):
 
 
 def _process_worker(call_queue, result_queue, processes_management_lock,
-                    timeout=None):
+                    timeout, current_depth):
     """Evaluates calls from call_queue and places the results in result_queue.
 
     This worker is run in a separate process.
@@ -316,6 +320,10 @@ def _process_worker(call_queue, result_queue, processes_management_lock,
         timeout: maximum time to wait for a new item in the call_queue. If that
             time is expired, the worker will shutdown.
     """
+    # set the global _CURRENT_DEPTH mechanism to limit recursive call
+    global _CURRENT_DEPTH
+    _CURRENT_DEPTH = current_depth
+
     mp.util.debug('worker started with timeout=%s' % timeout)
     while True:
         try:
@@ -610,8 +618,8 @@ def _queue_management_worker(executor_reference,
 
 
 def _management_worker(executor_reference, executor_flags,
-                              queue_management_thread, processes,
-                              pending_work_items, call_queue):
+                       queue_management_thread, processes,
+                       pending_work_items, call_queue):
     """Checks the state of the executor management and communications.
 
     This function is run in a local thread.
@@ -724,6 +732,27 @@ def _check_system_limits():
     raise NotImplementedError(_system_limited)
 
 
+def _check_max_detph(context):
+    # Limit the maxmal recursion level
+    global _CURRENT_DEPTH
+    if context.get_start_method() == "fork" and _CURRENT_DEPTH > 0:
+        raise LokyRecursionError(
+            "Could not spawn extra nested processes at depth superior to "
+            "MAX_DEPTH=1. It is not possible to increase this limit when "
+            "using the 'fork' start method.")
+
+    if 0 < MAX_DEPTH and _CURRENT_DEPTH + 1 > MAX_DEPTH:
+        raise LokyRecursionError(
+            "Could not spawn extra nested processes at depth superior to "
+            "MAX_DEPTH={}. If this is intendend, you can change this limit "
+            "with the LOKY_MAX_DEPTH environment variable.".format(MAX_DEPTH))
+
+
+class LokyRecursionError(RuntimeError):
+    """Raised when a process try to spawn too many levels of nested processes.
+    """
+
+
 class BrokenExecutor(RuntimeError):
 
     """
@@ -779,6 +808,7 @@ class ProcessPoolExecutor(_base.Executor):
         # Parameters of this executor
         self._ctx = context or get_context()
         mp.util.debug("using context {}".format(self._ctx))
+        _check_max_detph(self._ctx)
 
         # Timeout and its lock.
         self._timeout = timeout
@@ -865,7 +895,8 @@ class ProcessPoolExecutor(_base.Executor):
                 args=(self._call_queue,
                       self._result_queue,
                       self._processes_management_lock,
-                      self._timeout))
+                      self._timeout,
+                      _CURRENT_DEPTH + 1))
             p.start()
             self._processes[p.pid] = p
         mp.util.debug('Adjust process count : {}'.format(self._processes))
