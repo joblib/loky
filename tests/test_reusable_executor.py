@@ -1,5 +1,6 @@
 import os
 import sys
+import gc
 import ctypes
 import psutil
 import pytest
@@ -485,16 +486,17 @@ def test_osx_accelerate_freeze():
 
 def test_call_item_gc_crash_or_exit():
     for bad_object in [CrashAtGCInWorker(), CExitAtGCInWorker()]:
-        executor = get_reusable_executor(max_workers=2)
+        executor = get_reusable_executor(max_workers=1)
         f = executor.submit(id, bad_object)
 
         # The worker will sucessfully send back its result to the master
         # process before crashing so this future can always be collected:
         assert f.result() is not None
 
-        # The executor should automatically detect that one worker has crashed
+        # The executor should automatically detect that the worker has crashed
         # when processing subsequently dispatched tasks:
         with pytest.raises(BrokenExecutor):
+            executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass
 
