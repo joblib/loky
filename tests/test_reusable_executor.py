@@ -464,6 +464,15 @@ def test_invalid_process_number():
         get_reusable_executor(max_workers=-1)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
+def test_invalid_context():
+    """Raise error on invalid context"""
+    from loky.backend import get_context
+
+    with pytest.raises(ValueError):
+        get_reusable_executor(max_workers=2, context=get_context("fork"))
+
+
 @pytest.mark.skipif(np is None, reason="requires numpy")
 def test_osx_accelerate_freeze():
     """Test no freeze on OSX with Accelerate"""

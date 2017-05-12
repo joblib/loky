@@ -26,9 +26,6 @@ if WINSERVICE:
 else:
     _python_exe = sys.executable
 
-MAX_DEPTH = os.environ.get("LOKY_MAX_DEPTH", 2)
-_CURRENT_DEPTH = 0
-
 
 def get_executable():
     return _python_exe
@@ -76,21 +73,12 @@ def get_preparation_data(name):
     else:
         sys_path[i] = process.ORIGINAL_DIR
 
-    # Limit the maxmal recursion level
-    global _CURRENT_DEPTH
-    if _CURRENT_DEPTH + 1 > MAX_DEPTH:
-        raise ValueError(
-            "Trying to spawn descendent of LOKY process at depth superior to "
-            "MAX_DEPTH. If this is intendend, you can change this limit with "
-            "the LOKY_MAX_DEPTH environment variable.")
-
     d.update(
         name=name,
         sys_path=sys_path,
         sys_argv=sys.argv,
         orig_dir=process.ORIGINAL_DIR,
-        dir=os.getcwd(),
-        depth=_CURRENT_DEPTH + 1
+        dir=os.getcwd()
     )
 
     # Figure out whether to initialise main in the subprocess as a module
@@ -123,9 +111,6 @@ def prepare(data):
     '''
     Try to get current process ready to unpickle process object
     '''
-    global _CURRENT_DEPTH
-    _CURRENT_DEPTH = data['depth']
-
     if 'name' in data:
         process.current_process().name = data['name']
 
