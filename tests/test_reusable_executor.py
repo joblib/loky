@@ -184,6 +184,16 @@ class CExitAtGCInWorker(object):
             c_exit()
 
 
+class SlowlyPickling(object):
+    """Simulate slowly pickling object, e.g. large numpy array or dict"""
+    def __init__(self, delay=1):
+        self.delay = delay
+
+    def __reduce__(self):
+        sleep(self.delay)
+        return SlowlyPickling, (self.delay,)
+
+
 class TestExecutorDeadLock(ReusableExecutorMixin):
 
     crash_cases = [
@@ -478,3 +488,16 @@ def test_call_item_gc_crash_or_exit():
         with pytest.raises(BrokenExecutor):
             for r in executor.map(sleep, [.1] * 100):
                 pass
+
+
+def test_worker_timeout_with_slowly_pickling_objects(n_tasks=5):
+    """Check that the worker timeout can be low without deadlocking
+
+    In particular if dispatching call items to the queue is slow because of
+    pickling large arguments, the executor should ensure that there is an
+    appropriate amount of workers to move one and not get stalled.
+    """
+    for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1)]:
+        executor = get_reusable_executor(max_workers=2, timeout=timeout)
+        results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
+        assert len(results) == n_tasks
