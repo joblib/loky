@@ -71,21 +71,20 @@ import multiprocessing as mp
 from functools import partial
 
 from . import _base
+from .backend import get_context
+from .backend.connection import wait
 from .backend.queues import Queue, SimpleQueue
-from loky.backend.connection import wait
 
 # Compatibility for python2.7
 if sys.version_info[:2] > (2, 7):
     import queue
-    from queue import Full, Empty
+    from queue import Empty
     from _pickle import PicklingError
 else:
     import Queue as queue
-    from Queue import Full, Empty
+    from Queue import Empty
     from pickle import PicklingError
     ProcessLookupError = OSError
-
-from loky.backend import get_context
 
 
 __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
@@ -191,7 +190,7 @@ EXTRA_QUEUED_CALLS = 1
 class _RemoteTraceback(Exception):
     """Embed stringification of remote traceback in local traceback
     """
-    def __init__(self, tb):
+    def __init__(self, tb=None):
         self.tb = tb
 
     def __str__(self):

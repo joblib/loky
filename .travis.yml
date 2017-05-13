@@ -6,6 +6,7 @@ env:
   global:
     - PYTHON="python"
     - OMP_NUM_THREADS=4
+    - LOKY_MAX_DEPTH=3
 matrix:
   include:
     - python: 2.7
