@@ -466,6 +466,8 @@ def test_invalid_process_number():
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
+@pytest.mark.skipif(sys.version_info <= (3, 4),
+                    reason="No context before 3.4")
 def test_invalid_context():
     """Raise error on invalid context"""
     from loky.backend import get_context

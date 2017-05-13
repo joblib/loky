@@ -30,7 +30,7 @@ from threading import Thread
 import traceback
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
-from loky.process_executor import BrokenExecutor
+from loky.process_executor import BrokenExecutor, LokyRecursionError
 from .utils import id_sleep
 
 if sys.version_info[:2] < (3, 3):
@@ -619,3 +619,29 @@ class ExecutorTest:
         assert ret_obj_custom.value == 42
 
         executor.shutdown(wait=True)
+
+    @classmethod
+    def _test_max_depth(cls, max_depth=10, ctx=None):
+        if max_depth == 0:
+            return 42
+        executor = cls.executor_type(1, context=ctx)
+        f = executor.submit(cls._test_max_depth, max_depth - 1, ctx)
+        try:
+            return f.result()
+        finally:
+            executor.shutdown(wait=True, kill_workers=True)
+
+    def test_max_depth(self):
+        from loky.process_executor import MAX_DEPTH
+        if self.context.get_start_method() == 'fork':
+            # For 'fork', we do not allow nested process as the threads ends
+            # up in messy states
+            with pytest.raises(LokyRecursionError):
+                self._test_max_depth(max_depth=2, ctx=self.context)
+            return
+
+        assert self._test_max_depth(max_depth=MAX_DEPTH,
+                                    ctx=self.context) == 42
+
+        with pytest.raises(LokyRecursionError):
+            self._test_max_depth(max_depth=MAX_DEPTH + 1, ctx=self.context)
