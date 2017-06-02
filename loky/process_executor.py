@@ -559,13 +559,16 @@ def _queue_management_worker(executor_reference,
             # by the executor.shutdown method or by the timeout of the worker
             # itself: we should not mark the executor as broken.
             with processes_management_lock:
-                p = processes.pop(result_item)
-            p.join()
+                p = processes.pop(result_item, None)
+
+            # p can be None is the executor is concurrently shutting down.
+            if p is not None:
+                p.join()
 
             # Make sure the executor have the right number of worker, even if
             # a worker timeout while some jobs were submitted. If some work is
             # pending or there is less processes than runnin items, we need to
-            # start a new Process and raise a warning
+            # start a new Process and raise a warning.
             if ((len(pending_work_items) > 0
                 or len(running_work_items) > len(processes))
                and not is_shutting_down()):
