@@ -285,9 +285,15 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
     def test_deadlock_kill(self):
         """Test deadlock recovery for reusable_executor"""
         executor = get_reusable_executor(max_workers=1, timeout=None)
-        executor.submit(id, 1)  # trigger the spawning of the worker process
+        # trigger the spawning of the worker process
+        executor.submit(sleep, 0.1)
         worker = next(iter(executor._processes.values()))
-        executor = get_reusable_executor(max_workers=2, timeout=None)
+        with pytest.warns(UserWarning) as recorded_warnings:
+            executor = get_reusable_executor(max_workers=2, timeout=None)
+        assert len(recorded_warnings) == 1
+        expected_msg = ("Trying to resize an executor with running jobs:"
+                        " waiting for jobs completion before resizing.")
+        assert recorded_warnings[0].message.args[0] == expected_msg
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
 
@@ -440,7 +446,13 @@ class TestResizeExecutor(ReusableExecutorMixin):
         executor.map(id, range(2))  # trigger the creation of worker processes
         pid = next(iter(executor._processes.keys()))
         executor.submit(kill_friend, (pid, .1))
-        executor = get_reusable_executor(max_workers=1, timeout=None)
+
+        with pytest.warns(UserWarning) as recorded_warnings:
+            executor = get_reusable_executor(max_workers=1, timeout=None)
+        assert len(recorded_warnings) == 1
+        expected_msg = ("Trying to resize an executor with running jobs:"
+                        " waiting for jobs completion before resizing.")
+        assert recorded_warnings[0].message.args[0] == expected_msg
         assert executor.submit(id_sleep, 42, 0.).result() == 42
 
     @pytest.mark.timeout(30 if sys.platform == "win32" else 15)
