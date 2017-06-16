@@ -15,6 +15,10 @@ try:
 except ImportError:
     parallel_sum = None
 
+if sys.version_info < (3, 3):
+    FileNotFoundError = NameError
+
+
 if not hasattr(socket, "socketpair"):
     def socketpair():
         s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
