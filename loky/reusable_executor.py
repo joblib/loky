@@ -73,8 +73,8 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     args = dict(context=context, timeout=timeout, job_reducers=job_reducers,
                 result_reducers=result_reducers)
     if context is not None and context.get_start_method() == "fork":
-            raise ValueError("Cannot use reusable executor with the 'fork' "
-                             "context")
+        raise ValueError("Cannot use reusable executor with the 'fork' "
+                         "context")
     if executor is None:
         mp.util.debug("Create a executor with max_workers={}."
                       .format(max_workers))
