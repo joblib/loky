@@ -808,7 +808,7 @@ class ProcessPoolExecutor(_base.Executor):
             result_reducers = job_reducers
 
         # Parameters of this executor
-        self._ctx = context or get_context()
+        self._ctx = context or get_context('loky')
         mp.util.debug("using context {}".format(self._ctx))
         _check_max_detph(self._ctx)
 
