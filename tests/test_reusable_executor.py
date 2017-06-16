@@ -347,18 +347,21 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):
+
     def test_shutdown_kill(self):
         """Test reusable_executor termination handling"""
         from itertools import repeat
         executor = get_reusable_executor(max_workers=5)
-        res1 = executor.map(id_sleep, range(50), repeat(.001))
-        res2 = executor.map(id_sleep, range(50), repeat(.1))
-        assert list(res1) == list(range(50))
-        # We should get an error as the executor shutdowned before we fetched
-        # the results from the operation.
+        res1 = executor.map(id_sleep, range(100), repeat(.001))
+        res2 = executor.map(id_sleep, range(100), repeat(1))
+        assert list(res1) == list(range(100))
+
         shutdown = TimingWrapper(executor.shutdown)
         shutdown(wait=True, kill_workers=True)
-        assert shutdown.elapsed < .5
+        assert shutdown.elapsed < 5
+
+        # We should get an error as the executor shutdowned before we fetched
+        # all the results from the long running operation.
         with pytest.raises(ShutdownExecutorError):
             list(res2)
 
@@ -371,18 +374,6 @@ class TestTerminateExecutor(ReusableExecutorMixin):
                                       .0))
         sleep(.01)
         executor.shutdown(wait=True)
-
-    def test_shutdown(self):
-        executor = get_reusable_executor(max_workers=4)
-        res = executor.map(
-            sleep, [0.1 for i in range(10000)], chunksize=1
-        )
-        shutdown = TimingWrapper(executor.shutdown)
-        shutdown(wait=True, kill_workers=True)
-        assert shutdown.elapsed < 0.5
-
-        with pytest.raises(ShutdownExecutorError):
-            list(res)
 
     def test_kill_workers_on_new_options(self):
         # submit a long running job with no timeout
