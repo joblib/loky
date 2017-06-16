@@ -830,7 +830,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._flags = _ExecutorFlags()
         self._queue_count = 0
         self._pending_work_items = {}
-        mp.util.debug('PoolProcessExecutor is setup')
+        mp.util.debug('ProcessPoolExecutor is setup')
 
     def _setup_queue(self, job_reducers, result_reducers):
         # Make the call queue slightly larger than the number of processes to
