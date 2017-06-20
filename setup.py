@@ -39,7 +39,7 @@ cmdclass = {'clean': CleanCommand}
 
 setup(
     name='loky',
-    version='1.0.0',
+    version='1.1.0.dev0',
     description=("A robust implementation of "
                  "concurrent.futures.ProcessPoolExecutor"),
     url='https://github.com/tommoral/loky/',
