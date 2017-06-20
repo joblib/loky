@@ -8,7 +8,7 @@ $VERSION=(27, 33, 36)
 function TestPythonVersions () {
     Write-Host $PYTHON
     ForEach($ver in $VERSION){
-        python ./continuous_integration/appveyor/tox -e py$ver -- -vlx --timeout=15
+        python ./continuous_integration/appveyor/tox -e py$ver -- -vlx --timeout=30
         If( $LASTEXITCODE -ne 0){
             Exit 1
         }
