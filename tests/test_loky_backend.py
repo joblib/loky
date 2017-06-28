@@ -9,7 +9,7 @@ import multiprocessing
 from tempfile import mkstemp
 
 from loky.backend import get_context
-from .utils import TimingWrapper
+from .utils import TimingWrapper, check_subprocess_call
 
 try:
     from ._openmp.parallel_sum import parallel_sum
@@ -412,7 +412,7 @@ class TestLokyBackend:
         w: int
             fileno of the writable end of the Pipe, it should be closed
         """
-        to_clean_up = [cls.Semaphore(0), cls.BoundedSemaphore(1),
+        to_clean_up = [cls.Semaphore(0), cls.BoundedSemaphore(1),  # noqa: F841
                        cls.Lock(), cls.RLock(), cls.Condition(), cls.Event()]
         started.set()
         assert conn.recv_bytes() == b"foo"
@@ -592,50 +592,3 @@ def wait_for_handle(handle, timeout):
     if timeout is not None and timeout < 0.0:
         timeout = None
     return wait([handle], timeout)
-
-
-def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
-                          stderr_regex=None):
-    """Runs a command in a subprocess with timeout in seconds.
-
-    Also checks returncode is zero, stdout if stdout_regex is set, and
-    stderr if stderr_regex is set.
-    """
-    import re
-    import subprocess
-    import warnings
-    import threading
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-
-    def kill_process():
-        warnings.warn("Timeout running {}".format(cmd))
-        proc.kill()
-
-    timer = threading.Timer(timeout, kill_process)
-    try:
-        timer.start()
-        stdout, stderr = proc.communicate()
-
-        if sys.version_info[0] >= 3:
-            stdout, stderr = stdout.decode(), stderr.decode()
-        if proc.returncode != 0:
-            message = (
-                'Non-zero return code: {}.\nStdout:\n{}\n'
-                'Stderr:\n{}').format(
-                    proc.returncode, stdout, stderr)
-            raise ValueError(message)
-
-        if (stdout_regex is not None and
-                not re.search(stdout_regex, stdout)):
-            raise ValueError(
-                "Unexpected stdout: {!r} does not match:\n{!r}".format(
-                    stdout_regex, stdout))
-        if (stderr_regex is not None and
-                not re.search(stderr_regex, stderr)):
-            raise ValueError(
-                "Unexpected stderr: {!r} does not match:\n{!r}".format(
-                    stderr_regex, stderr))
-
-    finally:
-        timer.cancel()
