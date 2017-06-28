@@ -79,21 +79,26 @@ class ExecutorShutdownTest:
             self.executor.submit(pow, 2, 5)
 
     def test_interpreter_shutdown(self):
+        n_jobs = 4
         code = "\n".join([
             'from loky.process_executor import {executor_type}',
+            'from loky.backend import get_context',
             'from time import sleep',
             'from tests._test_process_executor import sleep_and_print',
-            't = {executor_type}(4)',
+            'context = get_context("{start_method}")',
+            't = {executor_type}({n_jobs}, context=context)',
             't.submit(id, 42).result()',
-            't.map(sleep_and_print, [0.1] * 10, range(10))'
-        ]).format(executor_type=self.executor_type.__name__)
+            't.map(sleep_and_print, [0.1] * 2 * {n_jobs}, range(2 * {n_jobs}))'
+        ]).format(executor_type=self.executor_type.__name__,
+                  start_method=self.context.get_start_method(), n_jobs=n_jobs)
         stdout, _ = check_subprocess_call(
             [sys.executable, "-c", code],
-            stderr_regex=r'^$', timeout=2)
+            stderr_regex=r'^$', timeout=10)
 
+        stdout = stdout.replace("\r", "")
         stdout = stdout.replace("\n", "")
-        assert len(stdout) == 10
-        assert [str(i) in stdout for i in range(10)]
+        assert len(stdout) == 2 * n_jobs
+        assert [str(i) in stdout for i in range(2 * n_jobs)]
 
     def test_hang_issue12364(self):
         fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]

@@ -547,6 +547,8 @@ class TestLokyBackend:
         p.join()
         assert p.exitcode == 0
 
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="The loky process are only defined for posix.")
     def test_interactively_define_process_no_main(self):
         code = '\n'.join([
             'from loky.backend.process import PosixLokyProcess',
@@ -563,10 +565,12 @@ class TestLokyBackend:
             with open(filename, mode='wb') as f:
                 f.write(code.encode('ascii'))
             check_subprocess_call([sys.executable, filename],
-                                  stdout_regex=r'ok', timeout=2)
+                                  stdout_regex=r'ok', timeout=5)
         finally:
             os.unlink(filename)
 
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="The loky process are only defined for posix.")
     def test_interactively_define_process_fail_main(self):
         code = '\n'.join([
             'from loky.backend.process import PosixLokyProcess',
@@ -582,7 +586,7 @@ class TestLokyBackend:
             with open(filename, mode='wb') as f:
                 f.write(code.encode('ascii'))
             check_subprocess_call([sys.executable, filename],
-                                  stdout_regex=r'RuntimeError:', timeout=2)
+                                  stdout_regex=r'RuntimeError:', timeout=5)
         finally:
             os.unlink(filename)
 

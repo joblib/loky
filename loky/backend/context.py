@@ -16,7 +16,7 @@ import multiprocessing as mp
 
 
 if sys.platform == "win32":
-    from multiprocessing import LokyProcess
+    from multiprocessing import Process as LokyProcess
 else:
     from .process import PosixLokyProcess as LokyProcess
 
@@ -54,8 +54,10 @@ else:
     def get_context(method="loky"):
         if method == "loky":
             return LokyContext()
-        elif method == "loky_safe":
-            return LokySafeContext()
+        elif method == "loky_no_main":
+            if sys.platform == "win32":
+                return LokyContext()
+            return LokyNoMainContext()
         else:
             raise ValueError("Context {} is not implemented.".format(method))
 
@@ -146,7 +148,7 @@ class LokyContext(BaseContext):
             return Event()
 
 
-class LokySafeContext(LokyContext):
+class LokyNoMainContext(LokyContext):
     def Process(self, *args, **kwargs):
         kwargs.pop('init_main_module', False)
         return LokyProcess(*args, init_main_module=False, **kwargs)
@@ -155,4 +157,7 @@ class LokySafeContext(LokyContext):
 if sys.version_info > (3, 4):
     """Register loky context so it works with multiprocessing.get_context"""
     mp.context._concrete_contexts['loky'] = LokyContext()
-    mp.context._concrete_contexts['lokysafe'] = LokySafeContext()
+    if sys.platform == "win32":
+        mp.context._concrete_contexts['loky_no_main'] = LokyContext()
+    else:
+        mp.context._concrete_contexts['loky_no_main'] = LokyNoMainContext()
