@@ -1,4 +1,3 @@
-import random
 import signal
 import multiprocessing as mp
 

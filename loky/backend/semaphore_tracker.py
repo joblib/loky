@@ -27,7 +27,6 @@ import signal
 import sys
 import threading
 import warnings
-import _multiprocessing
 
 from . import spawn
 from multiprocessing import util
