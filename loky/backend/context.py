@@ -8,7 +8,7 @@
 #  * Create a context ensuring loky uses only objects that are compatible
 #  * Add LokyContext to the list of context of multiprocessing so loky can be
 #    used with multiprocessing.set_start_method
-#  * Add some compat function for python2.7 and 3.3. 
+#  * Add some compat function for python2.7 and 3.3.
 #
 
 import sys
@@ -16,9 +16,9 @@ import multiprocessing as mp
 
 
 if sys.platform == "win32":
-    from multiprocessing import Process
+    from multiprocessing import LokyProcess
 else:
-    from .process import PosixLokyProcess as Process
+    from .process import PosixLokyProcess as LokyProcess
 
 if sys.version_info > (3, 4):
     from multiprocessing import get_context
@@ -52,13 +52,18 @@ else:
             )
 
     def get_context(method="loky"):
-        return LokyContext()
+        if method == "loky":
+            return LokyContext()
+        elif method == "loky_safe":
+            return LokySafeContext()
+        else:
+            raise ValueError("Context {} is not implemented.".format(method))
 
 
 class LokyContext(BaseContext):
     """Context relying on the LokyProcess."""
     _name = 'loky'
-    Process = Process
+    Process = LokyProcess
 
     def Queue(self, maxsize=0, reducers=None):
         '''Returns a queue object'''
@@ -141,6 +146,13 @@ class LokyContext(BaseContext):
             return Event()
 
 
+class LokySafeContext(LokyContext):
+    def Process(self, *args, **kwargs):
+        kwargs.pop('init_main_module', False)
+        return LokyProcess(*args, init_main_module=False, **kwargs)
+
+
 if sys.version_info > (3, 4):
     """Register loky context so it works with multiprocessing.get_context"""
     mp.context._concrete_contexts['loky'] = LokyContext()
+    mp.context._concrete_contexts['lokysafe'] = LokySafeContext()

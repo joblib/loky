@@ -37,8 +37,7 @@ def _get_next_executor_id():
 
 def get_reusable_executor(max_workers=None, context=None, timeout=10,
                           kill_workers=False, job_reducers=None,
-                          result_reducers=None, reuse="auto",
-                          init_main_module=True):
+                          result_reducers=None, reuse="auto"):
     """Return the current ReusableExectutor instance.
 
     Start a new instance if it has not been started already or if the previous
@@ -68,12 +67,6 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
 
     The ``job_reducers`` and ``result_reducers`` are used to customize the
     pickling of tasks and results send to the executor.
-
-    The ``init_main_module`` switch is used to allow script without the 
-    ``if __name__ == "__main__":`` to run without failure when using ``loky``
-    backend and ``cloudpickle`` for serialization. This switch was introduced
-    for backward compatibility in ``joblib`` and should not be used without a
-    good knowledge of the mechanism behind it.
     """
     global _executor, _executor_args
     executor = _executor
@@ -124,8 +117,7 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
 
 class ReusablePoolExecutor(ProcessPoolExecutor):
     def __init__(self, max_workers=None, context=None, timeout=None,
-                 executor_id=0, job_reducers=None, result_reducers=None,
-                 init_main_module=True):
+                 executor_id=0, job_reducers=None, result_reducers=None):
         if context is None and sys.version_info[:2] > (3, 3):
             context = mp.get_context('spawn')
         super(ReusablePoolExecutor, self).__init__(
@@ -133,7 +125,6 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
             job_reducers=job_reducers,
             result_reducers=result_reducers)
         self.executor_id = executor_id
-        self.init_main_module = init_main_module
 
     def _resize(self, max_workers):
         if max_workers is None or max_workers == self._max_workers:
@@ -179,17 +170,3 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
 
         self._result_queue = SimpleQueue(reducers=result_reducers,
                                          ctx=self._ctx)
-
-    def _adjust_process_count(self):
-        for _ in range(len(self._processes), self._max_workers):
-            p = self._ctx.Process(
-                target=_process_worker,
-                args=(self._call_queue,
-                      self._result_queue,
-                      self._processes_management_lock,
-                      self._timeout,
-                      _CURRENT_DEPTH + 1))
-            p.init_main_module = self.init_main_module
-            p.start()
-            self._processes[p.pid] = p
-        mp.util.debug('Adjust process count : {}'.format(self._processes))
