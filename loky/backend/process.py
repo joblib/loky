@@ -17,6 +17,20 @@ else:
 class PosixLokyProcess(BaseProcess):
     _start_method = 'loky'
 
+    def __init__(self, group=None, target=None, name=None, args=(),
+                 kwargs={}, daemon=None, init_main_module=True):
+        if sys.version_info < (3, 3):
+            super(PosixLokyProcess, self).__init__(
+                group=group, target=target, name=name, args=args,
+                kwargs=kwargs)
+            self.daemon = daemon
+        else:
+            super(PosixLokyProcess, self).__init__(
+                group=group, target=target, name=name, args=args,
+                kwargs=kwargs, daemon=daemon)
+        self.authkey = self.authkey
+        self.init_main_module = init_main_module
+
     @staticmethod
     def _Popen(process_obj):
         from .popen_loky import Popen
@@ -48,19 +62,6 @@ class PosixLokyProcess(BaseProcess):
                 raise ValueError("process not started")
 
     if sys.version_info < (3, 4):
-        def __init__(self, group=None, target=None, name=None, args=(),
-                     kwargs={}, daemon=None):
-            if sys.version_info < (3, 3):
-                super(PosixLokyProcess, self).__init__(
-                    group=group, target=target, name=name, args=args,
-                    kwargs=kwargs)
-                self.daemon = daemon
-            else:
-                super(PosixLokyProcess, self).__init__(
-                    group=group, target=target, name=name, args=args,
-                    kwargs=kwargs, daemon=daemon)
-            self.authkey = self.authkey
-
         @property
         def authkey(self):
             return self._authkey

@@ -6,6 +6,7 @@ import signal
 import pickle
 import socket
 import multiprocessing
+from tempfile import mkstemp
 
 from loky.backend import get_context
 from .utils import TimingWrapper
@@ -546,9 +547,95 @@ class TestLokyBackend:
         p.join()
         assert p.exitcode == 0
 
+    def test_interactively_define_process_no_main(self):
+        code = '\n'.join([
+            'from loky.backend.process import PosixLokyProcess',
+            'p = PosixLokyProcess(target=id, args=(1,), ',
+            '                     init_main_module=False)',
+            'p.start()',
+            'p.join()',
+            'assert p.exitcode == 0',
+            'print("ok")'
+        ])
+        fid, filename = mkstemp(suffix="_joblib.py")
+        os.close(fid)
+        try:
+            with open(filename, mode='wb') as f:
+                f.write(code.encode('ascii'))
+            check_subprocess_call([sys.executable, filename],
+                                  stdout_regex=r'ok', timeout=2)
+        finally:
+            os.unlink(filename)
+
+    def test_interactively_define_process_fail_main(self):
+        code = '\n'.join([
+            'from loky.backend.process import PosixLokyProcess',
+            'p = PosixLokyProcess(target=id, args=(1,), ',
+            '                     init_main_module=True)',
+            'p.start()',
+            'p.join()',
+            'assert p.exitcode != 0',
+        ])
+        fid, filename = mkstemp(suffix="_joblib.py")
+        os.close(fid)
+        try:
+            with open(filename, mode='wb') as f:
+                f.write(code.encode('ascii'))
+            check_subprocess_call([sys.executable, filename],
+                                  stdout_regex=r'RuntimeError:', timeout=2)
+        finally:
+            os.unlink(filename)
+
 
 def wait_for_handle(handle, timeout):
     from loky.backend.connection import wait
     if timeout is not None and timeout < 0.0:
         timeout = None
     return wait([handle], timeout)
+
+
+def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
+                          stderr_regex=None):
+    """Runs a command in a subprocess with timeout in seconds.
+
+    Also checks returncode is zero, stdout if stdout_regex is set, and
+    stderr if stderr_regex is set.
+    """
+    import re
+    import subprocess
+    import warnings
+    import threading
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+
+    def kill_process():
+        warnings.warn("Timeout running {}".format(cmd))
+        proc.kill()
+
+    timer = threading.Timer(timeout, kill_process)
+    try:
+        timer.start()
+        stdout, stderr = proc.communicate()
+
+        if sys.version_info[0] >= 3:
+            stdout, stderr = stdout.decode(), stderr.decode()
+        if proc.returncode != 0:
+            message = (
+                'Non-zero return code: {}.\nStdout:\n{}\n'
+                'Stderr:\n{}').format(
+                    proc.returncode, stdout, stderr)
+            raise ValueError(message)
+
+        if (stdout_regex is not None and
+                not re.search(stdout_regex, stdout)):
+            raise ValueError(
+                "Unexpected stdout: {!r} does not match:\n{!r}".format(
+                    stdout_regex, stdout))
+        if (stderr_regex is not None and
+                not re.search(stderr_regex, stderr)):
+            raise ValueError(
+                "Unexpected stderr: {!r} does not match:\n{!r}".format(
+                    stderr_regex, stderr))
+
+    finally:
+        timer.cancel()
