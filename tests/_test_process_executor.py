@@ -91,14 +91,19 @@ class ExecutorShutdownTest:
             't.map(sleep_and_print, [0.1] * 2 * {n_jobs}, range(2 * {n_jobs}))'
         ]).format(executor_type=self.executor_type.__name__,
                   start_method=self.context.get_start_method(), n_jobs=n_jobs)
-        stdout, _ = check_subprocess_call(
-            [sys.executable, "-c", code],
-            stderr_regex=r'^$', timeout=10)
+        stdout, stderr = check_subprocess_call([sys.executable, "-c", code],
+                                               timeout=10)
+
+        # On OSX, remove UserWarning for broken semaphores
+        if sys.platform == "darwin":
+            stderr = [e for e in stderr.strip().split("\n")
+                      if "increase its maximal value" not in e]
 
         stdout = stdout.replace("\r", "")
         stdout = stdout.replace("\n", "")
         assert len(stdout) == 2 * n_jobs
         assert [str(i) in stdout for i in range(2 * n_jobs)]
+        assert len(stderr) == 0 or stderr[0] == ''
 
     def test_hang_issue12364(self):
         fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
