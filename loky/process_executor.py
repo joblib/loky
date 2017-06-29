@@ -549,7 +549,7 @@ def _queue_management_worker(executor_reference,
                 try:
                     p.terminate()
                     p.join()
-                except ProcessLookupError:
+                except ProcessLookupError:  # pragma: no cover
                     pass
 
             shutdown_all_workers()
@@ -571,7 +571,7 @@ def _queue_management_worker(executor_reference,
             # start a new Process and raise a warning.
             if ((len(pending_work_items) > 0
                 or len(running_work_items) > len(processes))
-               and not is_shutting_down()):
+               and not is_shutting_down()):  # pragma: no cover
                 warnings.warn("A worker timeout while some jobs were given to "
                               "the executor. You might want to use a longer "
                               "timeout for the executor.", UserWarning)
