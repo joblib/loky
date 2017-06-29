@@ -149,6 +149,13 @@ class LokyContext(BaseContext):
 
 
 class LokyNoMainContext(LokyContext):
+    """Extra context with LokyProcess, which do not load the main module
+
+    This context is used for backward compatibility in ``joblib`` and should
+    not be used without a good knowledge of the mechanism behind it.
+    It alows a script without the ``if __name__ == "__main__":`` to run without
+    failure when using ``loky`` backend and ``cloudpickle`` for serialization.
+    """
     def Process(self, *args, **kwargs):
         kwargs.pop('init_main_module', False)
         return LokyProcess(*args, init_main_module=False, **kwargs)

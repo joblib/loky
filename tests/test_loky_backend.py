@@ -549,36 +549,48 @@ class TestLokyBackend:
 
     @pytest.mark.skipif(sys.platform == "win32",
                         reason="The loky process are only defined for posix.")
-    def test_interactively_define_process_no_main(self):
+    @pytest.mark.parametrize("run_file", [True, False])
+    def test_interactively_define_process_no_main(self, run_file):
         code = '\n'.join([
             'from loky.backend.process import PosixLokyProcess',
             'p = PosixLokyProcess(target=id, args=(1,), ',
-            '                     init_main_module=False)',
+            # when using -c option, we don't need the safeguard if __name__ ..
+            # and thus test LokyProcess without the extra argument. For running
+            # a script, it is necessary to use init_main_module=False.
+            '                     init_main_module=False)' if run_file else
+            '                     init_main_module=True)',
             'p.start()',
             'p.join()',
-            'assert p.exitcode == 0',
+            'msg = "LokyProcess failed to load without safegard"',
+            'assert p.exitcode == 0, msg',
             'print("ok")'
         ])
-        fid, filename = mkstemp(suffix="_joblib.py")
-        os.close(fid)
+        cmd = [sys.executable]
         try:
-            with open(filename, mode='wb') as f:
-                f.write(code.encode('ascii'))
-            check_subprocess_call([sys.executable, filename],
-                                  stdout_regex=r'ok', timeout=5)
+            if run_file:
+                fid, filename = mkstemp(suffix="_joblib.py")
+                os.close(fid)
+                with open(filename, mode='wb') as f:
+                    f.write(code.encode('ascii'))
+                cmd += [filename]
+            else:
+                cmd += ["-c", code]
+            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=5)
         finally:
-            os.unlink(filename)
+            if run_file:
+                os.unlink(filename)
 
     @pytest.mark.skipif(sys.platform == "win32",
                         reason="The loky process are only defined for posix.")
     def test_interactively_define_process_fail_main(self):
         code = '\n'.join([
             'from loky.backend.process import PosixLokyProcess',
-            'p = PosixLokyProcess(target=id, args=(1,), ',
+            'p = PosixLokyProcess(target=id, args=(1,),',
             '                     init_main_module=True)',
             'p.start()',
             'p.join()',
-            'assert p.exitcode != 0',
+            'msg = "LokyProcess succeed without safeguards"',
+            'assert p.exitcode != 0, msg'
         ])
         fid, filename = mkstemp(suffix="_joblib.py")
         os.close(fid)
