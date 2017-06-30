@@ -6,6 +6,10 @@ import threading
 import subprocess
 import contextlib
 
+if sys.version_info[:2] == (2, 7):
+    class TimeoutError(OSError):
+        pass
+
 
 @contextlib.contextmanager
 def captured_output(stream_name):
@@ -94,7 +98,12 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
         if sys.version_info[0] >= 3:
             stdout, stderr = stdout.decode(), stderr.decode()
-        if proc.returncode != 0:
+        if proc.returncode == -9:
+            message = (
+                'Subprocess timeout after {}s.\nStdout:\n{}\n'
+                'Stderr:\n{}').format(timeout, stdout, stderr)
+            raise TimeoutError(message)
+        elif proc.returncode != 0:
             message = (
                 'Non-zero return code: {}.\nStdout:\n{}\n'
                 'Stderr:\n{}').format(
