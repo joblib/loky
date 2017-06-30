@@ -615,6 +615,33 @@ class TestLokyBackend:
         ctx_loky_no_main = get_context("loky_no_main")
         assert ctx_loky_no_main.get_start_method() == "loky"
 
+        with pytest.raises(ValueError):
+            get_context("not_available")
+
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="The loky process are only defined for posix.")
+    def test_interactive_contex_no_main(self):
+        # Ensure that loky_no_main context is working properly
+        code = '\n'.join([
+            'from loky.backend import get_context',
+            'ctx = get_context("loky_no_main")',
+            'p = ctx.Process(target=id, args=(1,))',
+            'p.start()',
+            'p.join()',
+            'msg = "loky_no_main context failed to load without safegard"',
+            'assert p.exitcode == 0, msg',
+            'print("ok")'
+        ])
+        try:
+            fid, filename = mkstemp(suffix="_joblib.py")
+            os.close(fid)
+            with open(filename, mode='wb') as f:
+                f.write(code.encode('ascii'))
+            check_subprocess_call([sys.executable, filename],
+                                  stdout_regex=r'ok', timeout=5)
+        finally:
+            os.unlink(filename)
+
 
 def wait_for_handle(handle, timeout):
     from loky.backend.connection import wait
