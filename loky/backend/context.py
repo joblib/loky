@@ -12,6 +12,7 @@
 #
 
 import sys
+import warnings
 import multiprocessing as mp
 
 
@@ -21,9 +22,15 @@ else:
     from .process import PosixLokyProcess as LokyProcess
 
 if sys.version_info > (3, 4):
-    from multiprocessing import get_context
+    from multiprocessing import get_context as get_mp_context
     from multiprocessing.context import assert_spawning, set_spawning_popen
     from multiprocessing.context import get_spawning_popen, BaseContext
+
+    def get_context(method="spawn"):
+        if method == "fork":
+            warnings.warn("`fork` context should not be used with `loky` as it"
+                          " does not respect POSIX.", UserWarning)
+        return get_mp_context(method)
 
 else:
     if sys.platform != 'win32':

@@ -602,6 +602,19 @@ class TestLokyBackend:
         finally:
             os.unlink(filename)
 
+    def test_loky_get_context(self):
+        ctx_default = get_context()
+        if sys.version_info[:2] < (3, 4):
+            assert ctx_default.get_start_method() == "loky"
+        else:
+            assert ctx_default.get_start_method() == "spawn"
+
+        ctx_loky = get_context("loky")
+        assert ctx_loky.get_start_method() == "loky"
+
+        ctx_loky_no_main = get_context("loky_no_main")
+        assert ctx_loky_no_main.get_start_method() == "loky"
+
 
 def wait_for_handle(handle, timeout):
     from loky.backend.connection import wait

@@ -809,10 +809,7 @@ class ProcessPoolExecutor(_base.Executor):
 
         # Parameters of this executor
         if context is None:
-            if sys.version_info[:2] > (3, 3):
-                context = mp.get_context('spawn')
-            else:
-                context = get_context('loky')
+            context = get_context()
         self._ctx = context
         mp.util.debug("using context {}".format(self._ctx))
         _check_max_detph(self._ctx)
