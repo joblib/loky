@@ -75,7 +75,7 @@ class SemaphoreTracker(object):
                 # In python 3.3, there is a bug which put `-RRRRR..` instead of
                 # `-R` in args. Replace it to get the correct flags.
                 # See https://github.com/python/cpython/blob/3.3/Lib/subprocess.py#L488
-                if sys.version_info[:2] == (3, 3):
+                if sys.version_info[:2] <= (3, 3):
                     import re
                     for i in range(1, len(args)):
                         args[i] = re.sub("-R+", "-R", args[i])
