@@ -105,7 +105,9 @@ class TestLokyBackend:
         q.put(bytes(current.authkey))
         q.put(current.pid)
 
-    def test_process(self):
+    @pytest.mark.parametrize("context_name", ["loky"] + (
+        ["loky_no_main"] if sys.platform != "win32" else []))
+    def test_process(self, context_name):
         """behavior of Process variables and functionnal connection objects
         """
         q = self.Queue()
@@ -113,7 +115,8 @@ class TestLokyBackend:
         args = (q, sq, 1, 2)
         kwargs = {'hello': 23, 'bye': 2.54}
         name = 'TestLokyProcess'
-        p = self.Process(
+        ctx = get_context(context_name)
+        p = ctx.Process(
             target=self._test_process, args=args, kwargs=kwargs, name=name
         )
         p.daemon = True
@@ -575,7 +578,7 @@ class TestLokyBackend:
                 cmd += [filename]
             else:
                 cmd += ["-c", code]
-            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=5)
+            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
         finally:
             if run_file:
                 os.unlink(filename)
@@ -598,7 +601,7 @@ class TestLokyBackend:
             with open(filename, mode='wb') as f:
                 f.write(code.encode('ascii'))
             check_subprocess_call([sys.executable, filename],
-                                  stdout_regex=r'RuntimeError:', timeout=5)
+                                  stdout_regex=r'RuntimeError:', timeout=10)
         finally:
             os.unlink(filename)
 
@@ -638,7 +641,7 @@ class TestLokyBackend:
             with open(filename, mode='wb') as f:
                 f.write(code.encode('ascii'))
             check_subprocess_call([sys.executable, filename],
-                                  stdout_regex=r'ok', timeout=5)
+                                  stdout_regex=r'ok', timeout=10)
         finally:
             os.unlink(filename)
 
