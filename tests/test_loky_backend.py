@@ -554,14 +554,13 @@ class TestLokyBackend:
                         reason="The loky process are only defined for posix.")
     @pytest.mark.parametrize("run_file", [True, False])
     def test_interactively_define_process_no_main(self, run_file):
+        # when using -c option, we don't need the safeguard if __name__ ..
+        # and thus test LokyProcess without the extra argument. For running
+        # a script, it is necessary to use init_main_module=False.
         code = '\n'.join([
             'from loky.backend.process import PosixLokyProcess',
             'p = PosixLokyProcess(target=id, args=(1,), ',
-            # when using -c option, we don't need the safeguard if __name__ ..
-            # and thus test LokyProcess without the extra argument. For running
-            # a script, it is necessary to use init_main_module=False.
-            '                     init_main_module=False)' if run_file else
-            '                     init_main_module=True)',
+            '                     init_main_module={})'.format(not run_file),
             'p.start()',
             'p.join()',
             'msg = "LokyProcess failed to load without safegard"',
