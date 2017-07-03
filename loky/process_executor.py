@@ -549,7 +549,7 @@ def _queue_management_worker(executor_reference,
                 try:
                     p.terminate()
                     p.join()
-                except ProcessLookupError:
+                except ProcessLookupError:  # pragma: no cover
                     pass
 
             shutdown_all_workers()
@@ -571,7 +571,7 @@ def _queue_management_worker(executor_reference,
             # start a new Process and raise a warning.
             if ((len(pending_work_items) > 0
                 or len(running_work_items) > len(processes))
-               and not is_shutting_down()):
+               and not is_shutting_down()):  # pragma: no cover
                 warnings.warn("A worker timeout while some jobs were given to "
                               "the executor. You might want to use a longer "
                               "timeout for the executor.", UserWarning)
@@ -809,10 +809,7 @@ class ProcessPoolExecutor(_base.Executor):
 
         # Parameters of this executor
         if context is None:
-            if sys.version_info[:2] > (3, 3):
-                context = mp.get_context('spawn')
-            else:
-                context = get_context('loky')
+            context = get_context()
         self._ctx = context
         mp.util.debug("using context {}".format(self._ctx))
         _check_max_detph(self._ctx)

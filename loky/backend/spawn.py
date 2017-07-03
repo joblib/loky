@@ -49,7 +49,7 @@ def _check_not_importing_main():
         is not going to be frozen to produce an executable.''')
 
 
-def get_preparation_data(name):
+def get_preparation_data(name, init_main_module=True):
     '''
     Return info about parent needed by child to unpickle process object
     '''
@@ -83,20 +83,21 @@ def get_preparation_data(name):
 
     # Figure out whether to initialise main in the subprocess as a module
     # or through direct execution (or to leave it alone entirely)
-    main_module = sys.modules['__main__']
-    try:
-        main_mod_name = getattr(main_module.__spec__, "name", None)
-    except:
-        main_mod_name = None
-    if main_mod_name is not None:
-        d['init_main_from_name'] = main_mod_name
-    elif sys.platform != 'win32' or (not WINEXE and not WINSERVICE):
-        main_path = getattr(main_module, '__file__', None)
-        if main_path is not None:
-            if (not os.path.isabs(main_path) and
-                    process.ORIGINAL_DIR is not None):
-                main_path = os.path.join(process.ORIGINAL_DIR, main_path)
-            d['init_main_from_path'] = os.path.normpath(main_path)
+    if init_main_module:
+        main_module = sys.modules['__main__']
+        try:
+            main_mod_name = getattr(main_module.__spec__, "name", None)
+        except:
+            main_mod_name = None
+        if main_mod_name is not None:
+            d['init_main_from_name'] = main_mod_name
+        elif sys.platform != 'win32' or (not WINEXE and not WINSERVICE):
+            main_path = getattr(main_module, '__file__', None)
+            if main_path is not None:
+                if (not os.path.isabs(main_path) and
+                        process.ORIGINAL_DIR is not None):
+                    main_path = os.path.join(process.ORIGINAL_DIR, main_path)
+                d['init_main_from_path'] = os.path.normpath(main_path)
 
     return d
 

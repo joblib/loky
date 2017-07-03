@@ -65,8 +65,8 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     previously spawned jobs to get a new instance of the reusable executor
     with new constructor argument values.
 
-    The job_reducers and result_reducers are used to customize the pickling
-    of tasks and results send to the executor.
+    The ``job_reducers`` and ``result_reducers`` are used to customize the
+    pickling of tasks and results send to the executor.
     """
     global _executor, _executor_args
     executor = _executor

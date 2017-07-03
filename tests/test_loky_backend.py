@@ -6,9 +6,10 @@ import signal
 import pickle
 import socket
 import multiprocessing
+from tempfile import mkstemp
 
 from loky.backend import get_context
-from .utils import TimingWrapper
+from .utils import TimingWrapper, check_subprocess_call
 
 try:
     from ._openmp.parallel_sum import parallel_sum
@@ -104,7 +105,9 @@ class TestLokyBackend:
         q.put(bytes(current.authkey))
         q.put(current.pid)
 
-    def test_process(self):
+    @pytest.mark.parametrize("context_name", ["loky"] + (
+        ["loky_no_main"] if sys.platform != "win32" else []))
+    def test_process(self, context_name):
         """behavior of Process variables and functionnal connection objects
         """
         q = self.Queue()
@@ -112,7 +115,8 @@ class TestLokyBackend:
         args = (q, sq, 1, 2)
         kwargs = {'hello': 23, 'bye': 2.54}
         name = 'TestLokyProcess'
-        p = self.Process(
+        ctx = get_context(context_name)
+        p = ctx.Process(
             target=self._test_process, args=args, kwargs=kwargs, name=name
         )
         p.daemon = True
@@ -411,7 +415,7 @@ class TestLokyBackend:
         w: int
             fileno of the writable end of the Pipe, it should be closed
         """
-        to_clean_up = [cls.Semaphore(0), cls.BoundedSemaphore(1),
+        to_clean_up = [cls.Semaphore(0), cls.BoundedSemaphore(1),  # noqa: F841
                        cls.Lock(), cls.RLock(), cls.Condition(), cls.Event()]
         started.set()
         assert conn.recv_bytes() == b"foo"
@@ -545,6 +549,100 @@ class TestLokyBackend:
         p.start()
         p.join()
         assert p.exitcode == 0
+
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="The loky process are only defined for posix.")
+    @pytest.mark.parametrize("run_file", [True, False])
+    def test_interactively_define_process_no_main(self, run_file):
+        # when using -c option, we don't need the safeguard if __name__ ..
+        # and thus test LokyProcess without the extra argument. For running
+        # a script, it is necessary to use init_main_module=False.
+        code = '\n'.join([
+            'from loky.backend.process import PosixLokyProcess',
+            'p = PosixLokyProcess(target=id, args=(1,), ',
+            '                     init_main_module={})'.format(not run_file),
+            'p.start()',
+            'p.join()',
+            'msg = "LokyProcess failed to load without safegard"',
+            'assert p.exitcode == 0, msg',
+            'print("ok")'
+        ])
+        cmd = [sys.executable]
+        try:
+            if run_file:
+                fid, filename = mkstemp(suffix="_joblib.py")
+                os.close(fid)
+                with open(filename, mode='wb') as f:
+                    f.write(code.encode('ascii'))
+                cmd += [filename]
+            else:
+                cmd += ["-c", code]
+            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+        finally:
+            if run_file:
+                os.unlink(filename)
+
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="The loky process are only defined for posix.")
+    def test_interactively_define_process_fail_main(self):
+        code = '\n'.join([
+            'from loky.backend.process import PosixLokyProcess',
+            'p = PosixLokyProcess(target=id, args=(1,),',
+            '                     init_main_module=True)',
+            'p.start()',
+            'p.join()',
+            'msg = "LokyProcess succeed without safeguards"',
+            'assert p.exitcode != 0, msg'
+        ])
+        fid, filename = mkstemp(suffix="_joblib.py")
+        os.close(fid)
+        try:
+            with open(filename, mode='wb') as f:
+                f.write(code.encode('ascii'))
+            check_subprocess_call([sys.executable, filename],
+                                  stdout_regex=r'RuntimeError:', timeout=10)
+        finally:
+            os.unlink(filename)
+
+    def test_loky_get_context(self):
+        ctx_default = get_context()
+        if sys.version_info[:2] < (3, 4):
+            assert ctx_default.get_start_method() == "loky"
+        else:
+            assert ctx_default.get_start_method() == "spawn"
+
+        ctx_loky = get_context("loky")
+        assert ctx_loky.get_start_method() == "loky"
+
+        ctx_loky_no_main = get_context("loky_no_main")
+        assert ctx_loky_no_main.get_start_method() == "loky"
+
+        with pytest.raises(ValueError):
+            get_context("not_available")
+
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="The loky process are only defined for posix.")
+    def test_interactive_contex_no_main(self):
+        # Ensure that loky_no_main context is working properly
+        code = '\n'.join([
+            'from loky.backend import get_context',
+            'ctx = get_context("loky_no_main")',
+            'p = ctx.Process(target=id, args=(1,))',
+            'p.start()',
+            'p.join()',
+            'msg = "loky_no_main context failed to load without safegard"',
+            'assert p.exitcode == 0, msg',
+            'print("ok")'
+        ])
+        try:
+            fid, filename = mkstemp(suffix="_joblib.py")
+            os.close(fid)
+            with open(filename, mode='wb') as f:
+                f.write(code.encode('ascii'))
+            check_subprocess_call([sys.executable, filename],
+                                  stdout_regex=r'ok', timeout=10)
+        finally:
+            os.unlink(filename)
 
 
 def wait_for_handle(handle, timeout):

@@ -1,5 +1,4 @@
 from __future__ import print_function
-import psutil
 try:
     import test.support
 
@@ -31,7 +30,7 @@ import traceback
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import BrokenExecutor, LokyRecursionError
-from .utils import id_sleep
+from .utils import id_sleep, check_subprocess_call
 
 if sys.version_info[:2] < (3, 3):
     import loky._base as futures
@@ -79,24 +78,32 @@ class ExecutorShutdownTest:
         with pytest.raises(RuntimeError):
             self.executor.submit(pow, 2, 5)
 
-    @pytest.mark.skipif(sys.version_info < (3, 4),
-                        reason="requires python>3.4")
     def test_interpreter_shutdown(self):
-        from .script_helper import assert_python_ok
-        # Test the atexit hook for shutdown of worker threads and processes
-        rc, out, err = assert_python_ok('-c', """if 1:
-            from loky.process_executor import {executor_type}
-            from time import sleep
-            from tests._test_process_executor import sleep_and_print
-            t = {executor_type}(4)
-            t.submit(id, 42).result()
-            t.map(sleep_and_print, [0.1] * 10, range(10))
-            """.format(executor_type=self.executor_type.__name__))
-        # Errors in atexit hooks don't change the process exit code, check
-        # stderr manually.
-        assert not err
-        unique_out_bytes = set(out.replace(b"\r\n", b"").replace(b"\n", b""))
-        assert len(unique_out_bytes) == 10
+        n_jobs = 4
+        code = "\n".join([
+            'from loky.process_executor import {executor_type}',
+            'from loky.backend import get_context',
+            'from time import sleep',
+            'from tests._test_process_executor import sleep_and_print',
+            'context = get_context("{start_method}")',
+            't = {executor_type}({n_jobs}, context=context)',
+            't.submit(id, 42).result()',
+            't.map(sleep_and_print, [0.1] * 2 * {n_jobs}, range(2 * {n_jobs}))'
+        ]).format(executor_type=self.executor_type.__name__,
+                  start_method=self.context.get_start_method(), n_jobs=n_jobs)
+        stdout, stderr = check_subprocess_call([sys.executable, "-c", code],
+                                               timeout=10)
+
+        # On OSX, remove UserWarning for broken semaphores
+        if sys.platform == "darwin":
+            stderr = [e for e in stderr.strip().split("\n")
+                      if "increase its maximal value" not in e]
+
+        stdout = stdout.replace("\r", "")
+        stdout = stdout.replace("\n", "")
+        assert len(stdout) == 2 * n_jobs
+        assert [str(i) in stdout for i in range(2 * n_jobs)]
+        assert len(stderr) == 0 or stderr[0] == ''
 
     def test_hang_issue12364(self):
         fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
