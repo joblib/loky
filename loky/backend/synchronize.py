@@ -136,6 +136,8 @@ class Semaphore(SemLock):
         SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX)
 
     def get_value(self):
+        if sys.platform == 'darwin':
+            raise NotImplementedError("OSX does not implement sem_getvalue")
         return self._semlock._get_value()
 
     def __repr__(self):
