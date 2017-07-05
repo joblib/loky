@@ -52,7 +52,6 @@ if sys.version_info[:2] >= (3, 4):
     def reduce_pipe_connection(conn):
         access = ((_winapi.FILE_GENERIC_READ if conn.readable else 0) |
                   (_winapi.FILE_GENERIC_WRITE if conn.writable else 0))
-        print(access)
         dh = DupHandle(conn.fileno(), access)
         return rebuild_pipe_connection, (dh, conn.readable, conn.writable)
 

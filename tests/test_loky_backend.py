@@ -105,8 +105,7 @@ class TestLokyBackend:
         q.put(bytes(current.authkey))
         q.put(current.pid)
 
-    @pytest.mark.parametrize("context_name", ["loky"] + (
-        ["loky_no_main"] if sys.platform != "win32" else []))
+    @pytest.mark.parametrize("context_name", ["loky", "loky_no_main"])
     def test_process(self, context_name):
         """behavior of Process variables and functionnal connection objects
         """
@@ -375,9 +374,9 @@ class TestLokyBackend:
     def _test_sentinel(cls, event):
         event.wait(10.0)
 
-    @pytest.mark.skipif(
-        sys.platform == 'win32' and sys.version_info[:2] < (3, 4),
-        reason="test require python 3.4+")
+    # @pytest.mark.skipif(
+    #     sys.platform == 'win32' and sys.version_info[:2] < (3, 4),
+    #     reason="test require python 3.4+")
     def test_sentinel(self):
         event = self.Event()
         p = self.Process(target=self._test_sentinel, args=(event,))
@@ -550,17 +549,15 @@ class TestLokyBackend:
         p.join()
         assert p.exitcode == 0
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="The loky process are only defined for posix.")
     @pytest.mark.parametrize("run_file", [True, False])
     def test_interactively_define_process_no_main(self, run_file):
         # when using -c option, we don't need the safeguard if __name__ ..
         # and thus test LokyProcess without the extra argument. For running
         # a script, it is necessary to use init_main_module=False.
         code = '\n'.join([
-            'from loky.backend.process import PosixLokyProcess',
-            'p = PosixLokyProcess(target=id, args=(1,), ',
-            '                     init_main_module={})'.format(not run_file),
+            'from loky.backend.process import LokyProcess',
+            'p = LokyProcess(target=id, args=(1,), ',
+            '                init_main_module={})'.format(not run_file),
             'p.start()',
             'p.join()',
             'msg = "LokyProcess failed to load without safegard"',
@@ -582,13 +579,11 @@ class TestLokyBackend:
             if run_file:
                 os.unlink(filename)
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="The loky process are only defined for posix.")
     def test_interactively_define_process_fail_main(self):
         code = '\n'.join([
-            'from loky.backend.process import PosixLokyProcess',
-            'p = PosixLokyProcess(target=id, args=(1,),',
-            '                     init_main_module=True)',
+            'from loky.backend.process import LokyProcess',
+            'p = LokyProcess(target=id, args=(1,),',
+            '                init_main_module=True)',
             'p.start()',
             'p.join()',
             'msg = "LokyProcess succeed without safeguards"',
@@ -599,8 +594,12 @@ class TestLokyBackend:
         try:
             with open(filename, mode='wb') as f:
                 f.write(code.encode('ascii'))
-            check_subprocess_call([sys.executable, filename],
-                                  stdout_regex=r'RuntimeError:', timeout=10)
+            stdout, stderr = check_subprocess_call([sys.executable, filename],
+                                                   timeout=10)
+            if sys.platform == "win32":
+                assert "RuntimeError:" in stderr
+            else:
+                assert "RuntimeError:" in stdout
         finally:
             os.unlink(filename)
 
@@ -620,8 +619,6 @@ class TestLokyBackend:
         with pytest.raises(ValueError):
             get_context("not_available")
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="The loky process are only defined for posix.")
     def test_interactive_contex_no_main(self):
         # Ensure that loky_no_main context is working properly
         code = '\n'.join([

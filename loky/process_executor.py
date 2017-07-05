@@ -485,28 +485,9 @@ def _queue_management_worker(executor_reference,
         # that worker process are still running. If a worker process
         count = 0
         while not wakeup.get_and_unset():
-            if sys.platform == "win32" and sys.version_info < (3, 3):
-                # Process objects do not have a builtin sentinel attribute that
-                # can be passed directly to the 'wait' function (which does a
-                # 'select' under the hood). Instead we check for dead processes
-                # manually from time to time.
-                count += 1
-                ready = []
-                if count == 10:
-                    count = 0
-                    # materialize values quickly to avoid concurrent dictionary
-                    # mutation
-                    ready += [p for p in list(processes.values())
-                              if not p.is_alive()]
-
-                # If a process timed out, it should have written in the queue,
-                # so it is important to select the queue after processes
-                # introspection
-                ready += wait([result_reader], timeout=_poll_timeout)
-            else:
-                worker_sentinels = [p.sentinel for p in processes.values()]
-                ready = wait([result_reader] + worker_sentinels,
-                             timeout=_poll_timeout)
+            worker_sentinels = [p.sentinel for p in processes.values()]
+            ready = wait([result_reader] + worker_sentinels,
+                         timeout=_poll_timeout)
             if len(ready) > 0:
                 break
         else:
