@@ -79,6 +79,9 @@ class ExecutorShutdownTest:
             self.executor.submit(pow, 2, 5)
 
     def test_interpreter_shutdown(self):
+        # Free ressources to avoid random timeout in CI
+        self.executor.shutdown(wait=True, kill_workers=True)
+
         n_jobs = 4
         code = "\n".join([
             'from loky.process_executor import {executor_type}',
