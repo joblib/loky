@@ -1,14 +1,14 @@
 import sys
-import multiprocessing as mp
 
 from loky import process_executor
+from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
 
 
 if sys.version_info[:2] > (3, 3):
     class ProcessPoolSpawnMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
-        context = mp.get_context('spawn')
+        context = get_context('spawn')
 
     from ._test_process_executor import ExecutorShutdownTest
 

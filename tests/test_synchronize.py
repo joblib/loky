@@ -247,7 +247,7 @@ class TestCondition():
         cond.release()
 
         # check they have all woken
-        for i in range(10):
+        for i in range(50):
             try:
                 if woken.get_value() == 6:
                     break

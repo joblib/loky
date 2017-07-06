@@ -8,7 +8,7 @@
 #    semaphore management.
 #  * For OSX, as no sem_getvalue is not implemented, Semaphore with value > 1
 #    are not guaranteed to work.
-#  * Only work with PosixLokyProcess
+#  * Only work with LokyProcess on posix
 #
 import os
 import sys

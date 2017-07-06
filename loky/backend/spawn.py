@@ -26,6 +26,21 @@ if WINSERVICE:
 else:
     _python_exe = sys.executable
 
+if sys.version_info[:2] < (3, 4):
+    def get_command_line(pipe_handle, **kwds):
+        '''
+        Returns prefix of command line used for spawning a child process
+        '''
+        if getattr(sys, 'frozen', False):
+            return ([sys.executable, '--multiprocessing-fork'])
+        else:
+            prog = 'from multiprocessing.forking import main; main()'
+            opts = util._args_from_interpreter_flags()
+            return [_python_exe] + opts + ['-c', prog, '--multiprocessing-fork',
+                                           pipe_handle]
+else:
+    from multiprocessing.spawn import get_command_line
+
 
 def get_executable():
     return _python_exe
@@ -98,6 +113,8 @@ def get_preparation_data(name, init_main_module=True):
                         process.ORIGINAL_DIR is not None):
                     main_path = os.path.join(process.ORIGINAL_DIR, main_path)
                 d['init_main_from_path'] = os.path.normpath(main_path)
+                # Compat for python2.7
+                d['main_path'] = d['init_main_from_path']
 
     return d
 

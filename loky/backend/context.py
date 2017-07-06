@@ -16,12 +16,9 @@ import warnings
 import multiprocessing as mp
 
 
-if sys.platform == "win32":
-    from multiprocessing import Process as LokyProcess
-else:
-    from .process import PosixLokyProcess as LokyProcess
+from .process import LokyProcess
 
-if sys.version_info > (3, 4):
+if sys.version_info[:2] >= (3, 4):
     from multiprocessing import get_context as get_mp_context
     from multiprocessing.context import assert_spawning, set_spawning_popen
     from multiprocessing.context import get_spawning_popen, BaseContext
@@ -29,10 +26,12 @@ if sys.version_info > (3, 4):
     def get_context(method="spawn"):
         if method == "fork":
             warnings.warn("`fork` context should not be used with `loky` as it"
-                          " does not respect POSIX.", UserWarning)
+                          " does not respect POSIX. Try using `spawn` or "
+                          "`loky` instead.", UserWarning)
         return get_mp_context(method)
 
 else:
+    METHODS = ['loky', 'loky_no_main']
     if sys.platform != 'win32':
         import threading
         # Mecanism to check that the current thread is spawning a child process
@@ -62,11 +61,10 @@ else:
         if method == "loky":
             return LokyContext()
         elif method == "loky_no_main":
-            if sys.platform == "win32":
-                return LokyContext()
             return LokyNoMainContext()
         else:
-            raise ValueError("Context {} is not implemented.".format(method))
+            raise ValueError("Method {} is not implemented. The available "
+                             "methods are {}".format(method, METHODS))
 
 
 class LokyContext(BaseContext):
@@ -171,7 +169,4 @@ class LokyNoMainContext(LokyContext):
 if sys.version_info > (3, 4):
     """Register loky context so it works with multiprocessing.get_context"""
     mp.context._concrete_contexts['loky'] = LokyContext()
-    if sys.platform == "win32":
-        mp.context._concrete_contexts['loky_no_main'] = LokyContext()
-    else:
-        mp.context._concrete_contexts['loky_no_main'] = LokyNoMainContext()
+    mp.context._concrete_contexts['loky_no_main'] = LokyNoMainContext()

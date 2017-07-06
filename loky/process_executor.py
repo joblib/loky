@@ -72,18 +72,12 @@ from functools import partial
 
 from . import _base
 from .backend import get_context
-from .backend.connection import wait
+from .backend.compat import queue
+from .backend.compat import wait, PicklingError
 from .backend.queues import Queue, SimpleQueue
 
 # Compatibility for python2.7
-if sys.version_info[:2] > (2, 7):
-    import queue
-    from queue import Empty
-    from _pickle import PicklingError
-else:
-    import Queue as queue
-    from Queue import Empty
-    from pickle import PicklingError
+if sys.version_info[0] == 2:
     ProcessLookupError = OSError
 
 
@@ -329,7 +323,7 @@ def _process_worker(call_queue, result_queue, processes_management_lock,
             call_item = call_queue.get(block=True, timeout=timeout)
             if call_item is None:
                 mp.util.info("shutting down worker on sentinel")
-        except Empty:
+        except queue.Empty:
             mp.util.info("shutting down worker after timeout %0.3fs"
                          % timeout)
             if processes_management_lock.acquire(block=False):
@@ -388,7 +382,7 @@ def _add_call_item_to_queue(pending_work_items,
             return
         try:
             work_id = work_ids.get(block=False)
-        except Empty:
+        except queue.Empty:
             return
         else:
             work_item = pending_work_items[work_id]
@@ -483,30 +477,10 @@ def _queue_management_worker(executor_reference,
                                 call_queue)
         # Wait for a result to be ready in the result_queue while checking
         # that worker process are still running. If a worker process
-        count = 0
         while not wakeup.get_and_unset():
-            if sys.platform == "win32" and sys.version_info < (3, 3):
-                # Process objects do not have a builtin sentinel attribute that
-                # can be passed directly to the 'wait' function (which does a
-                # 'select' under the hood). Instead we check for dead processes
-                # manually from time to time.
-                count += 1
-                ready = []
-                if count == 10:
-                    count = 0
-                    # materialize values quickly to avoid concurrent dictionary
-                    # mutation
-                    ready += [p for p in list(processes.values())
-                              if not p.is_alive()]
-
-                # If a process timed out, it should have written in the queue,
-                # so it is important to select the queue after processes
-                # introspection
-                ready += wait([result_reader], timeout=_poll_timeout)
-            else:
-                worker_sentinels = [p.sentinel for p in processes.values()]
-                ready = wait([result_reader] + worker_sentinels,
-                             timeout=_poll_timeout)
+            worker_sentinels = [p.sentinel for p in processes.values()]
+            ready = wait([result_reader] + worker_sentinels,
+                         timeout=_poll_timeout)
             if len(ready) > 0:
                 break
         else:
