@@ -1,14 +1,14 @@
 import sys
-import multiprocessing as mp
 
 from loky import process_executor
+from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
 
 
 if sys.version_info[:2] > (3, 3) and sys.platform != "win32":
     class ProcessPoolForkserverMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
-        context = mp.get_context('forkserver')
+        context = get_context('forkserver')
 
     from ._test_process_executor import ExecutorShutdownTest
 

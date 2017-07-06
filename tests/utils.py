@@ -6,7 +6,7 @@ import threading
 import subprocess
 import contextlib
 
-if sys.version_info[:2] == (2, 7):
+if sys.version_info[0] == 2:
     class TimeoutError(OSError):
         pass
 

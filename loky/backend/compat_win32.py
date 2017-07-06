@@ -1,3 +1,4 @@
+# flake8: noqa: F401
 import sys
 
 # Compat Popen
@@ -6,10 +7,15 @@ if sys.version_info[:2] >= (3, 4):
 else:
     from multiprocessing.forking import Popen
 
+# wait compat
+if sys.version_info < (3, 3):
+    from ._win_wait import wait
+else:
+    from multiprocessing.connection import wait
 
 # Compat _winapi
 if sys.version_info[:2] >= (3, 4):
-    import _winapi    
+    import _winapi
 else:
     import os
     import msvcrt

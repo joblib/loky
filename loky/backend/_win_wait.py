@@ -32,7 +32,7 @@ def wait(handles, timeout=None):
 
     This function wait for either:
     * one connection is ready for read,
-    * one process has exited or got killed,
+    * one process handle has exited or got killed,
     * timeout is reached. Note that this function has a precision of 2 msec.
     """
     if timeout is not None:

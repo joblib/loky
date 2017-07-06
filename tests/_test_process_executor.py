@@ -328,12 +328,12 @@ class WaitTests:
         assert self.executor.submit(id_sleep, 42).result() == 42
 
         future1 = self.executor.submit(mul, 6, 7)
-        future2 = self.executor.submit(time.sleep, 2)
+        future2 = self.executor.submit(time.sleep, 5)
 
         finished, pending = futures.wait([CANCELLED_AND_NOTIFIED_FUTURE,
                                           EXCEPTION_FUTURE, SUCCESSFUL_FUTURE,
                                           future1, future2],
-                                         timeout=.5,
+                                         timeout=1,
                                          return_when=futures.ALL_COMPLETED)
 
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
@@ -403,8 +403,8 @@ class ExecutorTest:
         results = []
         with pytest.raises(futures.TimeoutError):
             for i in self.executor.map(time.sleep,
-                                       [0, 0, 3],
-                                       timeout=.5):
+                                       [0, 0, 5],
+                                       timeout=1):
                 results.append(i)
 
         assert [None, None] == results

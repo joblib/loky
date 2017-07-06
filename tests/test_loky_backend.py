@@ -640,7 +640,7 @@ class TestLokyBackend:
 
 
 def wait_for_handle(handle, timeout):
-    from loky.backend.connection import wait
+    from loky.backend.compat import wait
     if timeout is not None and timeout < 0.0:
         timeout = None
     return wait([handle], timeout)

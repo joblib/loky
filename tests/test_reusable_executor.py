@@ -10,8 +10,10 @@ from time import sleep
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
 
+from loky.backend import get_context
 from loky import get_reusable_executor
 from loky.process_executor import BrokenExecutor, ShutdownExecutorError
+
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep
 
@@ -473,10 +475,10 @@ def test_invalid_process_number():
                     reason="No context before 3.4")
 def test_invalid_context():
     """Raise error on invalid context"""
-    from loky.backend import get_context
 
-    with pytest.raises(ValueError):
-        get_reusable_executor(max_workers=2, context=get_context("fork"))
+    with pytest.warns(UserWarning):
+        with pytest.raises(ValueError):
+            get_reusable_executor(max_workers=2, context=get_context("fork"))
 
 
 @pytest.mark.skipif(np is None, reason="requires numpy")
