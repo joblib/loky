@@ -104,7 +104,7 @@ class ExecutorShutdownTest:
                 e.submit(id, 42).result()
 
                 task_ids = list(range(2 * {n_jobs}))
-                filenames = ['{tempdir}/task_%02d.log' % i for i in task_ids]
+                filenames = ['{tempdir}/task_{{:02}}.log'.format(i) for i in task_ids]
                 e.map(sleep_and_write, [0.1] * 2 * {n_jobs},
                       filenames, task_ids)
 
@@ -114,7 +114,8 @@ class ExecutorShutdownTest:
             """
             code = code.format(executor_type=self.executor_type.__name__,
                                start_method=self.context.get_start_method(),
-                               n_jobs=n_jobs, tempdir=tempdir)
+                               n_jobs=n_jobs, tempdir=tempdir.replace("\\", "/"))
+            print(code)
             stdout, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=10)
 
