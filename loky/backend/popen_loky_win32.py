@@ -48,37 +48,45 @@ class Popen(_Popen):
                                      pipe_handle=rhandle)
         cmd = ' '.join('"%s"' % x for x in cmd)
 
-        with open(wfd, 'wb') as to_child:
-            # start process
-            try:
-                inherit = sys.version_info[:2] < (3, 4)
-                hp, ht, pid, tid = _winapi.CreateProcess(
-                    spawn.get_executable(), cmd,
-                    None, None, inherit, 0,
-                    None, None, None)
-                _winapi.CloseHandle(ht)
-            except:
-                _winapi.CloseHandle(rhandle)
-                raise
+        try:
+            with open(wfd, 'wb') as to_child:
+                # start process
+                try:
+                    inherit = sys.version_info[:2] < (3, 4)
+                    hp, ht, pid, tid = _winapi.CreateProcess(
+                        spawn.get_executable(), cmd,
+                        None, None, inherit, 0,
+                        None, None, None)
+                    _winapi.CloseHandle(ht)
+                except:
+                    _winapi.CloseHandle(rhandle)
+                    raise
 
-            # set attributes of self
-            self.pid = pid
-            self.returncode = None
-            self._handle = hp
-            self.sentinel = int(hp)
-            util.Finalize(self, _winapi.CloseHandle, (self.sentinel,))
+                # set attributes of self
+                self.pid = pid
+                self.returncode = None
+                self._handle = hp
+                self.sentinel = int(hp)
+                util.Finalize(self, _winapi.CloseHandle, (self.sentinel,))
 
-            # send information to child
-            set_spawning_popen(self)
-            if sys.version_info[:2] < (3, 4):
-                Popen._tls.process_handle = int(hp)
-            try:
-                reduction.dump(prep_data, to_child)
-                reduction.dump(process_obj, to_child)
-            finally:
-                set_spawning_popen(None)
+                # send information to child
+                set_spawning_popen(self)
                 if sys.version_info[:2] < (3, 4):
-                    del Popen._tls.process_handle
+                    Popen._tls.process_handle = int(hp)
+                try:
+                    reduction.dump(prep_data, to_child)
+                    reduction.dump(process_obj, to_child)
+                finally:
+                    set_spawning_popen(None)
+                    if sys.version_info[:2] < (3, 4):
+                        del Popen._tls.process_handle
+        except IOError as exc:
+            # IOError 22 happens when the launched subprocess terminated before
+            # wfd.close is called. Thus we can safely ignore it.
+            if exc.errno != 22:
+                raise
+            util.debug("While starting {}, ignored a IOError 22"
+                       .format(process_obj._name))
 
     def duplicate_for_child(self, handle):
         assert self is get_spawning_popen()
