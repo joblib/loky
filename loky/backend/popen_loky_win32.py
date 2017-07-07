@@ -1,7 +1,6 @@
 import os
 import sys
 import msvcrt
-import signal
 
 from .context import get_spawning_popen, set_spawning_popen
 from . import spawn
@@ -22,6 +21,7 @@ __all__ = ['Popen']
 TERMINATE = 0x10000
 WINEXE = (sys.platform == 'win32' and getattr(sys, 'frozen', False))
 WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
+
 
 #
 # We define a Popen class similar to the one from subprocess, but
@@ -44,7 +44,8 @@ class Popen(_Popen):
         if sys.version_info[:2] > (3, 3):
             wfd = msvcrt.open_osfhandle(wfd, 0)
 
-        cmd = spawn.get_command_line(parent_pid=os.getpid(), pipe_handle=rhandle)
+        cmd = spawn.get_command_line(parent_pid=os.getpid(),
+                                     pipe_handle=rhandle)
         cmd = ' '.join('"%s"' % x for x in cmd)
 
         with open(wfd, 'wb') as to_child:
