@@ -17,12 +17,15 @@ except ImportError:
 # from test.support.script_helper import assert_python_ok
 from loky import process_executor
 
+import os
 import sys
 import threading
 import time
 import pytest
 import weakref
 import faulthandler
+import shutil
+import tempfile
 from math import sqrt
 from collections import defaultdict
 from threading import Thread
@@ -64,6 +67,12 @@ def sleep_and_print(t, msg):
     sys.stdout.flush()
 
 
+def sleep_and_write(t, filename, msg):
+    time.sleep(t)
+    with open(filename, 'wb') as f:
+        f.write(str(msg).encode('utf-8'))
+
+
 class MyObject(object):
     def __init__(self, value=0):
         self.value = value
@@ -82,31 +91,59 @@ class ExecutorShutdownTest:
         # Free ressources to avoid random timeout in CI
         self.executor.shutdown(wait=True, kill_workers=True)
 
-        n_jobs = 4
-        code = "\n".join([
-            'from loky.process_executor import {executor_type}',
-            'from loky.backend import get_context',
-            'from time import sleep',
-            'from tests._test_process_executor import sleep_and_print',
-            'context = get_context("{start_method}")',
-            't = {executor_type}({n_jobs}, context=context)',
-            't.submit(id, 42).result()',
-            't.map(sleep_and_print, [0.1] * 2 * {n_jobs}, range(2 * {n_jobs}))'
-        ]).format(executor_type=self.executor_type.__name__,
-                  start_method=self.context.get_start_method(), n_jobs=n_jobs)
-        stdout, stderr = check_subprocess_call([sys.executable, "-c", code],
-                                               timeout=10)
+        tempdir = tempfile.mkdtemp(prefix='loky_')
+        try:
+            n_jobs = 4
+            code = """if True:
+                from loky.process_executor import {executor_type}
+                from loky.backend import get_context
+                from time import sleep
+                from tests._test_process_executor import sleep_and_write
+                context = get_context("{start_method}")
+                e = {executor_type}({n_jobs}, context=context)
+                e.submit(id, 42).result()
 
-        # On OSX, remove UserWarning for broken semaphores
-        if sys.platform == "darwin":
-            stderr = [e for e in stderr.strip().split("\n")
-                      if "increase its maximal value" not in e]
+                task_ids = list(range(2 * {n_jobs}))
+                filenames = ['{tempdir}/task_%02d.log' % i for i in task_ids]
+                e.map(sleep_and_write, [0.1] * 2 * {n_jobs},
+                      filenames, task_ids)
 
-        stdout = stdout.replace("\r", "")
-        stdout = stdout.replace("\n", "")
-        assert len(stdout) == 2 * n_jobs
-        assert [str(i) in stdout for i in range(2 * n_jobs)]
-        assert len(stderr) == 0 or stderr[0] == ''
+                # Do not wait for the results: garbage collect executor and
+                # shutdown main Python interpreter while letting the worker
+                # processes finish in the background.
+            """
+            code = code.format(executor_type=self.executor_type.__name__,
+                               start_method=self.context.get_start_method(),
+                               n_jobs=n_jobs, tempdir=tempdir)
+            stdout, stderr = check_subprocess_call(
+                [sys.executable, "-c", code], timeout=10)
+
+            # On OSX, remove UserWarning for broken semaphores
+            if sys.platform == "darwin":
+                stderr = [e for e in stderr.strip().split("\n")
+                          if "increase its maximal value" not in e]
+            assert len(stderr) == 0 or stderr[0] == ''
+
+            # The workers should have completed their work before the main
+            # process exits:
+            expected_filenames = ['task_%02d.log' % i
+                                  for i in range(2 * n_jobs)]
+
+            # Apparently files can take some time to appear under windows
+            # on AppVeyor
+            for retry_idx in range(20):
+                filenames = sorted(os.listdir(tempdir))
+                if len(filenames) != len(expected_filenames):
+                    time.sleep(1)
+                else:
+                    break
+
+            assert filenames == expected_filenames
+            for i, filename in enumerate(filenames):
+                with open(os.path.join(tempdir, filename), 'rb') as f:
+                    assert int(f.read().strip()) == i
+        finally:
+            shutil.rmtree(tempdir)
 
     def test_hang_issue12364(self):
         fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
