@@ -519,3 +519,11 @@ def test_worker_timeout_with_slowly_pickling_objects(n_tasks=5):
         executor = get_reusable_executor(max_workers=2, timeout=timeout)
         results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
         assert len(results) == n_tasks
+
+
+def test_pass_start_method_name_as_context():
+    executor = get_reusable_executor(max_workers=2, context='loky')
+    assert executor.submit(id, 42).result() >= 0
+
+    with pytest.raises(ValueError):
+        get_reusable_executor(max_workers=2, context='invalid_start_method')
