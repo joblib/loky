@@ -11,9 +11,12 @@ import multiprocessing as mp
 
 from .process_executor import ProcessPoolExecutor, EXTRA_QUEUED_CALLS
 from .backend.queues import Queue, SimpleQueue
+from .backend import get_context
 
 __all__ = ['get_reusable_executor']
 
+# Python 2 compat helper
+STRING_TYPE = type("")
 
 # Singleton executor and id management
 _executor_id_lock = threading.Lock()
@@ -72,6 +75,8 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     executor = _executor
     args = dict(context=context, timeout=timeout, job_reducers=job_reducers,
                 result_reducers=result_reducers)
+    if isinstance(context, STRING_TYPE):
+        context = get_context(context)
     if context is not None and context.get_start_method() == "fork":
         raise ValueError("Cannot use reusable executor with the 'fork' "
                          "context")
