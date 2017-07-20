@@ -192,6 +192,9 @@ class TestCondition():
         self.check_invariant(cond)
         p.join()
 
+    @pytest.mark.xfail(sys.platform != "win32" and
+                       sys.version_info[:2] <= (3, 3),
+                       reason="The test if not robust enough. See issue#74")
     def test_notify_all(self):
         cond = loky_context.Condition()
         sleeping = loky_context.Semaphore(0)
