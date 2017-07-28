@@ -686,17 +686,19 @@ def _shutdown_crash(executor_flags, processes, pending_work_items,
                  "worker processes. " + cause_msg)
     executor_flags.flag_as_broken()
     call_queue.close()
+    # All futures in flight must be marked failed. We do that before killing the
+    # processes so that when process get killed, queue_manager_thread is woken
+    # up and realises it can shutdown
+    for work_id, work_item in pending_work_items.items():
+        work_item.future.set_exception(BrokenExecutor(cause_msg))
+        # Delete references to object. See issue16284
+        del work_item
     # Terminate remaining workers forcibly: the queues or their
     # locks may be in a dirty state and block forever.
     while processes:
         _, p = processes.popitem()
         p.terminate()
         p.join()
-    # All futures in flight must be marked failed
-    for work_id, work_item in pending_work_items.items():
-        work_item.future.set_exception(BrokenExecutor(cause_msg))
-        # Delete references to object. See issue16284
-        del work_item
     pending_work_items.clear()
 
 
