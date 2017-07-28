@@ -563,9 +563,9 @@ def _queue_management_worker(executor_reference,
             if p is not None:
                 p.join()
 
-            # Make sure the executor have the right number of worker, even if
-            # a worker timeout while some jobs were submitted. If some work is
-            # pending or there is less processes than runnin items, we need to
+            # Make sure the executor have the right number of worker, even if a
+            # worker timeout while some jobs were submitted. If some work is
+            # pending or there is less processes than running items, we need to
             # start a new Process and raise a warning.
             if ((len(pending_work_items) > 0
                 or len(running_work_items) > len(processes))
@@ -686,9 +686,9 @@ def _shutdown_crash(executor_flags, processes, pending_work_items,
                  "worker processes. " + cause_msg)
     executor_flags.flag_as_broken()
     call_queue.close()
-    # All futures in flight must be marked failed. We do that before killing the
-    # processes so that when process get killed, queue_manager_thread is woken
-    # up and realises it can shutdown
+    # All futures in flight must be marked failed. We do that before killing
+    # the processes so that when process get killed, queue_manager_thread is
+    # woken up and realises it can shutdown
     for work_id, work_item in pending_work_items.items():
         work_item.future.set_exception(BrokenExecutor(cause_msg))
         # Delete references to object. See issue16284
@@ -730,7 +730,7 @@ def _check_system_limits():
     raise NotImplementedError(_system_limited)
 
 
-def _check_max_detph(context):
+def _check_max_depth(context):
     # Limit the maxmal recursion level
     global _CURRENT_DEPTH
     if context.get_start_method() == "fork" and _CURRENT_DEPTH > 0:
@@ -808,7 +808,7 @@ class ProcessPoolExecutor(_base.Executor):
             context = get_context()
         self._ctx = context
         mp.util.debug("using context {}".format(self._ctx))
-        _check_max_detph(self._ctx)
+        _check_max_depth(self._ctx)
 
         # Timeout and its lock.
         self._timeout = timeout
