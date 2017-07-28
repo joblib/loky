@@ -33,6 +33,8 @@ import traceback
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import BrokenExecutor, LokyRecursionError
+from .test_reusable_executor import ErrorAtPickle
+from .test_reusable_executor import ExitAtPickle
 from .utils import id_sleep, check_subprocess_call
 
 if sys.version_info[:2] < (3, 3):
@@ -73,6 +75,11 @@ def sleep_and_write(t, filename, msg):
         f.write(str(msg).encode('utf-8'))
 
 
+def sleep_and_return(delay, x):
+    time.sleep(delay)
+    return x
+
+
 class MyObject(object):
     def __init__(self, value=0):
         self.value = value
@@ -82,10 +89,21 @@ class MyObject(object):
 
 
 class ExecutorShutdownTest:
+
     def test_run_after_shutdown(self):
         self.executor.shutdown()
         with pytest.raises(RuntimeError):
             self.executor.submit(pow, 2, 5)
+
+    def test_shutdown_with_pickle_error(self):
+        self.executor.shutdown()
+        with self.executor_type(max_workers=4) as e:
+            e.submit(id, ErrorAtPickle())
+
+    def test_shutdown_with_sys_exit_at_pickle(self):
+        self.executor.shutdown()
+        with self.executor_type(max_workers=4) as e:
+            e.submit(id, ExitAtPickle())
 
     def test_interpreter_shutdown(self):
         # Free ressources to avoid random timeout in CI
@@ -163,13 +181,8 @@ class ExecutorShutdownTest:
         for p in processes.values():
             p.join()
 
-    @classmethod
-    def _sleep_and_return(cls, delay, x):
-        time.sleep(delay)
-        return x
-
     def test_processes_terminate_on_executor_gc(self):
-        results = self.executor.map(self._sleep_and_return,
+        results = self.executor.map(sleep_and_return,
                                     [0.1] * 10, range(10))
         assert len(self.executor._processes) == 5
         processes = self.executor._processes
@@ -186,7 +199,7 @@ class ExecutorShutdownTest:
         # reference when we deleted self.executor.
         t_deadline = time.time() + 1
         while executor_reference() is not None and time.time() < t_deadline:
-            pass
+            time.sleep(0.001)
         assert executor_reference() is None
 
         # The remaining jobs should still be processed in the background
@@ -206,7 +219,7 @@ class ExecutorShutdownTest:
 
     def test_processes_crash_handling_after_executor_gc(self):
         # Start 5 easy jobs on 5 workers
-        results = self.executor.map(self._sleep_and_return,
+        results = self.executor.map(sleep_and_return,
                                     [0.01] * 5, range(5))
 
         # Enqueue a job that will trigger a crash of one of the workers.
@@ -363,8 +376,7 @@ class WaitTests:
         assert set() == pending
 
     def test_timeout(self):
-
-        # Make sure the executor has already started to avoid timeout happens
+        # Make sure the executor has already started to avoid timeout happening
         # before future1 returns
         assert self.executor.submit(id_sleep, 42).result() == 42
 

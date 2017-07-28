@@ -9,6 +9,7 @@ import multiprocessing
 from tempfile import mkstemp
 
 from loky.backend import get_context
+from loky.backend.compat import wait
 from .utils import TimingWrapper, check_subprocess_call
 
 try:
@@ -158,8 +159,7 @@ class TestLokyBackend:
 
     @classmethod
     def _test_connection(cls, conn):
-        """make sure a connection object is functionnal
-        """
+        """Make sure a connection object is functional"""
         if hasattr(conn, "get"):
             conn = conn.get()
         if hasattr(conn, "accept"):
@@ -389,6 +389,25 @@ class TestLokyBackend:
         assert wait_for_handle(sentinel, timeout=1)
 
     @classmethod
+    def _test_wait_sentinel(cls):
+        from signal import SIGTERM
+        time.sleep(.1)
+        os.kill(os.getpid(), SIGTERM)
+
+    def test_wait_sentinel(self):
+        p = self.Process(target=self._test_wait_sentinel)
+        with pytest.raises(ValueError):
+            p.sentinel
+        p.start()
+        sentinel = p.sentinel
+        assert isinstance(sentinel, int)
+        assert not wait([sentinel], timeout=0.0)
+        assert wait([sentinel], timeout=5), (p.exitcode)
+        expected_code = 15 if sys.platform == 'win32' else -15
+        p.join()  # force refresh of p.exitcode
+        assert p.exitcode == expected_code
+
+    @classmethod
     def _high_number_Pipe(cls):
         """Create a Pipe with 2 high numbered file descriptors"""
         fds = []
@@ -401,7 +420,7 @@ class TestLokyBackend:
         return r, w
 
     @classmethod
-    def _test_sync_object_handleling(cls, started, stop, conn, w):
+    def _test_sync_object_handling(cls, started, stop, conn, w):
         """Check validity of parents args and Create semaphores to clean up
 
         started, stop: Event
@@ -479,8 +498,8 @@ class TestLokyBackend:
 
         return named_sem
 
-    def test_sync_object_handleling(self):
-        """Check the correct handeling of semaphores and pipes with loky
+    def test_sync_object_handling(self):
+        """Check the correct handling of semaphores and pipes with loky
 
         We use a Pipe object to check the stated of file descriptors in parent
         and child. To make sure there is no interference in the fd numbers, we
@@ -501,13 +520,13 @@ class TestLokyBackend:
         with open(tmp_fname, "w"):
             # Process creating semaphore and pipes before stopping
             started, stop = self.Event(), self.Event()
-            p = self.Process(target=self._test_sync_object_handleling,
+            p = self.Process(target=self._test_sync_object_handling,
                              args=(started, stop, r, w.fileno()))
             named_sem = []
             try:
 
                 p.start()
-                assert started.wait(1), "The process took too long to start"
+                assert started.wait(5), "The process took too long to start"
                 r.close()
                 w.send_bytes(b"foo")
                 if sys.platform != "win32":
@@ -558,7 +577,7 @@ class TestLokyBackend:
             '                init_main_module={})'.format(not run_file),
             'p.start()',
             'p.join()',
-            'msg = "LokyProcess failed to load without safegard"',
+            'msg = "LokyProcess failed to load without safeguard"',
             'assert p.exitcode == 0, msg',
             'print("ok")'
         ])
@@ -624,7 +643,7 @@ class TestLokyBackend:
             'p = ctx.Process(target=id, args=(1,))',
             'p.start()',
             'p.join()',
-            'msg = "loky context failed to load without safegard"',
+            'msg = "loky context failed to load without safeguard"',
             'assert p.exitcode == 0, msg',
             'print("ok")'
         ])
