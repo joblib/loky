@@ -163,7 +163,7 @@ class LokyInitMainContext(LokyContext):
     functions and variable used from main should be out of this block.
 
     This mimics the default behavior of multiprocessing under Windows and the
-    behavior of the ``spawn`` start method on posix system for python3.4+.
+    behavior of the ``spawn`` start method on a posix system for python3.4+.
     For more details, see the end of the following section of python doc
     https://docs.python.org/3/library/multiprocessing.html#multiprocessing-programming
     """
