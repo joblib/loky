@@ -23,15 +23,15 @@ if sys.version_info[:2] >= (3, 4):
     from multiprocessing.context import assert_spawning, set_spawning_popen
     from multiprocessing.context import get_spawning_popen, BaseContext
 
-    def get_context(method="spawn"):
+    def get_context(method="loky"):
         if method == "fork":
-            warnings.warn("`fork` context should not be used with `loky` as it"
-                          " does not respect POSIX. Try using `spawn` or "
+            warnings.warn("`fork` start method should not be used with `loky` "
+                          "as it does not respect POSIX. Try using `spawn` or "
                           "`loky` instead.", UserWarning)
         return get_mp_context(method)
 
 else:
-    METHODS = ['loky', 'loky_no_main']
+    METHODS = ['loky', 'loky_init_main']
     if sys.platform != 'win32':
         import threading
         # Mecanism to check that the current thread is spawning a child process
@@ -60,8 +60,8 @@ else:
     def get_context(method="loky"):
         if method == "loky":
             return LokyContext()
-        elif method == "loky_no_main":
-            return LokyNoMainContext()
+        elif method == "loky_init_main":
+            return LokyInitMainContext()
         else:
             raise ValueError("Method {} is not implemented. The available "
                              "methods are {}".format(method, METHODS))
@@ -153,20 +153,26 @@ class LokyContext(BaseContext):
             return Event()
 
 
-class LokyNoMainContext(LokyContext):
-    """Extra context with LokyProcess, which do not load the main module
+class LokyInitMainContext(LokyContext):
+    """Extra context with LokyProcess, which does load the main module
 
-    This context is used for backward compatibility in ``joblib`` and should
-    not be used without a good knowledge of the mechanism behind it.
-    It alows a script without the ``if __name__ == "__main__":`` to run without
-    failure when using ``loky`` backend and ``cloudpickle`` for serialization.
+    This context is used for compatibility in the case ``cloudpickle`` is not 
+    present on the running system. This permits to load functions defined in
+    the ``main`` module, using proper safeguards. The declaration of the
+    ``executor`` should be protected by ``if __name__ == "__main__":`` and the
+    functions and variable used from main should be out of this block.
+
+    This mimics the default behavior of multiprocessing under Windows and the
+    behavior of the ``spawn`` start method on a posix system for python3.4+.
+    For more details, see the end of the following section of python doc
+    https://docs.python.org/3/library/multiprocessing.html#multiprocessing-programming
     """
     def Process(self, *args, **kwargs):
-        kwargs.pop('init_main_module', False)
-        return LokyProcess(*args, init_main_module=False, **kwargs)
+        kwargs.pop('init_main_module', True)
+        return LokyProcess(*args, init_main_module=True, **kwargs)
 
 
 if sys.version_info > (3, 4):
     """Register loky context so it works with multiprocessing.get_context"""
     mp.context._concrete_contexts['loky'] = LokyContext()
-    mp.context._concrete_contexts['loky_no_main'] = LokyNoMainContext()
+    mp.context._concrete_contexts['loky_init_main'] = LokyInitMainContext()

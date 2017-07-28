@@ -15,7 +15,7 @@ class LokyProcess(BaseProcess):
     _start_method = 'loky'
 
     def __init__(self, group=None, target=None, name=None, args=(),
-                 kwargs={}, daemon=None, init_main_module=True):
+                 kwargs={}, daemon=None, init_main_module=False):
         if sys.version_info < (3, 3):
             super(LokyProcess, self).__init__(
                 group=group, target=target, name=name, args=args,

@@ -105,7 +105,7 @@ class TestLokyBackend:
         q.put(bytes(current.authkey))
         q.put(current.pid)
 
-    @pytest.mark.parametrize("context_name", ["loky", "loky_no_main"])
+    @pytest.mark.parametrize("context_name", ["loky", "loky_init_main"])
     def test_process(self, context_name):
         """behavior of Process variables and functionnal connection objects
         """
@@ -548,6 +548,7 @@ class TestLokyBackend:
 
     @pytest.mark.parametrize("run_file", [True, False])
     def test_interactively_define_process_no_main(self, run_file):
+        # check that the init_main_module parameter works properly
         # when using -c option, we don't need the safeguard if __name__ ..
         # and thus test LokyProcess without the extra argument. For running
         # a script, it is necessary to use init_main_module=False.
@@ -577,6 +578,7 @@ class TestLokyBackend:
                 os.unlink(filename)
 
     def test_interactively_define_process_fail_main(self):
+        # check that the default behavior of the LokyProcess is correct
         code = '\n'.join([
             'from loky.backend.process import LokyProcess',
             'p = LokyProcess(target=id, args=(1,),',
@@ -601,30 +603,28 @@ class TestLokyBackend:
             os.unlink(filename)
 
     def test_loky_get_context(self):
+        # check the behavior of get_context
         ctx_default = get_context()
-        if sys.version_info[:2] < (3, 4):
-            assert ctx_default.get_start_method() == "loky"
-        else:
-            assert ctx_default.get_start_method() == "spawn"
+        assert ctx_default.get_start_method() == "loky"
 
         ctx_loky = get_context("loky")
         assert ctx_loky.get_start_method() == "loky"
 
-        ctx_loky_no_main = get_context("loky_no_main")
-        assert ctx_loky_no_main.get_start_method() == "loky"
+        ctx_loky_init_main = get_context("loky_init_main")
+        assert ctx_loky_init_main.get_start_method() == "loky"
 
         with pytest.raises(ValueError):
             get_context("not_available")
 
     def test_interactive_contex_no_main(self):
-        # Ensure that loky_no_main context is working properly
+        # Ensure that loky context is working properly
         code = '\n'.join([
             'from loky.backend import get_context',
-            'ctx = get_context("loky_no_main")',
+            'ctx = get_context("loky")',
             'p = ctx.Process(target=id, args=(1,))',
             'p.start()',
             'p.join()',
-            'msg = "loky_no_main context failed to load without safegard"',
+            'msg = "loky context failed to load without safegard"',
             'assert p.exitcode == 0, msg',
             'print("ok")'
         ])
