@@ -199,7 +199,7 @@ class ExecutorShutdownTest:
         # reference when we deleted self.executor.
         t_deadline = time.time() + 1
         while executor_reference() is not None and time.time() < t_deadline:
-            pass
+            time.sleep(0.001)
         assert executor_reference() is None
 
         # The remaining jobs should still be processed in the background
