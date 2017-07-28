@@ -23,6 +23,7 @@ from multiprocessing.queues import SimpleQueue as mp_SimpleQueue
 
 from .reduction import CustomizableLokyPickler
 from .context import assert_spawning, get_context
+from .utils import flag_current_thread_clean_exit
 
 
 __all__ = ['Queue', 'SimpleQueue']
@@ -143,8 +144,7 @@ class Queue(mp_Queue):
                         if obj is sentinel:
                             util.debug('feeder thread got sentinel -- exiting')
                             close()
-                            feeder = threading.current_thread()
-                            feeder._clean_exit = True
+                            flag_current_thread_clean_exit()
                             return
 
                         # serialize the data before acquiring the lock

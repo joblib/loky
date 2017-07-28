@@ -75,6 +75,7 @@ from .backend import get_context
 from .backend.compat import queue
 from .backend.compat import wait, PicklingError
 from .backend.queues import Queue, SimpleQueue
+from .backend.utils import flag_current_thread_clean_exit
 
 # Compatibility for python2.7
 if sys.version_info[0] == 2:
@@ -503,6 +504,8 @@ def _queue_management_worker(executor_reference,
         # that worker process are still running. If a worker process
         while not wakeup.get_and_unset():
             worker_sentinels = [p.sentinel for p in processes.values()]
+            if len(worker_sentinels) == 0:
+                wakeup.set()
             ready = wait([result_reader] + worker_sentinels,
                          timeout=_poll_timeout)
             if len(ready) > 0:
@@ -551,6 +554,7 @@ def _queue_management_worker(executor_reference,
                     pass
 
             shutdown_all_workers()
+            flag_current_thread_clean_exit()
             return
         if isinstance(result_item, int):
             # Clean shutdown of a worker using its PID, either on request
@@ -606,15 +610,18 @@ def _queue_management_worker(executor_reference,
                     p.terminate()
                     p.join()
                 shutdown_all_workers()
+                flag_current_thread_clean_exit()
                 return
             # Since no new work items can be added, it is safe to shutdown
             # this thread if there are no pending work items.
             if not pending_work_items:
                 shutdown_all_workers()
+                flag_current_thread_clean_exit()
                 return
         elif executor_flags.broken:
             return
         executor = None
+        flag_current_thread_clean_exit()
 
 
 def _management_worker(executor_reference, executor_flags,
@@ -644,7 +651,7 @@ def _management_worker(executor_reference, executor_flags,
                 (executor is None and not queue_management_thread.is_alive()))
 
     while True:
-        broken_qm = not queue_management_thread.is_alive()
+        broken_qm = _is_crashed(queue_management_thread)
 
         if broken_qm:
             broken = (call_queue._thread is not None and
@@ -667,7 +674,8 @@ def _management_worker(executor_reference, executor_flags,
                             call_queue, cause_msg)
             return
         executor = executor_reference()
-        if is_shutting_down():
+        if (is_shutting_down() and
+                getattr(queue_management_thread, "_clean_exit", False)):
             mp.util.debug("shutting down")
             return
 
