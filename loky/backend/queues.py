@@ -144,7 +144,7 @@ class Queue(mp_Queue):
                             util.debug('feeder thread got sentinel -- exiting')
                             close()
                             feeder = threading.current_thread()
-                            feeder.clean_exit = True
+                            feeder._clean_exit = True
                             return
 
                         # serialize the data before acquiring the lock

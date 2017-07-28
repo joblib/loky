@@ -274,19 +274,24 @@ class _CallItem(object):
 
 class _SafeQueue(Queue):
     """Safe Queue set exception to the future object linked to a job"""
-    def __init__(self, max_size=0, *, ctx, pending_work_items, reducers):
+    def __init__(self, max_size=0, ctx=None, pending_work_items=None,
+                 wakeup=None, reducers=None):
+        self.wakeup = wakeup
         self.pending_work_items = pending_work_items
-        super().__init__(max_size, reducers=reducers, ctx=ctx)
+        super(_SafeQueue, self).__init__(max_size, reducers=reducers, ctx=ctx)
 
     def _on_queue_feeder_error(self, e, obj):
         if isinstance(obj, _CallItem):
-            tb = traceback.format_exception(type(e), e, e.__traceback__)
+            # fromat traceback only on python3
+            tb = traceback.format_exception(
+                type(e), e, getattr(e, "__traceback__", None))
             e.__cause__ = _RemoteTraceback('\n"""\n{}"""'.format(''.join(tb)))
             work_item = self.pending_work_items.pop(obj.work_id, None)
             # work_item can be None if another process terminated (see above)
             if work_item is not None:
                 work_item.future.set_exception(e)
                 del work_item
+            self.wakeup.set()
         else:
             super()._on_queue_feeder_error(e, obj)
 
@@ -654,7 +659,7 @@ def _management_worker(executor_reference, executor_flags,
                                 pending_work_items, call_queue, cause_msg)
             return
         elif (_is_crashed(call_queue._thread) and
-              not hasattr(call_queue, "clean_exit")):
+              not getattr(call_queue._thread, "_clean_exit", False)):
             cause_msg = ("The QueueFeederThread was terminated abruptly "
                          "while feeding a new job. This can be due to "
                          "a job pickling error.")
@@ -786,7 +791,7 @@ class ProcessPoolExecutor(_base.Executor):
         _check_system_limits()
 
         if max_workers is None:
-            self._max_workers = os.cpu_count() or 1
+            self._max_workers = mp.cpu_count() or 1
         else:
             if max_workers <= 0:
                 raise ValueError("max_workers must be greater than 0")
@@ -825,14 +830,15 @@ class ProcessPoolExecutor(_base.Executor):
         # Finally setup the queue for interprocess communication
         self._setup_queue(job_reducers, result_reducers)
 
-    def _setup_queue(self, job_reducers, result_reducers):
+    def _setup_queue(self, job_reducers, result_reducers, queue_size=None):
         # Make the call queue slightly larger than the number of processes to
         # prevent the worker processes from idling. But don't make it too big
         # because futures in the call queue cannot be cancelled.
+        if queue_size is None:
+            queue_size = 2 * self._max_workers + EXTRA_QUEUED_CALLS
         self._call_queue = _SafeQueue(
-            2 * self._max_workers + EXTRA_QUEUED_CALLS,
-            pending_work_items=self._pending_work_items,
-            reducers=job_reducers, ctx=self._ctx)
+            max_size=queue_size, pending_work_items=self._pending_work_items,
+            wakeup=self._wakeup, reducers=job_reducers, ctx=self._ctx)
         # Killed worker processes can produce spurious "broken pipe"
         # tracebacks in the queue's own worker thread. But we detect killed
         # processes anyway, so silence the tracebacks.

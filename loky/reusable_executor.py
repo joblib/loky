@@ -170,11 +170,6 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
     def _setup_queue(self, job_reducers, result_reducers):
         # As this executor can be resized, use a large queue size to avoid
         # underestimating capacity and introducing overhead
-        self._call_queue = _SafeQueue(
-            2 * mp.cpu_count() + EXTRA_QUEUED_CALLS,
-            pending_work_items=self._pending_work_items,
-            reducers=job_reducers, ctx=self._ctx)
-        self._call_queue._ignore_epipe = True
-
-        self._result_queue = SimpleQueue(reducers=result_reducers,
-                                         ctx=self._ctx)
+        queue_size = 2 * mp.cpu_count() + EXTRA_QUEUED_CALLS
+        super(ReusablePoolExecutor, self)._setup_queue(
+            job_reducers, result_reducers, queue_size=queue_size)
