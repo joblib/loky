@@ -376,8 +376,7 @@ class WaitTests:
         assert set() == pending
 
     def test_timeout(self):
-
-        # Make sure the executor has already started to avoid timeout happens
+        # Make sure the executor has already started to avoid timeout happening
         # before future1 returns
         assert self.executor.submit(id_sleep, 42).result() == 42
 

@@ -402,7 +402,7 @@ class TestLokyBackend:
         sentinel = p.sentinel
         assert isinstance(sentinel, int)
         assert not wait([sentinel], timeout=0.0)
-        assert wait([sentinel], timeout=1), (p.exitcode)
+        assert wait([sentinel], timeout=5), (p.exitcode)
         expected_code = 15 if sys.platform == 'win32' else -15
         assert p.exitcode == expected_code
 
@@ -419,7 +419,7 @@ class TestLokyBackend:
         return r, w
 
     @classmethod
-    def _test_sync_object_handleling(cls, started, stop, conn, w):
+    def _test_sync_object_handling(cls, started, stop, conn, w):
         """Check validity of parents args and Create semaphores to clean up
 
         started, stop: Event
@@ -497,8 +497,8 @@ class TestLokyBackend:
 
         return named_sem
 
-    def test_sync_object_handleling(self):
-        """Check the correct handeling of semaphores and pipes with loky
+    def test_sync_object_handling(self):
+        """Check the correct handling of semaphores and pipes with loky
 
         We use a Pipe object to check the stated of file descriptors in parent
         and child. To make sure there is no interference in the fd numbers, we
@@ -519,7 +519,7 @@ class TestLokyBackend:
         with open(tmp_fname, "w"):
             # Process creating semaphore and pipes before stopping
             started, stop = self.Event(), self.Event()
-            p = self.Process(target=self._test_sync_object_handleling,
+            p = self.Process(target=self._test_sync_object_handling,
                              args=(started, stop, r, w.fileno()))
             named_sem = []
             try:
