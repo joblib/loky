@@ -1,3 +1,11 @@
+### 1.1 - 28/07/2017 - Release higlights
+
+- Rename `loky` backend to `loky_init_main`.
+- New `loky` backend which makes it possible to use `loky` with no `if __name__ == '__main__':` safeguard.
+- Change the default backend to `loky`.
+- Fix deadlocks on `PocessPoolExecutor.shutdown` (#71, #75)
+
+
 ### 1.0 - 20/06/2017 - Release highlights
 
 - Make `ProcessPoolExecutor` use a spawn-based start method by default. The
