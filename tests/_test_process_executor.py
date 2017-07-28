@@ -92,12 +92,12 @@ class ExecutorShutdownTest:
 
     def test_shutdown_with_pickle_error(self):
         self.executor.shutdown()
-        with self.executor_type() as e:
+        with self.executor_type(max_workers=4) as e:
             e.submit(id, ErrorAtPickle())
 
     def test_shutdown_with_sys_exit_at_pickle(self):
         self.executor.shutdown()
-        with self.executor_type() as e:
+        with self.executor_type(max_workers=4) as e:
             e.submit(id, ExitAtPickle())
 
     def test_interpreter_shutdown(self):
