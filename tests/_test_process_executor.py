@@ -34,6 +34,7 @@ from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import BrokenExecutor, LokyRecursionError
 from .test_reusable_executor import ErrorAtPickle
+from .test_reusable_executor import ExitAtPickle
 from .utils import id_sleep, check_subprocess_call
 
 if sys.version_info[:2] < (3, 3):
@@ -93,6 +94,11 @@ class ExecutorShutdownTest:
         self.executor.shutdown()
         with self.executor_type() as e:
             e.submit(id, ErrorAtPickle())
+
+    def test_shutdown_with_sys_exit_at_pickle(self):
+        self.executor.shutdown()
+        with self.executor_type() as e:
+            e.submit(id, ExitAtPickle())
 
     def test_interpreter_shutdown(self):
         # Free ressources to avoid random timeout in CI
