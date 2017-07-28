@@ -9,6 +9,7 @@ import multiprocessing
 from tempfile import mkstemp
 
 from loky.backend import get_context
+from loky.backend.compat import wait
 from .utils import TimingWrapper, check_subprocess_call
 
 try:
@@ -386,6 +387,24 @@ class TestLokyBackend:
         p.join()
         assert p.exitcode == 0
         assert wait_for_handle(sentinel, timeout=1)
+
+    @classmethod
+    def _test_wait_sentinel(cls):
+        from signal import SIGTERM
+        time.sleep(.1)
+        os.kill(os.getpid(), SIGTERM)
+
+    def test_wait_sentinel(self):
+        event = self.Event()
+        p = self.Process(target=self._test_wait_sentinel)
+        with pytest.raises(ValueError):
+            p.sentinel
+        p.start()
+        sentinel = p.sentinel
+        assert isinstance(sentinel, int)
+        assert not wait([sentinel], timeout=0.0)
+        assert wait([sentinel], timeout=1), (p.exitcode)
+        assert p.exitcode == 15
 
     @classmethod
     def _high_number_Pipe(cls):
