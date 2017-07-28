@@ -526,7 +526,7 @@ class TestLokyBackend:
             try:
 
                 p.start()
-                assert started.wait(1), "The process took too long to start"
+                assert started.wait(5), "The process took too long to start"
                 r.close()
                 w.send_bytes(b"foo")
                 if sys.platform != "win32":
