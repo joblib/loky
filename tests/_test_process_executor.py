@@ -176,8 +176,8 @@ class ExecutorShutdownTest:
         for p in processes.values():
             p.join()
 
-    @classmethod
-    def _sleep_and_return(cls, delay, x):
+    @staticmethod
+    def _sleep_and_return(delay, x):
         time.sleep(delay)
         return x
 
