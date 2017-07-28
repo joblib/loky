@@ -75,6 +75,11 @@ def sleep_and_write(t, filename, msg):
         f.write(str(msg).encode('utf-8'))
 
 
+def sleep_and_return(delay, x):
+    time.sleep(delay)
+    return x
+
+
 class MyObject(object):
     def __init__(self, value=0):
         self.value = value
@@ -176,13 +181,8 @@ class ExecutorShutdownTest:
         for p in processes.values():
             p.join()
 
-    @staticmethod
-    def _sleep_and_return(delay, x):
-        time.sleep(delay)
-        return x
-
     def test_processes_terminate_on_executor_gc(self):
-        results = self.executor.map(self._sleep_and_return,
+        results = self.executor.map(sleep_and_return,
                                     [0.1] * 10, range(10))
         assert len(self.executor._processes) == 5
         processes = self.executor._processes
@@ -219,7 +219,7 @@ class ExecutorShutdownTest:
 
     def test_processes_crash_handling_after_executor_gc(self):
         # Start 5 easy jobs on 5 workers
-        results = self.executor.map(self._sleep_and_return,
+        results = self.executor.map(sleep_and_return,
                                     [0.01] * 5, range(5))
 
         # Enqueue a job that will trigger a crash of one of the workers.
