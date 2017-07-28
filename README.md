@@ -18,7 +18,7 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     third party libraries.
 
   * __Reusable executor__: strategy to avoid respawning a complete
-    executor every time. A singleton executor instace can be reused (and
+    executor every time. A singleton executor instance can be reused (and
     dynamically resized if necessary) across consecutive calls to limit
     spawning and shutdown overhead. The worker processes can be shutdown
     automatically after a configurable idling timeout to free system
@@ -28,6 +28,11 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     defined functions and lambda expressions in parallel. It is also
     possible to register a custom pickler implementation to handle
     inter-process communications.
+
+  * __No need for if ``if __name__ == "__main__":`` in scripts__: thanks
+    to the use of ``cloudpickle`` to call functions defined in the
+    ``__main__`` module, it is not required to protect the code calling
+    parallel functions under Windows.
 
 ### Usage
 
