@@ -395,7 +395,6 @@ class TestLokyBackend:
         os.kill(os.getpid(), SIGTERM)
 
     def test_wait_sentinel(self):
-        event = self.Event()
         p = self.Process(target=self._test_wait_sentinel)
         with pytest.raises(ValueError):
             p.sentinel
@@ -404,7 +403,8 @@ class TestLokyBackend:
         assert isinstance(sentinel, int)
         assert not wait([sentinel], timeout=0.0)
         assert wait([sentinel], timeout=1), (p.exitcode)
-        assert p.exitcode == 15
+        expected_code = 15 if sys.platform == 'win32' else -15
+        assert p.exitcode == expected_code
 
     @classmethod
     def _high_number_Pipe(cls):
