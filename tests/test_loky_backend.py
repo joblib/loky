@@ -404,6 +404,7 @@ class TestLokyBackend:
         assert not wait([sentinel], timeout=0.0)
         assert wait([sentinel], timeout=5), (p.exitcode)
         expected_code = 15 if sys.platform == 'win32' else -15
+        p.join()  # force refresh of p.exitcode
         assert p.exitcode == expected_code
 
     @classmethod
@@ -576,7 +577,7 @@ class TestLokyBackend:
             '                init_main_module={})'.format(not run_file),
             'p.start()',
             'p.join()',
-            'msg = "LokyProcess failed to load without safegard"',
+            'msg = "LokyProcess failed to load without safeguard"',
             'assert p.exitcode == 0, msg',
             'print("ok")'
         ])
@@ -642,7 +643,7 @@ class TestLokyBackend:
             'p = ctx.Process(target=id, args=(1,))',
             'p.start()',
             'p.join()',
-            'msg = "loky context failed to load without safegard"',
+            'msg = "loky context failed to load without safeguard"',
             'assert p.exitcode == 0, msg',
             'print("ok")'
         ])
