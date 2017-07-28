@@ -158,8 +158,7 @@ class TestLokyBackend:
 
     @classmethod
     def _test_connection(cls, conn):
-        """make sure a connection object is functionnal
-        """
+        """Make sure a connection object is functional"""
         if hasattr(conn, "get"):
             conn = conn.get()
         if hasattr(conn, "accept"):
