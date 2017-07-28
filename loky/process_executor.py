@@ -272,6 +272,25 @@ class _CallItem(object):
         pass
 
 
+class _SafeQueue(Queue):
+    """Safe Queue set exception to the future object linked to a job"""
+    def __init__(self, max_size=0, *, ctx, pending_work_items, reducers):
+        self.pending_work_items = pending_work_items
+        super().__init__(max_size, reducers=reducers, ctx=ctx)
+
+    def _on_queue_feeder_error(self, e, obj):
+        if isinstance(obj, _CallItem):
+            tb = traceback.format_exception(type(e), e, e.__traceback__)
+            e.__cause__ = _RemoteTraceback('\n"""\n{}"""'.format(''.join(tb)))
+            work_item = self.pending_work_items.pop(obj.work_id, None)
+            # work_item can be None if another process terminated (see above)
+            if work_item is not None:
+                work_item.future.set_exception(e)
+                del work_item
+        else:
+            super()._on_queue_feeder_error(e, obj)
+
+
 def _get_chunks(chunksize, *iterables):
     """ Iterates over zip()ed iterables in chunks. """
     if sys.version_info < (3, 3):
@@ -634,12 +653,8 @@ def _management_worker(executor_reference, executor_flags,
                 _shutdown_crash(executor_flags, processes,
                                 pending_work_items, call_queue, cause_msg)
             return
-        elif _is_crashed(call_queue._thread):
-            executor = executor_reference()
-            if is_shutting_down():
-                mp.util.debug("shutting down")
-                return
-            executor = None
+        elif (_is_crashed(call_queue._thread) and
+              not hasattr(call_queue, "clean_exit")):
             cause_msg = ("The QueueFeederThread was terminated abruptly "
                          "while feeding a new job. This can be due to "
                          "a job pickling error.")
@@ -791,7 +806,6 @@ class ProcessPoolExecutor(_base.Executor):
         # Timeout and its lock.
         self._timeout = timeout
 
-        self._setup_queue(job_reducers, result_reducers)
         # Connection to wakeup QueueManagerThread
         self._wakeup = _Sentinel()
         self._work_ids = queue.Queue()
@@ -808,12 +822,17 @@ class ProcessPoolExecutor(_base.Executor):
         self._pending_work_items = {}
         mp.util.debug('ProcessPoolExecutor is setup')
 
+        # Finally setup the queue for interprocess communication
+        self._setup_queue(job_reducers, result_reducers)
+
     def _setup_queue(self, job_reducers, result_reducers):
         # Make the call queue slightly larger than the number of processes to
         # prevent the worker processes from idling. But don't make it too big
         # because futures in the call queue cannot be cancelled.
-        self._call_queue = Queue(2 * self._max_workers + EXTRA_QUEUED_CALLS,
-                                 reducers=job_reducers, ctx=self._ctx)
+        self._call_queue = _SafeQueue(
+            2 * self._max_workers + EXTRA_QUEUED_CALLS,
+            pending_work_items=self._pending_work_items,
+            reducers=job_reducers, ctx=self._ctx)
         # Killed worker processes can produce spurious "broken pipe"
         # tracebacks in the queue's own worker thread. But we detect killed
         # processes anyway, so silence the tracebacks.
