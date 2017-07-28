@@ -1,3 +1,7 @@
+### 1.1.1 - 28/07/2017 - Bug fix release
+
+- Fix default backend for ReusablePoolExecutor
+
 ### 1.1 - 28/07/2017 - Release higlights
 
 - Rename `loky` backend to `loky_init_main`.

@@ -40,9 +40,10 @@ cmdclass = {'clean': CleanCommand}
 
 setup(
     name='loky',
-    version='1.1.1.dev0',
+    version='1.1.1',
     description=("A robust implementation of "
                  "concurrent.futures.ProcessPoolExecutor"),
+    long_description=open('README.md', 'rb').read().decode('utf-8'),
     url='https://github.com/tommoral/loky/',
     author='Thomas Moreau',
     author_email='thomas.moreau.2010@gmail.com',
