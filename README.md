@@ -48,21 +48,19 @@ def say_hello(k):
     sleep(.01)
     return pid
 
+# Create an executor with 4 worker processes, that will
+# automatically shutdown after idling for 2s
+executor = get_reusable_executor(max_workers=4, timeout=2)
 
-if __name__ == "__main__":
-    # Create an executor with 4 worker processes, that will 
-    # automatically shutdown after idling for 2s
-    executor = get_reusable_executor(max_workers=4, timeout=2)
+res = executor.submit(say_hello, 1)
+print("Got results:", res.result())
 
-    res = executor.submit(say_hello, 1)
-    print("Got results:", res.result())
+results = executor.map(say_hello, range(50))
+n_workers = len(set(results))
+print("Number of used processes:", n_workers)
+assert n_workers == 4
 
-    results = executor.map(say_hello, range(50))
-    n_workers = len(set(results))
-    print("Number of used processes:", n_workers)
-    assert n_workers == 4
-
-    executor.shutdown(wait=True)
+executor.shutdown(wait=True)
 ```
 
 ### Acknowledgement

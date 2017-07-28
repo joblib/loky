@@ -7,6 +7,7 @@ import pytest
 import warnings
 import threading
 from time import sleep
+from tempfile import mkstemp
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
 
@@ -15,7 +16,7 @@ from loky import get_reusable_executor
 from loky.process_executor import BrokenExecutor, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
-from .utils import TimingWrapper, id_sleep
+from .utils import TimingWrapper, id_sleep, check_subprocess_call
 
 # Compat windows
 if sys.platform == "win32":
@@ -527,3 +528,26 @@ def test_pass_start_method_name_as_context():
 
     with pytest.raises(ValueError):
         get_reusable_executor(max_workers=2, context='invalid_start_method')
+
+
+def test_interactively_define_executor_no_main():
+    # check that the init_main_module parameter works properly
+    # when using -c option, we don't need the safeguard if __name__ ..
+    # and thus test LokyProcess without the extra argument. For running
+    # a script, it is necessary to use init_main_module=False.
+    code = """if True:
+        from loky import get_reusable_executor
+        e = get_reusable_executor()
+        e.submit(id, 42).result()
+        print("ok")
+    """
+    cmd = [sys.executable]
+    try:
+        fid, filename = mkstemp(suffix="_joblib.py")
+        os.close(fid)
+        with open(filename, mode='wb') as f:
+            f.write(code.encode('ascii'))
+        cmd += [filename]
+        check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+    finally:
+        os.unlink(filename)
