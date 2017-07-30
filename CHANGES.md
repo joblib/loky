@@ -1,3 +1,8 @@
+### 1.1.2 - 30/07/2017 - Bug fix release
+
+- Fix shutdown with exit at pickle deadlock
+- Fix LokyProcess spawning forcing context to be loky in child (necessary for joblib)
+
 ### 1.1.1 - 28/07/2017 - Bug fix release
 
 - Fix default backend for ReusablePoolExecutor
