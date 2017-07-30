@@ -107,55 +107,62 @@ class TestLokyBackend:
         q.put(current.pid)
 
     @pytest.mark.parametrize("context_name", ["loky", "loky_init_main"])
-    def test_process(self, context_name):
-        """behavior of Process variables and functionnal connection objects
+    def test_process(self, capsys, context_name):
+        """behavior of Process variables and functional connection objects
         """
-        q = self.Queue()
-        sq = self.SimpleQueue()
-        args = (q, sq, 1, 2)
-        kwargs = {'hello': 23, 'bye': 2.54}
-        name = 'TestLokyProcess'
-        ctx = get_context(context_name)
-        p = ctx.Process(
-            target=self._test_process, args=args, kwargs=kwargs, name=name
-        )
-        p.daemon = True
-        current = self.current_process()
+        import contextlib
 
-        assert p.authkey == current.authkey
-        assert not p.is_alive()
-        assert p.daemon
-        assert p not in self.active_children()
-        assert type(self.active_children()) is list
-        assert p.exitcode is None
+        @contextlib.contextmanager
+        def no_mgr():
+            yield None
 
-        # Make sure we do not break security
-        with pytest.raises(TypeError):
-            pickle.dumps(p.authkey)
+        with capsys.disabled() if sys.version_info[:2] == (3, 3) else no_mgr():
+            q = self.Queue()
+            sq = self.SimpleQueue()
+            args = (q, sq, 1, 2)
+            kwargs = {'hello': 23, 'bye': 2.54}
+            name = 'TestLokyProcess'
+            ctx = get_context(context_name)
+            p = ctx.Process(
+                target=self._test_process, args=args, kwargs=kwargs, name=name
+            )
+            p.daemon = True
+            current = self.current_process()
 
-        # Make sure we detect bad pickling
-        with pytest.raises(RuntimeError):
-            pickle.dumps(q)
+            assert p.authkey == current.authkey
+            assert not p.is_alive()
+            assert p.daemon
+            assert p not in self.active_children()
+            assert type(self.active_children()) is list
+            assert p.exitcode is None
 
-        p.start()
+            # Make sure we do not break security
+            with pytest.raises(TypeError):
+                pickle.dumps(p.authkey)
 
-        assert p.exitcode is None
-        assert p.is_alive()
-        assert p in self.active_children()
+            # Make sure we detect bad pickling
+            with pytest.raises(RuntimeError):
+                pickle.dumps(q)
 
-        assert q.get() == args[2:]
-        assert sq.get() == args[2:]
+            p.start()
 
-        assert q.get() == kwargs
-        assert q.get() == p.name
-        assert q.get() == current.authkey
-        assert q.get() == p.pid
+            assert p.exitcode is None
+            assert p.is_alive()
+            assert p in self.active_children()
 
-        p.join()
+            assert q.get() == args[2:]
+            assert sq.get() == args[2:]
 
-        assert p.exitcode == 0
-        assert not p.is_alive()
-        assert p not in self.active_children()
+            assert q.get() == kwargs
+            assert q.get() == p.name
+            assert q.get() == current.authkey
+            assert q.get() == p.pid
+
+            p.join()
+
+            assert p.exitcode == 0
+            assert not p.is_alive()
+            assert p not in self.active_children()
 
     @classmethod
     def _test_connection(cls, conn):
