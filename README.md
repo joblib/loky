@@ -29,7 +29,7 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     possible to register a custom pickler implementation to handle
     inter-process communications.
 
-  * __No need for if ``if __name__ == "__main__":`` in scripts__: thanks
+  * __No need for ``if __name__ == "__main__":`` in scripts__: thanks
     to the use of ``cloudpickle`` to call functions defined in the
     ``__main__`` module, it is not required to protect the code calling
     parallel functions under Windows.
