@@ -674,7 +674,7 @@ def _shutdown_crash(executor_flags, processes, pending_work_items,
     call_queue.close()
     # All futures in flight must be marked failed. We do that before killing
     # the processes so that when process get killed, queue_manager_thread is
-    # woken up and realises it can shutdown
+    # woken up and realizes it can shutdown
     for work_id, work_item in pending_work_items.items():
         work_item.future.set_exception(BrokenExecutor(cause_msg))
         # Delete references to object. See issue16284
