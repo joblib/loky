@@ -143,7 +143,7 @@ class Popen(object):
             #     _mk_inheritable(fd)
 
             cmd_python = [sys.executable]
-            cmd_python += ['-m', 'loky.backend.popen_loky_posix']
+            cmd_python += ['-m', self.__module__]
             cmd_python += ['--name-process', str(process_obj.name)]
             cmd_python += ['--pipe',
                            str(reduction._mk_inheritable(child_r))]
