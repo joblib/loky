@@ -31,9 +31,12 @@
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc',
+extensions = [
+    'sphinx.ext.autodoc',
     'sphinx.ext.todo',
-    'sphinx.ext.viewcode']
+    'sphinx.ext.viewcode',
+    'sphinx_gallery.gen_gallery'
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -171,4 +174,14 @@ texinfo_documents = [
 ]
 
 
+sphinx_gallery_conf = {
+    # path to your examples scripts
+    'examples_dirs'         : '../examples',
+    # path where to save gallery generated examples
+    'gallery_dirs'          : 'auto_examples',
+    'reference_url': {
+        'loky': None
+    },
+    'default_thumb_file'    : '_static/lock-2.png'
+}
 
