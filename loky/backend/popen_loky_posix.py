@@ -25,154 +25,153 @@ if sys.platform != "win32":
 
 __all__ = ['Popen']
 
+if sys.platform != "win32":
+    #
+    # Wrapper for an fd used while launching a process
+    #
 
-#
-# Wrapper for an fd used while launching a process
-#
+    class _DupFd(object):
+        def __init__(self, fd):
+            self.fd = reduction._mk_inheritable(fd)
 
-class _DupFd(object):
-    def __init__(self, fd):
-        self.fd = reduction._mk_inheritable(fd)
+        def detach(self):
+            return self.fd
 
-    def detach(self):
-        return self.fd
+    #
+    # Start child process using subprocess.Popen
+    #
 
+    class Popen(object):
+        method = 'loky'
+        DupFd = _DupFd
 
-#
-# Start child process using subprocess.Popen
-#
+        def __init__(self, process_obj):
+            sys.stdout.flush()
+            sys.stderr.flush()
+            self.returncode = None
+            self._fds = []
+            self._launch(process_obj)
 
-class Popen(object):
-    method = 'loky'
-    DupFd = _DupFd
+        if sys.version_info < (3, 4):
+            @classmethod
+            def duplicate_for_child(cls, fd):
+                popen = get_spawning_popen()
+                popen._fds.append(fd)
+                return reduction._mk_inheritable(fd)
 
-    def __init__(self, process_obj):
-        sys.stdout.flush()
-        sys.stderr.flush()
-        self.returncode = None
-        self._fds = []
-        self._launch(process_obj)
+        else:
+            def duplicate_for_child(self, fd):
+                self._fds.append(fd)
+                return reduction._mk_inheritable(fd)
 
-    if sys.version_info < (3, 4):
-        @classmethod
-        def duplicate_for_child(cls, fd):
-            popen = get_spawning_popen()
-            popen._fds.append(fd)
-            return reduction._mk_inheritable(fd)
+        def poll(self, flag=os.WNOHANG):
+            if self.returncode is None:
+                while True:
+                    try:
+                        pid, sts = os.waitpid(self.pid, flag)
+                    except OSError as e:
+                        # Child process not yet created. See #1731717
+                        # e.errno == errno.ECHILD == 10
+                        return None
+                    else:
+                        break
+                if pid == self.pid:
+                    if os.WIFSIGNALED(sts):
+                        self.returncode = -os.WTERMSIG(sts)
+                    else:
+                        assert os.WIFEXITED(sts)
+                        self.returncode = os.WEXITSTATUS(sts)
+            return self.returncode
 
-    else:
-        def duplicate_for_child(self, fd):
-            self._fds.append(fd)
-            return reduction._mk_inheritable(fd)
+        def wait(self, timeout=None):
+            if sys.version_info < (3, 3):
+                import time
+                if timeout is None:
+                    return self.poll(0)
+                deadline = time.time() + timeout
+                delay = 0.0005
+                while 1:
+                    res = self.poll()
+                    if res is not None:
+                        break
+                    remaining = deadline - time.time()
+                    if remaining <= 0:
+                        break
+                    delay = min(delay * 2, remaining, 0.05)
+                    time.sleep(delay)
+                return res
 
-    def poll(self, flag=os.WNOHANG):
-        if self.returncode is None:
-            while True:
+            if self.returncode is None:
+                if timeout is not None:
+                    from multiprocessing.connection import wait
+                    if not wait([self.sentinel], timeout):
+                        return None
+                # This shouldn't block if wait() returned successfully.
+                return self.poll(os.WNOHANG if timeout == 0.0 else 0)
+            return self.returncode
+
+        def terminate(self):
+            if self.returncode is None:
                 try:
-                    pid, sts = os.waitpid(self.pid, flag)
-                except OSError as e:
-                    # Child process not yet created. See #1731717
-                    # e.errno == errno.ECHILD == 10
-                    return None
-                else:
-                    break
-            if pid == self.pid:
-                if os.WIFSIGNALED(sts):
-                    self.returncode = -os.WTERMSIG(sts)
-                else:
-                    assert os.WIFEXITED(sts)
-                    self.returncode = os.WEXITSTATUS(sts)
-        return self.returncode
+                    os.kill(self.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                except OSError:
+                    if self.wait(timeout=0.1) is None:
+                        raise
 
-    def wait(self, timeout=None):
-        if sys.version_info < (3, 3):
-            import time
-            if timeout is None:
-                return self.poll(0)
-            deadline = time.time() + timeout
-            delay = 0.0005
-            while 1:
-                res = self.poll()
-                if res is not None:
-                    break
-                remaining = deadline - time.time()
-                if remaining <= 0:
-                    break
-                delay = min(delay * 2, remaining, 0.05)
-                time.sleep(delay)
-            return res
+        def _launch(self, process_obj):
 
-        if self.returncode is None:
-            if timeout is not None:
-                from multiprocessing.connection import wait
-                if not wait([self.sentinel], timeout):
-                    return None
-            # This shouldn't block if wait() returned successfully.
-            return self.poll(os.WNOHANG if timeout == 0.0 else 0)
-        return self.returncode
+            tracker_fd = semaphore_tracker._semaphore_tracker.getfd()
 
-    def terminate(self):
-        if self.returncode is None:
+            fp = BytesIO()
+            set_spawning_popen(self)
             try:
-                os.kill(self.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            except OSError:
-                if self.wait(timeout=0.1) is None:
-                    raise
+                prep_data = spawn.get_preparation_data(
+                    process_obj._name, process_obj.init_main_module)
+                reduction.dump(prep_data, fp)
+                reduction.dump(process_obj, fp)
 
-    def _launch(self, process_obj):
+            finally:
+                set_spawning_popen(None)
 
-        tracker_fd = semaphore_tracker._semaphore_tracker.getfd()
+            try:
+                parent_r, child_w = os.pipe()
+                child_r, parent_w = os.pipe()
+                # for fd in self._fds:
+                #     _mk_inheritable(fd)
 
-        fp = BytesIO()
-        set_spawning_popen(self)
-        try:
-            prep_data = spawn.get_preparation_data(
-                process_obj._name, process_obj.init_main_module)
-            reduction.dump(prep_data, fp)
-            reduction.dump(process_obj, fp)
+                cmd_python = [sys.executable]
+                cmd_python += ['-m', self.__module__]
+                cmd_python += ['--name-process', str(process_obj.name)]
+                cmd_python += ['--pipe',
+                               str(reduction._mk_inheritable(child_r))]
+                reduction._mk_inheritable(child_w)
+                if tracker_fd is not None:
+                    cmd_python += ['--semaphore',
+                                   str(reduction._mk_inheritable(tracker_fd))]
+                self._fds.extend([child_r, child_w, tracker_fd])
+                util.debug("launch python with cmd:\n%s" % cmd_python)
+                from .fork_exec import fork_exec
+                pid = fork_exec(cmd_python, self._fds)
+                self.sentinel = parent_r
 
-        finally:
-            set_spawning_popen(None)
+                method = 'getbuffer'
+                if not hasattr(fp, method):
+                    method = 'getvalue'
+                with os.fdopen(parent_w, 'wb') as f:
+                    f.write(getattr(fp, method)())
+                self.pid = pid
+            finally:
+                if parent_r is not None:
+                    util.Finalize(self, os.close, (parent_r,))
+                for fd in (child_r, child_w):
+                    if fd is not None:
+                        os.close(fd)
 
-        try:
-            parent_r, child_w = os.pipe()
-            child_r, parent_w = os.pipe()
-            # for fd in self._fds:
-            #     _mk_inheritable(fd)
-
-            cmd_python = [sys.executable]
-            cmd_python += ['-m', self.__module__]
-            cmd_python += ['--name-process', str(process_obj.name)]
-            cmd_python += ['--pipe',
-                           str(reduction._mk_inheritable(child_r))]
-            reduction._mk_inheritable(child_w)
-            if tracker_fd is not None:
-                cmd_python += ['--semaphore',
-                               str(reduction._mk_inheritable(tracker_fd))]
-            self._fds.extend([child_r, child_w, tracker_fd])
-            util.debug("launch python with cmd:\n%s" % cmd_python)
-            from .fork_exec import fork_exec
-            pid = fork_exec(cmd_python, self._fds)
-            self.sentinel = parent_r
-
-            method = 'getbuffer'
-            if not hasattr(fp, method):
-                method = 'getvalue'
-            with os.fdopen(parent_w, 'wb') as f:
-                f.write(getattr(fp, method)())
-            self.pid = pid
-        finally:
-            if parent_r is not None:
-                util.Finalize(self, os.close, (parent_r,))
-            for fd in (child_r, child_w):
-                if fd is not None:
-                    os.close(fd)
-
-    @staticmethod
-    def thread_is_spawning():
-        return True
+        @staticmethod
+        def thread_is_spawning():
+            return True
 
 
 if __name__ == '__main__':
