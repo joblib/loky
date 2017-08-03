@@ -179,7 +179,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('Command line parser')
     parser.add_argument('--pipe', type=int, required=True,
                         help='File handle for the pipe')
-    parser.add_argument('--semaphore', type=int, default=None,
+    parser.add_argument('--semaphore', type=int, required=True,
                         help='File handle name for the semaphore tracker')
     parser.add_argument('--name-process', type=str, default=None,
                         help='Identifier for debugging purpose')
@@ -187,17 +187,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     info = dict()
-    r = args.pipe
-    if sys.platform == 'win32':
-        import msvcrt
-        r = msvcrt.open_osfhandle(r, os.O_RDONLY)
-    else:
-        assert args.semaphore is not None
-        semaphore_tracker._semaphore_tracker._fd = args.semaphore
+    semaphore_tracker._semaphore_tracker._fd = args.semaphore
 
     exitcode = 1
     try:
-        with os.fdopen(r, 'rb') as from_parent:
+        with os.fdopen(args.pipe, 'rb') as from_parent:
             process.current_process()._inheriting = True
             try:
                 prep_data = pickle.load(from_parent)
