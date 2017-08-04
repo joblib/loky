@@ -23,7 +23,7 @@ if sys.platform != "win32":
         from . import semaphore_tracker
 
 
-__all__ = ['Popen']
+__all__ = []
 
 if sys.platform != "win32":
     #
@@ -40,6 +40,8 @@ if sys.platform != "win32":
     #
     # Start child process using subprocess.Popen
     #
+
+    __all__.append('Popen')
 
     class Popen(object):
         method = 'loky'
