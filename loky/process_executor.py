@@ -494,7 +494,10 @@ def _queue_management_worker(executor_reference,
         # Wait for a result to be ready in the result_queue while checking
         # that worker process are still running. If a worker process
         while not wakeup.get_and_unset():
-            worker_sentinels = [p.sentinel for p in list(processes.values())]
+            # Force cast long to int when running 64-bit Python 2.7 under
+            # Windows
+            worker_sentinels = [int(p.sentinel)
+                                for p in list(processes.values())]
             if len(worker_sentinels) == 0:
                 wakeup.set()
             ready = wait([result_reader] + worker_sentinels,

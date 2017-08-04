@@ -387,8 +387,8 @@ class TestLokyBackend:
         with pytest.raises(ValueError):
             p.sentinel
         p.start()
-        sentinel = p.sentinel
-        assert isinstance(sentinel, int)
+        # Cast long to int for 64-bit Python 2.7 under Windows
+        sentinel = int(p.sentinel)
         assert not wait_for_handle(sentinel, timeout=0.0)
         event.set()
         p.join()
@@ -406,7 +406,8 @@ class TestLokyBackend:
         with pytest.raises(ValueError):
             p.sentinel
         p.start()
-        sentinel = p.sentinel
+        # Cast long to int for 64-bit Python 2.7 under Windows
+        sentinel = int(p.sentinel)
         assert isinstance(sentinel, int)
         assert not wait([sentinel], timeout=0.0)
         assert wait([sentinel], timeout=5), (p.exitcode)
