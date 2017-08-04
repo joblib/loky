@@ -1,5 +1,6 @@
 # flake8: noqa: F401
 import sys
+import numbers
 
 if sys.platform == "win32":
     # Avoid import error by code introspection tools such as test runners
@@ -47,8 +48,11 @@ if sys.platform == "win32":
 
             @staticmethod
             def CloseHandle(h):
+                if isinstance(h, numbers.Integral):
+                    # Cast long to int for 64-bit Python 2.7 under Windows
+                    h = int(h)
                 if sys.version_info[:2] < (3, 3):
-                    if type(h) != int:
+                    if not isinstance(h, int):
                         h = h.Detach()
                     win32.CloseHandle(h)
                 else:
