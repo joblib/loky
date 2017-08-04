@@ -8,6 +8,8 @@ $VERSION=(27, 33, 36)
 function TestPythonVersions () {
     Write-Host $PYTHON
     ForEach($ver in $VERSION){
+        $env:TOXPYTHON = "C:\Python$ver$env:PYTHON_ARCH_SUFFIX\python.exe"
+        Write-Host $env:TOXPYTHON
         python ./continuous_integration/appveyor/tox -e py$ver -- -vlx --timeout=30
         If( $LASTEXITCODE -ne 0){
             Exit 1
