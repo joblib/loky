@@ -69,12 +69,6 @@ def sleep_and_print(t, msg):
     sys.stdout.flush()
 
 
-def sleep_and_write(t, filename, msg):
-    time.sleep(t)
-    with open(filename, 'wb') as f:
-        f.write(str(msg).encode('utf-8'))
-
-
 def sleep_and_return(delay, x):
     time.sleep(delay)
     return x
@@ -115,14 +109,20 @@ class ExecutorShutdownTest:
             code = """if True:
                 from loky.process_executor import {executor_type}
                 from loky.backend import get_context
-                from time import sleep
-                from tests._test_process_executor import sleep_and_write
+                import time
+
+                def sleep_and_write(t, filename, msg):
+                    time.sleep(t)
+                    with open(filename, 'wb') as f:
+                        f.write(str(msg).encode('utf-8'))
+
                 context = get_context("{start_method}")
                 e = {executor_type}({n_jobs}, context=context)
                 e.submit(id, 42).result()
 
                 task_ids = list(range(2 * {n_jobs}))
-                filenames = ['{tempdir}/task_{{:02}}.log'.format(i) for i in task_ids]
+                filenames = ['{tempdir}/task_{{:02}}.log'.format(i)
+                             for i in task_ids]
                 e.map(sleep_and_write, [0.1] * 2 * {n_jobs},
                       filenames, task_ids)
 
@@ -132,8 +132,8 @@ class ExecutorShutdownTest:
             """
             code = code.format(executor_type=self.executor_type.__name__,
                                start_method=self.context.get_start_method(),
-                               n_jobs=n_jobs, tempdir=tempdir.replace("\\", "/"))
-            print(code)
+                               n_jobs=n_jobs,
+                               tempdir=tempdir.replace("\\", "/"))
             stdout, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=10)
 
