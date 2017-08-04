@@ -3,7 +3,7 @@ import shutil
 from setuptools import setup, find_packages
 from distutils.command.clean import clean as Clean
 
-packages = find_packages(exclude=['tests', 'tests._openmp', 'benchmark'])
+packages = find_packages('src')
 
 
 # Custom clean command to remove build artifacts
@@ -48,6 +48,7 @@ setup(
     author='Thomas Moreau',
     author_email='thomas.moreau.2010@gmail.com',
     packages=packages,
+    package_dir={'': 'src'},
     zip_safe=False,
     license='BSD',
     classifiers=[
