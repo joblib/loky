@@ -1,15 +1,14 @@
 environment:
-  # There is no need to run the build for all the Python version /
-  # architectures combo as the generated joblib wheel is the same on all
-  # platforms (universal wheel).
-  # We run the tests on 2 different target platforms for testing purpose only.
+  # The test script uses tox to run the tests on all supported
+  # Python versions sequentially.
+  # We run it once per architecture (32 bit vs 64 bit).
   matrix:
-    - PYTHON: "C:\\Python27"
-      PYTHON_VERSION: "2.7.x"
+    - PYTHON: "C:\\Python36"
+      PYTHON_VERSION: "3.6.x"
       PYTHON_ARCH: "32"
 
-    - PYTHON: "C:\\Python27-x64"
-      PYTHON_VERSION: "2.7.x"
+    - PYTHON: "C:\\Python36-x64"
+      PYTHON_VERSION: "3.6.x"
       PYTHON_ARCH: "64"
 matrix:
   fast_finish: true
