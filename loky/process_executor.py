@@ -465,7 +465,8 @@ def _queue_management_worker(executor_reference,
         executor_flags.flag_as_shutting_down()
         # This is an upper bound
         with processes_management_lock:
-            nb_children_alive = sum(p.is_alive() for p in processes.values())
+            nb_children_alive = sum(p.is_alive()
+                                    for p in list(processes.values()))
         for i in range(0, nb_children_alive):
             call_queue.put(None)
 
@@ -480,7 +481,7 @@ def _queue_management_worker(executor_reference,
             _, p = processes.popitem()
             p.join()
         mp.util.debug("queue management thread clean shutdown of worker "
-                      "processes: {}".format(processes))
+                      "processes: {}".format(list(processes)))
 
     result_reader = result_queue._reader
     _poll_timeout = .001
@@ -493,7 +494,7 @@ def _queue_management_worker(executor_reference,
         # Wait for a result to be ready in the result_queue while checking
         # that worker process are still running. If a worker process
         while not wakeup.get_and_unset():
-            worker_sentinels = [p.sentinel for p in processes.values()]
+            worker_sentinels = [p.sentinel for p in list(processes.values())]
             if len(worker_sentinels) == 0:
                 wakeup.set()
             ready = wait([result_reader] + worker_sentinels,
