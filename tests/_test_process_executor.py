@@ -74,6 +74,12 @@ def sleep_and_return(delay, x):
     return x
 
 
+def sleep_and_write(t, filename, msg):
+    time.sleep(t)
+    with open(filename, 'wb') as f:
+        f.write(str(msg).encode('utf-8'))
+
+
 class MyObject(object):
     def __init__(self, value=0):
         self.value = value
@@ -109,12 +115,7 @@ class ExecutorShutdownTest:
             code = """if True:
                 from loky.process_executor import {executor_type}
                 from loky.backend import get_context
-                import time
-
-                def sleep_and_write(t, filename, msg):
-                    time.sleep(t)
-                    with open(filename, 'wb') as f:
-                        f.write(str(msg).encode('utf-8'))
+                from tests._test_process_executor import sleep_and_write
 
                 context = get_context("{start_method}")
                 e = {executor_type}({n_jobs}, context=context)
