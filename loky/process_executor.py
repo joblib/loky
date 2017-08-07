@@ -502,7 +502,7 @@ def _queue_management_worker(executor_reference,
             if len(worker_sentinels) == 0:
                 # The processes dict is empty, let's get out of the wait loop
                 # even if there is no result or worker sentinel event so
-                # as to check wheter the executor was terminated and shutdown
+                # as to check whether the executor was terminated and shutdown
                 # the QueueManager thread accordingly.
                 wakeup.set()
             ready = wait([result_reader] + worker_sentinels,
