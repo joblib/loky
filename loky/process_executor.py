@@ -345,6 +345,7 @@ def _process_worker(call_queue, result_queue, processes_management_lock,
                 processes_management_lock.release()
                 call_item = None
             else:
+                mp.util.info("Could not acquire processes_management_lock")
                 continue
         except BaseException as e:
             traceback.print_exc()
@@ -780,8 +781,8 @@ class ProcessPoolExecutor(_base.Executor):
                 will use the same reducers
             timeout: int, optional (default: None)
                 Idle workers exit after timeout seconds. If a new job is
-                submitted after the timeout, the executor will launch enough
-                job to make sure the pool of worker is full.
+                submitted after the timeout, the executor will start enough
+                new Python processes to make sure the pool of workers is full.
             context: A multiprocessing context to launch the workers. This
                 object should provide SimpleQueue, Queue and Process.
 
@@ -806,7 +807,7 @@ class ProcessPoolExecutor(_base.Executor):
         mp.util.debug("using context {}".format(self._ctx))
         _check_max_depth(self._ctx)
 
-        # Timeout and its lock.
+        # Timeout
         self._timeout = timeout
 
         # Connection to wakeup QueueManagerThread
