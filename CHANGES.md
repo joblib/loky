@@ -1,3 +1,8 @@
+### 1.1.4 - 08/08/2017 - Bug fix release
+
+- Fix crash for 64-bit Python under Windows.
+- Fix race condition in Queue Manager thread under Python 3.4+
+
 ### 1.1.2 - 30/07/2017 - Bug fix release
 
 - Fix shutdown with exit at pickle deadlock
