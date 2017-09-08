@@ -81,7 +81,7 @@ def _check_subprocesses_number(executor, expected_process_number=None,
             if expected_process_number != 0:
                 raise
             # there is a race condition with the /proc/<pid>/ system clean up
-            # and our utilisation of psutil. The Process is considered alive by
+            # and our utilization of psutil. The Process is considered alive by
             # psutil even though it have been terminated. Wait for the system
             # clean up in this case.
             for _ in range(patience):
