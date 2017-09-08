@@ -32,7 +32,7 @@ from threading import Thread
 import traceback
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
-from loky.process_executor import BrokenExecutor, LokyRecursionError
+from loky.process_executor import BrokenProcessPool, LokyRecursionError
 from .test_reusable_executor import ErrorAtPickle
 from .test_reusable_executor import ExitAtPickle
 from .utils import id_sleep, check_subprocess_call
@@ -257,7 +257,7 @@ class ExecutorShutdownTest:
 
         # The crashing job should be executed after the non-failing jobs
         # have completed. The crash should be detected.
-        with pytest.raises(BrokenExecutor):
+        with pytest.raises(BrokenProcessPool):
             crash_result.result()
 
         if manager is not None:
@@ -497,10 +497,10 @@ class ExecutorTest:
         # Get one of the processes, and terminate (kill) it
         p = next(iter(self.executor._processes.values()))
         p.terminate()
-        with pytest.raises(BrokenExecutor):
+        with pytest.raises(BrokenProcessPool):
             future.result()
         # Submitting other jobs fails as well.
-        with pytest.raises(BrokenExecutor):
+        with pytest.raises(BrokenProcessPool):
             self.executor.submit(pow, 2, 8)
 
     def test_map_chunksize(self):
