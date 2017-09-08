@@ -42,7 +42,9 @@ def _direct_children_with_cmdline(p):
                 # when the process is being terminated by the OS.
                 continue
             children_with_cmdline.append((c, cmdline))
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except (OSError, psutil.NoSuchProcess, psutil.AccessDenied):
+            # These errors indicate that the process has terminated while
+            # we were processing the info. Just discard it.
             pass
     return children_with_cmdline
 
