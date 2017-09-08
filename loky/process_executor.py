@@ -535,7 +535,7 @@ def _queue_management_worker(executor_reference,
             # All futures in flight must be marked failed
             for work_id, work_item in pending_work_items.items():
                 work_item.future.set_exception(
-                    BrokenExecutor(
+                    BrokenProcessPool(
                         "A process in the process pool was terminated abruptly"
                         " while the future was running or pending."
                     ))
@@ -687,7 +687,7 @@ def _shutdown_crash(executor_flags, processes, pending_work_items,
     # the processes so that when process get killed, queue_manager_thread is
     # woken up and realizes it can shutdown
     for work_id, work_item in pending_work_items.items():
-        work_item.future.set_exception(BrokenExecutor(cause_msg))
+        work_item.future.set_exception(BrokenProcessPool(cause_msg))
         # Delete references to object. See issue16284
         del work_item
     # Terminate remaining workers forcibly: the queues or their
@@ -748,8 +748,7 @@ class LokyRecursionError(RuntimeError):
     """
 
 
-class BrokenExecutor(RuntimeError):
-
+class BrokenProcessPool(RuntimeError):
     """
     Raised when a process in a ProcessPoolExecutor terminated abruptly
     while a future was in the running state.
@@ -917,7 +916,7 @@ class ProcessPoolExecutor(_base.Executor):
     def submit(self, fn, *args, **kwargs):
         with self._flags.shutdown_lock:
             if self._flags.broken:
-                raise BrokenExecutor('A child process terminated abruptly, '
+                raise BrokenProcessPool('A child process terminated abruptly, '
                                      'the process pool is not usable anymore')
             if self._flags.shutdown:
                 raise RuntimeError(

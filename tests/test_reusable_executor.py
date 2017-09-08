@@ -13,7 +13,7 @@ from pickle import PicklingError, UnpicklingError
 
 from loky.backend import get_context
 from loky import get_reusable_executor
-from loky.process_executor import BrokenExecutor, ShutdownExecutorError
+from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep, check_subprocess_call
@@ -202,27 +202,27 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
     crash_cases = [
         # Check problem occuring while pickling a task in
-        (id, (ExitAtPickle(),), BrokenExecutor),
+        (id, (ExitAtPickle(),), BrokenProcessPool),
         (id, (ErrorAtPickle(),), PicklingError),
         # Check problem occuring while unpickling a task on workers
-        (id, (ExitAtUnpickle(),), BrokenExecutor),
-        (id, (CExitAtUnpickle(),), BrokenExecutor),
-        (id, (ErrorAtUnpickle(),), BrokenExecutor),
-        (id, (CrashAtUnpickle(),), BrokenExecutor),
+        (id, (ExitAtUnpickle(),), BrokenProcessPool),
+        (id, (CExitAtUnpickle(),), BrokenProcessPool),
+        (id, (ErrorAtUnpickle(),), BrokenProcessPool),
+        (id, (CrashAtUnpickle(),), BrokenProcessPool),
         # Check problem occuring during function execution on workers
-        (crash, (), BrokenExecutor),
+        (crash, (), BrokenProcessPool),
         (exit, (), SystemExit),
-        (c_exit, (), BrokenExecutor),
+        (c_exit, (), BrokenProcessPool),
         (raise_error, (RuntimeError,), RuntimeError),
         # Check problem occuring while pickling a task result
         # on workers
-        (return_instance, (CrashAtPickle,), BrokenExecutor),
-        (return_instance, (ExitAtPickle,), BrokenExecutor),
-        (return_instance, (CExitAtPickle,), BrokenExecutor),
+        (return_instance, (CrashAtPickle,), BrokenProcessPool),
+        (return_instance, (ExitAtPickle,), BrokenProcessPool),
+        (return_instance, (CExitAtPickle,), BrokenProcessPool),
         (return_instance, (ErrorAtPickle,), PicklingError),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
-        (return_instance, (ExitAtUnpickle,), BrokenExecutor),
+        (return_instance, (ExitAtUnpickle,), BrokenProcessPool),
         (return_instance, (ErrorAtUnpickle,), UnpicklingError),
     ]
 
@@ -276,7 +276,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         f = executor.submit(id_sleep, 42, delay)
         f.add_done_callback(lambda _: exit())
         assert f.result() == 42
-        with pytest.raises(BrokenExecutor):
+        with pytest.raises(BrokenProcessPool):
             executor.submit(id_sleep, 42, 0.1).result()
 
         executor = get_reusable_executor(max_workers=2)
@@ -303,7 +303,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # wait for the executor to be able to detect the issue and set itself
         # in broken state:
         sleep(.5)
-        with pytest.raises(BrokenExecutor):
+        with pytest.raises(BrokenProcessPool):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -325,7 +325,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
         assert all(list(res))
-        with pytest.raises(BrokenExecutor):
+        with pytest.raises(BrokenProcessPool):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -503,7 +503,7 @@ def test_call_item_gc_crash_or_exit():
 
         # The executor should automatically detect that the worker has crashed
         # when processing subsequently dispatched tasks:
-        with pytest.raises(BrokenExecutor):
+        with pytest.raises(BrokenProcessPool):
             executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass
