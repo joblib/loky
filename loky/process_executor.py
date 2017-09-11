@@ -77,6 +77,12 @@ from .backend.compat import wait, PicklingError
 from .backend.queues import Queue, SimpleQueue
 from .backend.utils import flag_current_thread_clean_exit, is_crashed
 
+try:
+    from concurrent.futures.process import BrokenProcessPool as _BPPException
+except ImportError:
+    _BPPException = RuntimeError
+
+
 # Compatibility for python2.7
 if sys.version_info[0] == 2:
     ProcessLookupError = OSError
@@ -748,7 +754,7 @@ class LokyRecursionError(RuntimeError):
     """
 
 
-class BrokenProcessPool(RuntimeError):
+class BrokenProcessPool(_BPPException):
     """
     Raised when a process in a ProcessPoolExecutor terminated abruptly
     while a future was in the running state.

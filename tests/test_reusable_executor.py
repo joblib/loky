@@ -551,3 +551,14 @@ def test_interactively_define_executor_no_main():
         check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
     finally:
         os.unlink(filename)
+
+
+def test_compat_with_concurrent_futures_exception():
+    # It should be possible to use a loky process pool executor as a dropin
+    # replacement for a ProcessPoolExecutor, including when catching
+    # exceptions:
+    pytest.importorskip('concurrent.futures')
+    from concurrent.futures.process import BrokenProcessPool as BPPExc
+
+    with pytest.raises(BPPExc):
+        get_reusable_executor(max_workers=2).submit(crash).result()
