@@ -107,11 +107,16 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 _threads_wakeup = weakref.WeakKeyDictionary()
 _global_shutdown = False
 
-# TODO: comment - Max depth
+# Mechanism to prevent infinite process spawning. When a worker of a
+# ProcessPoolExecutor nested in MAX_DEPTH Executor tries to create a new
+# Executor, a LokyRecursionError is raised
 MAX_DEPTH = int(os.environ.get("LOKY_MAX_DEPTH", 10))
 _CURRENT_DEPTH = 0
 
-# TODO: explain
+# This constants control the maximal wakeup. If a job is submitted to the
+# Executor, it might take up to _POLL_TIMEOUT for the executor to notice and
+# start launching the job. This _POLL_TIMEOUT is to be cumulated with the
+# communication overhead.
 _POLL_TIMEOUT = .001
 
 
@@ -482,8 +487,8 @@ def _queue_management_worker(executor_reference,
             call_queue.put(None)
 
         # Release the queue's resources as soon as possible. Flag the feeder
-        # thread for clean exit to avoid the manager_thread flagging the
-        # Executor as broken during the shutdown. This is safe as either:
+        # thread for clean exit to avoid having the crash detection thread flag
+        # the Executor as broken during the shutdown. This is safe as either:
         #  * We don't need to communicate with the workers anymore
         #  * There is nothing left in the Queue buffer except None sentinels
         mp.util.debug("closing call_queue")
