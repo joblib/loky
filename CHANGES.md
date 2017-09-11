@@ -1,3 +1,10 @@
+### 1.2 - (development)
+
+- Rename loky.BrokenExecutor as loky.BrokenProcessPool and subclass
+  concurrent.futures.process.BrokenProcessPool when available to make
+  except statements forward compatible.
+
+
 ### 1.1.4 - 08/08/2017 - Bug fix release
 
 - Fix crash for 64-bit Python under Windows.
