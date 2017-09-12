@@ -1,25 +1,25 @@
-### 1.2 - (development)
+### 1.2 - 2017-09-12
 
-- Rename loky.process_executor.BrokenExecutor as loky.BrokenProcessPool and
-  subclass concurrent.futures.process.BrokenProcessPool when available to make
+- Rename `loky.process_executor.BrokenExecutor` as `loky.BrokenProcessPool` and
+  subclass `concurrent.futures.process.BrokenProcessPool` when available to make
   except statements forward compatible.
 
 
-### 1.1.4 - 08/08/2017 - Bug fix release
+### 1.1.4 - 2017-08-08 - Bug fix release
 
 - Fix crash for 64-bit Python under Windows.
 - Fix race condition in Queue Manager thread under Python 3.4+
 
-### 1.1.2 - 30/07/2017 - Bug fix release
+### 1.1.2 - 2017-07-03 - Bug fix release
 
 - Fix shutdown with exit at pickle deadlock
 - Fix LokyProcess spawning forcing context to be loky in child (necessary for joblib)
 
-### 1.1.1 - 28/07/2017 - Bug fix release
+### 1.1.1 - 2017-07-28 - Bug fix release
 
 - Fix default backend for ReusablePoolExecutor
 
-### 1.1 - 28/07/2017 - Release higlights
+### 1.1 - 2017-07-28 - Release higlights
 
 - Rename `loky` backend to `loky_init_main`.
 - New `loky` backend which makes it possible to use `loky` with no `if __name__ == '__main__':` safeguard.
@@ -27,20 +27,20 @@
 - Fix deadlocks on `PocessPoolExecutor.shutdown` (#71, #75)
 
 
-### 1.0 - 20/06/2017 - Release highlights
+### 1.0 - 2017-06-20 - Release highlights
 
 - Make `ProcessPoolExecutor` use a spawn-based start method by default. The
   `fork`-based start method is not longer officially supported.
 - Fixed a race condition at executor shutdown
 
 
-### 0.3 - 02/06/2017 - Release highlights
+### 0.3 - 2017-06-02 - Release highlights
 
 - Basic handling of nested parallel calls up to recursion depth 3 (by default, can be changd by setting LOKY_MAX_DEPTH)
 - Various internal code clean-up and test improvments
 
 
-### 0.2 - 24/03/2017 - Release highlights
+### 0.2 - 2017-03-24 - Release highlights
 
 - Customizable serialization (#46)
 - Add support for calling dynamically defined function when cloudpickle is available (#47)
