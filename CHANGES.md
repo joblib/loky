@@ -1,9 +1,12 @@
-### 1.2 - 2017-09-12
+### 1.3 - (in development)
+
+
+
+### 1.2 - 2017-09-12 - Release highlights
 
 - Rename `loky.process_executor.BrokenExecutor` as `loky.BrokenProcessPool` and
   subclass `concurrent.futures.process.BrokenProcessPool` when available to make
   except statements forward compatible.
-
 
 ### 1.1.4 - 2017-08-08 - Bug fix release
 

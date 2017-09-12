@@ -40,7 +40,7 @@ cmdclass = {'clean': CleanCommand}
 
 setup(
     name='loky',
-    version='1.2.0',
+    version='1.3.0.dev0',
     description=("A robust implementation of "
                  "concurrent.futures.ProcessPoolExecutor"),
     long_description=open('README.md', 'rb').read().decode('utf-8'),
