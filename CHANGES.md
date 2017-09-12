@@ -1,7 +1,7 @@
 ### 1.2 - (development)
 
-- Rename loky.BrokenExecutor as loky.BrokenProcessPool and subclass
-  concurrent.futures.process.BrokenProcessPool when available to make
+- Rename loky.process_executor.BrokenExecutor as loky.BrokenProcessPool and
+  subclass concurrent.futures.process.BrokenProcessPool when available to make
   except statements forward compatible.
 
 

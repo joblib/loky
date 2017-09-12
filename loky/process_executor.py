@@ -790,6 +790,11 @@ class BrokenProcessPool(_BPPException):
     """
 
 
+# Alias for backward compat (for code written for loky 1.1.4 and earlier). Do
+# not use in new code.
+BrokenExecutor = BrokenProcessPool
+
+
 class ShutdownExecutorError(RuntimeError):
 
     """
