@@ -117,6 +117,17 @@ class TestLokyBackend:
             yield None
 
         with capsys.disabled() if sys.version_info[:2] == (3, 3) else no_mgr():
+            if sys.version_info[:2] == (3, 3):
+                import logging
+                logger = multiprocessing.util.get_logger()
+                logger.setLevel(5)
+                formatter = logging.Formatter(
+                    multiprocessing.util.DEFAULT_LOGGING_FORMAT)
+                handler = logging.StreamHandler()
+                handler.setFormatter(formatter)
+                old_handler = logger.handlers[0]
+                logger.handlers[0] = handler
+
             q = self.Queue()
             sq = self.SimpleQueue()
             args = (q, sq, 1, 2)
@@ -163,6 +174,9 @@ class TestLokyBackend:
             assert p.exitcode == 0
             assert not p.is_alive()
             assert p not in self.active_children()
+
+            if sys.version_info[:2] == (3, 3):
+                logger.handlers[0] = old_handler
 
     @classmethod
     def _test_connection(cls, conn):
