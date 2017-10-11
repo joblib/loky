@@ -433,21 +433,24 @@ class TestResizeExecutor(ReusableExecutorMixin):
         assert len(executor._processes) == 2
         assert old_pid in list(executor._processes.keys())
 
+    @pytest.mark.parametrize("reuse", [True, False])
     @pytest.mark.parametrize("kill_workers", [True, False])
-    def test_reusable_executor_resize_many_times(self, kill_workers):
+    def test_reusable_executor_resize_many_times(self, kill_workers, reuse):
         # Tentative non-regression test for a deadlock when shutting down
         # the workers of an executor prior to resizing it.
-        kwargs = {'timeout': None, 'kill_workers': kill_workers}
-        executor = get_reusable_executor(max_workers=2, **kwargs)
-        executor.map(id, range(2))
-        sizes = [12, 2, 1, 12, 6, 1, 8, 5]
+        kwargs = {
+            'timeout': None,
+            'kill_workers': kill_workers,
+            'reuse': reuse,
+        }
         with warnings.catch_warnings(record=True):
             # Cause all warnings to always be triggered.
-            warnings.simplefilter("always")
-            for size in sizes:
+            warnings.simplefilter("ignore")
+            for size in [12, 2, 1, 12, 6, 1, 8, 5]:
                 executor = get_reusable_executor(max_workers=size, **kwargs)
                 executor.map(sleep, [0.01] * 6)
                 # Do not wait for the tasks to complete.
+            executor.shutdown()
 
     def test_kill_after_resize_call(self):
         """Test recovery if killed after resize call"""
