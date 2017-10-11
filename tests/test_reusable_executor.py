@@ -445,7 +445,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
         }
         with warnings.catch_warnings(record=True):
             # Cause all warnings to always be triggered.
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("always")
             for size in [12, 2, 1, 12, 6, 1, 8, 5]:
                 executor = get_reusable_executor(max_workers=size, **kwargs)
                 executor.map(sleep, [0.01] * 6)
