@@ -461,6 +461,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
         executor.submit(kill_friend, (pid, .1))
 
         with pytest.warns(UserWarning) as recorded_warnings:
+            warnings.simplefilter("always")
             executor = get_reusable_executor(max_workers=1, timeout=None)
         assert len(recorded_warnings) == 1
         expected_msg = ("Trying to resize an executor with running jobs:"
