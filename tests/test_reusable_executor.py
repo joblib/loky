@@ -42,6 +42,10 @@ except ImportError:
     pass
 
 
+# ignore the worker timeout warnings for all tests in this class
+pytestmark = pytest.mark.filterwarnings('ignore:A worker timeout')
+
+
 def clean_warning_registry():
     """Safe way to reset warnings."""
     warnings.resetwarnings()
@@ -202,7 +206,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
     crash_cases = [
         # Check problem occuring while pickling a task in
-        (id, (ExitAtPickle(),), BrokenProcessPool),
+        (id, (ExitAtPickle(),), SystemExit),
         (id, (ErrorAtPickle(),), PicklingError),
         # Check problem occuring while unpickling a task on workers
         (id, (ExitAtUnpickle(),), BrokenProcessPool),
@@ -217,13 +221,13 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # Check problem occuring while pickling a task result
         # on workers
         (return_instance, (CrashAtPickle,), BrokenProcessPool),
-        (return_instance, (ExitAtPickle,), BrokenProcessPool),
+        (return_instance, (ExitAtPickle,), SystemExit),
         (return_instance, (CExitAtPickle,), BrokenProcessPool),
         (return_instance, (ErrorAtPickle,), PicklingError),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
         (return_instance, (ExitAtUnpickle,), BrokenProcessPool),
-        (return_instance, (ErrorAtUnpickle,), UnpicklingError),
+        (return_instance, (ErrorAtUnpickle,), BrokenProcessPool),
     ]
 
     @pytest.mark.parametrize("func, args, expected_err", crash_cases)
@@ -276,8 +280,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         f = executor.submit(id_sleep, 42, delay)
         f.add_done_callback(lambda _: exit())
         assert f.result() == 42
-        with pytest.raises(BrokenProcessPool):
-            executor.submit(id_sleep, 42, 0.1).result()
+        assert executor.submit(id_sleep, 42, 0.1).result() == 42
 
         executor = get_reusable_executor(max_workers=2)
         f = executor.submit(id_sleep, 42, delay)
@@ -468,6 +471,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
                         " waiting for jobs completion before resizing.")
         assert recorded_warnings[0].message.args[0] == expected_msg
         assert executor.submit(id_sleep, 42, 0.).result() == 42
+        executor.shutdown()
 
     @pytest.mark.timeout(30 if sys.platform == "win32" else 15)
     def test_resize_after_timeout(self):
@@ -529,17 +533,29 @@ def test_call_item_gc_crash_or_exit():
                 pass
 
 
-def test_worker_timeout_with_slowly_pickling_objects(n_tasks=5):
+@pytest.mark.filterwarnings('always:A worker timeout')
+def test_worker_timeout_with_slowly_pickling_objects(n_tasks=10):
     """Check that the worker timeout can be low without deadlocking
 
     In particular if dispatching call items to the queue is slow because of
     pickling large arguments, the executor should ensure that there is an
     appropriate amount of workers to move one and not get stalled.
     """
-    for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1)]:
-        executor = get_reusable_executor(max_workers=2, timeout=timeout)
-        results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
-        assert len(results) == n_tasks
+    with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
+        for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1)]:
+            executor = get_reusable_executor(max_workers=2, timeout=timeout)
+            results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
+            assert len(results) == n_tasks
+
+
+@pytest.mark.filterwarnings('always:A worker timeout')
+def test_worker_timeout_shutdown_deadlock():
+    """Check that worker timeout don't cause deadlock even when shutting down.
+    """
+    with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
+        with get_reusable_executor(max_workers=2, timeout=.01) as e:
+            f = e.submit(id, SlowlyPickling(.1))
+    f.result()
 
 
 def test_pass_start_method_name_as_context():

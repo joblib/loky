@@ -1,8 +1,12 @@
-import sys
+import pytest
 
 from loky import process_executor
 from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
+
+
+# ignore the worker timeout warnings for all tests in this class
+pytestmark = pytest.mark.filterwarnings('ignore:A worker timeout')
 
 
 class ProcessPoolLokyMixin(ExecutorMixin):
