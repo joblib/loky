@@ -42,10 +42,6 @@ except ImportError:
     pass
 
 
-# ignore the worker timeout warnings for all tests in this class
-pytestmark = pytest.mark.filterwarnings('ignore:A worker timeout')
-
-
 def clean_warning_registry():
     """Safe way to reset warnings."""
     warnings.resetwarnings()
@@ -533,7 +529,6 @@ def test_call_item_gc_crash_or_exit():
                 pass
 
 
-@pytest.mark.filterwarnings('always:A worker timeout')
 def test_worker_timeout_with_slowly_pickling_objects(n_tasks=10):
     """Check that the worker timeout can be low without deadlocking
 
@@ -542,19 +537,20 @@ def test_worker_timeout_with_slowly_pickling_objects(n_tasks=10):
     appropriate amount of workers to move one and not get stalled.
     """
     with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
+        warnings.simplefilter("always")
         for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1)]:
             executor = get_reusable_executor(max_workers=2, timeout=timeout)
             results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
             assert len(results) == n_tasks
 
 
-@pytest.mark.filterwarnings('always:A worker timeout')
 def test_worker_timeout_shutdown_deadlock():
     """Check that worker timeout don't cause deadlock even when shutting down.
     """
     with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
-        with get_reusable_executor(max_workers=2, timeout=.01) as e:
-            f = e.submit(id, SlowlyPickling(.1))
+        warnings.simplefilter("always")
+        with get_reusable_executor(max_workers=2, timeout=.001) as e:
+            f = e.submit(id, SlowlyPickling(.2))
     f.result()
 
 

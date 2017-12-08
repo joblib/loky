@@ -6,10 +6,6 @@ from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
 
 
-# ignore the worker timeout warnings for all tests in this class
-pytestmark = pytest.mark.filterwarnings('ignore:A worker timeout')
-
-
 if sys.version_info[:2] > (3, 3) and sys.platform != "win32":
     class ProcessPoolForkserverMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
