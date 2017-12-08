@@ -62,7 +62,6 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 
 import os
 import sys
-import time
 import types
 import atexit
 import weakref
@@ -76,10 +75,10 @@ from functools import partial
 from . import _base
 from .backend import get_context
 from .backend.compat import queue
-from .backend.compat import wait, PicklingError
+from .backend.compat import wait
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
-from .backend.utils import _flag_current_thread_clean_exit, _is_crashed
+from .backend.utils import _flag_current_thread_clean_exit
 
 try:
     from concurrent.futures.process import BrokenProcessPool as _BPPException
@@ -139,7 +138,7 @@ class _ExecutorFlags(object):
     def __init__(self):
 
         self.shutdown = False
-        self.broken = False
+        self.broken = None
         self.kill_workers = False
         self.shutdown_lock = threading.Lock()
 
@@ -148,10 +147,10 @@ class _ExecutorFlags(object):
             self.shutdown = True
             self.kill_workers = kill_workers
 
-    def flag_as_broken(self):
+    def flag_as_broken(self, broken):
         with self.shutdown_lock:
             self.shutdown = True
-            self.broken = True
+            self.broken = broken
 
 
 def _clear_list(ll):
@@ -285,8 +284,9 @@ class _SafeQueue(Queue):
                 type(e), e, getattr(e, "__traceback__", None))
             e.__cause__ = _RemoteTraceback('\n"""\n{}"""'.format(''.join(tb)))
             work_item = self.pending_work_items.pop(obj.work_id, None)
-            # work_item can be None if another process terminated. In this case,
-            # the queue_manager_thread fails all work_items with BrokenProcessPool
+            # work_item can be None if another process terminated. In this
+            # case, the queue_manager_thread fails all work_items with
+            # BrokenProcessPool
             if work_item is not None:
                 work_item.future.set_exception(e)
                 del work_item
@@ -543,28 +543,29 @@ def _queue_management_worker(executor_reference,
         worker_sentinels = [p.sentinel for p in processes.values()]
         ready = wait(readers + worker_sentinels)
 
-        cause = None
-        is_broken = True
+        broken = ("A process in the executor was terminated abruptly", None)
 
         if result_reader in ready:
             try:
                 result_item = result_reader.recv()
-                is_broken = False
+                broken = None
             except BaseException as e:
                 tb = getattr(e, "__traceback__", None)
                 if tb is None:
                     _, _, tb = sys.exc_info()
-                cause = traceback.format_exception(type(e), e, tb)
+                broken = ("A result has failed to un-serialize",
+                          traceback.format_exception(type(e), e, tb))
         elif wakeup_reader in ready:
-            is_broken = False
+            broken = None
             result_item = None
         thread_wakeup.clear()
-        if is_broken:
+        if broken:
+            msg, cause = broken
             # Mark the process pool broken so that submits fail right now.
-            executor_flags.flag_as_broken()
-            bpe = BrokenProcessPool("A process in the process pool was "
-                                    "terminated abruptly while the future was "
-                                    "running or pending.")
+            executor_flags.flag_as_broken(
+                msg + ", the pool is not usable anymore.")
+            bpe = BrokenProcessPool(
+                msg + " while the future was running or pending.")
             if cause is not None:
                 bpe.__cause__ = _RemoteTraceback(
                     "\n'''\n{}'''".format(''.join(cause)))
@@ -605,13 +606,17 @@ def _queue_management_worker(executor_reference,
             # worker timeout while some jobs were submitted. If some work is
             # pending or there is less processes than running items, we need to
             # start a new Process and raise a warning.
-            if (len(pending_work_items) > 0
-                    or len(running_work_items) > len(processes)):
-                warnings.warn("A worker timeout while some jobs were given to "
-                              "the executor. You might want to use a longer "
-                              "timeout for the executor.", UserWarning)
+            n_pending = len(pending_work_items)
+            n_running = len(running_work_items)
+            if (n_pending - n_running > 0 or n_running > len(processes)):
                 executor = executor_reference()
-                if executor is not None:
+                if (executor is not None
+                        and len(processes) < executor._max_workers):
+                    warnings.warn(
+                        "A worker timeout while some jobs were given to the "
+                        "executor. You might want to use a longer timeout for "
+                        "the executor.", UserWarning
+                    )
                     executor._adjust_process_count()
                     executor = None
 
@@ -898,8 +903,7 @@ class ProcessPoolExecutor(_base.Executor):
     def submit(self, fn, *args, **kwargs):
         with self._flags.shutdown_lock:
             if self._flags.broken:
-                raise BrokenProcessPool('A child process terminated abruptly, '
-                                     'the process pool is not usable anymore')
+                raise BrokenProcessPool(self._flags.broken)
             if self._flags.shutdown:
                 raise ShutdownExecutorError(
                     'cannot schedule new futures after shutdown')

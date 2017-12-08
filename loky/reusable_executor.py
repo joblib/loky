@@ -3,16 +3,13 @@
 #
 # author: Thomas Moreau and Olivier Grisel
 #
-import sys
 import time
 import warnings
 import threading
 import multiprocessing as mp
 
 from .process_executor import ProcessPoolExecutor, EXTRA_QUEUED_CALLS
-from .process_executor import _SafeQueue
 from .backend.context import cpu_count
-from .backend.queues import SimpleQueue
 from .backend import get_context
 
 __all__ = ['get_reusable_executor']
