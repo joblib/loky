@@ -58,7 +58,7 @@ class SemaphoreTracker(object):
         This can be run from any process.  Usually a child process will use
         the semaphore created by its parent.'''
         with self._lock:
-            if self._pid is not None:
+            if self._fd is not None:
                 # semaphore tracker was launched before, is it still running?
                 if self._check_pid():
                     # => still alive
@@ -106,22 +106,23 @@ class SemaphoreTracker(object):
     def _check_pid(self):
         '''Check for the existence of the semaphore tracker process.'''
         try:
-            os.kill(self._pid, 0)
-        except OSError:
+            self._send('PROBE', '')
+        except BrokenPipeError:
             return False
         else:
             return True
 
     def register(self, name):
         '''Register name of semaphore with semaphore tracker.'''
+        self.ensure_running()
         self._send('REGISTER', name)
 
     def unregister(self, name):
         '''Unregister name of semaphore with semaphore tracker.'''
+        self.ensure_running()
         self._send('UNREGISTER', name)
 
     def _send(self, cmd, name):
-        self.ensure_running()
         msg = '{0}:{1}\n'.format(cmd, name).encode('ascii')
         if len(name) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
@@ -176,12 +177,14 @@ def main(fd):
                                              ": cache({})\n"
                                              .format(name, len(cache)))
                             sys.stderr.flush()
+                    elif cmd == b'PROBE':
+                        pass
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
-                except Exception:
+                except BaseException:
                     try:
                         sys.excepthook(*sys.exc_info())
-                    except:
+                    except BaseException:
                         pass
     finally:
         # all processes have terminated; cleanup any remaining semaphores
