@@ -60,7 +60,7 @@ class SemaphoreTracker(object):
         with self._lock:
             if self._fd is not None:
                 # semaphore tracker was launched before, is it still running?
-                if self._check_pid():
+                if self._check_alive():
                     # => still alive
                     return
                 # => dead, launch it again
@@ -103,7 +103,7 @@ class SemaphoreTracker(object):
             finally:
                 os.close(r)
 
-    def _check_pid(self):
+    def _check_alive(self):
         '''Check for the existence of the semaphore tracker process.'''
         try:
             self._send('PROBE', '')

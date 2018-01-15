@@ -122,7 +122,6 @@ if sys.platform != "win32":
         def _launch(self, process_obj):
 
             tracker_fd = semaphore_tracker._semaphore_tracker.getfd()
-            tracker_pid = semaphore_tracker._semaphore_tracker._pid
 
             fp = BytesIO()
             set_spawning_popen(self)
@@ -149,8 +148,7 @@ if sys.platform != "win32":
                 reduction._mk_inheritable(child_w)
                 if tracker_fd is not None:
                     cmd_python += ['--semaphore',
-                                   str(reduction._mk_inheritable(tracker_fd)),
-                                   str(tracker_pid)]
+                                   str(reduction._mk_inheritable(tracker_fd))]
                 self._fds.extend([child_r, child_w, tracker_fd])
                 util.debug("launch python with cmd:\n%s" % cmd_python)
                 from .fork_exec import fork_exec
@@ -180,7 +178,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('Command line parser')
     parser.add_argument('--pipe', type=int, required=True,
                         help='File handle for the pipe')
-    parser.add_argument('--semaphore', type=int, required=True, nargs=2,
+    parser.add_argument('--semaphore', type=int, required=True,
                         help='File handle name for the semaphore tracker')
     parser.add_argument('--name-process', type=str, default=None,
                         help='Identifier for debugging purpose')
@@ -188,9 +186,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     info = dict()
-    sem_fd, sem_pid = args.semaphore
-    semaphore_tracker._semaphore_tracker._fd = sem_fd
-    semaphore_tracker._semaphore_tracker._pid = sem_pid
+    semaphore_tracker._semaphore_tracker._fd = args.semaphore
 
     exitcode = 1
     try:
