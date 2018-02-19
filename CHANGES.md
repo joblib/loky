@@ -1,10 +1,14 @@
 ### 1.3 - (in development)
 
+
+### 1.2.2 - 2018-02-19 - Bug fix release
+
+- Fix handling of Full Queue exception at shutdown time. (#107).
+
 ### 1.2.1 - 2017-10-13 - Bug fix release
 
 - Fix a potential deadlock when shutting down a past reusable executor instance
   with to create a new instance with different parameters. (#101, #102)
-
 
 ### 1.2 - 2017-09-12 - Release highlights
 
