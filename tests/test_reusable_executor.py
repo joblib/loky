@@ -537,8 +537,8 @@ def test_worker_timeout_with_slowly_pickling_objects(n_tasks=10):
     appropriate amount of workers to move one and not get stalled.
     """
     with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
-        warnings.simplefilter("always")
-        for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1)]:
+        for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1),
+                               (0.001, 1)]:
             executor = get_reusable_executor(max_workers=2, timeout=timeout)
             results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
             assert len(results) == n_tasks
@@ -548,9 +548,8 @@ def test_worker_timeout_shutdown_deadlock():
     """Check that worker timeout don't cause deadlock even when shutting down.
     """
     with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
-        warnings.simplefilter("always")
-        with get_reusable_executor(max_workers=2, timeout=.005) as e:
-            f = e.submit(id, SlowlyPickling(.3))
+        with get_reusable_executor(max_workers=2, timeout=.001) as e:
+            f = e.submit(id, SlowlyPickling(1))
     f.result()
 
 
