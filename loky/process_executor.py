@@ -116,12 +116,20 @@ _CURRENT_DEPTH = 0
 
 
 class _ThreadWakeup:
-
     def __init__(self):
         self._reader, self._writer = mp.Pipe(duplex=False)
 
+    def close(self):
+        self._writer.close()
+        self._reader.close()
+
     def wakeup(self):
-        self._writer.send_bytes(b"")
+        if sys.platform == "win32" and sys.version_info[:2] < (3, 4):
+            # Compat for python2.7 on windows, where poll return false for
+            # b"" messages. Use the slightly larger message b"0".
+            self._writer.send_bytes(b"0")
+        else:
+            self._writer.send_bytes(b"")
 
     def clear(self):
         while self._reader.poll():
@@ -961,16 +969,20 @@ class ProcessPoolExecutor(_base.Executor):
             self._queue_management_thread_wakeup.wakeup()
             if wait:
                 self._queue_management_thread.join()
+        # To reduce the risk of opening too many files, remove references to
+        # objects that use file descriptors.
+        self._queue_management_thread = None
+        self._result_queue = None
+        self._processes_management_lock = None
+
         if self._call_queue:
             self._call_queue.close()
             if wait:
                 self._call_queue.join_thread()
-        # To reduce the risk of opening too many files, remove references to
-        # objects that use file descriptors.
-        self._queue_management_thread = None
-        self._call_queue = None
-        self._result_queue = None
-        self._processes.clear()
+            self._call_queue = None
+        if self._queue_management_thread_wakeup:
+            self._queue_management_thread_wakeup.close()
+            self._queue_management_thread_wakeup = None
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
 
 

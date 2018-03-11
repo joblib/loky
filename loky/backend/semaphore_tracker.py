@@ -204,7 +204,7 @@ def main(fd):
                     sem_unlink(name)
                     if VERBOSE:  # pragma: no cover
                         name = name.decode('ascii')
-                        sys.stderr.write("[SemaphoreTracker] unregister {}\n"
+                        sys.stderr.write("[SemaphoreTracker] unlink {}\n"
                                          .format(name))
                         sys.stderr.flush()
                 except Exception as e:
