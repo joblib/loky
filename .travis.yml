@@ -35,13 +35,13 @@ before_install:
     # Install python using brew on OSX
     if [ $TRAVIS_OS_NAME == 'osx' ] && [ $PYTHON == 'python3' ]; then
       brew update
-      brew install $PYTHON
+      brew upgrade $PYTHON
     fi
 
-install: pip install tox
+install: $PYTHON -m pip install tox
 script: ./continuous_integration/travis/runtests.sh
 after_success:
-  - pip install codecov
+  - $PYTHON -m pip install codecov
   - codecov
 
 notifications:

@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 from setuptools import setup, find_packages
 from distutils.command.clean import clean as Clean
@@ -6,8 +7,19 @@ from distutils.command.clean import clean as Clean
 packages = find_packages(exclude=['tests', 'tests._openmp', 'benchmark'])
 
 
-# Custom clean command to remove build artifacts
+# Function to parse __version__ in `loky`
+def find_version():
+    here = os.path.abspath(os.path.dirname(__file__))
+    with open(os.path.join(here, 'loky', '__init__.py'), 'r') as fp:
+        version_file = fp.read()
+    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
+                              version_file, re.M)
+    if version_match:
+        return version_match.group(1)
+    raise RuntimeError("Unable to find version string.")
 
+
+# Custom clean command to remove build artifacts
 class CleanCommand(Clean):
     description = "Remove build artifacts from the source tree"
 
@@ -40,7 +52,7 @@ cmdclass = {'clean': CleanCommand}
 
 setup(
     name='loky',
-    version='1.3.0.dev0',
+    version=find_version(),
     description=("A robust implementation of "
                  "concurrent.futures.ProcessPoolExecutor"),
     long_description=open('README.md', 'rb').read().decode('utf-8'),
