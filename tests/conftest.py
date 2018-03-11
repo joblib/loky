@@ -1,6 +1,7 @@
 import sys
 import pytest
 import logging
+import warnings
 from multiprocessing.util import log_to_stderr
 
 
@@ -25,3 +26,7 @@ def logging_setup(log_lvl):
         '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
     yield
     del log.handlers[:]
+
+
+def pytest_configure(config):
+    warnings.simplefilter('always')
