@@ -549,8 +549,8 @@ def test_worker_timeout_shutdown_deadlock():
     """
     with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
         warnings.simplefilter("always")
-        with get_reusable_executor(max_workers=2, timeout=.001) as e:
-            f = e.submit(id, SlowlyPickling(.2))
+        with get_reusable_executor(max_workers=2, timeout=.005) as e:
+            f = e.submit(id, SlowlyPickling(.3))
     f.result()
 
 
