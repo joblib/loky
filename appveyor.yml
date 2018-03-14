@@ -15,6 +15,9 @@ environment:
 matrix:
   fast_finish: true
 
+# init:
+#   - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+
 install:
   # Install Python (from the official .msi of http://python.org) and pip when
   # not already installed.
@@ -34,3 +37,6 @@ on_success:
   # .coverage file which is then converted to XML for uploading by codecov
   - "pip install coverage codecov"
   - "codecov"
+
+# on_finish:
+#   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
