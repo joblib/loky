@@ -8,8 +8,7 @@ import pytest
 import threading
 
 from loky._base import TimeoutError
-from loky import get_reusable_executor
-from loky.backend.context import cpu_count
+from loky import get_reusable_executor, cpu_count
 from .conftest import logging_setup
 
 

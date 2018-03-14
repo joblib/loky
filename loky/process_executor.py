@@ -72,9 +72,9 @@ from functools import partial
 
 from . import _base
 from .backend import get_context
-from .backend.context import cpu_count
 from .backend.compat import queue
 from .backend.compat import wait, PicklingError
+from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
 from .backend.utils import _flag_current_thread_clean_exit, _is_crashed
 

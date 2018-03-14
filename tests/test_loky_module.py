@@ -6,7 +6,7 @@ from subprocess import check_output
 import pytest
 
 import loky
-from loky.backend.context import cpu_count
+from loky import cpu_count
 
 
 def test_version():
@@ -18,6 +18,10 @@ def test_cpu_count():
     cpus = cpu_count()
     assert type(cpus) is int
     assert cpus >= 1
+
+
+cpu_count_cmd = ("from loky.backend.context import cpu_count;"
+                 "print(cpu_count())")
 
 
 def test_cpu_count_affinity():
@@ -35,9 +39,29 @@ def test_cpu_count_affinity():
     except NotImplementedError:
         pytest.skip()
 
-    cmd = "from loky.backend.context import cpu_count; print(cpu_count())"
+    res = check_output([taskset_bin, '-c', '0',
+                        python_bin, '-c', cpu_count_cmd])
 
-    res = check_output([taskset_bin, '-c', '0', python_bin, '-c', cmd])
+    assert res.strip().decode('utf-8') == '1'
+
+
+def test_cpu_count_cfs_limit():
+    if not hasattr(shutil, 'which'):
+        pytest.skip()
+
+    docker_bin = shutil.which('docker')
+    if docker_bin is None:
+        raise pytest.skip()
+
+    locky_path = os.path.abspath(os.path.dirname(loky.__file__))
+
+    # The following will always run using the Python 3.6 docker image.
+    # We mount the loky source as /loky inside the container,
+    # so it can be imported when running commands under /
+    res = check_output([docker_bin, 'run', '--rm', '--cpus', '0.5',
+                        '-v', '%s:/loky' % locky_path,
+                        'python:3.6',
+                        'python', '-c', cpu_count_cmd])
 
     assert res.strip().decode('utf-8') == '1'
 
