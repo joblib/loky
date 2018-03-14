@@ -71,6 +71,11 @@ else:
 
 def cpu_count():
     """Return the number of CPUs the current process can use.
+
+    The returned number of CPUs accounts for,
+     * the number of CPUs in the system
+     * the CPU affinity settings of the current process
+     * CFS scheduler CPU bandwidth limit (Linux only)
     """
     import math
 
@@ -92,14 +97,13 @@ def cpu_count():
     cpu_count_cfs = cpu_count_mp
     cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
     cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
-    if (os.name == 'posix' and os.path.exists(cfs_quota_fname)
-            and os.path.exists(cfs_period_fname)):
+    if (os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname)):
         with open(cfs_quota_fname, 'r') as fh:
             cfs_quota_us = int(fh.read())
         with open(cfs_period_fname, 'r') as fh:
             cfs_period_us = int(fh.read())
 
-        if cfs_quota_us > 0:
+        if cfs_quota_us > 0 and cfs_period_us > 0:
             cpu_count_cfs = math.ceil(cfs_quota_us / cfs_period_us)
             cpu_count_cfs = max(cpu_count_cfs, 1)
 
@@ -110,6 +114,7 @@ class LokyContext(BaseContext):
     """Context relying on the LokyProcess."""
     _name = 'loky'
     Process = LokyProcess
+    cpu_count = staticmethod(cpu_count)
 
     def Queue(self, maxsize=0, reducers=None):
         '''Returns a queue object'''

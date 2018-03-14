@@ -21,7 +21,6 @@ if os.environ.get("TRAVIS_OS_NAME") is not None and sys.version_info < (3, 4):
     # This is done automatically by cpu_count for Python >= 3.4
     CPU_COUNT = 2
 
-
 # Compat windows
 try:
     # Increase time if the test is perform on a slow machine
