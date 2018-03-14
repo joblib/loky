@@ -37,7 +37,7 @@ def test_cpu_count_affinity():
 
     cmd = "from loky.backend.context import cpu_count; print(cpu_count())"
 
-    res = check_output([taskset_bin, '-c', '1', python_bin, '-c', cmd])
+    res = check_output([taskset_bin, '-c', '0', python_bin, '-c', cmd])
 
     assert res.strip().decode('utf-8') == '1'
 
