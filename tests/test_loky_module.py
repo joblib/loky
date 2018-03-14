@@ -53,13 +53,13 @@ def test_cpu_count_cfs_limit():
     if docker_bin is None:
         raise pytest.skip()
 
-    locky_path = os.path.abspath(os.path.dirname(loky.__file__))
+    loky_path = os.path.abspath(os.path.dirname(loky.__file__))
 
     # The following will always run using the Python 3.6 docker image.
     # We mount the loky source as /loky inside the container,
     # so it can be imported when running commands under /
     res = check_output([docker_bin, 'run', '--rm', '--cpus', '0.5',
-                        '-v', '%s:/loky' % locky_path,
+                        '-v', '%s:/loky' % loky_path,
                         'python:3.6',
                         'python', '-c', cpu_count_cmd])
 
