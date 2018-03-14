@@ -62,6 +62,27 @@ print("Number of used processes:", n_workers)
 assert n_workers == 4
 ```
 
+### Workflow to contribute
+
+To contribute to **loky**, first create an account on [github](http://github.com/).
+Once this is done, fork the [loky repository](http://github.com/loky/loky) to
+have your own repository, clone it using 'git clone' on the computers where you
+want to work. Make your changes in your clone, push them to your github account,
+test them on several computers, and when you are happy with them, send a pull
+request to the main repository.
+
+### Running the test suite
+
+To run the test suite, you need the `pytest` (version >= 3) and `psutil`
+modules. Run the test suite using:
+
+```sh
+    pip install -e .
+    pytest .
+```
+
+from the root of the project.
+
 ### Acknowledgement
 
 This work is supported by the Center for Data Science, funded by the IDEX
