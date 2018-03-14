@@ -164,8 +164,14 @@ class CExitAtUnpickle(object):
 
 class ErrorAtPickle(object):
     """Bad object that raises an error at pickling time."""
+    def __init__(self, fail=True):
+        self.fail = fail
+
     def __reduce__(self):
-        raise PicklingError("Error in pickle")
+        if self.fail:
+            raise PicklingError("Error in pickle")
+        else:
+            return id, (42, )
 
 
 class ErrorAtUnpickle(object):
@@ -186,16 +192,6 @@ class CExitAtGCInWorker(object):
     def __del__(self):
         if current_process().name != "MainProcess":
             c_exit()
-
-
-class SlowlyPickling(object):
-    """Simulate slowly pickling object, e.g. large numpy array or dict"""
-    def __init__(self, delay=1):
-        self.delay = delay
-
-    def __reduce__(self):
-        sleep(self.delay)
-        return SlowlyPickling, (self.delay,)
 
 
 class TestExecutorDeadLock(ReusableExecutorMixin):
@@ -346,6 +342,16 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         with pytest.raises(SayWhenError):
             executor.map(id_sleep, exception_throwing_generator(20, 7),
                          chunksize=4)
+
+    def test_queue_full_deadlock(self):
+        executor = get_reusable_executor(max_workers=1)
+        fs_fail = [executor.submit(do_nothing, ErrorAtPickle(True))
+                   for i in range(100)]
+        fs = [executor.submit(do_nothing, ErrorAtPickle(False))
+              for i in range(100)]
+        with pytest.raises(PicklingError):
+            fs_fail[99].result()
+        assert fs[99].result()
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):
@@ -527,30 +533,6 @@ def test_call_item_gc_crash_or_exit():
             executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass
-
-
-def test_worker_timeout_with_slowly_pickling_objects(n_tasks=10):
-    """Check that the worker timeout can be low without deadlocking
-
-    In particular if dispatching call items to the queue is slow because of
-    pickling large arguments, the executor should ensure that there is an
-    appropriate amount of workers to move one and not get stalled.
-    """
-    with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
-        for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1),
-                               (0.001, .1)]:
-            executor = get_reusable_executor(max_workers=2, timeout=timeout)
-            results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
-            assert len(results) == n_tasks
-
-
-def test_worker_timeout_shutdown_deadlock():
-    """Check that worker timeout don't cause deadlock even when shutting down.
-    """
-    with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
-        with get_reusable_executor(max_workers=2, timeout=.001) as e:
-            f = e.submit(id, SlowlyPickling(1))
-    f.result()
 
 
 def test_pass_start_method_name_as_context():

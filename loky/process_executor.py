@@ -12,17 +12,16 @@
 #
 # Copyright 2009 Brian Quinlan. All Rights Reserved.
 # Licensed to PSF under a Contributor Agreement.
+
 """Implements ProcessPoolExecutor.
 
 The follow diagram and text describe the data-flow through the system:
 
 |======================= In-process =====================|== Out-of-process ==|
-                               +------------------+
-                               |  Thread watcher  |
-                               +------------------+
-+----------+     +----------+           |          +-----------+    +---------+
-|          |  => | Work Ids |           v          | Call Q    |    | Process |
-|          |     +----------+       +--------+     +-----------+    |  Pool   |
+
++----------+     +----------+       +--------+     +-----------+    +---------+
+|          |  => | Work Ids |       |        |     | Call Q    |    | Process |
+|          |     +----------+       |        |     +-----------+    |  Pool   |
 |          |     | ...      |       |        |     | ...       |    +---------+
 |          |     | 6        |    => |        |  => | 5, call() | => |         |
 |          |     | 7        |       |        |     | ...       |    |         |
@@ -78,7 +77,6 @@ from .backend.compat import queue
 from .backend.compat import wait
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
-from .backend.utils import _flag_current_thread_clean_exit
 
 try:
     from concurrent.futures.process import BrokenProcessPool as _BPPException
@@ -159,13 +157,6 @@ class _ExecutorFlags(object):
         with self.shutdown_lock:
             self.shutdown = True
             self.broken = broken
-
-
-def _clear_list(ll):
-    if sys.version_info < (3, 3):
-        del ll[:]
-    else:
-        ll.clear()
 
 
 def _python_exit():
@@ -280,9 +271,10 @@ class _CallItem(object):
 class _SafeQueue(Queue):
     """Safe Queue set exception to the future object linked to a job"""
     def __init__(self, max_size=0, ctx=None, pending_work_items=None,
-                 thread_wakeup=None, reducers=None):
-        self.qm_wakeup = thread_wakeup
+                 running_work_items=None, thread_wakeup=None, reducers=None):
+        self.thread_wakeup = thread_wakeup
         self.pending_work_items = pending_work_items
+        self.running_work_items = running_work_items
         super(_SafeQueue, self).__init__(max_size, reducers=reducers, ctx=ctx)
 
     def _on_queue_feeder_error(self, e, obj):
@@ -292,13 +284,14 @@ class _SafeQueue(Queue):
                 type(e), e, getattr(e, "__traceback__", None))
             e.__cause__ = _RemoteTraceback('\n"""\n{}"""'.format(''.join(tb)))
             work_item = self.pending_work_items.pop(obj.work_id, None)
+            self.running_work_items.remove(obj.work_id)
             # work_item can be None if another process terminated. In this
             # case, the queue_manager_thread fails all work_items with
             # BrokenProcessPool
             if work_item is not None:
                 work_item.future.set_exception(e)
                 del work_item
-            self.qm_wakeup.wakeup()
+            self.thread_wakeup.wakeup()
         else:
             super()._on_queue_feeder_error(e, obj)
 
@@ -453,6 +446,7 @@ def _queue_management_worker(executor_reference,
                              executor_flags,
                              processes,
                              pending_work_items,
+                             running_work_items,
                              work_ids_queue,
                              call_queue,
                              result_queue,
@@ -483,7 +477,6 @@ def _queue_management_worker(executor_reference,
             caused by permanently locked queues.
     """
     executor = None
-    running_work_items = []
 
     def is_shutting_down():
         # No more work items can be added if:
@@ -602,7 +595,6 @@ def _queue_management_worker(executor_reference,
                     pass
 
             shutdown_all_workers()
-            _flag_current_thread_clean_exit()
             return
         if isinstance(result_item, int):
             # Clean shutdown of a worker using its PID, either on request
@@ -670,13 +662,11 @@ def _queue_management_worker(executor_reference,
                     p.terminate()
                     p.join()
                 shutdown_all_workers()
-                _flag_current_thread_clean_exit()
                 return
             # Since no new work items can be added, it is safe to shutdown
             # this thread if there are no pending work items.
             if not pending_work_items:
                 shutdown_all_workers()
-                _flag_current_thread_clean_exit()
                 return
         elif executor_flags.broken:
             return
@@ -820,6 +810,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._processes = {}
         self._queue_count = 0
         self._pending_work_items = {}
+        self._running_work_items = []
         self._work_ids = queue.Queue()
         self._processes_management_lock = self._context.Lock()
         self._queue_management_thread = None
@@ -849,6 +840,7 @@ class ProcessPoolExecutor(_base.Executor):
             queue_size = 2 * self._max_workers + EXTRA_QUEUED_CALLS
         self._call_queue = _SafeQueue(
             max_size=queue_size, pending_work_items=self._pending_work_items,
+            running_work_items=self._running_work_items,
             thread_wakeup=self._queue_management_thread_wakeup,
             reducers=job_reducers, ctx=self._context)
         # Killed worker processes can produce spurious "broken pipe"
@@ -866,10 +858,11 @@ class ProcessPoolExecutor(_base.Executor):
             # When the executor gets garbarge collected, the weakref callback
             # will wake up the queue management thread so that it can terminate
             # if there is no pending work item.
-            def weakref_cb(_, qm_wakeup=self._queue_management_thread_wakeup):
+            def weakref_cb(_,
+                           thread_wakeup=self._queue_management_thread_wakeup):
                 mp.util.debug('Executor collected: triggering callback for'
                               ' QueueManager wakeup')
-                qm_wakeup.wakeup()
+                thread_wakeup.wakeup()
 
             # Start the processes so that their sentinels are known.
             self._queue_management_thread = threading.Thread(
@@ -878,6 +871,7 @@ class ProcessPoolExecutor(_base.Executor):
                       self._flags,
                       self._processes,
                       self._pending_work_items,
+                      self._running_work_items,
                       self._work_ids,
                       self._call_queue,
                       self._result_queue,
@@ -983,14 +977,14 @@ class ProcessPoolExecutor(_base.Executor):
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
         self._queue_management_thread = None
-        self._result_queue = None
-        self._processes_management_lock = None
 
         if self._call_queue:
             self._call_queue.close()
             if wait:
                 self._call_queue.join_thread()
             self._call_queue = None
+        self._result_queue = None
+        self._processes_management_lock = None
         if self._queue_management_thread_wakeup:
             self._queue_management_thread_wakeup.close()
             self._queue_management_thread_wakeup = None
