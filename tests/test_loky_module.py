@@ -64,12 +64,3 @@ def test_cpu_count_cfs_limit():
                         'python', '-c', cpu_count_cmd])
 
     assert res.strip().decode('utf-8') == '1'
-
-
-def test_cpu_count_travis():
-    if (os.environ.get("TRAVIS_OS_NAME") is not None
-            and sys.version_info >= (3, 4)):
-        # default number of available CPU on Travis CI for OSS projects
-        assert cpu_count() == 2
-    else:
-        pytest.skip()
