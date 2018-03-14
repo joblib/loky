@@ -1,5 +1,4 @@
 import sys
-import pytest
 
 from loky import process_executor
 from loky.backend import get_context

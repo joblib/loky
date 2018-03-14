@@ -184,3 +184,8 @@ class ReusableExecutorMixin:
         assert executor.submit(math.sqrt, 1).result() == 1
         # There can be less than 2 workers because of the worker timeout
         _check_subprocesses_number(executor, expected_max_process_number=2)
+
+    @classmethod
+    def teardown_class(cls):
+        executor = get_reusable_executor(max_workers=2)
+        executor.shutdown(wait=True)

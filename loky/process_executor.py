@@ -431,12 +431,12 @@ def _add_call_item_to_queue(pending_work_items,
             work_item = pending_work_items[work_id]
 
             if work_item.future.set_running_or_notify_cancel():
+                running_work_items += [work_id]
                 call_queue.put(_CallItem(work_id,
                                          work_item.fn,
                                          work_item.args,
                                          work_item.kwargs),
                                block=True)
-                running_work_items += [work_id]
             else:
                 del pending_work_items[work_id]
                 continue
