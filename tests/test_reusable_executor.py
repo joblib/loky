@@ -538,7 +538,7 @@ def test_worker_timeout_with_slowly_pickling_objects(n_tasks=10):
     """
     with pytest.warns(UserWarning, match=r'^A worker timeout while some jobs'):
         for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1),
-                               (0.001, 1)]:
+                               (0.001, .1)]:
             executor = get_reusable_executor(max_workers=2, timeout=timeout)
             results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
             assert len(results) == n_tasks
