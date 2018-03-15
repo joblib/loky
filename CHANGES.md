@@ -1,3 +1,6 @@
+### 2.1.0 (in developement)
+
+
 ### 2.0 - 2018-03-15 - Release highlights
 
 - Add `loky.cpu_count` that returns the number of CPUs the current process can
