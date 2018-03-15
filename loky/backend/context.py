@@ -73,9 +73,12 @@ def cpu_count():
     """Return the number of CPUs the current process can use.
 
     The returned number of CPUs accounts for:
-     * the number of CPUs in the system
+     * the number of CPUs in the system, as given by
+       ``multiprocessing.cpu_count``
      * the CPU affinity settings of the current process
-     * CFS scheduler CPU bandwidth limit (Linux only)
+       (available with Python 3.4+ on some Unix systems)
+     * CFS scheduler CPU bandwidth limit
+       (available on Linux only)
     """
     import math
 
