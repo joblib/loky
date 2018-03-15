@@ -336,14 +336,6 @@ class TestLokyBackend:
         # XXX sometimes get p.exitcode == 0 on Windows ...
         # assert p.exitcode == -signal.SIGTERM
 
-    def test_cpu_count(self):
-        try:
-            cpus = multiprocessing.cpu_count()
-        except NotImplementedError:
-            cpus = 1
-        assert type(cpus) is int
-        assert cpus >= 1
-
     def test_active_children(self):
         assert type(self.active_children()) == list
 

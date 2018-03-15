@@ -1,5 +1,8 @@
 ### 1.3 - (in development)
 
+- Add `loky.cpu_count` that returns the
+  number of CPUs the current process can use. This value is
+  now used by default by `ProcessPoolExecutor`.  (#114).
 
 ### 1.2.2 - 2018-02-19 - Bug fix release
 

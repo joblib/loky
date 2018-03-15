@@ -8,16 +8,16 @@ import pytest
 import threading
 
 from loky._base import TimeoutError
-from loky import get_reusable_executor
-from multiprocessing import cpu_count
+from loky import get_reusable_executor, cpu_count
 from .conftest import logging_setup
 
 
 # Compat Travis
 CPU_COUNT = cpu_count()
-if os.environ.get("TRAVIS_OS_NAME") is not None:
+if os.environ.get("TRAVIS_OS_NAME") is not None and sys.version_info < (3, 4):
     # Hard code number of cpu in travis as cpu_count return 32 whereas we
     # only access 2 cores.
+    # This is done automatically by cpu_count for Python >= 3.4
     CPU_COUNT = 2
 
 # Compat windows

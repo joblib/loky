@@ -74,6 +74,7 @@ from . import _base
 from .backend import get_context
 from .backend.compat import queue
 from .backend.compat import wait, PicklingError
+from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
 from .backend.utils import _flag_current_thread_clean_exit, _is_crashed
 
@@ -820,10 +821,11 @@ class ProcessPoolExecutor(_base.Executor):
         """Initializes a new ProcessPoolExecutor instance.
 
         Args:
-            max_workers: int, optional (default: os.cpu_count())
+            max_workers: int, optional (default: cpu_count())
                 The maximum number of processes that can be used to execute the
                 given calls. If None or not given then as many worker processes
-                will be created as the machine has processors.
+                will be created as the number of CPUs the current process
+                can use.
             job_reducers, result_reducers: dict(type: reducer_func)
                 Custom reducer for pickling the jobs and the results from the
                 Executor. If only `job_reducers` is provided, `result_reducer`
@@ -839,7 +841,7 @@ class ProcessPoolExecutor(_base.Executor):
         _check_system_limits()
 
         if max_workers is None:
-            self._max_workers = mp.cpu_count() or 1
+            self._max_workers = cpu_count()
         else:
             if max_workers <= 0:
                 raise ValueError("max_workers must be greater than 0")
