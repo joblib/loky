@@ -138,7 +138,7 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
         # ensure that no process are spwaned or timeout during the resize.
         with self._processes_management_lock:
             nb_children_alive = sum(p.is_alive()
-                                    for p in self._processes.values())
+                                    for p in list(self._processes.values()))
             self._max_workers = max_workers
             for _ in range(max_workers, nb_children_alive):
                 self._call_queue.put(None)

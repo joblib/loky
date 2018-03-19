@@ -575,3 +575,40 @@ def test_compat_with_concurrent_futures_exception():
 
     with pytest.raises(BPPExc):
         get_reusable_executor(max_workers=2).submit(crash).result()
+
+
+def test_reusable_executor_thread_safety():
+
+    def helper_func(output_collector, max_workers=2, n_outer_steps=5,
+                    n_inner_steps=10):
+
+        with warnings.catch_warnings():  # ignore resize warnings
+            warnings.simplefilter("always")
+            executor = get_reusable_executor(max_workers=max_workers)
+            for i in range(n_outer_steps):
+                results = executor.map(lambda x: x ** 2, range(n_inner_steps))
+                assert list(results) == [x ** 2 for x in range(n_inner_steps)]
+            output_collector.append('ok')
+
+    # Use the same executor with the same number of workers concurrently
+    # in different threads:
+    output_collector = []
+    threads = [threading.Thread(target=helper_func, args=(output_collector,))
+               for i in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert output_collector == ['ok'] * len(threads)
+
+    # Call the same executor with the varying number of workers concurrently
+    # in different threads:
+    output_collector = []
+    threads = [threading.Thread(target=helper_func,
+                                args=(output_collector, i + 1))
+               for i in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert output_collector == ['ok'] * len(threads)
