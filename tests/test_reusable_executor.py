@@ -577,14 +577,27 @@ def test_compat_with_concurrent_futures_exception():
         get_reusable_executor(max_workers=2).submit(crash).result()
 
 
-def test_reusable_executor_thread_safety():
-    # Make test independent of previous test by shutting down the shared
-    # executor.
-    get_reusable_executor(max_workers=2).shutdown(wait=True)
+thread_configurations = [
+    ('constant', 'clean_start'),
+    ('constant', 'broken_start'),
+    ('varying', 'clean_start'),
+    ('varying', 'broken_start'),
+]
+
+
+@pytest.mark.parametrize("workers, executor_state", thread_configurations)
+def test_reusable_executor_thread_safety(workers, executor_state):
+    if executor_state == 'clean_start':
+        # Create a new shared executor and ensures that it's workers are ready:
+        get_reusable_executor(reuse=False).submit(id, 42).result()
+    else:
+        # Break the shared executor before launching the threads:
+        with pytest.raises(BrokenProcessPool):
+            executor = get_reusable_executor(reuse=False)
+            executor.submit(return_instance, CrashAtPickle).result()
 
     def helper_func(output_collector, max_workers=2, n_outer_steps=5,
                     n_inner_steps=10):
-
         with warnings.catch_warnings():  # ignore resize warnings
             warnings.simplefilter("always")
             executor = get_reusable_executor(max_workers=max_workers)
@@ -593,26 +606,18 @@ def test_reusable_executor_thread_safety():
                 assert list(results) == [x ** 2 for x in range(n_inner_steps)]
             output_collector.append('ok')
 
+    if workers == 'constant':
+        max_workers = [2] * 10
+    else:
+        max_workers = [(i % 4) + 1 for i in range(10)]
+
     # Use the same executor with the same number of workers concurrently
     # in different threads:
     output_collector = []
-    threads = [threading.Thread(target=helper_func, args=(output_collector, 2),
-                                name='test_thread_1.%02d_max_workers_2' % i)
-               for i in range(10)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    assert output_collector == ['ok'] * len(threads)
-
-    # Call the same executor with the varying number of workers concurrently
-    # in different threads:
-    output_collector = []
-    threads = [threading.Thread(target=helper_func,
-                                args=(output_collector, i + 1),
-                                name='test_thread_2.%02d_max_workers_%d'
-                                     % (i, i + 1))
-               for i in range(5)]
+    threads = [threading.Thread(
+                    target=helper_func, args=(output_collector, w),
+                    name='test_thread_%02d_max_workers_%d' % (i, w))
+               for i, w in enumerate(max_workers)]
     for t in threads:
         t.start()
     for t in threads:
