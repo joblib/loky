@@ -578,6 +578,9 @@ def test_compat_with_concurrent_futures_exception():
 
 
 def test_reusable_executor_thread_safety():
+    # Make test independent of previous test by shutting down the shared
+    # executor.
+    get_reusable_executor(max_workers=2).shutdown(wait=True)
 
     def helper_func(output_collector, max_workers=2, n_outer_steps=5,
                     n_inner_steps=10):
@@ -593,7 +596,8 @@ def test_reusable_executor_thread_safety():
     # Use the same executor with the same number of workers concurrently
     # in different threads:
     output_collector = []
-    threads = [threading.Thread(target=helper_func, args=(output_collector,))
+    threads = [threading.Thread(target=helper_func, args=(output_collector, 2),
+                                name='test_thread_1.%02d_max_workers_2' % i)
                for i in range(10)]
     for t in threads:
         t.start()
@@ -605,7 +609,9 @@ def test_reusable_executor_thread_safety():
     # in different threads:
     output_collector = []
     threads = [threading.Thread(target=helper_func,
-                                args=(output_collector, i + 1))
+                                args=(output_collector, i + 1),
+                                name='test_thread_2.%02d_max_workers_%d'
+                                     % (i, i + 1))
                for i in range(5)]
     for t in threads:
         t.start()
