@@ -79,6 +79,8 @@ def cpu_count():
        (available with Python 3.4+ on some Unix systems)
      * CFS scheduler CPU bandwidth limit
        (available on Linux only)
+    and is given as the minimum of these three constraints.
+    It is also always larger or equal to 1.
     """
     import math
 
