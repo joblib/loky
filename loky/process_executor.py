@@ -969,25 +969,32 @@ class ProcessPoolExecutor(_base.Executor):
     def shutdown(self, wait=True, kill_workers=False):
         mp.util.debug('shutting down executor %s' % self)
         self._flags.flag_as_shutting_down(kill_workers)
-        if self._queue_management_thread:
+        qmt = self._queue_management_thread
+        qmtw = self._queue_management_thread_wakeup
+        if qmt:
+            self._queue_management_thread = None
             # Wake up queue management thread
-            self._queue_management_thread_wakeup.wakeup()
+            if qmtw is not None:
+                qmtw.wakeup()
             if wait:
-                self._queue_management_thread.join()
-        # To reduce the risk of opening too many files, remove references to
-        # objects that use file descriptors.
-        self._queue_management_thread = None
+                qmt.join()
 
-        if self._call_queue:
-            self._call_queue.close()
-            if wait:
-                self._call_queue.join_thread()
+        cq = self._call_queue
+        if cq:
             self._call_queue = None
+            cq.close()
+            if wait:
+                cq.join_thread()
         self._result_queue = None
         self._processes_management_lock = None
-        if self._queue_management_thread_wakeup:
-            self._queue_management_thread_wakeup.close()
+
+        if qmtw:
             self._queue_management_thread_wakeup = None
+            try:
+                qmtw.close()
+            except OSError:
+                # Can happen in case of concurrent calls to shutdown.
+                pass
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
 
 

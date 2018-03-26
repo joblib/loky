@@ -127,28 +127,30 @@ class ReusablePoolExecutor(ProcessPoolExecutor):
             job_reducers=job_reducers,
             result_reducers=result_reducers)
         self.executor_id = executor_id
+        self._resize_lock = threading.Lock()
 
     def _resize(self, max_workers):
-        if max_workers is None or max_workers == self._max_workers:
-            return True
-        self._wait_job_completion()
+        with self._resize_lock:
+            if max_workers is None or max_workers == self._max_workers:
+                return True
+            self._wait_job_completion()
 
-        # Some process might have returned due to timeout so check how many
-        # children are still alive. Use the _process_management_lock to
-        # ensure that no process are spwaned or timeout during the resize.
-        with self._processes_management_lock:
-            nb_children_alive = sum(p.is_alive()
-                                    for p in list(self._processes.values()))
-            self._max_workers = max_workers
-            for _ in range(max_workers, nb_children_alive):
-                self._call_queue.put(None)
-        while len(self._processes) > max_workers and not self._flags.broken:
-            time.sleep(1e-3)
+            # Some process might have returned due to timeout so check how many
+            # children are still alive. Use the _process_management_lock to
+            # ensure that no process are spwaned or timeout during the resize.
+            with self._processes_management_lock:
+                nb_children_alive = sum(p.is_alive()
+                                        for p in list(self._processes.values()))
+                self._max_workers = max_workers
+                for _ in range(max_workers, nb_children_alive):
+                    self._call_queue.put(None)
+            while len(self._processes) > max_workers and not self._flags.broken:
+                time.sleep(1e-3)
 
-        self._adjust_process_count()
-        # materialize values quickly to avoid concurrent dictionary mutation
-        while not all([p.is_alive() for p in list(self._processes.values())]):
-            time.sleep(1e-3)
+            self._adjust_process_count()
+            # materialize values quickly to avoid concurrent dictionary mutation
+            while not all([p.is_alive() for p in list(self._processes.values())]):
+                time.sleep(1e-3)
 
     def _wait_job_completion(self):
         """Wait for the cache to be empty before resizing the pool."""
