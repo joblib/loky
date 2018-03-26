@@ -10,7 +10,10 @@ echo $TOXENV
 
 # Make sure that we have the python docker image cached locally to avoid
 # a timeout in a test that needs it.
-docker pull python:3.6
+
+if [[ `which docker` != "" ]]; then
+    docker pull python:3.6
+fi
 
 # Run the tests and collect trace coverage data both in the subprocesses
 # and its subprocesses.
