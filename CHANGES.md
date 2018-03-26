@@ -1,7 +1,7 @@
 ### 2.1.0 (in developement)
 
 - Fixed a thread-safety issue when iterating over the dict of processes in
-  `ReusablePoolExecutor._resize`.
+  `ReusablePoolExecutor._resize` and `ProcessPoolExecutor.shutdown`.
 
 ### 2.0 - 2018-03-15 - Release highlights
 

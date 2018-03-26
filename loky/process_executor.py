@@ -973,9 +973,15 @@ class ProcessPoolExecutor(_base.Executor):
         qmtw = self._queue_management_thread_wakeup
         if qmt:
             self._queue_management_thread = None
+            if qmtw:
+                self._queue_management_thread_wakeup = None
             # Wake up queue management thread
             if qmtw is not None:
-                qmtw.wakeup()
+                try:
+                    qmtw.wakeup()
+                except OSError:
+                    # Can happen in case of concurrent calls to shutdown.
+                    pass
             if wait:
                 qmt.join()
 
@@ -989,7 +995,6 @@ class ProcessPoolExecutor(_base.Executor):
         self._processes_management_lock = None
 
         if qmtw:
-            self._queue_management_thread_wakeup = None
             try:
                 qmtw.close()
             except OSError:
