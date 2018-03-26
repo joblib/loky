@@ -8,6 +8,13 @@ set -e
 $PYTHON --version
 echo $TOXENV
 
+# Make sure that we have the python docker image cached locally to avoid
+# a timeout in a test that needs it.
+
+if [[ `which docker` != "" ]]; then
+    docker pull python:3.6
+fi
+
 # Run the tests and collect trace coverage data both in the subprocesses
 # and its subprocesses.
 COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- -vl \
