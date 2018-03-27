@@ -117,8 +117,7 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
 
                 mp.util.debug("Reusing existing executor with max_worker={}."
                               .format(executor._max_workers))
-                if max_workers is not None:
-                    executor._resize(max_workers)
+                executor._resize(max_workers)
 
     return executor
 
@@ -141,8 +140,15 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
 
     def _resize(self, max_workers):
         with self._submit_resize_lock:
+
+            if self._queue_management_thread is None:
+                # If the queue_management_thread has not been started
+                # then no processes have been spawned and we can just
+                # update _max_workers and return
+                self._max_workers = max_workers
             if max_workers is None or max_workers == self._max_workers:
                 return True
+
             self._wait_job_completion()
 
             # Some process might have returned due to timeout so check how many
@@ -154,7 +160,6 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                 self._max_workers = max_workers
                 for _ in range(max_workers, nb_children_alive):
                     self._call_queue.put(None)
-            self._ensure_executor_running()
             while (len(self._processes) > max_workers
                    and not self._flags.broken):
                 time.sleep(1e-3)

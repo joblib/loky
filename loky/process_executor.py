@@ -163,6 +163,8 @@ def _python_exit():
     global _global_shutdown
     _global_shutdown = True
     items = list(_threads_wakeups.items())
+    mp.util.debug("Interpreter shutting down. Waking up queue_manager_threads "
+                  "{}".format(items))
     for thread, thread_wakeup in items:
         if thread.is_alive():
             thread_wakeup.wakeup()
