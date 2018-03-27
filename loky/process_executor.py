@@ -821,7 +821,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._work_ids = queue.Queue()
         self._processes_management_lock = self._context.Lock()
         self._queue_management_thread = None
-        self._atexit = None
+        self._at_exit = None
 
         # _ThreadWakeup is a communication channel used to interrupt the wait
         # of the main loop of queue_manager_thread from another thread (e.g.
@@ -898,7 +898,7 @@ class ProcessPoolExecutor(_base.Executor):
                 # Ensure that the _python_exit function will be called before
                 # the multiprocessing.Queue._close finalizers which have an
                 # exitpriority of 10.
-                self._atexit = mp.util.Finalize(
+                self._at_exit = mp.util.Finalize(
                     None, _python_exit, exitpriority=20)
 
     def _adjust_process_count(self):
@@ -936,8 +936,8 @@ class ProcessPoolExecutor(_base.Executor):
                 raise ShutdownExecutorError(
                     'cannot schedule new futures after shutdown')
 
-            # Make sure that you cannot submit a new task once the interpreter
-            # is shutting down to avoid spawning new processes at exit.
+            # Cannot submit a new calls once the interpreter is shutting down.
+            # This check avoids spawning new processes at exit.
             if _global_shutdown:
                 raise RuntimeError('cannot schedule new futures after '
                                    'interpreter shutdown')
