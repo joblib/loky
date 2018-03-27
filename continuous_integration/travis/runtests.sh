@@ -11,7 +11,7 @@ echo $TOXENV
 # Make sure that we have the python docker image cached locally to avoid
 # a timeout in a test that needs it.
 
-if [[ `which docker` != "" ]]; then
+if [ `which docker` != "" ]; then
     docker pull python:3.6
 fi
 
