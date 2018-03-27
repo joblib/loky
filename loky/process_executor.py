@@ -819,6 +819,7 @@ class ProcessPoolExecutor(_base.Executor):
         self._work_ids = queue.Queue()
         self._processes_management_lock = self._context.Lock()
         self._queue_management_thread = None
+        self._atexit = None
 
         # _ThreadWakeup is a communication channel used to interrupt the wait
         # of the main loop of queue_manager_thread from another thread (e.g.
@@ -887,9 +888,26 @@ class ProcessPoolExecutor(_base.Executor):
             self._queue_management_thread.start()
 
             # register this executor in a mechanism that ensures it will wakeup
-            # when the interpreter is exiting.
-            _threads_wakeups[self._queue_management_thread] = \
-                self._queue_management_thread_wakeup
+            # when the interpreter is exiting. Use an exitpriority of 20 to be
+            # called before the multiprocessing.Queue._close which have an
+            # exitpriority of 10.
+            self._atexit = mp.util.Finalize(
+                self, self._wakeup_executor_at_exit,
+                [weakref.ref(self._queue_management_thread),
+                 weakref.ref(self._queue_management_thread_wakeup)],
+                exitpriority=20)
+
+    @staticmethod
+    def _wakeup_executor_at_exit(qmt_wr, qmtw_wr):
+        global _global_shutdown
+        _global_shutdown = True
+        qmtw = qmtw_wr()
+        if qmtw is not None:
+            qmtw.wakeup()
+            qmt = qmt_wr()
+            if qmt is not None:
+                qmt.join()
+                mp.util.debug('... queue management thread joined')
 
     def _adjust_process_count(self):
         for _ in range(len(self._processes), self._max_workers):
@@ -979,6 +997,13 @@ class ProcessPoolExecutor(_base.Executor):
 
     def shutdown(self, wait=True, kill_workers=False):
         mp.util.debug('shutting down executor %s' % self)
+
+        # As we are manually shutting down, we do not need the atexit mechanism
+        # anymore. Cancel it to avoid growing the list of finalizers.
+        if self._atexit:
+            self._atexit.cancel()
+            self._atexit = None
+
         self._flags.flag_as_shutting_down(kill_workers)
         qmt = self._queue_management_thread
         qmtw = self._queue_management_thread_wakeup
@@ -1012,8 +1037,3 @@ class ProcessPoolExecutor(_base.Executor):
                 # Can happen in case of concurrent calls to shutdown.
                 pass
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
-
-
-# Use an exitpriority of 20 to be called before the multiprocessing.Queue
-# Finalize which have a exitpriority 10.
-mp.util.Finalize(None, _python_exit, exitpriority=20)
