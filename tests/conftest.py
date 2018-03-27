@@ -6,14 +6,14 @@ from multiprocessing.util import log_to_stderr
 
 
 def pytest_addoption(parser):
-    parser.addoption("--verbosity", type=int, default=logging.DEBUG,
+    parser.addoption("--loky-verbosity", type=int, default=logging.DEBUG,
                      help="log-level: integer, SUBDEBUG(5) - INFO(20)")
 
 
 @pytest.fixture(scope="session")
 def log_lvl(request):
     """Choose logging level for multiprocessing"""
-    return request.config.getoption("--verbosity")
+    return request.config.getoption("--loky-verbosity")
 
 
 @pytest.yield_fixture(scope="session", autouse=True)
