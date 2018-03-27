@@ -511,7 +511,6 @@ def _queue_management_worker(executor_reference,
                     n_sentinels_sent += 1
                 except Full:
                     break
-                n_sentinels_sent += 1
             with processes_management_lock:
                 n_children_alive = sum(
                     p.is_alive() for p in list(processes.values())
@@ -650,6 +649,10 @@ def _queue_management_worker(executor_reference,
         #   - The executor that owns this worker has been collected OR
         #   - The executor that owns this worker has been shutdown.
         if is_shutting_down():
+            # bpo-33097: Make sure that the executor is flagged as shutting
+            # down even if it is shutdown by the interpreter exiting.
+            with executor_flags.shutdown_lock:
+                executor_flags.shutdown = True
             if executor_flags.kill_workers:
                 while pending_work_items:
                     _, work_item = pending_work_items.popitem()
@@ -923,6 +926,12 @@ class ProcessPoolExecutor(_base.Executor):
                 raise ShutdownExecutorError(
                     'cannot schedule new futures after shutdown')
 
+            # Make sure that you cannot submit a new task once the interpreter
+            # is shutting down to avoid spawning new processes at exit.
+            if _global_shutdown:
+                raise RuntimeError('cannot schedule new futures after '
+                                   'interpreter shutdown')
+
             f = _base.Future()
             w = _WorkItem(f, fn, args, kwargs)
 
@@ -1005,4 +1014,6 @@ class ProcessPoolExecutor(_base.Executor):
     shutdown.__doc__ = _base.Executor.shutdown.__doc__
 
 
-atexit.register(_python_exit)
+# Use an exitpriority of 20 to be called before the multiprocessing.Queue
+# Finalize which have a exitpriority 10.
+mp.util.Finalize(None, _python_exit, exitpriority=20)

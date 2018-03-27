@@ -610,20 +610,17 @@ def test_reusable_executor_thread_safety(workers, executor_state):
         max_workers = [2] * 10
     else:
         max_workers = [(i % 4) + 1 for i in range(10)]
-
     # Use the same executor with the same number of workers concurrently
     # in different threads:
     output_collector = []
     threads = [threading.Thread(
-                    target=helper_func, args=(output_collector, w),
-                    name='test_thread_%02d_max_workers_%d' % (i, w))
-               for i, w in enumerate(max_workers)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+        target=helper_func, args=(output_collector, w),
+        name='test_thread_%02d_max_workers_%d' % (i, w))
+        for i, w in enumerate(max_workers)]
+
+    with warnings.catch_warnings(record=True) as w:
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
     assert output_collector == ['ok'] * len(threads)
-
-
-def teardown_module():
-    get_reusable_executor().shutdown(kill_workers=True, wait=True)
