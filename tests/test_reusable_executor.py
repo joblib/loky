@@ -623,3 +623,7 @@ def test_reusable_executor_thread_safety(workers, executor_state):
     for t in threads:
         t.join()
     assert output_collector == ['ok'] * len(threads)
+
+
+def teardown_module():
+    get_reusable_executor().shutdown(kill_workers=True, wait=True)
