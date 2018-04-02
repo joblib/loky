@@ -821,7 +821,6 @@ class ProcessPoolExecutor(_base.Executor):
         self._work_ids = queue.Queue()
         self._processes_management_lock = self._context.Lock()
         self._queue_management_thread = None
-        self._at_exit = None
 
         # _ThreadWakeup is a communication channel used to interrupt the wait
         # of the main loop of queue_manager_thread from another thread (e.g.
