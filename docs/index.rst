@@ -4,14 +4,3 @@
    contain the root `toctree` directive.
 
 .. include:: ../README.rst
-
-
-.. toctree::
-   :hidden:
-   :caption: Contents
-
-   README
-   API
-   examples
-
-
