@@ -17,11 +17,11 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-import os
-import sys
+# import os
+# import sys
 import sphinx_bootstrap_theme
 
-sys.path.insert(0, os.path.abspath('../loky'))
+# sys.path.insert(0, os.path.abspath('../loky'))
 
 
 # -- General configuration ------------------------------------------------
@@ -34,10 +34,11 @@ sys.path.insert(0, os.path.abspath('../loky'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
     'sphinx.ext.todo',
+    'sphinx.ext.autodoc',
     'sphinx.ext.viewcode',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx',
     'sphinx_gallery.gen_gallery'
 ]
 
@@ -99,8 +100,8 @@ html_theme_options = {
     'navbar_sidebarrel': False,
     'navbar_links': [
         ("Examples", "auto_examples/index"),
-        ("API", "api"),
-        ("GitHub", "https://github.com/tommoral/adopty", True)
+        ("API", "API"),
+        ("GitHub", "https://github.com/tommoral/loky", True)
     ],
     'bootswatch_theme': "united"
 }
@@ -196,7 +197,7 @@ sphinx_gallery_conf = {
     'reference_url': {
         'loky': None
     },
-    'default_thumb_file': '_static/lock-2.png',
+    # 'default_thumb_file': '_static/lock-2.png',
 
     # directory where function granular galleries are stored
     'backreferences_dir': 'gen_modules/backreferences',
@@ -205,4 +206,6 @@ sphinx_gallery_conf = {
     # this case sphinx_gallery and numpy in a tuple of strings.
     'doc_module': ('loky')
 }
+
+intersphinx_mapping = {'python' : ('https://docs.python.org/3', None)}
 
