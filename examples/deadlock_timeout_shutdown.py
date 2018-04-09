@@ -14,7 +14,7 @@ from loky.backend import get_context
 class SlowPickle:
     def __init__(self, delay=.1):
         self.delay = delay
-        
+
     def __reduce__(self):
         time.sleep(self.delay)
         return SlowPickle, (self.delay,)
