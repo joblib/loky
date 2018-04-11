@@ -35,6 +35,7 @@ from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
 from loky.process_executor import BrokenProcessPool, LokyRecursionError
 from .test_reusable_executor import ErrorAtPickle
 from .test_reusable_executor import ExitAtPickle
+from . import _executor_mixin
 from .utils import id_sleep, check_subprocess_call
 
 if sys.version_info[:2] < (3, 3):
@@ -214,8 +215,8 @@ class ExecutorShutdownTest:
         assert not executor_flags.broken, processes
 
     @classmethod
-    def _wait_and_crash(cls, event):
-        event.wait()
+    def _wait_and_crash(cls):
+        _executor_mixin._test_event.wait()
         faulthandler._sigsegv()
 
     def test_processes_crash_handling_after_executor_gc(self):
@@ -227,14 +228,8 @@ class ExecutorShutdownTest:
         # Make sure this crash does not happen before the non-failing jobs
         # have returned their results by using and multiprocessing Event
         # instance
-        if self.context.get_start_method() != "fork":
-            manager = self.context.Manager()
-            event = manager.Event()
-        else:
-            manager = None
-            event = self.context.Event()
 
-        crash_result = self.executor.submit(self._wait_and_crash, event)
+        crash_result = self.executor.submit(self._wait_and_crash)
         assert len(self.executor._processes) == 5
         processes = self.executor._processes
         executor_flags = self.executor._flags
@@ -253,16 +248,14 @@ class ExecutorShutdownTest:
             assert result == expected
 
         # Let the crash job know that it can crash now
-        event.set()
+        _executor_mixin._test_event.set()
 
         # The crashing job should be executed after the non-failing jobs
         # have completed. The crash should be detected.
         with pytest.raises(BrokenProcessPool):
             crash_result.result()
 
-        if manager is not None:
-            manager.shutdown()
-            manager.join()
+        _executor_mixin._test_event.clear()
 
         # The executor flag should have been set at this point.
         assert executor_flags.broken, processes
@@ -316,30 +309,33 @@ class WaitTests:
         assert set([future1]) == pending
 
     @classmethod
-    def wait_and_raise(cls, ev, t):
-        ev.wait(t)
+    def wait_and_raise(cls, t):
+        _executor_mixin._test_event.wait(t)
         raise Exception('this is an exception')
 
+    @classmethod
+    def wait_and_return(cls, t):
+        _executor_mixin._test_event.wait()
+        return True
+
     def test_first_exception(self):
-        manager = self.context.Manager()
-        event = manager.Event()
         future1 = self.executor.submit(mul, 2, 21)
-        future2 = self.executor.submit(self.wait_and_raise, event, 1.5)
+        future2 = self.executor.submit(self.wait_and_raise, 1.5)
         future3 = self.executor.submit(time.sleep, 3)
 
         def cb_done(f):
-            event.set()
+            _executor_mixin._test_event.set()
         future1.add_done_callback(cb_done)
 
         finished, pending = futures.wait([future1, future2, future3],
                                          return_when=futures.FIRST_EXCEPTION)
 
-        assert event.is_set()
+        assert _executor_mixin._test_event.is_set()
 
         assert set([future1, future2]) == finished
         assert set([future3]) == pending
 
-        manager.shutdown()
+        _executor_mixin._test_event.clear()
 
     def test_first_exception_some_already_complete(self):
         future1 = self.executor.submit(divmod, 21, 0)
@@ -382,17 +378,23 @@ class WaitTests:
         assert self.executor.submit(id_sleep, 42).result() == 42
 
         future1 = self.executor.submit(mul, 6, 7)
-        future2 = self.executor.submit(time.sleep, 5)
+        future2 = self.executor.submit(self.wait_and_return, 5)
+
+        assert future1.result() == 42
 
         finished, pending = futures.wait([CANCELLED_AND_NOTIFIED_FUTURE,
                                           EXCEPTION_FUTURE, SUCCESSFUL_FUTURE,
                                           future1, future2],
-                                         timeout=1,
+                                         timeout=.1,
                                          return_when=futures.ALL_COMPLETED)
 
         assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
                     SUCCESSFUL_FUTURE, future1]) == finished
         assert set([future2]) == pending
+
+        _executor_mixin._test_event.set()
+        assert future2.result(timeout=10)
+        _executor_mixin._test_event.clear()
 
 
 class AsCompletedTests:
