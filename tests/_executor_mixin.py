@@ -27,6 +27,14 @@ try:
 except ImportError:
     TIMEOUT = 20
 
+_test_event = None
+
+
+def initializer_event(event):
+    """Initializer that set a global test event for test synchronization"""
+    global _test_event
+    _test_event = event
+
 
 def _direct_children_with_cmdline(p):
     """Helper to fetch cmdline from children process list"""
@@ -117,11 +125,28 @@ def _check_executor_started(executor):
 class ExecutorMixin:
     worker_count = 5
 
+    @classmethod
+    def setup_class(cls):
+        print("setup class with {}".format(cls.context))
+        global _test_event
+        if _test_event is None:
+            _test_event = cls.context.Event()
+
+    @classmethod
+    def teardown_class(cls):
+        print("teardown class with {}".format(cls.context))
+        global _test_event
+        if _test_event is not None:
+            _test_event = None
+
     @pytest.fixture(autouse=True)
     def setup_method(self, logging_setup):
+        global _test_event
+        assert _test_event is not None
         try:
             self.executor = self.executor_type(
-                max_workers=self.worker_count, context=self.context)
+                max_workers=self.worker_count, context=self.context,
+                initializer=initializer_event, initargs=(_test_event,))
         except NotImplementedError as e:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
