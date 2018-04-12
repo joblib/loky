@@ -62,7 +62,6 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 import os
 import sys
 import types
-import atexit
 import weakref
 import warnings
 import itertools
@@ -498,8 +497,8 @@ def _queue_management_worker(executor_reference,
         mp.util.debug("queue management thread shutting down")
         executor_flags.flag_as_shutting_down()
         # Create a list to avoid RuntimeError due to concurrent modification of
-        # processe. nb_children_alive is thus an upper bound. Also release the
-        # processes' safe_guard_locks to fasten the shutdown procedure, as
+        # processes. nb_children_alive is thus an upper bound. Also release the
+        # processes' safe_guard_locks to accelerate the shutdown procedure, as
         # there is no need for hand-shake here.
         with processes_management_lock:
             n_children_alive = 0
