@@ -495,11 +495,14 @@ def _queue_management_worker(executor_reference,
         mp.util.debug("queue management thread shutting down")
         executor_flags.flag_as_shutting_down()
         # Create a list to avoid RuntimeError due to concurrent modification of
-        # processe. nb_children_alive is thus an upper bound
+        # processe. nb_children_alive is thus an upper bound. Also release the
+        # processes' safe_guard_locks to fasten the shutdown procedure, as
+        # there is no need for hand-shake here.
         with processes_management_lock:
-            n_children_alive = sum(
-                p.is_alive() for p in list(processes.values())
-            )
+            n_children_alive = 0
+            for p in list(processes.values()):
+                p._worker_exit_lock.release()
+                n_children_alive += 1
         n_children_to_stop = n_children_alive
         n_sentinels_sent = 0
         # Send the right number of sentinels, to make sure all children are
@@ -529,7 +532,6 @@ def _queue_management_worker(executor_reference,
         # some ctx.Queue methods may deadlock on Mac OS X.
         while processes:
             _, p = processes.popitem()
-            p._worker_exit_lock.release()
             p.join()
         mp.util.debug("queue management thread clean shutdown of worker "
                       "processes: {}".format(list(processes)))
