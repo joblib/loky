@@ -172,6 +172,9 @@ def _python_exit():
         thread.join()
 
 
+# Module variable to register the at_exit call
+process_pool_executor_at_exit = None
+
 # Controls how many more calls than processes will be queued in the call queue.
 # A smaller number will mean that processes spend more time idle waiting for
 # work while a larger number will make Future.cancel() succeed less frequently
@@ -895,11 +898,12 @@ class ProcessPoolExecutor(_base.Executor):
             _threads_wakeups[self._queue_management_thread] = \
                 self._queue_management_thread_wakeup
 
-            if self._at_exit is None:
+            global process_pool_executor_at_exit
+            if process_pool_executor_at_exit is None:
                 # Ensure that the _python_exit function will be called before
                 # the multiprocessing.Queue._close finalizers which have an
                 # exitpriority of 10.
-                self._at_exit = mp.util.Finalize(
+                process_pool_executor_at_exit = mp.util.Finalize(
                     None, _python_exit, exitpriority=20)
 
     def _adjust_process_count(self):

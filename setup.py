@@ -82,6 +82,6 @@ setup(
     cmdclass=cmdclass,
     platforms='any',
     install_requires=['cloudpickle'],
-    tests_require = ['pytest', 'psutils',],
+    tests_require=['pytest', 'psutils'],
 
 )
