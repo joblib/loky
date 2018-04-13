@@ -498,7 +498,7 @@ def _queue_management_worker(executor_reference,
         executor_flags.flag_as_shutting_down()
         # Create a list to avoid RuntimeError due to concurrent modification of
         # processes. nb_children_alive is thus an upper bound. Also release the
-        # processes' safe_guard_locks to accelerate the shutdown procedure, as
+        # processes' _worker_exit_lock to accelerate the shutdown procedure, as
         # there is no need for hand-shake here.
         with processes_management_lock:
             n_children_alive = 0
