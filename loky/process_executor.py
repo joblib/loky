@@ -334,7 +334,7 @@ def _sendback_result(result_queue, work_id, result=None, exception=None):
 
 
 def _process_worker(call_queue, result_queue, initializer, initargs,
-                    processes_management_lock, timeout, safe_guard_lock,
+                    processes_management_lock, timeout, worker_exit_lock,
                     current_depth):
     """Evaluates calls from call_queue and places the results in result_queue.
 
@@ -351,7 +351,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             workers are being spawned.
         timeout: maximum time to wait for a new item in the call_queue. If that
             time is expired, the worker will shutdown.
-        safe_guard_lock: Lock to avoid flagging the executor as broken on
+        worker_exit_lock: Lock to avoid flagging the executor as broken on
             workers timeout.
         current_depth: Nested parallelism level, to avoid infinite spawning.
     """
@@ -389,7 +389,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         if call_item is None:
             # Notify queue management thread about clean worker shutdown
             result_queue.put(os.getpid())
-            with safe_guard_lock:
+            with worker_exit_lock:
                 return
         try:
             r = call_item.fn(*call_item.args, **call_item.kwargs)
@@ -529,7 +529,7 @@ def _queue_management_worker(executor_reference,
         # some ctx.Queue methods may deadlock on Mac OS X.
         while processes:
             _, p = processes.popitem()
-            p._safe_guard_lock.release()
+            p._worker_exit_lock.release()
             p.join()
         mp.util.debug("queue management thread clean shutdown of worker "
                       "processes: {}".format(list(processes)))
@@ -606,7 +606,7 @@ def _queue_management_worker(executor_reference,
 
             # p can be None is the executor is concurrently shutting down.
             if p is not None:
-                p._safe_guard_lock.release()
+                p._worker_exit_lock.release()
                 p.join()
                 del p
 
@@ -902,8 +902,8 @@ class ProcessPoolExecutor(_base.Executor):
 
     def _adjust_process_count(self):
         for _ in range(len(self._processes), self._max_workers):
-            safe_guard_lock = self._context.BoundedSemaphore(1)
-            safe_guard_lock.acquire()
+            worker_exit_lock = self._context.BoundedSemaphore(1)
+            worker_exit_lock.acquire()
             p = self._context.Process(
                 target=_process_worker,
                 args=(self._call_queue,
@@ -912,9 +912,9 @@ class ProcessPoolExecutor(_base.Executor):
                       self._initargs,
                       self._processes_management_lock,
                       self._timeout,
-                      safe_guard_lock,
+                      worker_exit_lock,
                       _CURRENT_DEPTH + 1))
-            p._safe_guard_lock = safe_guard_lock
+            p._worker_exit_lock = worker_exit_lock
             p.start()
             self._processes[p.pid] = p
         mp.util.debug('Adjust process count : {}'.format(self._processes))
