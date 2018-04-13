@@ -1,5 +1,12 @@
-### 2.1.0 (in developement)
+### 2.1.1 - 2018-04-13 - Bug fix release
 
+- Fix interpreter shutdown
+- Fix queue size in reusable executor
+- Accelerate executor shutdown
+
+### 2.1.0 - 2018-04-11 - Release Highlights
+
+- Add documentation, accessible on http://loky.readthedocs.io
 - Fixed a thread-safety issue when iterating over the dict of processes in
   `ReusablePoolExecutor._resize` and `ProcessPoolExecutor.shutdown`.
 
