@@ -182,9 +182,9 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         while len(self._pending_work_items) > 0:
             time.sleep(1e-3)
 
-    def _setup_queue(self, job_reducers, result_reducers):
+    def _setup_queues(self, job_reducers, result_reducers):
         # As this executor can be resized, use a large queue size to avoid
         # underestimating capacity and introducing overhead
         queue_size = 2 * cpu_count() + EXTRA_QUEUED_CALLS
-        super(_ReusablePoolExecutor, self)._setup_queue(
+        super(_ReusablePoolExecutor, self)._setup_queues(
             job_reducers, result_reducers, queue_size=queue_size)
