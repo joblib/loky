@@ -9,7 +9,6 @@ import threading
 
 from loky._base import TimeoutError
 from loky import get_reusable_executor, cpu_count
-from .conftest import logging_setup
 
 
 # Compat Travis
@@ -140,7 +139,7 @@ class ExecutorMixin:
             _test_event = None
 
     @pytest.fixture(autouse=True)
-    def setup_method(self, logging_setup):
+    def setup_method(self):
         global _test_event
         assert _test_event is not None
         try:

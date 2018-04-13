@@ -62,7 +62,6 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 import os
 import sys
 import types
-import atexit
 import weakref
 import warnings
 import itertools
@@ -171,6 +170,9 @@ def _python_exit():
     for thread, _ in items:
         thread.join()
 
+
+# Module variable to register the at_exit call
+process_pool_executor_at_exit = None
 
 # Controls how many more calls than processes will be queued in the call queue.
 # A smaller number will mean that processes spend more time idle waiting for
@@ -495,11 +497,14 @@ def _queue_management_worker(executor_reference,
         mp.util.debug("queue management thread shutting down")
         executor_flags.flag_as_shutting_down()
         # Create a list to avoid RuntimeError due to concurrent modification of
-        # processe. nb_children_alive is thus an upper bound
+        # processes. nb_children_alive is thus an upper bound. Also release the
+        # processes' safe_guard_locks to accelerate the shutdown procedure, as
+        # there is no need for hand-shake here.
         with processes_management_lock:
-            n_children_alive = sum(
-                p.is_alive() for p in list(processes.values())
-            )
+            n_children_alive = 0
+            for p in list(processes.values()):
+                p._worker_exit_lock.release()
+                n_children_alive += 1
         n_children_to_stop = n_children_alive
         n_sentinels_sent = 0
         # Send the right number of sentinels, to make sure all children are
@@ -529,7 +534,6 @@ def _queue_management_worker(executor_reference,
         # some ctx.Queue methods may deadlock on Mac OS X.
         while processes:
             _, p = processes.popitem()
-            p._worker_exit_lock.release()
             p.join()
         mp.util.debug("queue management thread clean shutdown of worker "
                       "processes: {}".format(list(processes)))
@@ -893,11 +897,12 @@ class ProcessPoolExecutor(_base.Executor):
             _threads_wakeups[self._queue_management_thread] = \
                 self._queue_management_thread_wakeup
 
-            if self._at_exit is None:
+            global process_pool_executor_at_exit
+            if process_pool_executor_at_exit is None:
                 # Ensure that the _python_exit function will be called before
                 # the multiprocessing.Queue._close finalizers which have an
                 # exitpriority of 10.
-                self._at_exit = mp.util.Finalize(
+                process_pool_executor_at_exit = mp.util.Finalize(
                     None, _python_exit, exitpriority=20)
 
     def _adjust_process_count(self):
