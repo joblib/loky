@@ -624,3 +624,12 @@ def test_reusable_executor_thread_safety(workers, executor_state):
         for t in threads:
             t.join()
     assert output_collector == ['ok'] * len(threads)
+
+
+@pytest.mark.parametrize("reuse", [False, 'auto'])
+def test_simple_map_stress_test(reuse):
+    for i in range(5):
+        for max_workers in [1, 4, 10, 2, 3]:
+            e = get_reusable_executor(max_workers, reuse=reuse)
+            for r in e.map(lambda x: x ** 2, list(range(5)) * (i + 1)):
+                assert r is not None
