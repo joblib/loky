@@ -3,7 +3,7 @@
 # Authors: Thomas Moreau
 # License: 3-clause BSD
 
-$VERSION=(27, 34, 36)
+$VERSION=(36, 34, 27)
 
 function TestPythonVersions () {
     Write-Host $PYTHON
