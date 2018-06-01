@@ -21,7 +21,7 @@ COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- -vl \
         --timeout=30 --maxfail=5
 
 
-if [ "$JOBLIB_TESTS" == "true" ]; then
+if [ "$JOBLIB_TESTS" = "true" ]; then
     # Install joblib from pip, patch it to use this version of loky
     # and run the joblib tests with pytest.
     pip install joblib
