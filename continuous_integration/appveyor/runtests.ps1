@@ -3,14 +3,14 @@
 # Authors: Thomas Moreau
 # License: 3-clause BSD
 
-$VERSION=(27, 34, 36)
+$VERSION=(36, 34, 27)
 
 function TestPythonVersions () {
     Write-Host $PYTHON
     ForEach($ver in $VERSION){
         $env:TOXPYTHON = "C:\Python$ver$env:PYTHON_ARCH_SUFFIX\python.exe"
         Write-Host $env:TOXPYTHON
-        python ./continuous_integration/appveyor/tox -e py$ver -- -vlx --timeout=30
+        python ./continuous_integration/appveyor/tox -e py$ver -- -vlx --timeout=50
         If( $LASTEXITCODE -ne 0){
             Exit 1
         }
