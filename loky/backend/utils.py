@@ -2,6 +2,7 @@ import os
 import sys
 import errno
 import signal
+import warnings
 import threading
 import subprocess
 
@@ -15,9 +16,19 @@ def _flag_current_thread_clean_exit():
 def safe_terminate(process):
     """Terminate a process and its children.
     """
-
-    _safe_terminate(process.pid)
-    process.join()
+    try:
+        _safe_terminate(process.pid)
+        process.join()
+    except OSError as e:
+        import traceback
+        tb = traceback.format_exc()
+        warnings.warn("Failure in child introspection on this platform. You "
+                      "should report it on https://github.com/tomMoral/loky "
+                      "with the following traceback\n{}".format(tb))
+        # In case we cannot introspect the children, we fall back to the
+        # classic Process.terminate.
+        process.terminate()
+        process.join()
 
 
 def _safe_terminate(pid):
@@ -44,7 +55,7 @@ def _safe_terminate(pid):
     else:
         try:
             children_pids = subprocess.check_output(
-                ["ps", "-o", "pid=", "--ppid", str(pid)],
+                ["pgrep", "-P", str(pid)],
                 stderr=None
             )
         except subprocess.CalledProcessError as e:
