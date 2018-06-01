@@ -24,10 +24,11 @@ COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- -vl \
 if [ "$JOBLIB_TESTS" = "true" ]; then
     # Install joblib from pip, patch it to use this version of loky
     # and run the joblib tests with pytest.
-    pip install joblib
+    git clone https://github.com/joblib/joblib.git src_joblib
+    cd src_joblib
+    pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
     cp $TRAVIS_BUILD_DIR/continuous_integration/travis/copy_loky.sh $JOBLIB/externals
     (cd $JOBLIB/externals && bash copy_loky.sh $TRAVIS_BUILD_DIR)
-    cp $TRAVIS_BUILD_DIR/continuous_integration/travis/conftest.py $JOBLIB/..
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 fi

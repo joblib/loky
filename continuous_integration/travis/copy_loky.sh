@@ -20,7 +20,3 @@ rm -rf $INSTALL_FOLDER
 # so first renaming to .bak and then deleting backup files
 find loky -name "*.py" | xargs sed -i.bak "s/from loky/from joblib.externals.loky/"
 find loky -name "*.bak" | xargs rm
-
-# Remove the tests folders to speed-up test time for joblib.
-# loky is already tested on its own CI infrastructure upstream.
-rm -r loky/test
