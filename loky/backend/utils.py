@@ -27,9 +27,20 @@ def _safe_terminate(pid):
     if sys.platform == "win32":
         # On windows, the taskkill function with option `/T` terminate a given
         # process pid and its children.
-        subprocess.check_output(
-            ["taskkill", "/F", "/T", "/PID", str(pid)],
-            stderr=None)
+        try:
+            subprocess.check_output(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                stderr=None)
+        except subprocess.CalledProcessError as e:
+            # In windows, taskkill return 1 for permission denied and 128 for
+            # no process found.
+            if e.returncode not in [1, 128]:
+                raise
+            elif e.returncode == 1:
+                # Try to kill the process with a signal if taskkill was denied
+                # permission.
+                os.kill(pid, signal.SIGTERM)
+
     else:
         try:
             children_pids = subprocess.check_output(
