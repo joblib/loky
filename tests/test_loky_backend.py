@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import psutil
 import pytest
 import signal
 import pickle
@@ -10,6 +11,7 @@ from tempfile import mkstemp
 
 from loky.backend import get_context
 from loky.backend.compat import wait
+from loky.backend.utils import safe_terminate
 from .utils import TimingWrapper, check_subprocess_call
 
 try:
@@ -68,8 +70,7 @@ class TestLokyBackend:
         """Clean up the test environment from any remaining subprocesses.
         """
         for child_process in cls.active_children():
-            child_process.terminate()
-            child_process.join()
+            safe_terminate(child_process)
 
     def test_current(self):
 
@@ -463,7 +464,7 @@ class TestLokyBackend:
                                            "-p", "{}".format(pid),
                                            "-d", "^txt,^cwd,^rtd"])
             lines = out.decode().split("\n")[1:-1]
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError):
             print("lsof does not exist on this plateform. Skip open files"
                   "check.")
             return []
@@ -677,3 +678,36 @@ def wait_for_handle(handle, timeout):
     if timeout is not None and timeout < 0.0:
         timeout = None
     return wait([handle], timeout)
+
+
+def _run_netesed_delayed(depth, delay, event):
+    if depth > 0:
+        p = multiprocessing.Process(target=_run_netesed_delayed,
+                                    args=(depth - 1, delay, event))
+        p.start()
+        p.join()
+    else:
+        event.set()
+
+    time.sleep(delay)
+
+
+def test_safe_terminate():
+    event = multiprocessing.Event()
+    p = multiprocessing.Process(target=_run_netesed_delayed,
+                                args=(4, 1000, event))
+    p.start()
+
+    # Wait for all the processes to be launched
+    if not event.wait(10):
+        safe_terminate(p)
+        raise RuntimeError("test_safe_terminate was not able to launch all "
+                           "nested processes.")
+
+    children = psutil.Process(pid=p.pid).children(recursive=True)
+    safe_terminate(p)
+
+    # The process can take some time finishing so we should wait up to 5s
+    gone, alive = psutil.wait_procs(children, timeout=5)
+    msg = "Should be no descendent left but found:\n{}"
+    assert len(alive) == 0, msg.format(children)
