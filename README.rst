@@ -20,6 +20,20 @@ cross-version implementation of the :class:`~concurrent.futures.ProcessPoolExecu
 
 -  **No need for ``if __name__ == "__main__":`` in scripts**: thanks to the use of :mod:`cloudpickle <https://github.com/cloudpipe/cloudpickle>` to call functions defined in the :mod:`__main__` module, it is not required to protect the code calling parallel functions under Windows.
 
+
+Installation
+~~~~~~~~~~~~
+
+The recommended way to install :mod:`loky` is with `pip`,
+.. code:: bash
+
+    pip install loky
+
+:mod:`loky` can also be installed from sources using
+.. code:: bash
+    python setup.py install
+
+
 Usage
 ~~~~~
 
@@ -51,6 +65,8 @@ The basic usage of :mod:`loky` relies on the :func:`~loky.get_reusable_executor`
     print("Number of used processes:", n_workers)
     assert n_workers == 4
 
+For more advance usage, see our `documentation <https://loky.readthedocs.io/en/stable/>`
+
 
 Acknowledgement
 ~~~~~~~~~~~~~~~
@@ -67,3 +83,4 @@ IDEX Paris-Saclay, ANR-11-IDEX-0003-02
    :target: https://codecov.io/gh/tomMoral/loky
 
 .. _cloudpickle: https://github.com/cloudpipe/cloudpickle
+.. _documentation:  http://loky.readthedocs.io/en/stable
