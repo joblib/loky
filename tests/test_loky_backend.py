@@ -680,9 +680,9 @@ def wait_for_handle(handle, timeout):
     return wait([handle], timeout)
 
 
-def _run_netesed_delayed(depth, delay, event):
+def _run_nested_delayed(depth, delay, event):
     if depth > 0:
-        p = multiprocessing.Process(target=_run_netesed_delayed,
+        p = multiprocessing.Process(target=_run_nested_delayed,
                                     args=(depth - 1, delay, event))
         p.start()
         p.join()
@@ -694,15 +694,15 @@ def _run_netesed_delayed(depth, delay, event):
 
 def test_recursive_terminate():
     event = multiprocessing.Event()
-    p = multiprocessing.Process(target=_run_netesed_delayed,
+    p = multiprocessing.Process(target=_run_nested_delayed,
                                 args=(4, 1000, event))
     p.start()
 
     # Wait for all the processes to be launched
     if not event.wait(10):
         recursive_terminate(p)
-        raise RuntimeError("test_recursive_terminate was not able to launch all "
-                           "nested processes.")
+        raise RuntimeError("test_recursive_terminate was not able to launch "
+                           "all nested processes.")
 
     children = psutil.Process(pid=p.pid).children(recursive=True)
     recursive_terminate(p)
@@ -710,4 +710,4 @@ def test_recursive_terminate():
     # The process can take some time finishing so we should wait up to 5s
     gone, alive = psutil.wait_procs(children, timeout=5)
     msg = "Should be no descendent left but found:\n{}"
-    assert len(alive) == 0, msg.format(children)
+    assert len(alive) == 0, msg.format(alive)

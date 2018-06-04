@@ -14,11 +14,10 @@ def _flag_current_thread_clean_exit():
 
 
 def recursive_terminate(process):
-    """Terminate a process and its children.
+    """Terminate a process and its descendants.
     """
     try:
         _recursive_terminate(process.pid)
-        process.join()
     except OSError as e:
         import traceback
         tb = traceback.format_exc()
@@ -28,11 +27,11 @@ def recursive_terminate(process):
         # In case we cannot introspect the children, we fall back to the
         # classic Process.terminate.
         process.terminate()
-        process.join()
+    process.join()
 
 
 def _recursive_terminate(pid):
-    """Terminate the children of a process before killing this process.
+    """Recursively kill the descendants of a process before killing it.
     """
 
     if sys.platform == "win32":
@@ -48,9 +47,15 @@ def _recursive_terminate(pid):
             if e.returncode not in [1, 128]:
                 raise
             elif e.returncode == 1:
-                # Try to kill the process with a signal if taskkill was denied
-                # permission.
-                os.kill(pid, signal.SIGTERM)
+                # Try to kill the process without its descendants if taskkill
+                # was denied permission. If this fails too, with an error
+                # different from process not found, let the top level function
+                # raise a warning and retry to kill the process.
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except OSError as e:
+                    if e.errno != errno.ESRCH:
+                        raise
 
     else:
         try:
@@ -72,6 +77,7 @@ def _recursive_terminate(pid):
             os.kill(pid, signal.SIGTERM)
         except OSError as e:
             # if OSError is raised with [Errno 3] no such process, the process
-            # is already terminated, else, raise the error
+            # is already terminated, else, raise the error and let the top
+            # level function raise a warning and retry to kill the process.
             if e.errno != errno.ESRCH:
                 raise
