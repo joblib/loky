@@ -1,6 +1,8 @@
-### 2.2.0 - in development
+### 2.1.2 - 2018-06-04 - Release Highligths
 
 - Fix terminate for nested processes
+- Fix support for windows freezed application
+- Fix some internal API inconsistencies
 
 ### 2.1.1 - 2018-04-13 - Bug fix release
 
