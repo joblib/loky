@@ -16,21 +16,26 @@ cross-version implementation of the :class:`~concurrent.futures.ProcessPoolExecu
 
 -  **Reusable executor**: strategy to avoid re-spawning a complete executor every time. A singleton executor instance can be reused (and dynamically resized if necessary) across consecutive calls to limit spawning and shutdown overhead. The worker processes can be shutdown automatically after a configurable idling timeout to free system resources.
 
--  **Transparent :mod:`cloudpickle` integration**: to call interactively defined functions and lambda expressions in parallel. It is also possible to register a custom pickler implementation to handle inter-process communications.
+-  **Transparent** |cloudpickle| **integration**: to call interactively defined functions and lambda expressions in parallel. It is also possible to register a custom pickler implementation to handle inter-process communications.
 
--  **No need for ``if __name__ == "__main__":`` in scripts**: thanks to the use of :mod:`cloudpickle <https://github.com/cloudpipe/cloudpickle>` to call functions defined in the :mod:`__main__` module, it is not required to protect the code calling parallel functions under Windows.
+-  **No need for** :code:`if __name__ == "__main__":` **in scripts**: thanks to the use of |cloudpickle| to call functions defined in the :mod:`__main__` module, it is not required to protect the code calling parallel functions under Windows.
 
 
 Installation
 ~~~~~~~~~~~~
 
-The recommended way to install :mod:`loky` is with `pip`,
+The recommended way to install :mod:`loky` is with :mod:`pip`,
+
 .. code:: bash
 
     pip install loky
 
 :mod:`loky` can also be installed from sources using
+
 .. code:: bash
+
+    git clone https://github.com/tommoral/loky
+    cd loky
     python setup.py install
 
 
@@ -65,7 +70,7 @@ The basic usage of :mod:`loky` relies on the :func:`~loky.get_reusable_executor`
     print("Number of used processes:", n_workers)
     assert n_workers == 4
 
-For more advance usage, see our `documentation <https://loky.readthedocs.io/en/stable/>`
+For more advance usage, see our documentation_.
 
 
 Acknowledgement
@@ -82,5 +87,10 @@ IDEX Paris-Saclay, ANR-11-IDEX-0003-02
 .. |codecov| image:: https://codecov.io/gh/tomMoral/loky/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/tomMoral/loky
 
-.. _cloudpickle: https://github.com/cloudpipe/cloudpickle
+
+
+.. |cloudpickle| raw:: html
+
+    <a href="https://github.com/cloudpipe/cloudpickle"><code>cloudpickle</code></a>
+
 .. _documentation:  http://loky.readthedocs.io/en/stable

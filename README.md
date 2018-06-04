@@ -1,7 +1,7 @@
 # Reusable Process Pool Executor  [![Build Status](https://travis-ci.org/tomMoral/loky.svg?branch=master)](https://travis-ci.org/tomMoral/loky) [![Build status](https://ci.appveyor.com/api/projects/status/oifqilb5sb0p7fdp/branch/master?svg=true)](https://ci.appveyor.com/project/tomMoral/loky/branch/master) [![codecov](https://codecov.io/gh/tomMoral/loky/branch/master/graph/badge.svg)](https://codecov.io/gh/tomMoral/loky)
 
 
-### Goal 
+### Goal
 
 The aim of this project is to provide a robust, cross-platform and
 cross-version implementation of the `ProcessPoolExecutor` class of
