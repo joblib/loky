@@ -1,7 +1,7 @@
 # Reusable Process Pool Executor  [![Build Status](https://travis-ci.org/tomMoral/loky.svg?branch=master)](https://travis-ci.org/tomMoral/loky) [![Build status](https://ci.appveyor.com/api/projects/status/oifqilb5sb0p7fdp/branch/master?svg=true)](https://ci.appveyor.com/project/tomMoral/loky/branch/master) [![codecov](https://codecov.io/gh/tomMoral/loky/branch/master/graph/badge.svg)](https://codecov.io/gh/tomMoral/loky)
 
 
-### Goal 
+### Goal
 
 The aim of this project is to provide a robust, cross-platform and
 cross-version implementation of the `ProcessPoolExecutor` class of
@@ -17,7 +17,7 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     fork/exec on POSIX systems. This ensures safer interactions with
     third party libraries.
 
-  * __Reusable executor__: strategy to avoid respawning a complete
+  * __Reusable executor__: strategy to avoid re-spawning a complete
     executor every time. A singleton executor instance can be reused (and
     dynamically resized if necessary) across consecutive calls to limit
     spawning and shutdown overhead. The worker processes can be shutdown
@@ -33,6 +33,18 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     to the use of ``cloudpickle`` to call functions defined in the
     ``__main__`` module, it is not required to protect the code calling
     parallel functions under Windows.
+
+### Installation
+
+The recommended way to install `loky` is with `pip`,
+```bash
+pip install loky
+```
+
+`loky` can also be installed from sources using
+```bash
+python setup.py install
+```
 
 ### Usage
 
@@ -61,6 +73,8 @@ n_workers = len(set(results))
 print("Number of used processes:", n_workers)
 assert n_workers == 4
 ```
+
+For more advance usage, see our [documentation](https://loky.readthedocs.io/en/stable/)
 
 ### Workflow to contribute
 

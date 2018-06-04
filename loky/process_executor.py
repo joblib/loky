@@ -1,5 +1,5 @@
 ###############################################################################
-# Re-implementation of the ProcessPoolExecutor to robustify its fault tolerance
+# Re-implementation of the ProcessPoolExecutor more robust to faults
 #
 # author: Thomas Moreau and Olivier Grisel
 #
