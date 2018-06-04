@@ -76,7 +76,7 @@ from .backend.compat import queue
 from .backend.compat import wait
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
-from .backend.utils import safe_terminate
+from .backend.utils import recursive_terminate
 
 try:
     from concurrent.futures.process import BrokenProcessPool as _BPPException
@@ -595,7 +595,7 @@ def _queue_management_worker(executor_reference,
                 _, p = processes.popitem()
                 mp.util.debug('terminate process {}'.format(p.name))
                 try:
-                    safe_terminate(p)
+                    recursive_terminate(p)
                 except ProcessLookupError:  # pragma: no cover
                     pass
 
@@ -668,7 +668,7 @@ def _queue_management_worker(executor_reference,
                 # locks may be in a dirty state and block forever.
                 while processes:
                     _, p = processes.popitem()
-                    safe_terminate(p)
+                    recursive_terminate(p)
                 shutdown_all_workers()
                 return
             # Since no new work items can be added, it is safe to shutdown

@@ -11,7 +11,7 @@ from tempfile import mkstemp
 
 from loky.backend import get_context
 from loky.backend.compat import wait
-from loky.backend.utils import safe_terminate
+from loky.backend.utils import recursive_terminate
 from .utils import TimingWrapper, check_subprocess_call
 
 try:
@@ -70,7 +70,7 @@ class TestLokyBackend:
         """Clean up the test environment from any remaining subprocesses.
         """
         for child_process in cls.active_children():
-            safe_terminate(child_process)
+            recursive_terminate(child_process)
 
     def test_current(self):
 
@@ -692,7 +692,7 @@ def _run_netesed_delayed(depth, delay, event):
     time.sleep(delay)
 
 
-def test_safe_terminate():
+def test_recursive_terminate():
     event = multiprocessing.Event()
     p = multiprocessing.Process(target=_run_netesed_delayed,
                                 args=(4, 1000, event))
@@ -700,12 +700,12 @@ def test_safe_terminate():
 
     # Wait for all the processes to be launched
     if not event.wait(10):
-        safe_terminate(p)
-        raise RuntimeError("test_safe_terminate was not able to launch all "
+        recursive_terminate(p)
+        raise RuntimeError("test_recursive_terminate was not able to launch all "
                            "nested processes.")
 
     children = psutil.Process(pid=p.pid).children(recursive=True)
-    safe_terminate(p)
+    recursive_terminate(p)
 
     # The process can take some time finishing so we should wait up to 5s
     gone, alive = psutil.wait_procs(children, timeout=5)

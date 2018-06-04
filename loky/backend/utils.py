@@ -13,11 +13,11 @@ def _flag_current_thread_clean_exit():
     thread._clean_exit = True
 
 
-def safe_terminate(process):
+def recursive_terminate(process):
     """Terminate a process and its children.
     """
     try:
-        _safe_terminate(process.pid)
+        _recursive_terminate(process.pid)
         process.join()
     except OSError as e:
         import traceback
@@ -31,7 +31,7 @@ def safe_terminate(process):
         process.join()
 
 
-def _safe_terminate(pid):
+def _recursive_terminate(pid):
     """Terminate the children of a process before killing this process.
     """
 
@@ -66,7 +66,7 @@ def _safe_terminate(pid):
         children_pids = children_pids.decode().split('\n')[:-1]
         for cpid in children_pids:
             cpid = int(cpid)
-            _safe_terminate(cpid)
+            _recursive_terminate(cpid)
 
         try:
             os.kill(pid, signal.SIGTERM)
