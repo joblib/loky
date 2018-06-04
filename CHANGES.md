@@ -1,5 +1,7 @@
 ### 2.2.0 - in development
 
+- Fix terminate for nested processes
+
 ### 2.1.1 - 2018-04-13 - Bug fix release
 
 - Fix interpreter shutdown
