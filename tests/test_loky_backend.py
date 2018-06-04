@@ -709,5 +709,5 @@ def test_recursive_terminate():
 
     # The process can take some time finishing so we should wait up to 5s
     gone, alive = psutil.wait_procs(children, timeout=5)
-    msg = "Should be no descendent left but found:\n{}"
+    msg = "Should be no descendant left but found:\n{}"
     assert len(alive) == 0, msg.format(alive)
