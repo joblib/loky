@@ -65,7 +65,10 @@ def _recursive_terminate(pid):
             )
         except subprocess.CalledProcessError as e:
             # `ps` returns 1 when no child process has been found
-            children_pids = b''
+            if e.returncode == 1:
+                children_pids = b''
+            else:
+                raise
 
         # Decode the result, split the cpid and remove the trailing line
         children_pids = children_pids.decode().split('\n')[:-1]
