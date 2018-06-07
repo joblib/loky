@@ -88,15 +88,16 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
                 "max_workers must be greater than 0, got {}."
                 .format(max_workers))
 
-        kwargs = dict(context=context, timeout=timeout,
-                      job_reducers=job_reducers,
-                      result_reducers=result_reducers,
-                      initializer=initializer, initargs=initargs)
         if isinstance(context, STRING_TYPE):
             context = get_context(context)
         if context is not None and context.get_start_method() == "fork":
             raise ValueError("Cannot use reusable executor with the 'fork' "
                              "context")
+
+        kwargs = dict(context=context, timeout=timeout,
+                      job_reducers=job_reducers,
+                      result_reducers=result_reducers,
+                      initializer=initializer, initargs=initargs)
         if executor is None:
             mp.util.debug("Create a executor with max_workers={}."
                           .format(max_workers))
