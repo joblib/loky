@@ -662,7 +662,6 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         INITIALIZER_STATUS = x
 
     def _test_initializer(self, delay=0):
-        print(delay)
         sleep(delay)
 
         global INITIALIZER_STATUS
