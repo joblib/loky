@@ -1,5 +1,7 @@
 ### 2.2.0.dev0 (in development)
 
+- Fix bad interaction between `max_workers=None` and `reuse='auto'` (#132).
+
 ### 2.1.2 - 2018-06-04 - Release Highligths
 
 - Fix terminate for nested processes

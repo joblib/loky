@@ -13,6 +13,7 @@ from pickle import PicklingError, UnpicklingError
 
 from loky.backend import get_context
 from loky import get_reusable_executor
+from loky import cpu_count
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
@@ -618,9 +619,28 @@ def test_reusable_executor_thread_safety(workers, executor_state):
         name='test_thread_%02d_max_workers_%d' % (i, w))
         for i, w in enumerate(max_workers)]
 
-    with warnings.catch_warnings(record=True) as w:
+    with warnings.catch_warnings(record=True):
         for t in threads:
             t.start()
         for t in threads:
             t.join()
     assert output_collector == ['ok'] * len(threads)
+
+
+def test_reusable_executor_reuse_true():
+    re = get_reusable_executor(max_workers=3, timeout=42)
+    re.submit(id, 42).result()
+    assert len(re._processes) == 3
+    assert re._timeout == 42
+
+    re2 = get_reusable_executor(reuse=True)
+    re2.submit(id, 42).result()
+    assert len(re2._processes) == 3
+    assert re2._timeout == 42
+    assert re2 is re
+
+    re3 = get_reusable_executor()
+    re3.submit(id, 42).result()
+    assert len(re3._processes) == cpu_count()
+    assert re3._timeout == 10
+    assert re3 is not re
