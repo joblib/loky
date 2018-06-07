@@ -43,6 +43,9 @@ except ImportError:
     pass
 
 
+INITIALIZER_STATUS = 'uninitialized'
+
+
 def clean_warning_registry():
     """Safe way to reset warnings."""
     warnings.resetwarnings()
@@ -651,3 +654,38 @@ def test_reusable_executor_reuse_true():
 
     executor4 = get_reusable_executor()
     assert executor4 is executor3
+
+
+class TestExecutorInitializer(ReusableExecutorMixin):
+    def _initializer(self, x):
+        global INITIALIZER_STATUS
+        INITIALIZER_STATUS = x
+
+    def _test_initializer(self, delay=0):
+        print(delay)
+        sleep(delay)
+
+        global INITIALIZER_STATUS
+        return INITIALIZER_STATUS
+
+    def test_reusable_initializer(self):
+        executor = get_reusable_executor(
+            max_workers=2, initializer=self._initializer, initargs=('done',))
+
+        assert executor.submit(self._test_initializer).result() == 'done'
+
+        # when the initializer change, the executor is re-spawned
+        executor = get_reusable_executor(
+            max_workers=2, initializer=self._initializer, initargs=(42,))
+
+        assert executor.submit(self._test_initializer).result() == 42
+
+        # With reuse=True, the executor use the same initializer
+        executor = get_reusable_executor(max_workers=4, reuse=True)
+        for x in executor.map(self._test_initializer, delay=.1):
+            assert x == 42
+
+        # With reuse='auto', the initializer is not used anymore
+        executor = get_reusable_executor(max_workers=4)
+        for x in executor.map(self._test_initializer, delay=.1):
+            assert x == 'uninitialized'
