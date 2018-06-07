@@ -13,6 +13,7 @@ from pickle import PicklingError, UnpicklingError
 
 from loky.backend import get_context
 from loky import get_reusable_executor
+from loky import cpu_count
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
@@ -496,6 +497,10 @@ def test_invalid_process_number():
     with pytest.raises(ValueError):
         get_reusable_executor(max_workers=-1)
 
+    executor = get_reusable_executor()
+    with pytest.raises(ValueError):
+        executor._resize(max_workers=None)
+
 
 @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
 @pytest.mark.skipif(sys.version_info <= (3, 4),
@@ -618,9 +623,31 @@ def test_reusable_executor_thread_safety(workers, executor_state):
         name='test_thread_%02d_max_workers_%d' % (i, w))
         for i, w in enumerate(max_workers)]
 
-    with warnings.catch_warnings(record=True) as w:
+    with warnings.catch_warnings(record=True):
         for t in threads:
             t.start()
         for t in threads:
             t.join()
     assert output_collector == ['ok'] * len(threads)
+
+
+def test_reusable_executor_reuse_true():
+    executor = get_reusable_executor(max_workers=3, timeout=42)
+    executor.submit(id, 42).result()
+    assert len(executor._processes) == 3
+    assert executor._timeout == 42
+
+    executor2 = get_reusable_executor(reuse=True)
+    executor2.submit(id, 42).result()
+    assert len(executor2._processes) == 3
+    assert executor2._timeout == 42
+    assert executor2 is executor
+
+    executor3 = get_reusable_executor()
+    executor3.submit(id, 42).result()
+    assert len(executor3._processes) == cpu_count()
+    assert executor3._timeout == 10
+    assert executor3 is not executor
+
+    executor4 = get_reusable_executor()
+    assert executor4 is executor3

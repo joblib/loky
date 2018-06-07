@@ -73,6 +73,17 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     with _executor_lock:
         global _executor, _executor_args
         executor = _executor
+
+        if max_workers is None:
+            if reuse is True and executor is not None:
+                max_workers = executor._max_workers
+            else:
+                max_workers = cpu_count()
+        elif max_workers <= 0:
+            raise ValueError(
+                "max_workers must be greater than 0, got {}."
+                .format(max_workers))
+
         args = dict(context=context, timeout=timeout,
                     job_reducers=job_reducers, result_reducers=result_reducers)
         if isinstance(context, STRING_TYPE):
@@ -110,12 +121,7 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
                 return get_reusable_executor(max_workers=max_workers,
                                              **args)
             else:
-                if max_workers is not None and max_workers <= 0:
-                    raise ValueError(
-                        "max_workers must be greater than 0, got {}."
-                        .format(max_workers))
-
-                mp.util.debug("Reusing existing executor with max_worker={}."
+                mp.util.debug("Reusing existing executor with max_workers={}."
                               .format(executor._max_workers))
                 executor._resize(max_workers)
 
@@ -140,14 +146,17 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
 
     def _resize(self, max_workers):
         with self._submit_resize_lock:
+            if max_workers is None:
+                raise ValueError("Trying to resize with max_workers=None")
+            elif max_workers == self._max_workers:
+                return
 
             if self._queue_management_thread is None:
                 # If the queue_management_thread has not been started
                 # then no processes have been spawned and we can just
                 # update _max_workers and return
                 self._max_workers = max_workers
-            if max_workers is None or max_workers == self._max_workers:
-                return True
+                return
 
             self._wait_job_completion()
 
