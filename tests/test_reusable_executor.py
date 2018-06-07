@@ -497,9 +497,9 @@ def test_invalid_process_number():
     with pytest.raises(ValueError):
         get_reusable_executor(max_workers=-1)
 
-    re = get_reusable_executor()
+    executor = get_reusable_executor()
     with pytest.raises(ValueError):
-        re._resize(max_workers=None)
+        executor._resize(max_workers=None)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
@@ -632,22 +632,22 @@ def test_reusable_executor_thread_safety(workers, executor_state):
 
 
 def test_reusable_executor_reuse_true():
-    re = get_reusable_executor(max_workers=3, timeout=42)
-    re.submit(id, 42).result()
-    assert len(re._processes) == 3
-    assert re._timeout == 42
+    executor = get_reusable_executor(max_workers=3, timeout=42)
+    executor.submit(id, 42).result()
+    assert len(executor._processes) == 3
+    assert executor._timeout == 42
 
-    re2 = get_reusable_executor(reuse=True)
-    re2.submit(id, 42).result()
-    assert len(re2._processes) == 3
-    assert re2._timeout == 42
-    assert re2 is re
+    executor2 = get_reusable_executor(reuse=True)
+    executor2.submit(id, 42).result()
+    assert len(executor2._processes) == 3
+    assert executor2._timeout == 42
+    assert executor2 is executor
 
-    re3 = get_reusable_executor()
-    re3.submit(id, 42).result()
-    assert len(re3._processes) == cpu_count()
-    assert re3._timeout == 10
-    assert re3 is not re
+    executor3 = get_reusable_executor()
+    executor3.submit(id, 42).result()
+    assert len(executor3._processes) == cpu_count()
+    assert executor3._timeout == 10
+    assert executor3 is not executor
 
-    re4 = get_reusable_executor()
-    assert re4 is re3
+    executor4 = get_reusable_executor()
+    assert executor4 is executor3
