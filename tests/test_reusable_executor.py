@@ -644,3 +644,6 @@ def test_reusable_executor_reuse_true():
     assert len(re3._processes) == cpu_count()
     assert re3._timeout == 10
     assert re3 is not re
+
+    re4 = get_reusable_executor()
+    assert re4 is re3
