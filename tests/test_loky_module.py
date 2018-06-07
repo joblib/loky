@@ -7,6 +7,12 @@ import pytest
 
 import loky
 from loky import cpu_count
+from loky.backend.utils import get_thread_limits
+
+try:
+    import numpy
+except ImportError:
+    numpy = None
 
 
 def test_version():
@@ -64,3 +70,7 @@ def test_cpu_count_cfs_limit():
                         'python', '-c', cpu_count_cmd])
 
     assert res.strip().decode('utf-8') == '1'
+
+
+def test_limit_openBLAS_threads():
+    print(get_thread_limits())

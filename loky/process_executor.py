@@ -62,7 +62,6 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 import os
 import gc
 import sys
-import types
 import struct
 import weakref
 import warnings
@@ -79,8 +78,8 @@ from .backend import get_context
 from .backend.compat import queue
 from .backend.compat import wait
 from .backend.context import cpu_count
-from .backend.queues import Queue, SimpleQueue, Full
 from .backend.utils import recursive_terminate
+from .backend.queues import Queue, SimpleQueue, Full
 from .cloudpickle_wrapper import _wrap_non_picklable_objects
 
 try:
