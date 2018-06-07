@@ -497,6 +497,10 @@ def test_invalid_process_number():
     with pytest.raises(ValueError):
         get_reusable_executor(max_workers=-1)
 
+    re = get_reusable_executor()
+    with pytest.raises(ValueError):
+        re._resize(max_workers=None)
+
 
 @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
 @pytest.mark.skipif(sys.version_info <= (3, 4),
