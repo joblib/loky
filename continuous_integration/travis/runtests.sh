@@ -26,11 +26,19 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     (cd $JOBLIB/externals && bash copy_loky.sh $TRAVIS_BUILD_DIR)
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 else
-    # Run the tests and collect trace coverage data both in the subprocesses
-    # and its subprocesses.
-    PYTEST_ARGS="-vl --timeout=30 --maxfail=5"
+
+    export PYTEST_ARGS="-vl --timeout=30 --maxfail=5"
+    if [ "$LOKY_TEST_FORCE_OPENBLAS" = "true" ]; then
+        # Fail if Blas is not found. This should be used when numpy is
+        # installed via pip.
+        export PYTEST_ARGS="$PYTEST_ARGS --force-blas"
+    fi
     if [ "$RUN_MEMORY" != "true" ]; then
+        # Skip high memory usage tests when there are not required on CI
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
+
+    # Run the tests and collect trace coverage data both in the subprocesses
+    # and its subprocesses.
     COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- $PYTEST_ARGS
 fi

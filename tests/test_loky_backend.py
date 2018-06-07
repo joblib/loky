@@ -569,6 +569,11 @@ class TestLokyBackend:
 
                 assert p.exitcode == 0
 
+    @classmethod
+    def _run_parallel_sum(cls, x):
+        from ._openmp.parallel_sum import parallel_sum
+        return parallel_sum(x)
+
     @pytest.mark.skipif(parallel_sum is None,
                         reason="cython is not installed on this system.")
     def test_compatibility_openmp(self):
@@ -576,7 +581,7 @@ class TestLokyBackend:
         # are nto correctly clean up, causing a freeze. No freeze should be
         # detected with loky.
         parallel_sum(10)
-        p = self.Process(target=parallel_sum, args=(10,))
+        p = self.Process(target=self._run_parallel_sum, args=(10,))
         p.start()
         p.join()
         assert p.exitcode == 0

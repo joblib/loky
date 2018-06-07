@@ -1,7 +1,8 @@
+import time
 import signal
 import multiprocessing as mp
 
-from openmp_parallel_sum import parallel_sum
+from parallel_sum import parallel_sum
 
 
 if __name__ == '__main__':
@@ -11,17 +12,24 @@ if __name__ == '__main__':
                         help='define start method tested with openMP')
     args = parser.parse_args()
 
+    t_start = time.time()
     parallel_sum(10)
+    dt_parallel_sum = time.time() - t_start
+    timeout = 3
 
     mp.set_start_method(args.start)
     p = mp.Process(target=parallel_sum, args=(10,))
 
     def raise_timeout(a, b):
-        print("TIMEOUT - parallel_sum could not complete in less than a sec")
+        print("DEADLOCK - parallel_sum took {:.2f}ms in the main process but "
+              "could not terminate in {}s in the subprocess. The computation "
+              "are stucked because we used `fork` to start our new process, "
+              "breaking the POSIX convention.".format(
+                  dt_parallel_sum * 1000, timeout)
+              )
         p.terminate()
 
     signal.signal(signal.SIGALRM, raise_timeout)
-    signal.alarm(1)
+    signal.alarm(timeout)
     p.start()
     p.join()
-    print("done")

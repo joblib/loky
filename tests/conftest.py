@@ -10,11 +10,20 @@ def pytest_addoption(parser):
                      help="log-level: integer, SUBDEBUG(5) - INFO(20)")
     parser.addoption("--skip-high-memory", action="store_true",
                      help="skip high-memory test to avoid conflict on CI.")
+    parser.addoption("--force-blas", action='store_true',
+                     help="Fail test_limit_openBLAS_threads if BLAS is not "
+                     "found")
 
 
 def log_lvl(request):
     """Choose logging level for multiprocessing"""
     return request.config.getoption("--loky-verbosity")
+
+
+@pytest.fixture
+def force_blas(request):
+    """Choose logging level for multiprocessing"""
+    return request.config.getoption("--force-blas")
 
 
 def pytest_configure(config):

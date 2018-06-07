@@ -76,7 +76,7 @@ def _recursive_terminate(pid):
         try:
             subprocess.check_output(
                 ["taskkill", "/F", "/T", "/PID", str(pid)],
-                stderr=None)
+                stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             # In windows, taskkill return 1 for permission denied and 128, 255
             # for no process found.
@@ -199,14 +199,14 @@ class _CLibsWrapper:
         if self.lib_openblas is not None:
             try:
                 self.lib_openblas.openblas_set_num_threads(num_threads)
-            except OSError as e:
+            except OSError as e:  # pragma: no cover
                 return
 
     def openblas_get_max_threads(self):
         if self.lib_openblas is not None:
             try:
                 return self.lib_openblas.openblas_get_num_threads()
-            except OSError as e:
+            except OSError as e:  # pragma: no cover
                 pass
         return
 
@@ -220,7 +220,7 @@ class _CLibsWrapper:
         if self.lib_omp is not None:
             try:
                 self.lib_omp.omp_set_num_threads(num_threads)
-            except OSError as e:
+            except OSError as e:  # pragma: no cover
                 return
 
     def omp_get_max_threads(self):
@@ -228,7 +228,7 @@ class _CLibsWrapper:
         if self.lib_omp is not None:
             try:
                 return self.lib_omp.omp_get_max_threads()
-            except OSError as e:
+            except OSError as e:  # pragma: no cover
                 pass
         return
 
@@ -239,14 +239,14 @@ class _CLibsWrapper:
         if self.lib_mkl is not None:
             try:
                 self.lib_mkl.MKL_Set_Num_Threads(num_threads)
-            except OSError as e:
+            except OSError as e:  # pragma: no cover
                 return
 
     def mkl_get_max_threads(self):
         if self.lib_mkl is not None:
             try:
                 return self.lib_mkl.MKL_Get_Max_Threads()
-            except OSError as e:
+            except OSError as e: # pragma: no cover
                 pass
         return
 
@@ -271,14 +271,20 @@ class _CLibsWrapper:
         except ImportError:
             pass
 
-        return self._get_lib_from_dynamic_libs(module_name)
+        if sys.platform != "win32":
+            return self._get_lib_from_dynamic_libs(module_name)
 
     def _get_lib_from_dynamic_libs(self, module_name):
 
         global _MODULE_NAME
         _MODULE_NAME = None
 
-        libc = ctypes.CDLL(find_library("c"))
+        libc_name = find_library("c")
+        if libc_name is None:
+            return
+        libc = ctypes.CDLL(libc_name)
+        if not hasattr(libc, "dl_iterate_phdr"):
+            return
 
         signature_cfunc = ctypes.CFUNCTYPE(
             ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_char_p)
@@ -293,6 +299,13 @@ class _CLibsWrapper:
 _clibs_wrapper = None
 
 
+def _get_wrapper():
+    global _clibs_wrapper
+    if _clibs_wrapper is None:
+        _clibs_wrapper = _CLibsWrapper()
+    return _clibs_wrapper
+
+
 def limit_threads_clib(max_threads_per_process):
     """Limit the number of threads available for OpenBLAS, MKL and OpenMP
 
@@ -300,10 +313,7 @@ def limit_threads_clib(max_threads_per_process):
     to `max_threads_per_process`. This function works on POSIX plateforms and
     can be used to change this limit dynamically.
     """
-    global _clibs_wrapper
-    if _clibs_wrapper is None:
-        _clibs_wrapper = _CLibsWrapper()
-    _clibs_wrapper.limit_threads_clibs(max_threads_per_process)
+    _get_wrapper().limit_threads_clibs(max_threads_per_process)
 
 
 def get_thread_limits():
@@ -313,7 +323,4 @@ def get_thread_limits():
     used for these three library or None if this library is not available. The
     key of the dictionary are {'MKL', 'OpenBLAS', 'OpenMP'}
     """
-    global _clibs_wrapper
-    if _clibs_wrapper is None:
-        _clibs_wrapper = _CLibsWrapper()
-    return _clibs_wrapper.get_thread_limits()
+    return _get_wrapper().get_thread_limits()

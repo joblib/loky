@@ -7,7 +7,7 @@ import pytest
 
 import loky
 from loky import cpu_count
-from loky.backend.utils import get_thread_limits
+from loky.backend.utils import get_thread_limits, limit_threads_clib
 
 try:
     import numpy
@@ -72,5 +72,42 @@ def test_cpu_count_cfs_limit():
     assert res.strip().decode('utf-8') == '1'
 
 
-def test_limit_openBLAS_threads():
-    print(get_thread_limits())
+def test_limit_openBLAS_threads(force_blas):
+    thread_limits = get_thread_limits()
+    old_thread_limit = thread_limits["OpenBLAS"]
+    if old_thread_limit is None:
+        if force_blas:
+            raise ImportError("Could not load OpenBLAS library")
+        raise pytest.skip("Need OpenBLAS")
+
+    limit_threads_clib(1)
+    assert get_thread_limits()["OpenBLAS"] == 1
+
+    limit_threads_clib(3)
+    assert get_thread_limits()["OpenBLAS"] == 3
+
+
+def test_limit_openMP_threads():
+    thread_limits = get_thread_limits()
+    old_thread_limit = thread_limits["OpenMP"]
+    if old_thread_limit is None:
+        raise pytest.skip("Need OpenMP")
+
+    limit_threads_clib(1)
+    assert get_thread_limits()["OpenMP"] == 1
+
+    limit_threads_clib(3)
+    assert get_thread_limits()["OpenMP"] == 3
+
+
+def test_limit_MKL_threads():
+    thread_limits = get_thread_limits()
+    old_thread_limit = thread_limits["MKL"]
+    if old_thread_limit is None:
+        raise pytest.skip("Need MKL")
+
+    limit_threads_clib(1)
+    assert get_thread_limits()["MKL"] == 1
+
+    limit_threads_clib(3)
+    assert get_thread_limits()["MKL"] == 3
