@@ -8,7 +8,7 @@ import loky
 from loky import cpu_count
 from loky.backend.utils import get_thread_limits, limit_threads_clib
 
-from .utils import with_parallel_sum
+from .utils import with_parallel_sum, with_support_openmp
 
 
 def test_version():
@@ -69,10 +69,10 @@ def test_cpu_count_cfs_limit():
 
 
 SUPPORTED_CLIBS = [
-    'OpenBLAS',
-    'OpenMP_Intel',
-    'OpenMP_GNU',
-    'MKL'
+    'openblas',
+    'openmp_intel',
+    'openmp_gnu',
+    'mkl'
 ]
 
 @pytest.mark.parametrize("clib", SUPPORTED_CLIBS)
@@ -80,8 +80,8 @@ def test_limit_threads_clib(openblas_test_noskip, clib):
     thread_limits = get_thread_limits()
     old_thread_limit = thread_limits[clib]
     if old_thread_limit is None:
-        if clib == "OpenBLAS" and openblas_test_noskip:
-            raise ImportError("Could not load OpenBLAS library")
+        if clib == "openblas" and openblas_test_noskip:
+            raise RuntimeError("Could not load the OpenBLAS library")
         raise pytest.skip("Need {} support".format(clib))
 
     limit_threads_clib(1)
@@ -91,11 +91,11 @@ def test_limit_threads_clib(openblas_test_noskip, clib):
     assert get_thread_limits()[clib] == 3
 
 
-
 @with_parallel_sum
-def test_compatibility_openmp():
+@with_support_openmp
+def test_openmp_limit_num_threads():
     from ._openmp_test_helper.parallel_sum import parallel_sum
-    # Use openMP before launching subprocesses. With fork backend, some fds
+    # Use openmp before launching subprocesses. With fork backend, some fds
     # are nto correctly clean up, causing a freeze. No freeze should be
     # detected with loky.
     old_num_threads = parallel_sum(100)

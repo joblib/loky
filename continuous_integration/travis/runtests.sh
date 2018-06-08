@@ -29,7 +29,7 @@ else
 
     export PYTEST_ARGS="-vl --timeout=30 --maxfail=5"
     if [ "$LOKY_TEST_FORCE_OPENBLAS" = "true" ]; then
-        # Fail if Blas is not found. This should be used when numpy is
+        # Fail if OpenBlas is not found. This should be used when numpy is
         # installed via pip.
         export PYTEST_ARGS="$PYTEST_ARGS --openblas-test-noskip"
     fi

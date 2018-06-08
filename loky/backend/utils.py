@@ -167,7 +167,8 @@ def check_module(info, size, data):
 
 class _CLibsWrapper:
     # Wrapper around classic C-library for scientific computations to set and
-    # get the maximal number they can
+    # get the maximum number of threads they are allowed to used for inner
+    # parallelism.
 
     def __init__(self):
         self._load_openblas()
@@ -186,10 +187,10 @@ class _CLibsWrapper:
 
     def get_thread_limits(self):
         return dict(
-            OpenBLAS=self.openblas_get_max_threads(),
-            OpenMP_Intel=self.gomp_get_max_threads(),
-            OpenMP_GNU=self.iomp_get_max_threads(),
-            MKL=self.mkl_get_max_threads(),
+            openblas=self.openblas_get_max_threads(),
+            openmp_intel=self.gomp_get_max_threads(),
+            openmp_gnu=self.iomp_get_max_threads(),
+            mkl=self.mkl_get_max_threads(),
         )
 
     def _load_openblas(self):
@@ -323,7 +324,7 @@ def _get_wrapper():
 
 
 def limit_threads_clib(max_threads_per_process):
-    """Limit the number of threads available for OpenBLAS, MKL and OpenMP
+    """Limit the number of threads available for openblas, mkl and openmp
 
     Set the maximal number of thread that can be used for these three libraries
     to `max_threads_per_process`. This function works on POSIX plateforms and
@@ -333,10 +334,10 @@ def limit_threads_clib(max_threads_per_process):
 
 
 def get_thread_limits():
-    """Return thread limit set for OpenBLAS, MKL and OpenMP
+    """Return thread limit set for openblas, mkl and openmp
 
     Return a dictionary containing the maximal number of threads that can be
     used for these three library or None if this library is not available. The
-    key of the dictionary are {'MKL', 'OpenBLAS', 'OpenMP'}
+    key of the dictionary are {'mkl', 'openblas', 'openmp_gnu', 'openmp_intel'}
     """
     return _get_wrapper().get_thread_limits()

@@ -128,6 +128,11 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
         timer.cancel()
 
 
+def skip_func(msg):
+    def my_func(*args, **kwargs):
+        raise pytest.SkipTest(msg)
+
+
 # A decorator to run tests only when numpy is available
 try:
     import numpy  # noqa F401
@@ -139,9 +144,7 @@ try:
 except ImportError:
     def with_numpy(func):
         """A decorator to skip tests requiring numpy."""
-        def my_func():
-            raise pytest.SkipTest('Test requires numpy')
-        return my_func
+        return skip_func('Test require numpy')
 
 
 # A decorator to run tests only when numpy is available
@@ -155,6 +158,13 @@ try:
 except ImportError:
     def with_parallel_sum(func):
         """A decorator to skip tests if parallel_sum is not compiled."""
-        def my_func():
-            pytest.skip('Test requires parallel_sum to be compiled')
-        return my_func
+        return skip_func('Test requires parallel_sum to be compiled')
+
+
+def with_support_openmp(func):
+    from loky.backend.utils import get_thread_limits
+    limits = get_thread_limits()
+    if limits['openmp_gnu'] or limits['openmp_intel']:
+        return func
+    else:
+        return skip_func('`loky` was not able to load openmp library')
