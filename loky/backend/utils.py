@@ -179,15 +179,16 @@ class _CLibsWrapper:
         msg = ("max_threads_per_process should be an interger in "
                "limit_threads_clib")
         assert isinstance(max_threads_per_process, int), msg
-        if os.name == "posix":
-            self.openblas_set_num_threads(max_threads_per_process)
-            self.mkl_set_num_threads(max_threads_per_process)
-            self.omp_set_num_threads(max_threads_per_process)
+        self.openblas_set_num_threads(max_threads_per_process)
+        self.mkl_set_num_threads(max_threads_per_process)
+        self.gomp_set_num_threads(max_threads_per_process)
+        self.iomp_set_num_threads(max_threads_per_process)
 
     def get_thread_limits(self):
         return dict(
             OpenBLAS=self.openblas_get_max_threads(),
-            OpenMP=self.omp_get_max_threads(),
+            OpenMP_Intel=self.gomp_get_max_threads(),
+            OpenMP_GNU=self.iomp_get_max_threads(),
             MKL=self.mkl_get_max_threads(),
         )
 
@@ -211,23 +212,38 @@ class _CLibsWrapper:
         return
 
     def _load_omp(self):
-        self.lib_omp = self._load_lib(OMP_MODULE_NAME_GNU, "")
-        if self.lib_omp is None:
-            self.lib_omp = self._load_lib(OMP_MODULE_NAME_INTEL, "")
+        self.lib_gomp = self._load_lib(OMP_MODULE_NAME_GNU, "")
+        self.lib_iomp = self._load_lib(OMP_MODULE_NAME_INTEL, "")
 
-    def omp_set_num_threads(self, num_threads):
+    def gomp_set_num_threads(self, num_threads):
 
-        if self.lib_omp is not None:
+        if self.lib_gomp is not None:
             try:
-                self.lib_omp.omp_set_num_threads(num_threads)
+                self.lib_gomp.omp_set_num_threads(num_threads)
             except OSError as e:  # pragma: no cover
                 return
 
-    def omp_get_max_threads(self):
-
-        if self.lib_omp is not None:
+    def iomp_set_num_threads(self, num_threads):
+        if self.lib_gomp is not None:
             try:
-                return self.lib_omp.omp_get_max_threads()
+                self.lib_gomp.omp_set_num_threads(num_threads)
+            except OSError as e:  # pragma: no cover
+                return
+
+    def iomp_get_max_threads(self):
+
+        if self.lib_iomp is not None:
+            try:
+                return self.lib_iomp.omp_get_max_threads()
+            except OSError as e:  # pragma: no cover
+                pass
+        return
+
+    def gomp_get_max_threads(self):
+
+        if self.lib_gomp is not None:
+            try:
+                return self.lib_gomp.omp_get_max_threads()
             except OSError as e:  # pragma: no cover
                 pass
         return
@@ -246,7 +262,7 @@ class _CLibsWrapper:
         if self.lib_mkl is not None:
             try:
                 return self.lib_mkl.MKL_Get_Max_Threads()
-            except OSError as e: # pragma: no cover
+            except OSError as e:  # pragma: no cover
                 pass
         return
 

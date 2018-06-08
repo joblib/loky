@@ -1,5 +1,4 @@
 import os
-import sys
 import shutil
 from subprocess import check_output
 
@@ -9,10 +8,7 @@ import loky
 from loky import cpu_count
 from loky.backend.utils import get_thread_limits, limit_threads_clib
 
-try:
-    import numpy
-except ImportError:
-    numpy = None
+from .utils import with_parallel_sum
 
 
 def test_version():
@@ -72,42 +68,43 @@ def test_cpu_count_cfs_limit():
     assert res.strip().decode('utf-8') == '1'
 
 
-def test_limit_openBLAS_threads(force_blas):
+SUPPORTED_CLIBS = [
+    'OpenBLAS',
+    'OpenMP_Intel',
+    'OpenMP_GNU',
+    'MKL'
+]
+
+@pytest.mark.parametrize("clib", SUPPORTED_CLIBS)
+def test_limit_threads_clib(force_blas, clib):
     thread_limits = get_thread_limits()
-    old_thread_limit = thread_limits["OpenBLAS"]
+    old_thread_limit = thread_limits[clib]
     if old_thread_limit is None:
-        if force_blas:
+        if clib == "OpenBLAS" and force_blas:
             raise ImportError("Could not load OpenBLAS library")
-        raise pytest.skip("Need OpenBLAS")
+        raise pytest.skip("Need {} support".format(clib))
 
     limit_threads_clib(1)
-    assert get_thread_limits()["OpenBLAS"] == 1
+    assert get_thread_limits()[clib] == 1
 
     limit_threads_clib(3)
-    assert get_thread_limits()["OpenBLAS"] == 3
+    assert get_thread_limits()[clib] == 3
 
 
-def test_limit_openMP_threads():
-    thread_limits = get_thread_limits()
-    old_thread_limit = thread_limits["OpenMP"]
-    if old_thread_limit is None:
-        raise pytest.skip("Need OpenMP")
+
+@with_parallel_sum
+def test_compatibility_openmp():
+    from ._openmp.parallel_sum import parallel_sum
+    # Use openMP before launching subprocesses. With fork backend, some fds
+    # are nto correctly clean up, causing a freeze. No freeze should be
+    # detected with loky.
+    old_num_threads = parallel_sum(100)
 
     limit_threads_clib(1)
-    assert get_thread_limits()["OpenMP"] == 1
+    assert parallel_sum(100) == 1
 
-    limit_threads_clib(3)
-    assert get_thread_limits()["OpenMP"] == 3
+    limit_threads_clib(2)
+    assert parallel_sum(100) == 2
 
-
-def test_limit_MKL_threads():
-    thread_limits = get_thread_limits()
-    old_thread_limit = thread_limits["MKL"]
-    if old_thread_limit is None:
-        raise pytest.skip("Need MKL")
-
-    limit_threads_clib(1)
-    assert get_thread_limits()["MKL"] == 1
-
-    limit_threads_clib(3)
-    assert get_thread_limits()["MKL"] == 3
+    limit_threads_clib(old_num_threads)
+    assert parallel_sum(100) == old_num_threads
