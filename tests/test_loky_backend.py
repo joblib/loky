@@ -566,18 +566,18 @@ class TestLokyBackend:
                 assert p.exitcode == 0
 
     @classmethod
-    def _run_parallel_sum(cls, x):
-        from ._openmp.parallel_sum import parallel_sum
-        return parallel_sum(x)
+    def _run_openmp_parallel_sum(cls, x):
+        from ._openmp_test_helper.parallel_sum import parallel_sum
+        parallel_sum(x)
 
     @with_parallel_sum
-    def test_compatibility_openmp(self):
-        from ._openmp.parallel_sum import parallel_sum
+    def test_openmp_compatibility(self):
+        from ._openmp_test_helper.parallel_sum import parallel_sum
         # Use openMP before launching subprocesses. With fork backend, some fds
         # are nto correctly clean up, causing a freeze. No freeze should be
         # detected with loky.
         parallel_sum(10)
-        p = self.Process(target=self._run_parallel_sum, args=(10,))
+        p = self.Process(target=self._run_openmp_parallel_sum, args=(100,))
         p.start()
         p.join()
         assert p.exitcode == 0

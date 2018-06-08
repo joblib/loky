@@ -4,7 +4,7 @@ import shutil
 from setuptools import setup, find_packages
 from distutils.command.clean import clean as Clean
 
-packages = find_packages(exclude=['tests', 'tests._openmp', 'benchmark'])
+packages = find_packages(exclude=['tests', 'tests._openmp_test_helper', 'benchmark'])
 
 
 # Function to parse __version__ in `loky`

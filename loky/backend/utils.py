@@ -224,9 +224,9 @@ class _CLibsWrapper:
                 return
 
     def iomp_set_num_threads(self, num_threads):
-        if self.lib_gomp is not None:
+        if self.lib_iomp is not None:
             try:
-                self.lib_gomp.omp_set_num_threads(num_threads)
+                self.lib_iomp.omp_set_num_threads(num_threads)
             except OSError as e:  # pragma: no cover
                 return
 

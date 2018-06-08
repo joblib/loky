@@ -26,6 +26,6 @@ ext_modules = [
 ]
 
 setup(
-    name='_openmp',
+    name='_openmp_test_helper',
     ext_modules=cythonize(ext_modules),
 )
