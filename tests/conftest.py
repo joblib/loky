@@ -11,7 +11,7 @@ def pytest_addoption(parser):
     parser.addoption("--skip-high-memory", action="store_true",
                      help="skip high-memory test to avoid conflict on CI.")
     parser.addoption("--openblas-test-noskip", action='store_true',
-                     help="Fail test_limit_openBLAS_threads if BLAS is not "
+                     help="Fail test_limit_openblas_threads if BLAS is not "
                      "found")
 
 
@@ -22,7 +22,7 @@ def log_lvl(request):
 
 @pytest.fixture
 def openblas_test_noskip(request):
-    """Fail the test is openBLAS is not found"""
+    """Fail the test is OpenBLAS is not found"""
     return request.config.getoption("--openblas-test-noskip")
 
 

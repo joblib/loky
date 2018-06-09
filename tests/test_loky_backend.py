@@ -573,7 +573,7 @@ class TestLokyBackend:
     @with_parallel_sum
     def test_openmp_compatibility(self):
         from ._openmp_test_helper.parallel_sum import parallel_sum
-        # Use openMP before launching subprocesses. With fork backend, some fds
+        # Use OpenMP before launching subprocesses. With fork backend, some fds
         # are nto correctly clean up, causing a freeze. No freeze should be
         # detected with loky.
         parallel_sum(10)

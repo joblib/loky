@@ -78,14 +78,16 @@ SUPPORTED_CLIBS = [
 @pytest.mark.parametrize("clib", SUPPORTED_CLIBS)
 def test_limit_threads_clib(openblas_test_noskip, clib):
     thread_limits = get_thread_limits()
+
     old_thread_limit = thread_limits[clib]
     if old_thread_limit is None:
         if clib == "openblas" and openblas_test_noskip:
             raise RuntimeError("Could not load the OpenBLAS library")
         raise pytest.skip("Need {} support".format(clib))
 
-    limit_threads_clib(1)
+    dynamic_scaling = limit_threads_clib(1)
     assert get_thread_limits()[clib] == 1
+    assert dynamic_scaling[clib]
 
     limit_threads_clib(3)
     assert get_thread_limits()[clib] == 3
@@ -95,9 +97,6 @@ def test_limit_threads_clib(openblas_test_noskip, clib):
 @with_support_openmp
 def test_openmp_limit_num_threads():
     from ._openmp_test_helper.parallel_sum import parallel_sum
-    # Use openmp before launching subprocesses. With fork backend, some fds
-    # are nto correctly clean up, causing a freeze. No freeze should be
-    # detected with loky.
     old_num_threads = parallel_sum(100)
 
     limit_threads_clib(1)
