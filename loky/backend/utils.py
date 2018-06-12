@@ -268,10 +268,7 @@ class _CLibsWrapper:
         global _thread_locals
         _thread_locals._module_path = None
 
-        libc_name = find_library("c")
-        if libc_name is None:
-            return
-        libc = ctypes.CDLL(libc_name)
+        libc = self._get_libc()
         if not hasattr(libc, "dl_iterate_phdr"):
             return
 
@@ -287,14 +284,13 @@ class _CLibsWrapper:
 
     def _find_with_libc_dyld(self, module_name):
 
-        libc_name = find_library("c")
-        if libc_name is None:
-            return
-        libc = ctypes.CDLL(libc_name)
+        libc = self._get_libc()
         if not hasattr(libc, "_dyld_image_count"):
             return
 
         found_module_path = None
+        module_name = "lib{}".format(module_name)
+
         n_dyld = libc._dyld_image_count()
         libc._dyld_get_image_name.restype = ctypes.c_char_p
 
@@ -306,6 +302,15 @@ class _CLibsWrapper:
 
         if found_module_path:
             return ctypes.CDLL(found_module_path)
+
+    def _get_libc(self):
+        if not hasattr(self, "libc"):
+            libc_name = find_library("c")
+            if libc_name is None:
+                self.libc = None
+            self.libc = ctypes.CDLL(libc_name)
+
+        return self.libc
 
 
 _clibs_wrapper = None
