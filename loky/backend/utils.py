@@ -259,6 +259,8 @@ class _CLibsWrapper:
         lib_name = find_library(module_name)
         if lib_name is not None:
             return ctypes.CDLL(lib_name, use_errno=True)
+        if sys.platform == "darwin":
+            self._find_with_libc_dyld(module_name)
         return self._find_with_libc_dl_iterate_phdr(module_name)
 
     def _find_with_libc_dl_iterate_phdr(self, module_name):
@@ -282,6 +284,28 @@ class _CLibsWrapper:
         res = libc.dl_iterate_phdr(c_match_module_callback, data)
         if res == 1:
             return ctypes.CDLL(_thread_locals._module_path)
+
+    def _find_with_libc_dyld(self, module_name):
+
+        libc_name = find_library("c")
+        if libc_name is None:
+            return
+        libc = ctypes.CDLL(libc_name)
+        if not hasattr(libc, "_dyld_image_count"):
+            return
+
+        found_module_path = None
+        n_dyld = libc._dyld_image_count()
+        libc._dyld_get_image_name.restype = ctypes.c_char_p
+
+        for i in range(n_dyld):
+            module_path = ctypes.string_at(libc._dyld_get_image_name(i))
+            module_path = module_path.decode("utf-8")
+            if os.path.basename(module_path).startswith(module_name):
+                found_module_path = module_path
+
+        if found_module_path:
+            return ctypes.CDLL(found_module_path)
 
 
 _clibs_wrapper = None
