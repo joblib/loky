@@ -260,7 +260,7 @@ class _CLibsWrapper:
         if lib_name is not None:
             return ctypes.CDLL(lib_name, use_errno=True)
         if sys.platform == "darwin":
-            self._find_with_libc_dyld(module_name)
+            return self._find_with_libc_dyld(module_name)
         return self._find_with_libc_dl_iterate_phdr(module_name)
 
     def _find_with_libc_dl_iterate_phdr(self, module_name):
