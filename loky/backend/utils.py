@@ -166,18 +166,25 @@ class _CLibsWrapper:
 
     # Here are the C-library supported on linux platforms, with their name and
     # the name of the library file which is looked-up.
-    SUPPORTED_CLIB = [
-        ("openblas", "openblas"),
-        ("openmp_intel", "iomp"),
-        ("openmp_gnu", "gomp"),
-        ("mkl", "mkl_rt")
-    ]
+    SUPPORTED_CLIB = {
+        "openblas": (
+            "libopenblas", "openblas_set_num_threads",
+            "openblas_get_num_threads"),
+        "openmp_intel": (
+            "libiomp", "omp_set_num_threads", "omp_get_max_threads"),
+        "openmp_gnu": (
+            "libgomp", "omp_set_num_threads", "omp_get_max_threads"),
+        "openmp_win32": (
+            "vcomp", "omp_set_num_threads", "omp_get_max_threads"),
+        "mkl": (
+            "libmkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads")
+    }
 
     def __init__(self):
         self._load()
 
     def _load(self):
-        for clib, module_name in self.SUPPORTED_CLIB:
+        for clib, (module_name, _, _) in self.SUPPORTED_CLIB.items():
             if not hasattr(self, clib):
                 setattr(self, clib, self._load_lib(module_name))
 
@@ -188,64 +195,26 @@ class _CLibsWrapper:
         assert isinstance(max_threads_per_process, int), msg
 
         dynamic_threadpool_size = {}
-        for clib, _ in self.SUPPORTED_CLIB:
-            try:
-                _set = getattr(self, "{}_set_num_threads".format(clib))
+        for clib, (_, _set, _) in self.SUPPORTED_CLIB.items():
+            module = getattr(self, clib, None)
+            if module is not None:
+                _set = getattr(module, _set)
                 _set(max_threads_per_process)
                 dynamic_threadpool_size[clib] = True
-            except NotImplementedError:
+            else:
                 dynamic_threadpool_size[clib] = False
         return dynamic_threadpool_size
 
     def get_thread_limits(self):
         limits = {}
-        for clib, _ in self.SUPPORTED_CLIB:
-            try:
-                _get = getattr(self, "{}_get_max_threads".format(clib))
+        for clib, (_, _, _get) in self.SUPPORTED_CLIB.items():
+            module = getattr(self, clib, None)
+            if module is not None:
+                _get = getattr(module, _get)
                 limits[clib] = _get()
-            except NotImplementedError:
+            else:
                 limits[clib] = None
         return limits
-
-    def openblas_set_num_threads(self, num_threads):
-        if self.openblas is None:
-            raise NotImplementedError("Could not find OpenBLAS library.")
-        self.openblas.openblas_set_num_threads(num_threads)
-
-    def openblas_get_max_threads(self):
-        if self.openblas is None:
-            raise NotImplementedError("Could not find OpenBLAS library.")
-        return self.openblas.openblas_get_num_threads()
-
-    def openmp_gnu_set_num_threads(self, num_threads):
-        if self.openmp_gnu is None:
-            raise NotImplementedError("Could not find OpenMP library")
-        self.openmp_gnu.omp_set_num_threads(num_threads)
-
-    def openmp_gnu_get_max_threads(self):
-        if self.openmp_gnu is None:
-            raise NotImplementedError("Could not find OpenMP library")
-        return self.openmp_gnu.omp_get_max_threads()
-
-    def openmp_intel_set_num_threads(self, num_threads):
-        if self.openmp_intel is None:
-            raise NotImplementedError("Could not find OpenMP library")
-        self.openmp_intel.omp_set_num_threads(num_threads)
-
-    def openmp_intel_get_max_threads(self):
-        if self.openmp_intel is None:
-            raise NotImplementedError("Could not find OpenMP library")
-        return self.openmp_intel.omp_get_max_threads()
-
-    def mkl_set_num_threads(self, num_threads):
-        if self.mkl is None:
-            raise NotImplementedError("Could not find MKL libray")
-        self.mkl.MKL_Set_Num_Threads(num_threads)
-
-    def mkl_get_max_threads(self):
-        if self.mkl is None:
-            raise NotImplementedError("Could not find MKL libray")
-        return self.mkl.MKL_Get_Max_Threads()
 
     def _load_lib(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
@@ -278,7 +247,6 @@ class _CLibsWrapper:
             ctypes.POINTER(dl_phdr_info), ctypes.c_size_t, ctypes.c_char_p)
         c_match_module_callback = c_func_signature(match_module_callback)
 
-        module_name = "lib{}".format(module_name)
         data = ctypes.c_char_p(module_name.encode('utf-8'))
         res = libc.dl_iterate_phdr(c_match_module_callback, data)
         if res == 1:
@@ -294,7 +262,6 @@ class _CLibsWrapper:
             return
 
         found_module_path = None
-        module_name = "lib{}".format(module_name)
 
         n_dyld = libc._dyld_image_count()
         libc._dyld_get_image_name.restype = ctypes.c_char_p
@@ -332,7 +299,6 @@ class _CLibsWrapper:
             raise OSError('Could not open PID %s' % os.getpid())
 
         found_module_path = None
-        module_name = "lib{}".format(module_name)
         try:
             buf_count = 256
             needed = DWORD()

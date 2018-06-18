@@ -130,7 +130,7 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
 def skip_func(msg):
     def test_func(*args, **kwargs):
-        raise pytest.SkipTest(msg)
+        pytest.skip(msg)
     return test_func
 
 
