@@ -327,7 +327,8 @@ class _CLibsWrapper:
                         ctypes.byref(nSize)):
                     raise OSError('GetModuleFileNameEx failed')
                 module_path = buf.value
-                if os.path.basename(module_path).startswith(module_name):
+                module_basename = os.path.basename(module_path).lower()
+                if module_basename.startswith(module_name):
                     found_module_path = module_path
         finally:
             Kernel32.CloseHandle(hProcess)

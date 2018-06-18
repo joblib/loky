@@ -7,6 +7,7 @@ import pytest
 import loky
 from loky import cpu_count
 from loky.backend.utils import get_thread_limits, limit_threads_clib
+from loky.backend.utils import _CLibsWrapper
 
 from .utils import with_parallel_sum
 
@@ -68,14 +69,7 @@ def test_cpu_count_cfs_limit():
     assert res.strip().decode('utf-8') == '1'
 
 
-SUPPORTED_CLIBS = [
-    'openblas',
-    'openmp_intel',
-    'openmp_gnu',
-    'mkl'
-]
-
-@pytest.mark.parametrize("clib", SUPPORTED_CLIBS)
+@pytest.mark.parametrize("clib", _CLibsWrapper.SUPPORTED_CLIB)
 def test_limit_threads_clib(openblas_test_noskip, clib):
     thread_limits = get_thread_limits()
 
