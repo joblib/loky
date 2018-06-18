@@ -8,7 +8,7 @@ import loky
 from loky import cpu_count
 from loky.backend.utils import get_thread_limits, limit_threads_clib
 
-from .utils import with_parallel_sum, with_support_openmp
+from .utils import with_parallel_sum
 
 
 def test_version():
@@ -94,7 +94,6 @@ def test_limit_threads_clib(openblas_test_noskip, clib):
 
 
 @with_parallel_sum
-@with_support_openmp
 def test_openmp_limit_num_threads():
     from ._openmp_test_helper.parallel_sum import parallel_sum
     old_num_threads = parallel_sum(100)

@@ -129,8 +129,9 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
 
 def skip_func(msg):
-    def my_func(*args, **kwargs):
+    def test_func(*args, **kwargs):
         raise pytest.SkipTest(msg)
+    return test_func
 
 
 # A decorator to run tests only when numpy is available
@@ -159,12 +160,3 @@ except ImportError:
     def with_parallel_sum(func):
         """A decorator to skip tests if parallel_sum is not compiled."""
         return skip_func('Test requires parallel_sum to be compiled')
-
-
-def with_support_openmp(func):
-    from loky.backend.utils import get_thread_limits
-    limits = get_thread_limits()
-    if limits['openmp_gnu'] or limits['openmp_intel']:
-        return func
-    else:
-        return skip_func('`loky` was not able to load openmp library')
