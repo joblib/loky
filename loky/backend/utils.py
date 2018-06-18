@@ -117,29 +117,23 @@ def _recursive_terminate(pid):
             if e.errno != errno.ESRCH:
                 raise
 
+###########################################################################
+# Code to load C-library that relies on thread pools and limit the maximal
+# number of thread used.
 
-##############################################################################
-# The following code is derived from code by Intel developper @anton-malakhov
-# available at https://github.com/IntelPython/smp
-#
-# Copyright (c) 2017, Intel Corporation published under the BSD 3-Clause
-# license
-#
+# Structure to cast the the info on dynamically loaded library. See
+# https://linux.die.net/man/3/dl_iterate_phdr for more details.
+UINT_SYSTEM = ctypes.c_uint64 if sys.maxsize > 2**32 else ctypes.c_uint32
+UINT_HALF_SYSTEM = ctypes.c_uint32 if sys.maxsize > 2**32 else ctypes.c_uint16
 
 
-# Structure to cast the the info on dynamically loaded library.
-if sys.maxsize > 2**32:
-    class dl_phdr_info(ctypes.Structure):
-        _fields_ = [("dlpi_addr",  ctypes.c_uint64),
-                    ("dlpi_name",  ctypes.c_char_p),
-                    ("dlpi_phdr",  ctypes.c_void_p),
-                    ("dlpi_phnum", ctypes.c_uint16)]
-else:
-    class dl_phdr_info(ctypes.Structure):
-        _fields_ = [("dlpi_addr",  ctypes.c_uint32),
-                    ("dlpi_name",  ctypes.c_char_p),
-                    ("dlpi_phdr",  ctypes.c_void_p),
-                    ("dlpi_phnum", ctypes.c_uint16)]
+class dl_phdr_info(ctypes.Structure):
+    _fields_ = [
+        ("dlpi_addr",  UINT_SYSTEM),       # Base address of object
+        ("dlpi_name",  ctypes.c_char_p),   # path to the library
+        ("dlpi_phdr",  ctypes.c_void_p),   # pointer on dlpi_headers
+        ("dlpi_phnum",  UINT_HALF_SYSTEM)  # number of element in dlpi_phdr
+        ]
 
 
 # This function is called on each dynamically loaded library attached to our
@@ -148,12 +142,11 @@ else:
 # full path of this library, to be loaded with ctypes.CDLL.
 def match_module_callback(info, size, module_name):
     global _thread_locals
+
     # recast the name of the module as a string
-    module_name = ctypes.cast(module_name, ctypes.c_char_p).value
-    module_name = module_name.decode('utf-8')
+    module_name = ctypes.string_at(module_name).decode('utf-8')
 
     # Get the name of the current library
-    info = ctypes.cast(info, ctypes.POINTER(dl_phdr_info))
     module_path = info.contents.dlpi_name
 
     # If the current library is the one we are looking for, set the global
@@ -189,7 +182,7 @@ class _CLibsWrapper:
                 setattr(self, clib, self._load_lib(module_name))
 
     def limit_threads_clibs(self, max_threads_per_process):
-
+        """Limit the maximal number of threads used by supported C-library"""
         msg = ("max_threads_per_process should be an interger. Got {}"
                .format(max_threads_per_process))
         assert isinstance(max_threads_per_process, int), msg
@@ -225,7 +218,6 @@ class _CLibsWrapper:
         return self.openblas.openblas_get_num_threads()
 
     def openmp_gnu_set_num_threads(self, num_threads):
-
         if self.openmp_gnu is None:
             raise NotImplementedError("Could not find OpenMP library")
         self.openmp_gnu.omp_set_num_threads(num_threads)
@@ -256,15 +248,24 @@ class _CLibsWrapper:
         return self.mkl.MKL_Get_Max_Threads()
 
     def _load_lib(self, module_name):
-        lib_name = find_library(module_name)
-        if lib_name is not None:
-            return ctypes.CDLL(lib_name, use_errno=True)
+        """Return a binder on module_name by looping through loaded libraries
+        """
         if sys.platform == "darwin":
             return self._find_with_libc_dyld(module_name)
+        elif sys.platform == "win32":
+            return self._find_with_libc_enum_process_module_ex(module_name)
         return self._find_with_libc_dl_iterate_phdr(module_name)
 
     def _find_with_libc_dl_iterate_phdr(self, module_name):
+        """Return a binder on module_name by looping through loaded libraries
 
+        This function is expected to work on POSIX system only.
+        This code is adapted from code by Intel developper @anton-malakhov
+        available at https://github.com/IntelPython/smp
+
+        Copyright (c) 2017, Intel Corporation published under the BSD 3-Clause
+        license
+        """
         global _thread_locals
         _thread_locals._module_path = None
 
@@ -273,7 +274,8 @@ class _CLibsWrapper:
             return
 
         c_func_signature = ctypes.CFUNCTYPE(
-            ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_char_p)
+            ctypes.c_int,  # Return type
+            ctypes.POINTER(dl_phdr_info), ctypes.c_size_t, ctypes.c_char_p)
         c_match_module_callback = c_func_signature(match_module_callback)
 
         module_name = "lib{}".format(module_name)
@@ -283,7 +285,10 @@ class _CLibsWrapper:
             return ctypes.CDLL(_thread_locals._module_path)
 
     def _find_with_libc_dyld(self, module_name):
+        """Return a binder on module_name by looping through loaded libraries
 
+        This function is expected to work on OSX system only
+        """
         libc = self._get_libc()
         if not hasattr(libc, "_dyld_image_count"):
             return
@@ -303,6 +308,67 @@ class _CLibsWrapper:
         if found_module_path:
             return ctypes.CDLL(found_module_path)
 
+    def _find_with_libc_enum_process_module_ex(self, module_name):
+        """Return a binder on module_name by looping through loaded libraries
+
+        This function is expected to work on windows system only.
+        This code is adapted from code by Philipp Hagemeister @phihag available
+        at https://stackoverflow.com/questions/17474574
+        """
+        from ctypes.wintypes import DWORD, HMODULE, MAX_PATH
+
+        PROCESS_QUERY_INFORMATION = 0x0400
+        PROCESS_VM_READ = 0x0010
+
+        LIST_MODULES_ALL = 0x03
+
+        Psapi = self._get_windll('Psapi')
+        Kernel32 = self._get_windll('kernel32')
+
+        hProcess = Kernel32.OpenProcess(
+            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+            False, os.getpid())
+        if not hProcess:
+            raise OSError('Could not open PID %s' % os.getpid())
+
+        found_module_path = None
+        module_name = "lib{}".format(module_name)
+        try:
+            buf_count = 256
+            needed = DWORD()
+            # Grow the buffer until it becomes large enough to hold all the
+            # module headers
+            while True:
+                buf = (HMODULE * buf_count)()
+                buf_size = ctypes.sizeof(buf)
+                if not Psapi.EnumProcessModulesEx(
+                        hProcess, ctypes.byref(buf), buf_size,
+                        ctypes.byref(needed), LIST_MODULES_ALL):
+                    raise OSError('EnumProcessModulesEx failed')
+                if buf_size >= needed.value:
+                    break
+                buf_count = needed.value // (buf_size // buf_count)
+
+            count = needed.value // (buf_size // buf_count)
+            hModules = map(HMODULE, buf[:count])
+
+            # Loop through all the module headers and get the module file name
+            buf = ctypes.create_unicode_buffer(MAX_PATH)
+            nSize = DWORD()
+            for hModule in hModules:
+                if not Psapi.GetModuleFileNameExW(
+                        hProcess, hModule, ctypes.byref(buf),
+                        ctypes.byref(nSize)):
+                    raise OSError('GetModuleFileNameEx failed')
+                module_path = buf.value
+                if os.path.basename(module_path).startswith(module_name):
+                    found_module_path = module_path
+        finally:
+            Kernel32.CloseHandle(hProcess)
+
+        if found_module_path:
+            return ctypes.CDLL(found_module_path)
+
     def _get_libc(self):
         if not hasattr(self, "libc"):
             libc_name = find_library("c")
@@ -311,6 +377,12 @@ class _CLibsWrapper:
             self.libc = ctypes.CDLL(libc_name)
 
         return self.libc
+
+    def _get_windll(self, dll_name):
+        if not hasattr(self, dll_name):
+            setattr(self, dll_name, ctypes.WinDLL("{}.dll".format(dll_name)))
+
+        return getattr(self, dll_name)
 
 
 _clibs_wrapper = None
