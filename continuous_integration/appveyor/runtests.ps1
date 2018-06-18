@@ -14,6 +14,9 @@ function TestPythonVersions () {
         # Skip memory test as the appveyor environment is too small for those.
         $PYTEST_ARGS = "-vxl --timeout=50 --skip-high-memory"
 
+        If( $ver -eq 36){
+            $PYTEST_ARGS = "$PYTEST_ARGS --openblas-test-noskip"
+        }
         # Launch the tox command for the correct python version. We use `iex`
         # to correctly pass PYTEST_ARGS, which are parsed as files otherwise.
         iex "$TOX_CMD -e py$ver -- $PYTEST_ARGS"
