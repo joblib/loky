@@ -70,14 +70,16 @@ def test_cpu_count_cfs_limit():
 
 
 @pytest.mark.parametrize("clib", _CLibsWrapper.SUPPORTED_CLIBS)
-def test_limit_threads_clib(openblas_test_noskip, clib):
+def test_limit_threads_clib(openblas_test_noskip, mkl_win32_test_noskip, clib):
     thread_limits = get_thread_limits()
 
     old_thread_limit = thread_limits[clib]
     if old_thread_limit is None:
         if clib == "openblas" and openblas_test_noskip:
             raise RuntimeError("Could not load the OpenBLAS library")
-        raise pytest.skip("Need {} support".format(clib))
+        elif clib == "mkl_win32" and mkl_win32_test_noskip:
+            raise RuntimeError("Could not load the MKL library")
+        pytest.skip("Need {} support".format(clib))
 
     dynamic_scaling = limit_threads_clib(1)
     assert get_thread_limits()[clib] == 1

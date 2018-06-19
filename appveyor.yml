@@ -3,6 +3,8 @@ environment:
   # Python versions sequentially.
   # We run it once per architecture (32 bit vs 64 bit).
   matrix:
+    - TEST_CONDA: "true"
+
     - PYTHON: "C:\\Python36"
       PYTHON_VERSION: "3.6.x"
       PYTHON_ARCH: "32"
@@ -12,6 +14,7 @@ environment:
       PYTHON_VERSION: "3.6.x"
       PYTHON_ARCH: "64"
       PYTHON_ARCH_SUFFIX: "-x64"
+
 matrix:
   fast_finish: true
 

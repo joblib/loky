@@ -13,11 +13,6 @@ try:
 except ImportError:
     psutil = None
 
-def _flag_current_thread_clean_exit():
-    """Put a ``_clean_exit`` flag on the current thread"""
-    thread = threading.current_thread()
-    thread._clean_exit = True
-
 
 def recursive_terminate(process, use_psutil=True):
     if use_psutil and psutil is not None:
@@ -378,7 +373,7 @@ def limit_threads_clib(max_threads_per_process, reload_clib=False):
 
     Return a dict dynamic_threadpool_size containing pairs `('clib': boolean)`
     which are True if `clib` have been found and can be used to scale the
-    maximal number of hreads dynamically.
+    maximal number of threads dynamically.
     """
     wrapper = _get_wrapper(reload_clib)
     return wrapper.limit_threads_clibs(max_threads_per_process)

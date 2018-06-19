@@ -584,7 +584,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         assert executor.submit(id, 42).result() >= 0
 
         with pytest.raises(ValueError):
-            get_reusable_executor(max_workers=2, context='bad_start_method')
+            get_reusable_executor(max_workers=2, context='no_start_method')
 
     def test_interactively_define_executor_no_main(self):
         # check that the init_main_module parameter works properly
