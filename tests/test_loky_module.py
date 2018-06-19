@@ -69,7 +69,7 @@ def test_cpu_count_cfs_limit():
     assert res.strip().decode('utf-8') == '1'
 
 
-@pytest.mark.parametrize("clib", _CLibsWrapper.SUPPORTED_CLIB)
+@pytest.mark.parametrize("clib", _CLibsWrapper.SUPPORTED_CLIBS)
 def test_limit_threads_clib(openblas_test_noskip, clib):
     thread_limits = get_thread_limits()
 
@@ -84,7 +84,8 @@ def test_limit_threads_clib(openblas_test_noskip, clib):
     assert dynamic_scaling[clib]
 
     limit_threads_clib(3)
-    assert get_thread_limits()[clib] == 3
+    max_threads = get_thread_limits()[clib]
+    assert max_threads == 3 or max_threads == min(3, os.cpu_count())
 
 
 @with_parallel_sum

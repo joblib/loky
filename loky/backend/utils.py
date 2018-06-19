@@ -13,10 +13,6 @@ try:
 except ImportError:
     psutil = None
 
-_thread_locals = threading.local() 
-_thread_locals._module_path = None
-
-
 def _flag_current_thread_clean_exit():
     """Put a ``_clean_exit`` flag on the current thread"""
     thread = threading.current_thread()
@@ -117,11 +113,14 @@ def _recursive_terminate(pid):
             if e.errno != errno.ESRCH:
                 raise
 
-###########################################################################
-# Code to load C-library that relies on thread pools and limit the maximal
-# number of thread used.
+#############################################################################
+# The following provides utilities to load C-libraries that relies on thread
+# pools and limit the maximal number of thread that can be used.
+#
+#
 
-# Structure to cast the the info on dynamically loaded library. See
+
+# Structure to cast the info on dynamically loaded library. See
 # https://linux.die.net/man/3/dl_iterate_phdr for more details.
 UINT_SYSTEM = ctypes.c_uint64 if sys.maxsize > 2**32 else ctypes.c_uint32
 UINT_HALF_SYSTEM = ctypes.c_uint32 if sys.maxsize > 2**32 else ctypes.c_uint16
@@ -136,37 +135,14 @@ class dl_phdr_info(ctypes.Structure):
         ]
 
 
-# This function is called on each dynamically loaded library attached to our
-# process. It checks if any of this library matches the name given in data and
-# if a match is found, it set the thread local variable _module_path to the
-# full path of this library, to be loaded with ctypes.CDLL.
-def match_module_callback(info, size, module_name):
-    global _thread_locals
-
-    # recast the name of the module as a string
-    module_name = ctypes.string_at(module_name).decode('utf-8')
-
-    # Get the name of the current library
-    module_path = info.contents.dlpi_name
-
-    # If the current library is the one we are looking for, set the global
-    # variable with the desired path and return 1 to stop `dl_iterate_phdr`.
-    if module_path:
-        module_path = module_path.decode("utf-8")
-        if os.path.basename(module_path).startswith(module_name):
-            _thread_locals._module_path = module_path
-            return 1
-    return 0
-
-
 class _CLibsWrapper:
-    # Wrapper around classic C-library for scientific computations to set and
+    # Wrapper around classic C-libraries for scientific computations to set and
     # get the maximum number of threads they are allowed to used for inner
     # parallelism.
 
-    # Here are the C-library supported on linux platforms, with their name and
-    # the name of the library file which is looked-up.
-    SUPPORTED_CLIB = {
+    # Supported C-libraries for this wrapper, index with their name. The items
+    # hold the name of the library file and the functions to call.
+    SUPPORTED_CLIBS = {
         "openblas": (
             "libopenblas", "openblas_set_num_threads",
             "openblas_get_num_threads"),
@@ -177,25 +153,28 @@ class _CLibsWrapper:
         "openmp_win32": (
             "vcomp", "omp_set_num_threads", "omp_get_max_threads"),
         "mkl": (
-            "libmkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads")
+            "libmkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads"),
+        "mkl_win32": (
+            "mkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads")
     }
+
+    cls_thread_locals = threading.local()
 
     def __init__(self):
         self._load()
 
     def _load(self):
-        for clib, (module_name, _, _) in self.SUPPORTED_CLIB.items():
-            if not hasattr(self, clib):
-                setattr(self, clib, self._load_lib(module_name))
+        for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
+            setattr(self, clib, self._load_lib(module_name))
 
     def limit_threads_clibs(self, max_threads_per_process):
-        """Limit the maximal number of threads used by supported C-library"""
+        """Limit maximal number of threads used by supported C-libraries"""
         msg = ("max_threads_per_process should be an interger. Got {}"
                .format(max_threads_per_process))
         assert isinstance(max_threads_per_process, int), msg
 
         dynamic_threadpool_size = {}
-        for clib, (_, _set, _) in self.SUPPORTED_CLIB.items():
+        for clib, (_, _set, _) in self.SUPPORTED_CLIBS.items():
             module = getattr(self, clib, None)
             if module is not None:
                 _set = getattr(module, _set)
@@ -206,8 +185,10 @@ class _CLibsWrapper:
         return dynamic_threadpool_size
 
     def get_thread_limits(self):
+        """Return maximal number of threads available for supported C-libraries
+        """
         limits = {}
-        for clib, (_, _, _get) in self.SUPPORTED_CLIB.items():
+        for clib, (_, _, _get) in self.SUPPORTED_CLIBS.items():
             module = getattr(self, clib, None)
             if module is not None:
                 _get = getattr(module, _get)
@@ -220,12 +201,12 @@ class _CLibsWrapper:
         """Return a binder on module_name by looping through loaded libraries
         """
         if sys.platform == "darwin":
-            return self._find_with_libc_dyld(module_name)
+            return self._find_with_clibs_dyld(module_name)
         elif sys.platform == "win32":
-            return self._find_with_libc_enum_process_module_ex(module_name)
-        return self._find_with_libc_dl_iterate_phdr(module_name)
+            return self._find_with_clibs_enum_process_module_ex(module_name)
+        return self._find_with_clibs_dl_iterate_phdr(module_name)
 
-    def _find_with_libc_dl_iterate_phdr(self, module_name):
+    def _find_with_clibs_dl_iterate_phdr(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
 
         This function is expected to work on POSIX system only.
@@ -235,12 +216,30 @@ class _CLibsWrapper:
         Copyright (c) 2017, Intel Corporation published under the BSD 3-Clause
         license
         """
-        global _thread_locals
-        _thread_locals._module_path = None
+        self.cls_thread_locals._module_path = None
 
         libc = self._get_libc()
         if not hasattr(libc, "dl_iterate_phdr"):
             return
+
+        # Callback function for `dl_iterate_phdr` which is called for every
+        # module loaded in the current process until it returns 1.
+        def match_module_callback(info, size, module_name):
+
+            # recast the name of the module as a string
+            module_name = ctypes.string_at(module_name).decode('utf-8')
+
+            # Get the name of the current library
+            module_path = info.contents.dlpi_name
+
+            # If the current library is the one we are looking for, store the
+            # path and return 1 to stop the loop in `dl_iterate_phdr`.
+            if module_path:
+                module_path = module_path.decode("utf-8")
+                if os.path.basename(module_path).startswith(module_name):
+                    self.cls_thread_locals._module_path = module_path
+                    return 1
+            return 0
 
         c_func_signature = ctypes.CFUNCTYPE(
             ctypes.c_int,  # Return type
@@ -250,9 +249,9 @@ class _CLibsWrapper:
         data = ctypes.c_char_p(module_name.encode('utf-8'))
         res = libc.dl_iterate_phdr(c_match_module_callback, data)
         if res == 1:
-            return ctypes.CDLL(_thread_locals._module_path)
+            return ctypes.CDLL(self.cls_thread_locals._module_path)
 
-    def _find_with_libc_dyld(self, module_name):
+    def _find_with_clibs_dyld(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
 
         This function is expected to work on OSX system only
@@ -275,7 +274,7 @@ class _CLibsWrapper:
         if found_module_path:
             return ctypes.CDLL(found_module_path)
 
-    def _find_with_libc_enum_process_module_ex(self, module_name):
+    def _find_with_clibs_enum_process_module_ex(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
 
         This function is expected to work on windows system only.
@@ -355,32 +354,46 @@ class _CLibsWrapper:
 _clibs_wrapper = None
 
 
-def _get_wrapper():
+def _get_wrapper(reload_clib=False):
+    """Helper function to only create one wrapper per thread."""
     global _clibs_wrapper
     if _clibs_wrapper is None:
         _clibs_wrapper = _CLibsWrapper()
+    if reload_clib:
+        _clibs_wrapper._load()
+
     return _clibs_wrapper
 
 
-def limit_threads_clib(max_threads_per_process):
-    """Limit the number of threads available for openblas, mkl and openmp
+def limit_threads_clib(max_threads_per_process, reload_clib=False):
+    """Limit the number of threads available for threadpools in supported C-lib
 
-    Set the maximal number of thread that can be used for these three libraries
-    to `max_threads_per_process`. This function works on POSIX plateforms and
-    can be used to change this limit dynamically.
+    Set the maximal number of thread that can be used in thread pools used in
+    the supported C-libraries to `max_threads_per_process`. This function works
+    for libraries that are already loaded in the interpreter and can be changed
+    dynamically.
+
+    If `reload_clib` is `True`, first loop through the loaded libraries to
+    ensure that this function is called on all available libraries.
 
     Return a dict dynamic_threadpool_size containing pairs `('clib': boolean)`
     which are True if `clib` have been found and can be used to scale the
     maximal number of hreads dynamically.
     """
-    return _get_wrapper().limit_threads_clibs(max_threads_per_process)
+    wrapper = _get_wrapper(reload_clib)
+    return wrapper.limit_threads_clibs(max_threads_per_process)
 
 
-def get_thread_limits():
-    """Return thread limit set for openblas, mkl and openmp
+def get_thread_limits(reload_clib=False):
+    """Return maximal thread number for threadpools in supported C-lib
 
     Return a dictionary containing the maximal number of threads that can be
-    used for these three library or None if this library is not available. The
-    key of the dictionary are {'mkl', 'openblas', 'openmp_gnu', 'openmp_intel'}
+    used in supported libraries or None when the library is not available. The
+    key of the dictionary are {`'mkl'`, `'openblas'`, `'openmp_gnu'`,
+    `'openmp_intel'`, `'openmp_win32'`}.
+
+    If `reload_clib` is `True`, first loop through the loaded libraries to
+    ensure that this function is called on all available libraries.
     """
-    return _get_wrapper().get_thread_limits()
+    wrapper = _get_wrapper(reload_clib)
+    return wrapper.get_thread_limits()
