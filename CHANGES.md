@@ -1,4 +1,4 @@
-### 2.2.0.dev0 (in development)
+### 2.1.3 - 2018-06-20 - Release Highlights
 
 - Fix bad interaction between `max_workers=None` and `reuse='auto'` (#132).
 - Add initializer for `get_reusable_executor` (#134)
