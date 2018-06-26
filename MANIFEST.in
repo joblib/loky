@@ -1,5 +1,6 @@
 include *.md *.py *.cfg *.ini
 include .coveragerc
+include LICENSE.txt
 recursive-include tests *.py *.pyx
 recursive-include continuous_integration *.sh *.py
 graft doc
