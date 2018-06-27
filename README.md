@@ -7,15 +7,11 @@ The aim of this project is to provide a robust, cross-platform and
 cross-version implementation of the `ProcessPoolExecutor` class of
 `concurrent.futures`. It notably features:
 
-  * __Deadlock free implementation__: one of the major concern in
-    standard `multiprocessing` and `concurrent.futures` libraries is the
-    ability of the `Pool/Executor` to handle crashes of worker
-    processes. This library intends to fix those possible deadlocks and
-    send back meaningful errors.
-
-  * __Consistent spawn behavior__: All processes are started using
-    fork/exec on POSIX systems. This ensures safer interactions with
-    third party libraries.
+  * __Consistent and robust spawn behavior__: All processes are started
+    using fork + exec on POSIX systems. This ensures safer interactions with
+    third party libraries. On the contrary, `multiprocessing.Pool` uses
+    fork without exec by default, causing third party runtimes to crash
+    (e.g. OpenMP, macOS Accelerate...).
 
   * __Reusable executor__: strategy to avoid re-spawning a complete
     executor every time. A singleton executor instance can be reused (and
@@ -33,6 +29,16 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     to the use of ``cloudpickle`` to call functions defined in the
     ``__main__`` module, it is not required to protect the code calling
     parallel functions under Windows.
+    
+  * __Deadlock free implementation__: one of the major concern in
+    standard `multiprocessing` and `concurrent.futures` modules is the
+    ability of the `Pool/Executor` to handle crashes of worker
+    processes. This library intends to fix those possible deadlocks and
+    send back meaningful errors. Note that the implementation of
+    `concurrent.futures.ProcessPoolExecutor` that comes with Python 3.7+
+    is as robust as the executor from loky but the later also works for
+    older versions of Python.
+
 
 ### Installation
 
