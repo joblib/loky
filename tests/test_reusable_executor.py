@@ -202,7 +202,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
     crash_cases = [
         # Check problem occuring while pickling a task in
-        (id, (ExitAtPickle(),), SystemExit),
+        (id, (ExitAtPickle(),), PicklingError),
         (id, (ErrorAtPickle(),), PicklingError),
         # Check problem occuring while unpickling a task on workers
         (id, (ExitAtUnpickle(),), BrokenProcessPool),
