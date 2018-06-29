@@ -1,5 +1,8 @@
 ### 2.0.0dev0 (in development)
 
+- Fix win32 failure to kill worker process with taskkill returning 255
+- Fix all error at pickle raise PicklingError
+- Add missing license file
 
 ### 2.1.3 - 2018-06-20 - Release Highlights
 
