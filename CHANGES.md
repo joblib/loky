@@ -1,3 +1,6 @@
+### 2.2.0dev0 (in development)
+
+
 ### 2.1.4 - 2018-06-29 - Bug fix release
 
 - Fix win32 failure to kill worker process with taskkill returning 255
