@@ -481,14 +481,20 @@ class TestResizeExecutor(ReusableExecutorMixin):
 
     @pytest.mark.timeout(30 if sys.platform == "win32" else 15)
     def test_resize_after_timeout(self):
-        executor = get_reusable_executor(max_workers=2, timeout=.001)
-        assert executor.submit(id_sleep, 42, 0.).result() == 42
-        sleep(.1)
-        executor = get_reusable_executor(max_workers=8, timeout=.001)
-        assert executor.submit(id_sleep, 42, 0.).result() == 42
-        sleep(.1)
-        executor = get_reusable_executor(max_workers=2, timeout=.001)
-        assert executor.submit(id_sleep, 42, 0.).result() == 42
+        with warnings.catch_warnings(record=True) as recorded_warnings:
+            warnings.simplefilter("always")
+            executor = get_reusable_executor(max_workers=2, timeout=.001)
+            assert executor.submit(id_sleep, 42, 0.).result() == 42
+            sleep(.1)
+            executor = get_reusable_executor(max_workers=8, timeout=.001)
+            assert executor.submit(id_sleep, 42, 0.).result() == 42
+            sleep(.1)
+            executor = get_reusable_executor(max_workers=2, timeout=.001)
+            assert executor.submit(id_sleep, 42, 0.).result() == 42
+
+        if len(recorded_warnings) > 1:
+            expected_msg = 'A worker stopped'
+            assert expected_msg in recorded_warnings[0].message.args[0]
 
 
 def test_invalid_process_number():
@@ -688,3 +694,39 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=4)
         for x in executor.map(self._test_initializer, delay=.1):
             assert x == 'uninitialized'
+
+
+def test_memory_leak_protection():
+
+    def leak_some_memory(size=int(1e6), delay=0.01):
+        if getattr(os, '__loky_leak', None) is None:
+            os.__loky_leak = []
+        os.__loky_leak.append(b"\x00" * size)
+
+        # Leave enough time for the memory leak detector to kick-in:
+        # by default the process does not check its memory usage
+        # more than once per second.
+        sleep(delay)
+
+        leaked_size = sum(len(buffer) for buffer in os.__loky_leak)
+        return os.getpid(), leaked_size
+
+    executor = get_reusable_executor(max_workers=1)
+
+    with pytest.warns(UserWarning, match='memory leak'):
+        futures = []
+        for i in range(300):
+            # Total run time should be 3s which is way over the 1s cooldown
+            # period between two consecutive memory checks in the worker.
+            futures.append(executor.submit(leak_some_memory))
+
+        results = [f.result() for f in futures]
+
+        # The pid of the worker has changed when restarting the worker
+        first_pid, last_pid = results[0][0], results[-1][0]
+        assert first_pid != last_pid
+
+        # The restart happened after 100 MB of leak over the default process
+        # size + what has leaked since the last memory check.
+        for _, leak_size in results:
+            assert leak_size / 1e6 < 250

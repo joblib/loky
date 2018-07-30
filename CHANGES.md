@@ -1,5 +1,10 @@
 ### 2.2.0dev0 (in development)
 
+- Add a protection against memory-leaks for long running worker
+  processes: if the memory usage has increased by more than 100 MB
+  (after a garbage collection), the worker is automatically restarted
+  before accepting new tasks. This protection is only active when psutil
+  is installed.
 
 ### 2.1.4 - 2018-06-29 - Bug fix release
 
