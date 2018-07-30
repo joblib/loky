@@ -29,7 +29,7 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     to the use of ``cloudpickle`` to call functions defined in the
     ``__main__`` module, it is not required to protect the code calling
     parallel functions under Windows.
-    
+
   * __Deadlock free implementation__: one of the major concern in
     standard `multiprocessing` and `concurrent.futures` modules is the
     ability of the `Pool/Executor` to handle crashes of worker
