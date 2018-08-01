@@ -1,4 +1,4 @@
-### 2.2.0dev0 (in development)
+### 2.2.0 - 2018-08-01 - Release Highlights
 
 - Add a protection against memory-leaks for long running worker
   processes: if the memory usage has increased by more than 100 MB
