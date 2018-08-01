@@ -692,7 +692,8 @@ def _run_nested_delayed(depth, delay, event):
     time.sleep(delay)
 
 
-def test_recursive_terminate():
+@pytest.mark.parametrize("use_psutil", [True, False])
+def test_recursive_terminate(use_psutil):
     event = multiprocessing.Event()
     p = multiprocessing.Process(target=_run_nested_delayed,
                                 args=(4, 1000, event))
@@ -700,12 +701,12 @@ def test_recursive_terminate():
 
     # Wait for all the processes to be launched
     if not event.wait(10):
-        recursive_terminate(p)
+        recursive_terminate(p, use_psutil=use_psutil)
         raise RuntimeError("test_recursive_terminate was not able to launch "
                            "all nested processes.")
 
     children = psutil.Process(pid=p.pid).children(recursive=True)
-    recursive_terminate(p)
+    recursive_terminate(p, use_psutil=use_psutil)
 
     # The process can take some time finishing so we should wait up to 5s
     gone, alive = psutil.wait_procs(children, timeout=5)
