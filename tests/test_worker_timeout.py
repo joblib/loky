@@ -72,7 +72,7 @@ class TestTimeoutExecutor():
         executor._result_queue = result_queue
 
         with pytest.warns(UserWarning,
-                          match=r'^A worker timeout while some jobs'):
+                          match=r'^A worker stopped while some jobs'):
             for i in range(5):
                 # Trigger worker spawn for lazy executor implementations
                 for result in executor.map(id, range(8)):
@@ -89,7 +89,7 @@ class TestTimeoutExecutor():
         appropriate amount of workers to move one and not get stalled.
         """
         with pytest.warns(UserWarning,
-                          match=r'^A worker timeout while some jobs'):
+                          match=r'^A worker stopped while some jobs'):
             for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1),
                                    (0.001, .1)]:
                 executor = get_reusable_executor(max_workers=2,
@@ -102,7 +102,7 @@ class TestTimeoutExecutor():
         """Check that worker timeout don't cause deadlock even when shutting down.
         """
         with pytest.warns(UserWarning,
-                          match=r'^A worker timeout while some jobs'):
+                          match=r'^A worker stopped while some jobs'):
             with get_reusable_executor(max_workers=2, timeout=.001) as e:
                 f = e.submit(id, SlowlyPickling(1))
         f.result()
