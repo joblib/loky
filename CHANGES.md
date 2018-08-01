@@ -6,6 +6,10 @@
   before accepting new tasks. This protection is only active when psutil
   is installed.
 
+- psutil is now a soft-dependency of loky: it is used to recursively
+  terminate children processes when available but there is a fallback
+  for windows and all unices with pgrep installed otherwise.
+
 ### 2.1.4 - 2018-06-29 - Bug fix release
 
 - Fix win32 failure to kill worker process with taskkill returning 255
