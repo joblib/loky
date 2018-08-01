@@ -26,20 +26,19 @@ def recursive_terminate(process, use_psutil=True):
 
 def _recursive_terminate_with_psutil(process, retries=5):
     try:
-        psutil_process = psutil.Process(process.pid)
-    except psutil._exceptions.NoSuchProcess:
+        children = psutil.Process(process.pid).children(recursive=True)
+    except psutil.NoSuchProcess:
         return
 
-    children = psutil_process.children(recursive=True)
     for child in children:
         try:
             child.terminate()
-        except psutil._exceptions.NoSuchProcess:
+        except psutil.NoSuchProcess:
             pass
 
     gone, still_alive = psutil.wait_procs(children, timeout=5)
-    for p in still_alive:
-        p.kill()
+    for child_process in still_alive:
+        child_process.kill()
 
     process.terminate()
     process.join()
