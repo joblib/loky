@@ -709,6 +709,9 @@ class ExecutorTest:
         with pytest.raises(LokyRecursionError):
             self._test_max_depth(max_depth=MAX_DEPTH + 1, ctx=self.context)
 
+    @pytest.mark.memory
+    @pytest.mark.skipif(sys.version_info < (3, 4),
+                        reason="Limitation only present for python3")
     def test_failure_on_large_data_send(self):
         data = b'\x00' * int(2.5e9)
 

@@ -28,6 +28,9 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
 else
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
-    COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- -vl \
-            --timeout=30 --maxfail=5
+    PYTEST_ARGS="-vl --timeout=30 --maxfail=5"
+    if [ "$MEMORY" != "true" ]; then
+        PYTEST_ARGS="$PYTEST_ARGS --no-memory"
+    fi
+    COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- $PYTEST_ARGS
 fi

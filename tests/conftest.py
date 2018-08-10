@@ -1,4 +1,5 @@
 import sys
+import pytest
 import logging
 import warnings
 from multiprocessing.util import log_to_stderr
@@ -7,6 +8,8 @@ from multiprocessing.util import log_to_stderr
 def pytest_addoption(parser):
     parser.addoption("--loky-verbosity", type=int, default=logging.DEBUG,
                      help="log-level: integer, SUBDEBUG(5) - INFO(20)")
+    parser.addoption("--no-memory", action="store_true",
+                     help="skip memory test to avoid conflict on CI.")
 
 
 def log_lvl(request):
@@ -23,3 +26,13 @@ def pytest_configure(config):
         '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
 
     warnings.simplefilter('always')
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--no-memory"):
+        # --runslow given in cli: do not skip slow tests
+        return
+    skip_memory = pytest.mark.skip(reason="--no-memory option was provided")
+    for item in items:
+        if "memory" in item.keywords:
+            item.add_marker(skip_memory)
