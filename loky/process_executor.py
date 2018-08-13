@@ -394,8 +394,8 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     # set the global _CURRENT_DEPTH mechanism to limit recursive call
     global _CURRENT_DEPTH
     _CURRENT_DEPTH = current_depth
-    _REFERENCE_PROCESS_SIZE = None
-    _LAST_MEMORY_CHECK = None
+    _process_reference_size = None
+    _process_last_memory_check = None
     pid = os.getpid()
 
     mp.util.debug('Worker started with timeout=%s' % timeout)
@@ -434,15 +434,15 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         del call_item
 
         if _get_memory_usage is not None:
-            if _REFERENCE_PROCESS_SIZE is None:
+            if _process_reference_size is None:
                 # Make reference measurement after the first call
-                _REFERENCE_PROCESS_SIZE = _get_memory_usage(pid, force_gc=True)
-                _LAST_MEMORY_CHECK = time()
+                _process_reference_size = _get_memory_usage(pid, force_gc=True)
+                _process_last_memory_check = time()
                 continue
-            if time() - _LAST_MEMORY_CHECK > _MEMORY_CHECK_DELAY:
+            if time() - _process_last_memory_check > _MEMORY_CHECK_DELAY:
                 mem_usage = _get_memory_usage(pid)
-                _LAST_MEMORY_CHECK = time()
-                if mem_usage - _REFERENCE_PROCESS_SIZE < _MAX_MEMORY_LEAK_SIZE:
+                _process_last_memory_check = time()
+                if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
                     # Memory usage stays within bounds: everything is fine.
                     continue
 
@@ -450,8 +450,8 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 # after a forced garbage collection to break any reference
                 # cycles.
                 mem_usage = _get_memory_usage(pid, force_gc=True)
-                _LAST_MEMORY_CHECK = time()
-                if mem_usage - _REFERENCE_PROCESS_SIZE < _MAX_MEMORY_LEAK_SIZE:
+                _process_last_memory_check = time()
+                if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
                     # The GC managed to free the memory: everything is fine.
                     continue
 
