@@ -309,7 +309,8 @@ class _SafeQueue(Queue):
             # format traceback only works on python3
             if isinstance(e, struct.error):
                 raised_error = RuntimeError(
-                    "The task is too big to be sent to workers.")
+                    "The task could not be sent to the workers as it is too "
+                    "large for `send_bytes`.")
             else:
                 raised_error = PicklingError(
                     "Could not pickle the task to send it to the workers.")

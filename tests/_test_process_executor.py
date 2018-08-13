@@ -713,7 +713,7 @@ class ExecutorTest:
     @pytest.mark.skipif(sys.version_info < (3, 4),
                         reason="Limitation only present for python3")
     def test_failure_on_large_data_send(self):
-        data = b'\x00' * int(2.5e9)
+        data = b'\x00' * int(2.2e9)
 
         with pytest.raises(RuntimeError):
             self.executor.submit(id, data).result()

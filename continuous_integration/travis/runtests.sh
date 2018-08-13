@@ -29,8 +29,8 @@ else
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
     PYTEST_ARGS="-vl --timeout=30 --maxfail=5"
-    if [ "$MEMORY" != "true" ]; then
-        PYTEST_ARGS="$PYTEST_ARGS --no-memory"
+    if [ "$RUN_MEMORY" != "true" ]; then
+        PYTEST_ARGS="$PYTEST_ARGS --skip-memory"
     fi
     COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- $PYTEST_ARGS
 fi
