@@ -10,7 +10,11 @@ function TestPythonVersions () {
     ForEach($ver in $VERSION){
         $env:TOXPYTHON = "C:\Python$ver$env:PYTHON_ARCH_SUFFIX\python.exe"
         Write-Host $env:TOXPYTHON
-        python ./continuous_integration/appveyor/tox -e py$ver -- -vlx --timeout=50
+        $PYTEST_ARGS = "-vlx --timeout=50"
+        If( $env:PYTHON_ARCH -eq 32){
+            $PYTEST_ARGS = "$PYTEST_ARGS --no-memory"
+        }
+        python ./continuous_integration/appveyor/tox -e py$ver -- $PYTEST_ARGS
         If( $LASTEXITCODE -ne 0){
             Exit 1
         }
