@@ -1,10 +1,16 @@
+import os
+import inspect
+from functools import partial
 
+from .backend import LOKY_PICKLER
 
 try:
     from cloudpickle import dumps, loads
-    import inspect
-    from functools import partial
+    cloudpickle = True
+except ImportError:
+    cloudpickle = False
 
+if not LOKY_PICKLER and cloudpickle:
     wrap_cache = dict()
 
     class CloudpickledObjectWrapper(object):
@@ -42,6 +48,6 @@ try:
             wrap_cache[obj] = wrapped_obj
         return wrapped_obj
 
-except ImportError:
+else:
     def _wrap_non_picklable_objects(obj):
         return obj
