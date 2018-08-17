@@ -32,6 +32,7 @@ from threading import Thread
 import traceback
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
+from loky.process_executor import ShutdownExecutorError
 from loky.process_executor import BrokenProcessPool, LokyRecursionError
 from .test_reusable_executor import ErrorAtPickle
 from .test_reusable_executor import ExitAtPickle
@@ -283,6 +284,26 @@ class ExecutorShutdownTest:
         queue_management_thread.join()
         for p in processes.values():
             p.join()
+
+    @classmethod
+    def _test_recursive_kill(cls):
+        executor = cls.executor_type(max_workers=2, context=cls.context)
+        assert executor.submit(sleep_and_return, 0, 42).result() == 42
+        _executor_mixin._test_event.set()
+        executor.submit(sleep_and_return, 30, 42).result()
+        executor.shutdown()
+
+    def test_recursive_kill(self):
+        f = self.executor.submit(self._test_recursive_kill)
+        _executor_mixin._test_event.wait()
+        t_start = time.time()
+        self.executor.shutdown(wait=True, kill_workers=True)
+        msg = "Failed to quickly kill nested executor"
+        print(time.time() - t_start)
+        assert time.time() - t_start < 5, msg
+
+        with pytest.raises(ShutdownExecutorError):
+            f.result()
 
 
 class WaitTests:
