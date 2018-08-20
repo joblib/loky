@@ -5,6 +5,7 @@ import signal
 import warnings
 import threading
 import subprocess
+import multiprocessing as mp
 try:
     import psutil
 except ImportError:
@@ -30,10 +31,15 @@ def _recursive_terminate_with_psutil(process, retries=5):
     except psutil.NoSuchProcess:
         return
 
-    for child in children:
+    # Kill the children in reverse order to avoid killing the parents before
+    # the children in cases where the tree is nested.
+    for child in children[::-1]:
         try:
+            mp.util.debug("psutil.kill child process {}".format(child.pid))
             child.kill()
-        except psutil.NoSuchProcess:
+        except psutil.NoSuchProcess as e:
+            import traceback
+            traceback.print_exc()
             pass
 
     process.terminate()
