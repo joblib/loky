@@ -98,8 +98,10 @@ def _check_subprocesses_number(executor, expected_process_number=None,
                     break
                 time.sleep(.1)
             else:
-                # Clean up and raises
-                children = psutil.Process(os.getpid()).children(recursive=True)
+                # Clean up the given executor and raises
+                children = []
+                for pid in worker_pids:
+                    children += [psutil.Process(pid).children(recursive=True)]
                 for child in children:
                     try:
                         child.kill()
