@@ -311,7 +311,7 @@ class ExecutorShutdownTest:
             # process for recursive_kill. This break the test.
             pytest.skip("Need python3.7+")
 
-        f = self.executor.submit(self._test_recursive_kill)
+        f = self.executor.submit(self._test_recursive_kill, 1)
         # Wait for the nested executors to be started
         _executor_mixin._test_event.wait()
 
@@ -325,7 +325,7 @@ class ExecutorShutdownTest:
         with pytest.raises(ShutdownExecutorError):
             f.result()
 
-        _executor_mixin._check_subprocesses_number(self.executor, 1)
+        _executor_mixin._check_subprocesses_number(self.executor, 0)
 
 
 class WaitTests:

@@ -38,7 +38,11 @@ def initializer_event(event):
 def _direct_children_with_cmdline(p):
     """Helper to fetch cmdline from children process list"""
     children_with_cmdline = []
-    for c in p.children(recursive=True):
+    try:
+        children = p.children(recursive=True)
+    except psutil.NoSuchProcess:
+        children = []
+    for c in children:
         try:
             cmdline = " ".join(c.cmdline())
             if not c.is_running() or not cmdline:
