@@ -179,7 +179,7 @@ class ExecutorShutdownTest:
         self.executor.submit(mul, 21, 2)
         self.executor.submit(mul, 6, 7)
         self.executor.submit(mul, 3, 14)
-        assert len(self.executor._processes) == 5
+        assert len(self.executor._processes) == self.worker_count
         processes = self.executor._processes
         self.executor.shutdown()
 
@@ -189,7 +189,7 @@ class ExecutorShutdownTest:
     def test_processes_terminate_on_executor_gc(self):
         results = self.executor.map(sleep_and_return,
                                     [0.1] * 10, range(10))
-        assert len(self.executor._processes) == 5
+        assert len(self.executor._processes) == self.worker_count
         processes = self.executor._processes
         executor_flags = self.executor._flags
 
@@ -233,7 +233,7 @@ class ExecutorShutdownTest:
         # instance
 
         crash_result = self.executor.submit(self._wait_and_crash)
-        assert len(self.executor._processes) == 5
+        assert len(self.executor._processes) == self.worker_count
         processes = self.executor._processes
         executor_flags = self.executor._flags
 
