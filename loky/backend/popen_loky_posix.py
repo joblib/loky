@@ -152,8 +152,8 @@ if sys.platform != "win32":
                 self._fds.extend([child_r, child_w, tracker_fd])
                 from .fork_exec import fork_exec
                 pid = fork_exec(cmd_python, self._fds)
-                util.debug("launched python in %i with cmd:\n%s"
-                           % (pid, cmd_python))
+                util.debug("launched python with pid {} and cmd:\n{}"
+                           .format(pid, cmd_python))
                 self.sentinel = parent_r
 
                 method = 'getbuffer'
