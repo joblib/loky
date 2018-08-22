@@ -288,44 +288,44 @@ class ExecutorShutdownTest:
             p.join()
 
     @classmethod
-    def _test_recursive_kill(cls, depth=1):
+    def _test_recursive_kill(cls, depth):
         executor = cls.executor_type(
             max_workers=2, context=cls.context,
             initializer=_executor_mixin.initializer_event,
             initargs=(_executor_mixin._test_event,))
         assert executor.submit(sleep_and_return, 0, 42).result() == 42
-        if depth == 0:
+
+        if depth >= 2:
             _executor_mixin._test_event.set()
             executor.submit(sleep_and_return, 30, 42).result()
             executor.shutdown()
         else:
-            f = executor.submit(cls._test_recursive_kill, depth - 1)
+            f = executor.submit(cls._test_recursive_kill, depth + 1)
             f.result()
 
     def test_recursive_kill(self):
-        if self.context.get_start_method() == 'forkserver':
-            pytest.skip("Debug")
-        f = self.executor.submit(self._test_recursive_kill)
-        _executor_mixin._test_event.wait()
-        # Give some time to make sure psutil will detect the child workers
-        time.sleep(.5)
-        mp.util.debug("Calling shutdown on executor")
-        import psutil
-        for p in self.executor._processes:
-            mp.util.debug("psutil.children process {}".format(p))
-            children = psutil.Process(p).children(recursive=True)
-            mp.util.debug("Found children = {}".format(children))
+        if (self.context.get_start_method() == 'forkserver' and
+                sys.version_info < (3, 7)):
+            # Before python3.7, the forserver was shared with the child
+            # processes so there is no way to detect the children of a given
+            # process for recursive_kill. This break the test.
+            pytest.skip("Need python3.7+")
 
+        f = self.executor.submit(self._test_recursive_kill)
+        # Wait for the nested executors to be started
+        _executor_mixin._test_event.wait()
+
+        # Forcefully shutdown the executor and kill the workers
         t_start = time.time()
         self.executor.shutdown(wait=True, kill_workers=True)
         msg = "Failed to quickly kill nested executor"
-        print(time.time() - t_start)
-        assert time.time() - t_start < 5, msg
+        t_shutdown = time.time() - t_start
+        assert t_shutdown < 5, msg
 
         with pytest.raises(ShutdownExecutorError):
             f.result()
 
-        _executor_mixin._check_subprocesses_number(self.executor, 0)
+        _executor_mixin._check_subprocesses_number(self.executor, 1)
 
 
 class WaitTests:

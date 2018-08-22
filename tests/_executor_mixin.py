@@ -38,7 +38,7 @@ def initializer_event(event):
 def _direct_children_with_cmdline(p):
     """Helper to fetch cmdline from children process list"""
     children_with_cmdline = []
-    for c in p.children():
+    for c in p.children(recursive=True):
         try:
             cmdline = " ".join(c.cmdline())
             if not c.is_running() or not cmdline:
@@ -98,17 +98,6 @@ def _check_subprocesses_number(executor, expected_process_number=None,
                     break
                 time.sleep(.1)
             else:
-                # Clean up the given executor and raises
-                children = []
-                for pid in worker_pids:
-                    children += [psutil.Process(pid).children(recursive=True)]
-                for child in children:
-                    try:
-                        child.kill()
-                    except psutil.NoSuchProcess:
-                        pass
-                (gone, alive) = psutil.wait_procs(children, timeout=10)
-                print("Still alive: {}".format(alive))
                 raise
 
     if expected_max_process_number is not None:

@@ -5,7 +5,6 @@ import signal
 import warnings
 import threading
 import subprocess
-import multiprocessing as mp
 try:
     import psutil
 except ImportError:
@@ -19,7 +18,6 @@ def _flag_current_thread_clean_exit():
 
 
 def recursive_terminate(process, use_psutil=True):
-    mp.util.debug("recursive_kill for process {}".format(process))
     if use_psutil and psutil is not None:
         _recursive_terminate_with_psutil(process)
     else:
@@ -27,22 +25,17 @@ def recursive_terminate(process, use_psutil=True):
 
 
 def _recursive_terminate_with_psutil(process, retries=5):
-    mp.util.debug("psutil.kill process {}".format(process.pid))
     try:
         children = psutil.Process(process.pid).children(recursive=True)
     except psutil.NoSuchProcess:
         return
 
-    mp.util.debug("Found children = {}".format(children))
     # Kill the children in reverse order to avoid killing the parents before
-    # the children in cases where the tree is nested.
+    # the children in cases where there are more processes nested.
     for child in children[::-1]:
         try:
-            mp.util.debug("psutil.kill child process {}".format(child.pid))
             child.kill()
         except psutil.NoSuchProcess as e:
-            import traceback
-            traceback.print_exc()
             pass
 
     process.terminate()
@@ -66,7 +59,6 @@ def _recursive_terminate_without_psutil(process):
 def _recursive_terminate(pid):
     """Recursively kill the descendants of a process before killing it.
     """
-    mp.util.debug("nopsutil.kill child process {}".format(pid))
 
     if sys.platform == "win32":
         # On windows, the taskkill function with option `/T` terminate a given
