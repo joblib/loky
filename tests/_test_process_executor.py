@@ -19,17 +19,19 @@ from loky import process_executor
 
 import os
 import sys
-import threading
 import time
+import shutil
 import pytest
 import weakref
-import faulthandler
-import shutil
 import tempfile
-from math import sqrt
-from collections import defaultdict
-from threading import Thread
 import traceback
+import threading
+import faulthandler
+from math import sqrt
+from threading import Thread
+import multiprocessing as mp
+from collections import defaultdict
+
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import ShutdownExecutorError
@@ -305,6 +307,13 @@ class ExecutorShutdownTest:
         _executor_mixin._test_event.wait()
         # Give some time to make sure psutil will detect the child workers
         time.sleep(.5)
+        mp.util.debug("Calling shutdown on executor")
+        import psutil
+        for p in self.executor._processes:
+            mp.util.debug("psutil.children process {}".format(p))
+            children = psutil.Process(p).children(recursive=True)
+            mp.util.debug("Found children = {}".format(children))
+
         t_start = time.time()
         self.executor.shutdown(wait=True, kill_workers=True)
         msg = "Failed to quickly kill nested executor"

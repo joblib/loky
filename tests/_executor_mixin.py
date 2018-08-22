@@ -108,6 +108,7 @@ def _check_subprocesses_number(executor, expected_process_number=None,
                     except psutil.NoSuchProcess:
                         pass
                 (gone, alive) = psutil.wait_procs(children, timeout=10)
+                print("Still alive: {}".format(alive))
                 raise
 
     if expected_max_process_number is not None:
