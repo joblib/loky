@@ -303,6 +303,8 @@ class ExecutorShutdownTest:
     def test_recursive_kill(self):
         f = self.executor.submit(self._test_recursive_kill)
         _executor_mixin._test_event.wait()
+        # Give some time to make sure psutil will detect the child workers
+        time.sleep(.5)
         t_start = time.time()
         self.executor.shutdown(wait=True, kill_workers=True)
         msg = "Failed to quickly kill nested executor"

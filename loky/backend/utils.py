@@ -31,7 +31,6 @@ def _recursive_terminate_with_psutil(process, retries=5):
     try:
         children = psutil.Process(process.pid).children(recursive=True)
     except psutil.NoSuchProcess:
-        mp.util.debug("Not found")
         return
 
     mp.util.debug("Found children = {}".format(children))
