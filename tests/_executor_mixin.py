@@ -44,6 +44,7 @@ def _direct_children_with_cmdline(p):
         children = []
     for c in children:
         try:
+            c.loky_ppid = c.ppid()
             cmdline = " ".join(c.cmdline())
             if not c.is_running() or not cmdline:
                 # Under linux is_running() can return True even though
@@ -77,8 +78,8 @@ def _check_subprocesses_number(executor, expected_process_number=None,
                                expected_max_process_number=None, patience=100):
     # Wait for terminating processes to disappear
     children_cmdlines = _running_children_with_cmdline(psutil.Process())
-    pids_cmdlines = [(c.pid, cmdline) for c, cmdline in children_cmdlines]
-    children_pids = set(pid for pid, _ in pids_cmdlines)
+    pids_cmdlines = [(c.pid, cmdline, c.loky_ppid) for c, cmdline in children_cmdlines]
+    children_pids = set(pid for pid, _, _ in pids_cmdlines)
     if executor is not None:
         worker_pids = set(executor._processes.keys())
     else:
