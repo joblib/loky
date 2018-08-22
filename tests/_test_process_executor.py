@@ -303,6 +303,8 @@ class ExecutorShutdownTest:
             f.result()
 
     def test_recursive_kill(self):
+        if self.context.get_start_method() == 'forkserver':
+            pytest.skip("Debug")
         f = self.executor.submit(self._test_recursive_kill)
         _executor_mixin._test_event.wait()
         # Give some time to make sure psutil will detect the child workers
