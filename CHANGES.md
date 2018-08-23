@@ -1,6 +1,7 @@
 ### 2.2.1.dev0 - in development
 
 - Fix deadlock when large objects are sent to workers.
+- Fix context and start_method logic for loky contexts.
 
 ### 2.2.0 - 2018-08-01 - Release Highlights
 
