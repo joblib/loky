@@ -682,8 +682,8 @@ def wait_for_handle(handle, timeout):
 
 def _run_nested_delayed(depth, delay, event):
     if depth > 0:
-        p = mp.Process(target=_run_nested_delayed,
-                                    args=(depth - 1, delay, event))
+        p = ctx_loky.Process(target=_run_nested_delayed,
+                             args=(depth - 1, delay, event))
         p.start()
         p.join()
     else:
