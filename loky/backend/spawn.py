@@ -13,6 +13,8 @@ import types
 import multiprocessing as mp
 from multiprocessing import process, util
 
+from loky.backend import context
+
 
 if sys.platform != 'win32':
     WINEXE = False
@@ -165,8 +167,9 @@ def prepare(data):
     if 'orig_dir' in data:
         process.ORIGINAL_DIR = data['orig_dir']
 
-    if hasattr(mp, 'set_start_method'):
-        mp.set_start_method('loky', force=True)
+    if sys.version_info < (3, 3):
+        if 'init_main_from_name' in data or 'init_main_from_path' in data:
+            context.DEFAULT_METHOD = 'loky_init_main'
 
     if 'tacker_pid' in data:
         from . import semaphore_tracker

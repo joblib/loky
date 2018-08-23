@@ -18,22 +18,31 @@ import warnings
 import multiprocessing as mp
 
 
-from .process import LokyProcess
+from .process import LokyProcess, LokyInitMainProcess
 
 if sys.version_info[:2] >= (3, 4):
-    from multiprocessing import get_context as get_mp_context
+    from multiprocessing import get_context as mp_get_context
     from multiprocessing.context import assert_spawning, set_spawning_popen
     from multiprocessing.context import get_spawning_popen, BaseContext
 
-    def get_context(method="loky"):
-        if method == "fork":
-            warnings.warn("`fork` start method should not be used with `loky` "
-                          "as it does not respect POSIX. Try using `spawn` or "
-                          "`loky` instead.", UserWarning)
-        return get_mp_context(method)
+    def get_context(method=None):
+        context = mp_get_context(method)
+        if context.get_start_method() == 'fork':
+            if method == "fork":
+                # If 'fork' is explicitly requested, warn user about potential
+                # issues.
+                warnings.warn("`fork` start method should not be used with "
+                              "`loky` as it does not respect POSIX. Try using "
+                              "`spawn` or `loky` instead.", UserWarning)
+            else:
+                # Else, default to 'loky'.
+                context = mp_get_context('loky')
+
+        return context
 
 else:
     METHODS = ['loky', 'loky_init_main']
+    DEFAULT_METHOD = 'loky'
     if sys.platform != 'win32':
         import threading
         # Mecanism to check that the current thread is spawning a child process
@@ -59,7 +68,8 @@ else:
                 ' through inheritance' % type(obj).__name__
             )
 
-    def get_context(method="loky"):
+    def get_context(method=None):
+        method = method or DEFAULT_METHOD
         if method == "loky":
             return LokyContext()
         elif method == "loky_init_main":
@@ -138,7 +148,7 @@ class LokyContext(BaseContext):
             return self
 
         def get_start_method(self):
-            return "loky"
+            return self._name
 
         def Pipe(self, duplex=True):
             '''Returns two connection object connected by a pipe'''
@@ -216,9 +226,8 @@ class LokyInitMainContext(LokyContext):
     For more details, see the end of the following section of python doc
     https://docs.python.org/3/library/multiprocessing.html#multiprocessing-programming
     """
-    def Process(self, *args, **kwargs):
-        kwargs.pop('init_main_module', True)
-        return LokyProcess(*args, init_main_module=True, **kwargs)
+    _name = 'loky_init_main'
+    Process = LokyInitMainProcess
 
 
 if sys.version_info > (3, 4):
