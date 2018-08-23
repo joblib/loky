@@ -30,7 +30,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     if not config.getoption("--skip-high-memory"):
-        # --runslow given in cli: do not skip slow tests
+        # --skip-high-memory given in cli: skip high-memory tests
         return
     skip_high_memory = pytest.mark.skip(
         reason="--skip-high-memory option was provided")
