@@ -737,8 +737,6 @@ class ExecutorTest:
         finally:
             executor.shutdown(wait=True, kill_workers=True)
 
-
-
     def test_max_depth(self):
         from loky.process_executor import MAX_DEPTH
         if self.context.get_start_method() == 'fork':
