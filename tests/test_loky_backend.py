@@ -726,7 +726,9 @@ def _get_start_method(queue):
 
 METHODS = ['loky', 'loky_init_main']
 if sys.version_info >= (3, 3):
-    METHODS += ['fork', 'forkserver', 'spawn']
+    METHODS += ['spawn']
+    if sys.platform != "win32":
+        METHODS += ['fork', 'forkserver']
 
 
 @pytest.mark.parametrize('method', METHODS)
