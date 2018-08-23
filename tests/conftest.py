@@ -8,8 +8,8 @@ from multiprocessing.util import log_to_stderr
 def pytest_addoption(parser):
     parser.addoption("--loky-verbosity", type=int, default=logging.DEBUG,
                      help="log-level: integer, SUBDEBUG(5) - INFO(20)")
-    parser.addoption("--skip-memory", action="store_true",
-                     help="skip memory test to avoid conflict on CI.")
+    parser.addoption("--skip-high-memory", action="store_true",
+                     help="skip high-memory test to avoid conflict on CI.")
 
 
 def log_lvl(request):
@@ -29,10 +29,11 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    if not config.getoption("--skip-memory"):
+    if not config.getoption("--skip-high-memory"):
         # --runslow given in cli: do not skip slow tests
         return
-    skip_memory = pytest.mark.skip(reason="--skip-memory option was provided")
+    skip_high_memory = pytest.mark.skip(
+        reason="--skip-high-memory option was provided")
     for item in items:
-        if "memory" in item.keywords:
-            item.add_marker(skip_memory)
+        if "high_memory" in item.keywords:
+            item.add_marker(skip_high_memory)

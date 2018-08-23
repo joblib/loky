@@ -30,7 +30,7 @@ else
     # and its subprocesses.
     PYTEST_ARGS="-vl --timeout=30 --maxfail=5"
     if [ "$RUN_MEMORY" != "true" ]; then
-        PYTEST_ARGS="$PYTEST_ARGS --skip-memory"
+        PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
     COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- $PYTEST_ARGS
 fi
