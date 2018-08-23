@@ -19,19 +19,22 @@ from loky import process_executor
 
 import os
 import sys
-import threading
 import time
+import shutil
 import pytest
 import weakref
-import faulthandler
-import shutil
 import tempfile
-from math import sqrt
-from collections import defaultdict
-from threading import Thread
 import traceback
+import threading
+import faulthandler
+from math import sqrt
+from threading import Thread
+import multiprocessing as mp
+from collections import defaultdict
+
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
+from loky.process_executor import ShutdownExecutorError
 from loky.process_executor import BrokenProcessPool, LokyRecursionError
 from .test_reusable_executor import ErrorAtPickle
 from .test_reusable_executor import ExitAtPickle
@@ -176,7 +179,7 @@ class ExecutorShutdownTest:
         self.executor.submit(mul, 21, 2)
         self.executor.submit(mul, 6, 7)
         self.executor.submit(mul, 3, 14)
-        assert len(self.executor._processes) == 5
+        assert len(self.executor._processes) == self.worker_count
         processes = self.executor._processes
         self.executor.shutdown()
 
@@ -186,7 +189,7 @@ class ExecutorShutdownTest:
     def test_processes_terminate_on_executor_gc(self):
         results = self.executor.map(sleep_and_return,
                                     [0.1] * 10, range(10))
-        assert len(self.executor._processes) == 5
+        assert len(self.executor._processes) == self.worker_count
         processes = self.executor._processes
         executor_flags = self.executor._flags
 
@@ -230,7 +233,7 @@ class ExecutorShutdownTest:
         # instance
 
         crash_result = self.executor.submit(self._wait_and_crash)
-        assert len(self.executor._processes) == 5
+        assert len(self.executor._processes) == self.worker_count
         processes = self.executor._processes
         executor_flags = self.executor._flags
 
@@ -283,6 +286,46 @@ class ExecutorShutdownTest:
         queue_management_thread.join()
         for p in processes.values():
             p.join()
+
+    @classmethod
+    def _test_recursive_kill(cls, depth):
+        executor = cls.executor_type(
+            max_workers=2, context=cls.context,
+            initializer=_executor_mixin.initializer_event,
+            initargs=(_executor_mixin._test_event,))
+        assert executor.submit(sleep_and_return, 0, 42).result() == 42
+
+        if depth >= 2:
+            _executor_mixin._test_event.set()
+            executor.submit(sleep_and_return, 30, 42).result()
+            executor.shutdown()
+        else:
+            f = executor.submit(cls._test_recursive_kill, depth + 1)
+            f.result()
+
+    def test_recursive_kill(self):
+        if (self.context.get_start_method() == 'forkserver' and
+                sys.version_info < (3, 7)):
+            # Before python3.7, the forserver was shared with the child
+            # processes so there is no way to detect the children of a given
+            # process for recursive_kill. This break the test.
+            pytest.skip("Need python3.7+")
+
+        f = self.executor.submit(self._test_recursive_kill, 1)
+        # Wait for the nested executors to be started
+        _executor_mixin._test_event.wait()
+
+        # Forcefully shutdown the executor and kill the workers
+        t_start = time.time()
+        self.executor.shutdown(wait=True, kill_workers=True)
+        msg = "Failed to quickly kill nested executor"
+        t_shutdown = time.time() - t_start
+        assert t_shutdown < 5, msg
+
+        with pytest.raises(ShutdownExecutorError):
+            f.result()
+
+        _executor_mixin._check_subprocesses_number(self.executor, 0)
 
 
 class WaitTests:
