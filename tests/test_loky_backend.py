@@ -694,9 +694,8 @@ def _run_nested_delayed(depth, delay, event):
 
 @pytest.mark.parametrize("use_psutil", [True, False])
 def test_recursive_terminate(use_psutil):
-    event = mp.Event()
-    p = mp.Process(target=_run_nested_delayed,
-                                args=(4, 1000, event))
+    event = ctx_loky.Event()
+    p = ctx_loky.Process(target=_run_nested_delayed, args=(4, 1000, event))
     p.start()
 
     # Wait for all the processes to be launched

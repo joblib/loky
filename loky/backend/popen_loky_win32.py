@@ -42,7 +42,7 @@ class Popen(_Popen):
 
     def __init__(self, process_obj):
         prep_data = spawn.get_preparation_data(
-            process_obj._name, process_obj.init_main_module)
+            process_obj._name, getattr(process_obj, "init_main_module", True))
 
         # read end of pipe will be "stolen" by the child process
         # -- see spawn_main() in spawn.py.

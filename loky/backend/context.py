@@ -24,9 +24,14 @@ if sys.version_info[:2] >= (3, 4):
     from multiprocessing import get_context as mp_get_context
     from multiprocessing.context import assert_spawning, set_spawning_popen
     from multiprocessing.context import get_spawning_popen, BaseContext
+    from multiprocessing.context import _default_context
 
     def get_context(method=None):
+        # Try to overload the default context
+        if method is None and _default_context._actual_context is None:
+            method = 'loky'
         context = mp_get_context(method)
+
         if context.get_start_method() == 'fork':
             if method == "fork":
                 # If 'fork' is explicitly requested, warn user about potential
@@ -35,7 +40,7 @@ if sys.version_info[:2] >= (3, 4):
                               "`loky` as it does not respect POSIX. Try using "
                               "`spawn` or `loky` instead.", UserWarning)
             else:
-                # Else, default to 'loky'.
+                # If fork is not explicitly requested, override it with `loky`
                 context = mp_get_context('loky')
 
         return context
@@ -232,5 +237,6 @@ class LokyInitMainContext(LokyContext):
 
 if sys.version_info > (3, 4):
     """Register loky context so it works with multiprocessing.get_context"""
-    mp.context._concrete_contexts['loky'] = LokyContext()
+    ctx_loky = LokyContext()
+    mp.context._concrete_contexts['loky'] = ctx_loky
     mp.context._concrete_contexts['loky_init_main'] = LokyInitMainContext()

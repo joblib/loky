@@ -127,7 +127,8 @@ if sys.platform != "win32":
             set_spawning_popen(self)
             try:
                 prep_data = spawn.get_preparation_data(
-                    process_obj._name, process_obj.init_main_module)
+                    process_obj._name,
+                    getattr(process_obj, "init_main_module", True))
                 reduction.dump(prep_data, fp)
                 reduction.dump(process_obj, fp)
 
