@@ -6,7 +6,7 @@ import pytest
 import signal
 import pickle
 import socket
-import multiprocessing
+import multiprocessing as mp
 from tempfile import mkstemp
 
 from loky.backend import get_context
@@ -48,8 +48,8 @@ HAVE_FROM_FD = hasattr(socket, "fromfd")
 class TestLokyBackend:
     # loky processes
     Process = staticmethod(ctx_loky.Process)
-    current_process = staticmethod(multiprocessing.current_process)
-    active_children = staticmethod(multiprocessing.active_children)
+    current_process = staticmethod(mp.current_process)
+    active_children = staticmethod(mp.active_children)
 
     # interprocess communication objects
     Pipe = staticmethod(ctx_loky.Pipe)
@@ -120,10 +120,10 @@ class TestLokyBackend:
         with capsys.disabled() if sys.version_info[:2] == (3, 3) else no_mgr():
             if sys.version_info[:2] == (3, 3):
                 import logging
-                logger = multiprocessing.util.get_logger()
+                logger = mp.util.get_logger()
                 logger.setLevel(5)
                 formatter = logging.Formatter(
-                    multiprocessing.util.DEFAULT_LOGGING_FORMAT)
+                    mp.util.DEFAULT_LOGGING_FORMAT)
                 handler = logging.StreamHandler()
                 handler.setFormatter(formatter)
                 old_handler = logger.handlers[0]
@@ -527,7 +527,7 @@ class TestLokyBackend:
         - python2.7 links stdin to /dev/null even if it is closed beforehand.
         """
 
-        # TODO generate high numbered multiprocessing.Pipe directly
+        # TODO generate high numbered mp.Pipe directly
         # -> can be used on windows
         r, w = self._high_number_Pipe()
 
@@ -645,7 +645,7 @@ class TestLokyBackend:
         assert ctx_loky.get_start_method() == "loky"
 
         ctx_loky_init_main = get_context("loky_init_main")
-        assert ctx_loky_init_main.get_start_method() == "loky"
+        assert ctx_loky_init_main.get_start_method() == "loky_init_main"
 
         with pytest.raises(ValueError):
             get_context("not_available")
@@ -682,8 +682,8 @@ def wait_for_handle(handle, timeout):
 
 def _run_nested_delayed(depth, delay, event):
     if depth > 0:
-        p = multiprocessing.Process(target=_run_nested_delayed,
-                                    args=(depth - 1, delay, event))
+        p = ctx_loky.Process(target=_run_nested_delayed,
+                             args=(depth - 1, delay, event))
         p.start()
         p.join()
     else:
@@ -694,9 +694,8 @@ def _run_nested_delayed(depth, delay, event):
 
 @pytest.mark.parametrize("use_psutil", [True, False])
 def test_recursive_terminate(use_psutil):
-    event = multiprocessing.Event()
-    p = multiprocessing.Process(target=_run_nested_delayed,
-                                args=(4, 1000, event))
+    event = ctx_loky.Event()
+    p = ctx_loky.Process(target=_run_nested_delayed, args=(4, 1000, event))
     p.start()
 
     # Wait for all the processes to be launched
@@ -712,3 +711,36 @@ def test_recursive_terminate(use_psutil):
     gone, alive = psutil.wait_procs(children, timeout=5)
     msg = "Should be no descendant left but found:\n{}"
     assert len(alive) == 0, msg.format(alive)
+
+
+def _get_start_method(queue):
+    if sys.version_info >= (3, 3):
+        start_method = mp.get_start_method()
+        print(start_method)
+    else:
+        from loky.backend.context import DEFAULT_METHOD
+        start_method = DEFAULT_METHOD
+
+    queue.put(start_method)
+
+
+METHODS = ['loky', 'loky_init_main']
+if sys.version_info >= (3, 3):
+    METHODS += ['spawn']
+    if sys.platform != "win32":
+        METHODS += ['fork', 'forkserver']
+
+
+@pytest.mark.parametrize('method', METHODS)
+def test_default_subcontext(method):
+    if sys.version_info >= (3, 3):
+        mp.set_start_method(method, force=True)
+        ctx = mp.get_context()
+    else:
+        ctx = get_context(method)
+    queue = ctx.SimpleQueue()
+    p = ctx.Process(target=_get_start_method, args=(queue,))
+    p.start()
+    p.join()
+    start_method = queue.get()
+    assert start_method == method

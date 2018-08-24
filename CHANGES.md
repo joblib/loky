@@ -4,6 +4,7 @@
   between initializer and tasks. Also fixes the logic behind the
   environment variable `LOKY_PICKLER`.
 - Fix deadlock when large objects are sent to workers.
+- Fix context and start_method logic for loky contexts.
 
 ### 2.2.0 - 2018-08-01 - Release Highlights
 
