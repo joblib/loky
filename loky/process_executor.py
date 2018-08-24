@@ -81,6 +81,7 @@ from .backend.compat import wait
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
 from .backend.utils import recursive_terminate
+from .cloudpickle_wrapper import _wrap_non_picklable_objects
 
 try:
     from concurrent.futures.process import BrokenProcessPool as _BPPException
@@ -264,35 +265,16 @@ class _CallItem(object):
         return "CallItem({}, {}, {}, {})".format(
             self.work_id, self.fn, self.args, self.kwargs)
 
-    try:
-        # If cloudpickle is present on the system, use it to pickle the
-        # function. This permits to use interactive terminal for loky calls.
-        # TODO: Add option to deactivate, as it increases pickling time.
-        from .backend import LOKY_PICKLER
-        assert LOKY_PICKLER is None or LOKY_PICKLER == ""
+    def __getstate__(self):
+        return (
+            self.work_id,
+            _wrap_non_picklable_objects(self.fn),
+            [_wrap_non_picklable_objects(a) for a in self.args],
+            {k: _wrap_non_picklable_objects(a) for k, a in self.kwargs.items()}
+        )
 
-        import cloudpickle  # noqa: F401
-
-        def __getstate__(self):
-            from cloudpickle import dumps
-            if isinstance(self.fn, (types.FunctionType,
-                                    types.LambdaType,
-                                    partial)):
-                cp = True
-                fn = dumps(self.fn)
-            else:
-                cp = False
-                fn = self.fn
-            return (self.work_id, self.args, self.kwargs, fn, cp)
-
-        def __setstate__(self, state):
-            self.work_id, self.args, self.kwargs, self.fn, cp = state
-            if cp:
-                from cloudpickle import loads
-                self.fn = loads(self.fn)
-
-    except (ImportError, AssertionError) as e:
-        pass
+    def __setstate__(self, state):
+        self.work_id, self.fn, self.args, self.kwargs = state
 
 
 class _SafeQueue(Queue):
@@ -867,8 +849,8 @@ class ProcessPoolExecutor(_base.Executor):
 
         if initializer is not None and not callable(initializer):
             raise TypeError("initializer must be a callable")
-        self._initializer = initializer
-        self._initargs = initargs
+        self._initializer = _wrap_non_picklable_objects(initializer)
+        self._initargs = [_wrap_non_picklable_objects(a) for a in initargs]
 
         _check_max_depth(self._context)
 

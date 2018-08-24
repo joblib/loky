@@ -727,7 +727,7 @@ class ExecutorTest:
         executor.shutdown(wait=True)
 
     @classmethod
-    def _test_max_depth(cls, max_depth=10, ctx=None):
+    def _test_max_depth(cls, max_depth=10, kill_workers=False, ctx=None):
         if max_depth == 0:
             return 42
         executor = cls.executor_type(1, context=ctx)
@@ -735,9 +735,10 @@ class ExecutorTest:
         try:
             return f.result()
         finally:
-            executor.shutdown(wait=True, kill_workers=True)
+            executor.shutdown(wait=True, kill_workers=kill_workers)
 
-    def test_max_depth(self):
+    @pytest.mark.parametrize('kill_workers', [True, False])
+    def test_max_depth(self, kill_workers):
         from loky.process_executor import MAX_DEPTH
         if self.context.get_start_method() == 'fork':
             # For 'fork', we do not allow nested process as the threads ends
@@ -747,10 +748,13 @@ class ExecutorTest:
             return
 
         assert self._test_max_depth(max_depth=MAX_DEPTH,
+                                    kill_workers=kill_workers,
                                     ctx=self.context) == 42
 
         with pytest.raises(LokyRecursionError):
-            self._test_max_depth(max_depth=MAX_DEPTH + 1, ctx=self.context)
+            self._test_max_depth(max_depth=MAX_DEPTH + 1,
+                                 kill_workers=kill_workers,
+                                 ctx=self.context)
 
     @pytest.mark.high_memory
     @pytest.mark.skipif(sys.version_info < (3, 4),

@@ -30,7 +30,12 @@ if sys.version_info[:2] >= (3, 4):
         # Try to overload the default context
         if method is None and _default_context._actual_context is None:
             method = 'loky'
-        context = mp_get_context(method)
+        try:
+            return get_mp_context(method)
+        except ValueError:
+            raise ValueError("Unknown context '{}'. Value should be in {{"
+                             "'loky', 'loky_init_main', 'spawn', 'forkserver'"
+                             "}}.".format(method))
 
         if context.get_start_method() == 'fork':
             if method == "fork":
