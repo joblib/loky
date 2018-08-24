@@ -10,7 +10,6 @@ import os
 import sys
 import runpy
 import types
-import multiprocessing as mp
 from multiprocessing import process, util
 
 from loky.backend import context
@@ -27,59 +26,6 @@ if WINSERVICE:
     _python_exe = os.path.join(sys.exec_prefix, 'python.exe')
 else:
     _python_exe = sys.executable
-
-if sys.version_info[:2] < (3, 4):
-    import msvcrt
-    from pickle import load
-
-    def get_command_line(pipe_handle, **kwds):
-        '''
-        Returns prefix of command line used for spawning a child process
-        '''
-        if getattr(sys, 'frozen', False):
-            return ([sys.executable, '--multiprocessing-fork', pipe_handle])
-        else:
-            prog = 'from loky.backend.spawn import main; main()'
-            opts = util._args_from_interpreter_flags()
-            return [_python_exe] + opts + [
-                '-c', prog, '--multiprocessing-fork', pipe_handle]
-
-    # compatibility for python2.7:
-    # duplicate here the code from multiprocessing.forking.main to call our
-    # prepare function and correctly set the default start_methods in loky.
-    def is_forking(argv):
-        '''
-        Return whether commandline indicates we are forking
-        '''
-        if len(argv) >= 2 and argv[1] == '--multiprocessing-fork':
-            assert len(argv) == 3
-            return True
-        else:
-            return False
-
-    def main():
-        '''
-        Run code specified by data received over pipe
-        '''
-        assert is_forking(sys.argv)
-
-        handle = int(sys.argv[-1])
-        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
-        from_parent = os.fdopen(fd, 'rb')
-
-        process.current_process()._inheriting = True
-        preparation_data = load(from_parent)
-        prepare(preparation_data)
-        self = load(from_parent)
-        process.current_process()._inheriting = False
-
-        from_parent.close()
-
-        exitcode = self._bootstrap()
-        exit(exitcode)
-
-else:
-    from multiprocessing.spawn import get_command_line
 
 
 def get_executable():
