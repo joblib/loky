@@ -35,7 +35,7 @@ def _recursive_terminate_with_psutil(process, retries=5):
     for child in children[::-1]:
         try:
             child.kill()
-        except psutil.NoSuchProcess as e:
+        except psutil.NoSuchProcess:
             pass
 
     process.terminate()

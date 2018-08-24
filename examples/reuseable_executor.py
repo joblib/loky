@@ -7,18 +7,19 @@ using the parameter `reuse=True`, the executor is resized if needed but the
 arguments stay the same.
 """
 from time import sleep
+import multiprocessing as mp
 from loky import get_reusable_executor
 
 INITIALIZER_STATUS = "uninitialized"
 
 
-def initializer(self, x):
+def initializer(x):
     global INITIALIZER_STATUS
+    print("[{}] init".format(mp.current_process().name))
     INITIALIZER_STATUS = x
 
 
-def test_initializer(self, delay=0):
-    print(delay)
+def return_initializer_status(delay=0):
     sleep(delay)
 
     global INITIALIZER_STATUS
@@ -26,17 +27,20 @@ def test_initializer(self, delay=0):
 
 
 executor = get_reusable_executor(
-    max_workers=2, initializer=initializer, initargs=('initialized',))
+    max_workers=2, initializer=initializer, initargs=('initialized',),
+    context="loky", timeout=1000)
 
-assert executor.submit(test_initializer).result() == 'initialized'
+assert INITIALIZER_STATUS == "uninitialized"
+executor.submit(return_initializer_status).result()
+assert executor.submit(return_initializer_status).result() == 'initialized'
 
 # With reuse=True, the executor use the same initializer
 executor = get_reusable_executor(max_workers=4, reuse=True)
-for x in executor.map(test_initializer, delay=.5):
+for x in executor.map(return_initializer_status, [.5] * 4):
     assert x == 'initialized'
 
-# With reuse='auto', the initializer is not used anymore as a new executor is
-# created.
+# With reuse='auto', the initializer is not used anymore as a new executor
+# is created.
 executor = get_reusable_executor(max_workers=4)
-for x in executor.map(test_initializer, delay=.1):
+for x in executor.map(return_initializer_status, [.1] * 4):
     assert x == 'uninitialized'

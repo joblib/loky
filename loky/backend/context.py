@@ -30,7 +30,12 @@ if sys.version_info[:2] >= (3, 4):
             warnings.warn("`fork` start method should not be used with `loky` "
                           "as it does not respect POSIX. Try using `spawn` or "
                           "`loky` instead.", UserWarning)
-        return get_mp_context(method)
+        try:
+            return get_mp_context(method)
+        except ValueError:
+            raise ValueError("Unknown context '{}'. Value should be in {{"
+                             "'loky', 'loky_init_main', 'spawn', 'forkserver'"
+                             "}}.".format(method))
 
 else:
     METHODS = ['loky', 'loky_init_main']
