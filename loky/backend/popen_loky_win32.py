@@ -64,8 +64,9 @@ class Popen(_Popen):
                         None, None, inherit, 0,
                         None, None, None)
                     _winapi.CloseHandle(ht)
-                finally:
+                except BaseException as e:
                     _winapi.CloseHandle(rhandle)
+                    raise
 
                 # set attributes of self
                 self.pid = pid
