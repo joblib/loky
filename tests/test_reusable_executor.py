@@ -104,9 +104,9 @@ def kill_friend(pid, delay=0):
         util.debug("process {} was already dead".format(pid))
 
 
-def raise_error(Err):
+def raise_error(etype=UnpicklingError, message=None):
     """Function that raises an Exception in process"""
-    raise Err()
+    raise etype(message)
 
 
 def return_instance(cls):
@@ -180,8 +180,12 @@ class ErrorAtPickle(object):
 
 class ErrorAtUnpickle(object):
     """Bad object that triggers a process exit at unpickling time."""
+    def __init__(self, etype=UnpicklingError, message='the error message'):
+        self.etype = etype
+        self.message = message
+
     def __reduce__(self):
-        return raise_error, (UnpicklingError, )
+        return raise_error, (self.etype, self.message)
 
 
 class CrashAtGCInWorker(object):
@@ -356,6 +360,16 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         with pytest.raises(PicklingError):
             fs_fail[99].result()
         assert fs[99].result()
+
+    def test_informvative_error_when_fail_at_unpickle(self):
+        executor = get_reusable_executor(max_workers=2)
+        obj = ErrorAtUnpickle(RuntimeError, 'message raised in child')
+        f = executor.submit(id, obj)
+
+        with pytest.raises(BrokenProcessPool) as excinfo:
+            f.result()
+        assert 'RuntimeError' in str(excinfo.value.__cause__)
+        assert 'message raised in child' in str(excinfo.value.__cause__)
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):
