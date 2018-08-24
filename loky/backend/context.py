@@ -31,7 +31,7 @@ if sys.version_info[:2] >= (3, 4):
         if method is None and _default_context._actual_context is None:
             method = 'loky'
         try:
-            return get_mp_context(method)
+            context = mp_get_context(method)
         except ValueError:
             raise ValueError("Unknown context '{}'. Value should be in {{"
                              "'loky', 'loky_init_main', 'spawn', 'forkserver'"
