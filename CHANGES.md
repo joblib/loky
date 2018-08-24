@@ -1,3 +1,7 @@
+### 2.2.1.dev0 - in development
+
+- Fix deadlock when large objects are sent to workers.
+
 ### 2.2.0 - 2018-08-01 - Release Highlights
 
 - Add a protection against memory-leaks for long running worker
