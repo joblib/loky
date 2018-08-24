@@ -14,6 +14,7 @@ from pickle import PicklingError, UnpicklingError
 from loky.backend import get_context
 from loky import get_reusable_executor
 from loky import cpu_count
+from loky.process_executor import _RemoteTraceback
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
@@ -206,40 +207,48 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
     crash_cases = [
         # Check problem occuring while pickling a task in
-        (id, (ExitAtPickle(),), PicklingError),
-        (id, (ErrorAtPickle(),), PicklingError),
+        (id, (ExitAtPickle(),), PicklingError, None),
+        (id, (ErrorAtPickle(),), PicklingError, None),
         # Check problem occuring while unpickling a task on workers
-        (id, (ExitAtUnpickle(),), BrokenProcessPool),
-        (id, (CExitAtUnpickle(),), BrokenProcessPool),
-        (id, (ErrorAtUnpickle(),), BrokenProcessPool),
-        (id, (CrashAtUnpickle(),), BrokenProcessPool),
+        (id, (ExitAtUnpickle(),), BrokenProcessPool, "SystemExit"),
+        (id, (CExitAtUnpickle(),), BrokenProcessPool, None),
+        (id, (ErrorAtUnpickle(),), BrokenProcessPool, "UnpicklingError"),
+        (id, (CrashAtUnpickle(),), BrokenProcessPool, None),
         # Check problem occuring during function execution on workers
-        (crash, (), BrokenProcessPool),
-        (exit, (), SystemExit),
-        (c_exit, (), BrokenProcessPool),
-        (raise_error, (RuntimeError,), RuntimeError),
+        (crash, (), BrokenProcessPool, None),
+        (exit, (), SystemExit, None),
+        (c_exit, (), BrokenProcessPool, None),
+        (raise_error, (RuntimeError,), RuntimeError, None),
         # Check problem occuring while pickling a task result
         # on workers
-        (return_instance, (CrashAtPickle,), BrokenProcessPool),
-        (return_instance, (ExitAtPickle,), SystemExit),
-        (return_instance, (CExitAtPickle,), BrokenProcessPool),
-        (return_instance, (ErrorAtPickle,), PicklingError),
+        (return_instance, (CrashAtPickle,), BrokenProcessPool, None),
+        (return_instance, (ExitAtPickle,), SystemExit, None),
+        (return_instance, (CExitAtPickle,), BrokenProcessPool, None),
+        (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
-        (return_instance, (ExitAtUnpickle,), BrokenProcessPool),
-        (return_instance, (ErrorAtUnpickle,), BrokenProcessPool),
+        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, "SystemExit"),
+        (return_instance, (ErrorAtUnpickle,), BrokenProcessPool,
+         "UnpicklingError"),
     ]
 
-    @pytest.mark.parametrize("func, args, expected_err", crash_cases)
-    def test_crashes(self, func, args, expected_err):
+    @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
+    def test_crashes(self, func, args, expected_err, match):
         """Test various reusable_executor crash handling"""
         executor = get_reusable_executor(max_workers=2)
         res = executor.submit(func, *args)
-        with pytest.raises(expected_err):
+        with pytest.raises(expected_err) as exc_info:
             res.result()
 
-    @pytest.mark.parametrize("func, args, expected_exc", crash_cases)
-    def test_in_callback_submit_with_crash(self, func, args, expected_exc):
+        # For remote traceback, ensure that the cause contains the original
+        # error
+        if match is not None:
+            with pytest.raises(_RemoteTraceback, match=match):
+                raise exc_info.value.__cause__
+
+    @pytest.mark.parametrize("func, args, expected_exc, match", crash_cases)
+    def test_in_callback_submit_with_crash(self, func, args, expected_exc,
+                                           match):
         """Test the recovery from callback crash"""
         executor = get_reusable_executor(max_workers=2, timeout=12)
 
@@ -261,8 +270,14 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         assert f.result() == 42
         if not f.callback_done.wait(timeout=3):
             raise AssertionError('callback not done before timeout')
-        with pytest.raises(expected_exc):
+        with pytest.raises(expected_exc) as exc_info:
             f.callback_future.result()
+
+        # For remote traceback, ensure that the cause contains the original
+        # error
+        if match is not None:
+            with pytest.raises(_RemoteTraceback, match=match):
+                raise exc_info.value.__cause__
 
     def test_callback_crash_on_submit(self):
         """Errors in the callback execution directly in queue manager thread.
