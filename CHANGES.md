@@ -3,7 +3,11 @@
 - Fix pickling logic in loky. Now the serialization is consistent
   between initializer and tasks. Also fixes the logic behind the
   environment variable `LOKY_PICKLER`.
+
+- Improve reporting for tasks unpickling errors.
+
 - Fix deadlock when large objects are sent to workers.
+
 
 ### 2.2.0 - 2018-08-01 - Release Highlights
 
