@@ -402,7 +402,13 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 mp.util.info("Could not acquire processes_management_lock")
                 continue
         except BaseException as e:
-            traceback.print_exc()
+            previous_tb = traceback.format_exc()
+            try:
+                result_queue.put(_RemoteTraceback(previous_tb))
+            except BaseException:
+                # If we cannot format correctly the exception, at least print
+                # the traceback.
+                print(previous_tb)
             sys.exit(1)
         if call_item is None:
             # Notify queue management thread about clean worker shutdown
@@ -605,6 +611,9 @@ def _queue_management_worker(executor_reference,
             try:
                 result_item = result_reader.recv()
                 broken = None
+                if isinstance(result_item, _RemoteTraceback):
+                    cause = result_item.tb
+                    broken = ("A task has failed to un-serialize", cause)
             except BaseException as e:
                 tb = getattr(e, "__traceback__", None)
                 if tb is None:
