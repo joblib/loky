@@ -162,6 +162,10 @@ class _CLibsWrapper:
         for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
             setattr(self, clib, self._load_lib(module_name))
 
+    def _unload(self):
+        for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
+            delattr(self, clib)
+
     def limit_threads_clibs(self, max_threads_per_process):
         """Limit maximal number of threads used by supported C-libraries"""
         msg = ("max_threads_per_process should be an interger. Got {}"
@@ -169,6 +173,7 @@ class _CLibsWrapper:
         assert isinstance(max_threads_per_process, int), msg
 
         dynamic_threadpool_size = {}
+        self._load()
         for clib, (_, _set, _) in self.SUPPORTED_CLIBS.items():
             module = getattr(self, clib, None)
             if module is not None:
@@ -177,12 +182,14 @@ class _CLibsWrapper:
                 dynamic_threadpool_size[clib] = True
             else:
                 dynamic_threadpool_size[clib] = False
+        self._unload()
         return dynamic_threadpool_size
 
     def get_thread_limits(self):
         """Return maximal number of threads available for supported C-libraries
         """
         limits = {}
+        self._load()
         for clib, (_, _, _get) in self.SUPPORTED_CLIBS.items():
             module = getattr(self, clib, None)
             if module is not None:
@@ -190,6 +197,7 @@ class _CLibsWrapper:
                 limits[clib] = _get()
             else:
                 limits[clib] = None
+        self._unload()
         return limits
 
     def _load_lib(self, module_name):

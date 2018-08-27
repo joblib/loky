@@ -397,13 +397,14 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         executor.shutdown(wait=True)
 
     @pytest.mark.skipif(np is None, reason="requires numpy")
-    def test_osx_accelerate_freeze(self):
+    def test_osx_accelerate_freeze(self, capsys):
         """Test no freeze on OSX with Accelerate"""
-        a = np.random.randn(1000, 1000)
-        np.dot(a, a)
-        executor = get_reusable_executor(max_workers=2)
-        executor.submit(np.dot, a, a).result()
-        executor.shutdown(wait=True)
+        with capsys.disabled():
+            a = np.random.randn(1000, 1000)
+            np.dot(a, a)
+            executor = get_reusable_executor(max_workers=2, context="spawn")
+            executor.submit(np.dot, a, a).result()
+            executor.shutdown(wait=True)
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):

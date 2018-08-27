@@ -198,6 +198,9 @@ class ExecutorMixin:
 class ReusableExecutorMixin:
 
     def setup_method(self, method):
+        import faulthandler
+        if hasattr(faulthandler, "dump_traceback_later"):
+            faulthandler.dump_traceback_later(timeout=15, exit=True)
         default_start_method = get_context().get_start_method()
         assert default_start_method == "loky", default_start_method
         executor = get_reusable_executor(max_workers=2)
@@ -211,6 +214,9 @@ class ReusableExecutorMixin:
         assert executor.submit(math.sqrt, 1).result() == 1
         # There can be less than 2 workers because of the worker timeout
         _check_subprocesses_number(executor, expected_max_process_number=2)
+        import faulthandler
+        if hasattr(faulthandler, "cancel_dump_traceback_later"):
+            faulthandler.cancel_dump_traceback_later()
 
     @classmethod
     def teardown_class(cls):
