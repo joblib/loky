@@ -396,6 +396,15 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         executor.submit(np.dot, a, a)
         executor.shutdown(wait=True)
 
+    @pytest.mark.skipif(np is None, reason="requires numpy")
+    def test_osx_accelerate_freeze(self):
+        """Test no freeze on OSX with Accelerate"""
+        a = np.random.randn(1000, 1000)
+        np.dot(a, a)
+        executor = get_reusable_executor(max_workers=2)
+        executor.submit(np.dot, a, a).result()
+        executor.shutdown(wait=True)
+
 
 class TestTerminateExecutor(ReusableExecutorMixin):
 
@@ -583,6 +592,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=2, context='loky')
         assert executor.submit(id, 42).result() >= 0
 
+        executor = get_reusable_executor()
         with pytest.raises(ValueError):
             get_reusable_executor(max_workers=2, context='no_start_method')
 

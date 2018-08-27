@@ -145,7 +145,7 @@ class ExecutorShutdownTest:
             if sys.platform == "darwin":
                 stderr = [e for e in stderr.strip().split("\n")
                           if "increase its maximal value" not in e]
-            assert len(stderr) == 0 or stderr[0] == ''
+            assert len(stderr) == 0 or stderr[0] == '', stderr
 
             # The workers should have completed their work before the main
             # process exits:
