@@ -386,8 +386,10 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         assert 'message raised in child' in str(exc_info.value.__cause__)
 
     @pytest.mark.skipif(np is None, reason="requires numpy")
-    def test_osx_accelerate_freeze(self):
-        """Test no freeze on OSX with Accelerate"""
+    def test_numpy_dot_parent_and_child_no_freeze(self):
+        """Test that no freeze happens in child process when numpy's thread
+        pool is started in the parent.
+        """
         a = np.random.randn(1000, 1000)
         np.dot(a, a)
         executor = get_reusable_executor(max_workers=2)

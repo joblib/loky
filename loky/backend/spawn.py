@@ -91,10 +91,11 @@ def get_preparation_data(name, init_main_module=True):
     # Figure out whether to initialise main in the subprocess as a module
     # or through direct execution (or to leave it alone entirely)
     if init_main_module:
+        d['loky_init_main'] = True
         main_module = sys.modules['__main__']
         try:
             main_mod_name = getattr(main_module.__spec__, "name", None)
-        except:
+        except BaseException:
             main_mod_name = None
         if main_mod_name is not None:
             d['init_main_from_name'] = main_mod_name
@@ -151,8 +152,7 @@ def prepare(data):
     if 'orig_dir' in data:
         process.ORIGINAL_DIR = data['orig_dir']
 
-    if sys.version_info < (3, 3):
-        if 'init_main_from_name' in data or 'init_main_from_path' in data:
+    if sys.version_info < (3, 3) and 'loky_init_main' in data:
             context.DEFAULT_METHOD = 'loky_init_main'
 
     if 'tacker_pid' in data:
