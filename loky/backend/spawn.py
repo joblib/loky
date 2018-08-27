@@ -91,6 +91,7 @@ def get_preparation_data(name, init_main_module=True):
     # Figure out whether to initialise main in the subprocess as a module
     # or through direct execution (or to leave it alone entirely)
     if init_main_module:
+        d['init_main_module'] = True
         main_module = sys.modules['__main__']
         try:
             main_mod_name = getattr(main_module.__spec__, "name", None)

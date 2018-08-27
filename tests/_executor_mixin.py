@@ -212,9 +212,6 @@ class ReusableExecutorMixin:
         # There can be less than 2 workers because of the worker timeout
         _check_subprocesses_number(executor, expected_max_process_number=2)
 
-        import faulthandler
-        faulthandler.dump_traceback()
-
     @classmethod
     def teardown_class(cls):
         executor = get_reusable_executor(max_workers=2)
