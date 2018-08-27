@@ -1,4 +1,4 @@
-### 2.2.1.dev0 - in development
+### 2.2.1 - 2018-08-27 - Bug fix release
 
 - Fix pickling logic in loky. Now the serialization is consistent
   between initializer and tasks. Also fixes the logic behind the
@@ -7,7 +7,8 @@
 - Improve reporting for tasks unpickling errors.
 
 - Fix deadlock when large objects are sent to workers.
-- Fix context and start_method logic for loky contexts.
+
+- Fix context and `start_method` logic for loky contexts.
 
 
 ### 2.2.0 - 2018-08-01 - Release Highlights
