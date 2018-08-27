@@ -11,9 +11,8 @@ from tempfile import mkstemp
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
 
-from loky.backend import get_context
-from loky import get_reusable_executor
 from loky import cpu_count
+from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
@@ -376,15 +375,24 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
             fs_fail[99].result()
         assert fs[99].result()
 
-    def test_informvative_error_when_fail_at_unpickle(self):
+    def test_informative_error_when_fail_at_unpickle(self):
         executor = get_reusable_executor(max_workers=2)
         obj = ErrorAtUnpickle(RuntimeError, 'message raised in child')
         f = executor.submit(id, obj)
 
-        with pytest.raises(BrokenProcessPool) as excinfo:
+        with pytest.raises(BrokenProcessPool) as exc_info:
             f.result()
-        assert 'RuntimeError' in str(excinfo.value.__cause__)
-        assert 'message raised in child' in str(excinfo.value.__cause__)
+        assert 'RuntimeError' in str(exc_info.value.__cause__)
+        assert 'message raised in child' in str(exc_info.value.__cause__)
+
+    @pytest.mark.skipif(np is None, reason="requires numpy")
+    def test_osx_accelerate_freeze(self):
+        """Test no freeze on OSX with Accelerate"""
+        a = np.random.randn(1000, 1000)
+        np.dot(a, a)
+        executor = get_reusable_executor(max_workers=2)
+        executor.submit(np.dot, a, a)
+        executor.shutdown(wait=True)
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):
@@ -430,6 +438,24 @@ class TestTerminateExecutor(ReusableExecutorMixin):
             f.result()
         f2 = executor.submit(id_sleep, 42, 0)
         assert f2.result() == 42
+
+    @pytest.mark.parametrize("bad_object", [CrashAtGCInWorker,
+                                            CExitAtGCInWorker])
+    def test_call_item_gc_crash_or_exit(self, bad_object):
+        executor = get_reusable_executor(max_workers=1)
+        bad_object = bad_object()
+        f = executor.submit(id, bad_object)
+
+        # The worker will successfully send back its result to the master
+        # process before crashing so this future can always be collected:
+        assert f.result() is not None
+
+        # The executor should automatically detect that the worker has crashed
+        # when processing subsequently dispatched tasks:
+        with pytest.raises(BrokenProcessPool):
+            executor.submit(gc.collect).result()
+            for r in executor.map(sleep, [.1] * 100):
+                pass
 
 
 class TestResizeExecutor(ReusableExecutorMixin):
@@ -526,169 +552,140 @@ class TestResizeExecutor(ReusableExecutorMixin):
             assert expected_msg in recorded_warnings[0].message.args[0]
 
 
-def test_invalid_process_number():
-    """Raise error on invalid process number"""
+class TestGetReusableExecutor(ReusableExecutorMixin):
 
-    with pytest.raises(ValueError):
-        get_reusable_executor(max_workers=0)
+    def test_invalid_process_number(self):
+        """Raise error on invalid process number"""
 
-    with pytest.raises(ValueError):
-        get_reusable_executor(max_workers=-1)
-
-    executor = get_reusable_executor()
-    with pytest.raises(ValueError):
-        executor._resize(max_workers=None)
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
-@pytest.mark.skipif(sys.version_info <= (3, 4),
-                    reason="No context before 3.4")
-def test_invalid_context():
-    """Raise error on invalid context"""
-
-    with pytest.warns(UserWarning):
         with pytest.raises(ValueError):
-            get_reusable_executor(max_workers=2, context=get_context("fork"))
+            get_reusable_executor(max_workers=0)
 
+        with pytest.raises(ValueError):
+            get_reusable_executor(max_workers=-1)
 
-@pytest.mark.skipif(np is None, reason="requires numpy")
-def test_osx_accelerate_freeze():
-    """Test no freeze on OSX with Accelerate"""
-    a = np.random.randn(1000, 1000)
-    np.dot(a, a)
-    executor = get_reusable_executor(max_workers=2)
-    executor.submit(np.dot, (a, a))
-    executor.shutdown(wait=True)
+        executor = get_reusable_executor()
+        with pytest.raises(ValueError):
+            executor._resize(max_workers=None)
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
+    @pytest.mark.skipif(sys.version_info <= (3, 4),
+                        reason="No context before 3.4")
+    def test_invalid_context(self):
+        """Raise error on invalid context"""
 
-def test_call_item_gc_crash_or_exit():
-    for bad_object in [CrashAtGCInWorker(), CExitAtGCInWorker()]:
-        executor = get_reusable_executor(max_workers=1)
-        f = executor.submit(id, bad_object)
+        with pytest.warns(UserWarning):
+            with pytest.raises(ValueError):
+                get_reusable_executor(max_workers=2, context="fork")
 
-        # The worker will sucessfully send back its result to the master
-        # process before crashing so this future can always be collected:
-        assert f.result() is not None
+    def test_pass_start_method_name_as_context(self):
+        executor = get_reusable_executor(max_workers=2, context='loky')
+        assert executor.submit(id, 42).result() >= 0
 
-        # The executor should automatically detect that the worker has crashed
-        # when processing subsequently dispatched tasks:
-        with pytest.raises(BrokenProcessPool):
-            executor.submit(gc.collect).result()
-            for r in executor.map(sleep, [.1] * 100):
-                pass
+        with pytest.raises(ValueError):
+            get_reusable_executor(max_workers=2, context='bad_start_method')
 
+    def test_interactively_define_executor_no_main(self):
+        # check that the init_main_module parameter works properly
+        # when using -c option, we don't need the safeguard if __name__ ..
+        # and thus test LokyProcess without the extra argument. For running
+        # a script, it is necessary to use init_main_module=False.
+        code = """if True:
+            from loky import get_reusable_executor
+            e = get_reusable_executor()
+            e.submit(id, 42).result()
+            print("ok")
+        """
+        cmd = [sys.executable]
+        try:
+            fid, filename = mkstemp(suffix="_joblib.py")
+            os.close(fid)
+            with open(filename, mode='wb') as f:
+                f.write(code.encode('ascii'))
+            cmd += [filename]
+            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+        finally:
+            os.unlink(filename)
 
-def test_pass_start_method_name_as_context():
-    executor = get_reusable_executor(max_workers=2, context='loky')
-    assert executor.submit(id, 42).result() >= 0
+    def test_compat_with_concurrent_futures_exception(self):
+        # It should be possible to use a loky process pool executor as a dropin
+        # replacement for a ProcessPoolExecutor, including when catching
+        # exceptions:
+        pytest.importorskip('concurrent.futures')
+        from concurrent.futures.process import BrokenProcessPool as BPPExc
 
-    with pytest.raises(ValueError):
-        get_reusable_executor(max_workers=2, context='invalid_start_method')
+        with pytest.raises(BPPExc):
+            get_reusable_executor(max_workers=2).submit(crash).result()
 
+    thread_configurations = [
+        ('constant', 'clean_start'),
+        ('constant', 'broken_start'),
+        ('varying', 'clean_start'),
+        ('varying', 'broken_start'),
+    ]
 
-def test_interactively_define_executor_no_main():
-    # check that the init_main_module parameter works properly
-    # when using -c option, we don't need the safeguard if __name__ ..
-    # and thus test LokyProcess without the extra argument. For running
-    # a script, it is necessary to use init_main_module=False.
-    code = """if True:
-        from loky import get_reusable_executor
-        e = get_reusable_executor()
-        e.submit(id, 42).result()
-        print("ok")
-    """
-    cmd = [sys.executable]
-    try:
-        fid, filename = mkstemp(suffix="_joblib.py")
-        os.close(fid)
-        with open(filename, mode='wb') as f:
-            f.write(code.encode('ascii'))
-        cmd += [filename]
-        check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
-    finally:
-        os.unlink(filename)
+    @pytest.mark.parametrize("workers, executor_state", thread_configurations)
+    def test_reusable_executor_thread_safety(self, workers, executor_state):
+        if executor_state == 'clean_start':
+            # Create a new shared executor and ensures that it's workers are
+            # ready:
+            get_reusable_executor(reuse=False).submit(id, 42).result()
+        else:
+            # Break the shared executor before launching the threads:
+            with pytest.raises(BrokenProcessPool):
+                executor = get_reusable_executor(reuse=False)
+                executor.submit(return_instance, CrashAtPickle).result()
 
+        def helper_func(output_collector, max_workers=2, n_outer_steps=5,
+                        n_inner_steps=10):
+            with warnings.catch_warnings():  # ignore resize warnings
+                warnings.simplefilter("always")
+                executor = get_reusable_executor(max_workers=max_workers)
+                for i in range(n_outer_steps):
+                    results = executor.map(
+                        lambda x: x ** 2, range(n_inner_steps))
+                    expected_result = [x ** 2 for x in range(n_inner_steps)]
+                    assert list(results) == expected_result
+                output_collector.append('ok')
 
-def test_compat_with_concurrent_futures_exception():
-    # It should be possible to use a loky process pool executor as a dropin
-    # replacement for a ProcessPoolExecutor, including when catching
-    # exceptions:
-    pytest.importorskip('concurrent.futures')
-    from concurrent.futures.process import BrokenProcessPool as BPPExc
+        if workers == 'constant':
+            max_workers = [2] * 10
+        else:
+            max_workers = [(i % 4) + 1 for i in range(10)]
+        # Use the same executor with the same number of workers concurrently
+        # in different threads:
+        output_collector = []
+        threads = [threading.Thread(
+            target=helper_func, args=(output_collector, w),
+            name='test_thread_%02d_max_workers_%d' % (i, w))
+            for i, w in enumerate(max_workers)]
 
-    with pytest.raises(BPPExc):
-        get_reusable_executor(max_workers=2).submit(crash).result()
+        with warnings.catch_warnings(record=True):
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        assert output_collector == ['ok'] * len(threads)
 
+    def test_reusable_executor_reuse_true(self):
+        executor = get_reusable_executor(max_workers=3, timeout=42)
+        executor.submit(id, 42).result()
+        assert len(executor._processes) == 3
+        assert executor._timeout == 42
 
-thread_configurations = [
-    ('constant', 'clean_start'),
-    ('constant', 'broken_start'),
-    ('varying', 'clean_start'),
-    ('varying', 'broken_start'),
-]
+        executor2 = get_reusable_executor(reuse=True)
+        executor2.submit(id, 42).result()
+        assert len(executor2._processes) == 3
+        assert executor2._timeout == 42
+        assert executor2 is executor
 
+        executor3 = get_reusable_executor()
+        executor3.submit(id, 42).result()
+        assert len(executor3._processes) == cpu_count()
+        assert executor3._timeout == 10
+        assert executor3 is not executor
 
-@pytest.mark.parametrize("workers, executor_state", thread_configurations)
-def test_reusable_executor_thread_safety(workers, executor_state):
-    if executor_state == 'clean_start':
-        # Create a new shared executor and ensures that it's workers are ready:
-        get_reusable_executor(reuse=False).submit(id, 42).result()
-    else:
-        # Break the shared executor before launching the threads:
-        with pytest.raises(BrokenProcessPool):
-            executor = get_reusable_executor(reuse=False)
-            executor.submit(return_instance, CrashAtPickle).result()
-
-    def helper_func(output_collector, max_workers=2, n_outer_steps=5,
-                    n_inner_steps=10):
-        with warnings.catch_warnings():  # ignore resize warnings
-            warnings.simplefilter("always")
-            executor = get_reusable_executor(max_workers=max_workers)
-            for i in range(n_outer_steps):
-                results = executor.map(lambda x: x ** 2, range(n_inner_steps))
-                assert list(results) == [x ** 2 for x in range(n_inner_steps)]
-            output_collector.append('ok')
-
-    if workers == 'constant':
-        max_workers = [2] * 10
-    else:
-        max_workers = [(i % 4) + 1 for i in range(10)]
-    # Use the same executor with the same number of workers concurrently
-    # in different threads:
-    output_collector = []
-    threads = [threading.Thread(
-        target=helper_func, args=(output_collector, w),
-        name='test_thread_%02d_max_workers_%d' % (i, w))
-        for i, w in enumerate(max_workers)]
-
-    with warnings.catch_warnings(record=True):
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-    assert output_collector == ['ok'] * len(threads)
-
-
-def test_reusable_executor_reuse_true():
-    executor = get_reusable_executor(max_workers=3, timeout=42)
-    executor.submit(id, 42).result()
-    assert len(executor._processes) == 3
-    assert executor._timeout == 42
-
-    executor2 = get_reusable_executor(reuse=True)
-    executor2.submit(id, 42).result()
-    assert len(executor2._processes) == 3
-    assert executor2._timeout == 42
-    assert executor2 is executor
-
-    executor3 = get_reusable_executor()
-    executor3.submit(id, 42).result()
-    assert len(executor3._processes) == cpu_count()
-    assert executor3._timeout == 10
-    assert executor3 is not executor
-
-    executor4 = get_reusable_executor()
-    assert executor4 is executor3
+        executor4 = get_reusable_executor()
+        assert executor4 is executor3
 
 
 class TestExecutorInitializer(ReusableExecutorMixin):
