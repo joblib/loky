@@ -1,3 +1,7 @@
+### 2.2.2.dev0 - In development
+
+
+
 ### 2.2.1 - 2018-08-27 - Bug fix release
 
 - Fix pickling logic in loky. Now the serialization is consistent
