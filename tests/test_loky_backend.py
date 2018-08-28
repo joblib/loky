@@ -654,7 +654,8 @@ class TestLokyBackend:
         # Ensure that loky context is working properly
         code = '\n'.join([
             'from loky.backend import get_context',
-            'ctx = get_context("loky")',
+            'ctx = get_context()',
+            'assert ctx.get_start_method() == "loky"',
             'p = ctx.Process(target=id, args=(1,))',
             'p.start()',
             'p.join()',
