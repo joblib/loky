@@ -1,5 +1,8 @@
 ### 2.2.2.dev0 - In development
 
+- Add a `set_start_method` function in `loky.backend.context`. Note
+  that now, `loky` does not respect the start method set using
+  `multiprocessing.set_start_method`.
 
 
 ### 2.2.1 - 2018-08-27 - Bug fix release

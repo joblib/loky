@@ -241,7 +241,7 @@ class TestsFuture:
         with pytest.raises(futures.CancelledError):
             CANCELLED_AND_NOTIFIED_FUTURE.exception(timeout=0)
         assert isinstance(EXCEPTION_FUTURE.exception(timeout=0), OSError)
-        assert SUCCESSFUL_FUTURE.exception(timeout=0) == None
+        assert SUCCESSFUL_FUTURE.exception(timeout=0) is None
 
     def test_exception_with_success(self):
         def notification(ready):

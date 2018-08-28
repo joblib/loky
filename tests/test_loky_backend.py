@@ -726,7 +726,6 @@ def _test_default_subcontext(queue):
     queue.put(start_method)
 
 
-
 @pytest.mark.parametrize('method', START_METHODS)
 def test_default_subcontext(method):
     code = """if True:

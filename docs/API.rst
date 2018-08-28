@@ -19,6 +19,13 @@ There is two way to temper with the serialization in :mod:`loky`:
 - Setting the variable :code:`LOKY_PICKLER` to an available and valid serialization module. This module must present a valid :code:`Pickler` object. Setting the environment variable :code:`LOKY_PICKER=cloudpickle` will force :mod:`loky` to serialize everything with |cloudpickle| instead of just serializing the object detected to be in the :code:`__main__` module.
 
 
+Processes start methods in :mod`loky`
+-------------------------------------
+
+The API in :mod:`loky` provides a :func:`set_start_method` function to set the default way a new :class:`Process` is started.
+Note that this is not compatible with :func:`multiprocessing.set_start_method` function because of compatibility issues.
+
+
 .. |cloudpickle| raw:: html
 
     <a href="https://github.com/cloudpipe/cloudpickle"><code>cloudpickle</code></a>
