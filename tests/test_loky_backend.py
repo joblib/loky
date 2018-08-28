@@ -733,14 +733,27 @@ if sys.version_info >= (3, 3):
 
 @pytest.mark.parametrize('method', METHODS)
 def test_default_subcontext(method):
-    if sys.version_info >= (3, 3):
-        mp.set_start_method(method, force=True)
-        ctx = mp.get_context()
-    else:
-        ctx = get_context(method)
-    queue = ctx.SimpleQueue()
-    p = ctx.Process(target=_get_start_method, args=(queue,))
-    p.start()
-    p.join()
-    start_method = queue.get()
-    assert start_method == method
+    code = """if True:
+        import sys
+        from tests.test_loky_backend import _get_start_method
+
+        if sys.version_info >= (3, 3):
+            import multiprocessing as mp
+            mp.set_start_method('{method}', force=True)
+            ctx = mp.get_context()
+        else:
+            from loky.backend import get_context
+            ctx = get_context('{method}')
+        queue = ctx.SimpleQueue()
+        p = ctx.Process(target=_get_start_method, args=(queue,))
+        p.start()
+        p.join()
+        start_method = queue.get()
+        assert start_method == '{method}', start_method
+    """.format(method=method)
+
+    cmd = [sys.executable, "-c", code]
+    check_subprocess_call(cmd, timeout=10)
+
+    ctx_default = get_context()
+    assert ctx_default.get_start_method() == "loky"
