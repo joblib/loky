@@ -718,10 +718,9 @@ def test_recursive_terminate(use_psutil):
 def _test_default_subcontext(queue):
     if sys.version_info >= (3, 3):
         start_method = mp.get_start_method()
-        print(start_method)
     else:
-        from loky.backend.context import DEFAULT_METHOD
-        start_method = DEFAULT_METHOD
+        from loky.backend.context import _DEFAULT_START_METHOD
+        start_method = _DEFAULT_START_METHOD
 
     queue.put(start_method)
 
