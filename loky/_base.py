@@ -13,6 +13,7 @@
 import sys
 import collections
 import logging
+import textwrap
 import threading
 import time
 
@@ -304,7 +305,14 @@ def wait(fs, timeout=None, return_when=ALL_COMPLETED):
     return DoneAndNotDoneFutures(done, set(fs) - done)
 
 
-class Future(object):
+try:
+    from concurrent.futures import Future as _Future
+    fobj = _Future
+except ImportError:
+    fobj = object
+
+
+class Future(fobj):
     """Represents the result of an asynchronous computation."""
 
     def __init__(self):
