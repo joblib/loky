@@ -8,6 +8,7 @@ import pytest
 import threading
 
 from loky._base import TimeoutError
+from loky.backend import get_context
 from loky import get_reusable_executor, cpu_count
 
 
@@ -197,6 +198,8 @@ class ExecutorMixin:
 class ReusableExecutorMixin:
 
     def setup_method(self, method):
+        default_start_method = get_context().get_start_method()
+        assert default_start_method == "loky", default_start_method
         executor = get_reusable_executor(max_workers=2)
         _check_executor_started(executor)
         # There can be less than 2 workers because of the worker timeout

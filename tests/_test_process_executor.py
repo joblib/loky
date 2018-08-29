@@ -29,7 +29,6 @@ import threading
 import faulthandler
 from math import sqrt
 from threading import Thread
-import multiprocessing as mp
 from collections import defaultdict
 
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,

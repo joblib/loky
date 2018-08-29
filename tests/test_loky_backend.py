@@ -11,6 +11,7 @@ from tempfile import mkstemp
 
 from loky.backend import get_context
 from loky.backend.compat import wait
+from loky.backend.context import START_METHODS
 from loky.backend.utils import recursive_terminate
 from .utils import TimingWrapper, check_subprocess_call
 
@@ -654,7 +655,8 @@ class TestLokyBackend:
         # Ensure that loky context is working properly
         code = '\n'.join([
             'from loky.backend import get_context',
-            'ctx = get_context("loky")',
+            'ctx = get_context()',
+            'assert ctx.get_start_method() == "loky"',
             'p = ctx.Process(target=id, args=(1,))',
             'p.start()',
             'p.join()',
@@ -713,43 +715,46 @@ def test_recursive_terminate(use_psutil):
     assert len(alive) == 0, msg.format(alive)
 
 
-def _get_start_method(queue):
+def _test_default_subcontext(queue):
     if sys.version_info >= (3, 3):
         start_method = mp.get_start_method()
-        print(start_method)
     else:
-        from loky.backend.context import DEFAULT_METHOD
-        start_method = DEFAULT_METHOD
+        from loky.backend.context import _DEFAULT_START_METHOD
+        start_method = _DEFAULT_START_METHOD
 
     queue.put(start_method)
 
 
-METHODS = ['loky', 'loky_init_main']
-if sys.version_info >= (3, 3):
-    METHODS += ['spawn']
-    if sys.platform != "win32":
-        METHODS += ['fork', 'forkserver']
-
-
-@pytest.mark.parametrize('method', METHODS)
+@pytest.mark.parametrize('method', START_METHODS)
 def test_default_subcontext(method):
     code = """if True:
         import sys
-        from tests.test_loky_backend import _get_start_method
 
-        if sys.version_info >= (3, 3):
-            import multiprocessing as mp
-            mp.set_start_method('{method}', force=True)
-            ctx = mp.get_context()
-        else:
-            from loky.backend import get_context
-            ctx = get_context('{method}')
+        from loky.backend.context import get_context, set_start_method
+        from tests.test_loky_backend import _test_default_subcontext
+
+        set_start_method('{method}')
+        ctx = get_context()
+        assert ctx.get_start_method() == '{method}'
+
         queue = ctx.SimpleQueue()
-        p = ctx.Process(target=_get_start_method, args=(queue,))
+        p = ctx.Process(target=_test_default_subcontext, args=(queue,))
         p.start()
         p.join()
         start_method = queue.get()
         assert start_method == '{method}', start_method
+
+        try:
+            set_start_method('loky')
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("Did not raise RuntimeError when resetting"
+                                 "start_method without force")
+
+        set_start_method(None, force=True)
+        ctx = get_context()
+        assert ctx.get_start_method() == 'loky'
     """.format(method=method)
 
     cmd = [sys.executable, "-c", code]
