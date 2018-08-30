@@ -304,14 +304,7 @@ def wait(fs, timeout=None, return_when=ALL_COMPLETED):
     return DoneAndNotDoneFutures(done, set(fs) - done)
 
 
-try:
-    from concurrent.futures import Future as _Future
-    fobj = _Future
-except ImportError:
-    fobj = object
-
-
-class Future(fobj):
+class Future(object):
     """Represents the result of an asynchronous computation."""
 
     def __init__(self):

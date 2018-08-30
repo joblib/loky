@@ -9,4 +9,29 @@ from .process_executor import BrokenProcessPool  # noqa: F401
 
 from .backend.context import cpu_count  # noqa: F401
 
+try:
+    from concurrent.futures._base import (FIRST_COMPLETED,
+                                          FIRST_EXCEPTION,
+                                          ALL_COMPLETED,
+                                          CancelledError,
+                                          TimeoutError,
+                                          InvalidStateError,
+                                          BrokenExecutor,
+                                          Future,
+                                          Executor,
+                                          wait,
+                                          as_completed)
+except ImportError:
+    from ._base import (FIRST_COMPLETED,
+                        FIRST_EXCEPTION,
+                        ALL_COMPLETED,
+                        CancelledError,
+                        TimeoutError,
+                        InvalidStateError,
+                        BrokenExecutor,
+                        Future,
+                        Executor,
+                        wait,
+                        as_completed)
+
 __version__ = '2.3.0.dev0'

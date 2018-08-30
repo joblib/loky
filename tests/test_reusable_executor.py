@@ -613,10 +613,14 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # replacement for a ProcessPoolExecutor, including when catching
         # exceptions:
         pytest.importorskip('concurrent.futures')
+        import concurrent
         from concurrent.futures.process import BrokenProcessPool as BPPExc
 
         with pytest.raises(BPPExc):
             get_reusable_executor(max_workers=2).submit(crash).result()
+        e = get_reusable_executor(max_workers=2)
+        f = e.submit(id, 42)
+        assert isinstance(f, concurrent.futures.Future)
 
     thread_configurations = [
         ('constant', 'clean_start'),
