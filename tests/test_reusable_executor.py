@@ -391,9 +391,9 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         pool is started in the parent.
         """
         a = np.random.randn(1000, 1000)
-        np.dot(a, a)
+        np.dot(a, a)  # trigger the thread pool init in the parent process
         executor = get_reusable_executor(max_workers=2)
-        executor.submit(np.dot, a, a)
+        executor.submit(np.dot, a, a).result()
         executor.shutdown(wait=True)
 
 
