@@ -1,3 +1,6 @@
+### 2.3.0 - In developement
+
+
 ### 2.2.2 - 2018-08-30 - Bug fix release
 
 - Add a `set_start_method` function in `loky.backend.context`. Note
