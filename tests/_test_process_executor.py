@@ -253,6 +253,8 @@ class ExecutorShutdownTest:
         self.executor = None
 
         if IS_PYPY:
+            # Object deletion and garbage collection can be delayed under PyPy.
+            time.sleep(1.)
             gc.collect()
 
         # Make sure that there is not other reference to the executor object.
@@ -295,6 +297,8 @@ class ExecutorShutdownTest:
         processes = executor._processes
         del executor
         if IS_PYPY:
+            # Object deletion and garbage collection can be delayed under PyPy.
+            time.sleep(1.)
             gc.collect()
 
         queue_management_thread.join()
