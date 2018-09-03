@@ -74,6 +74,7 @@ import multiprocessing as mp
 from functools import partial
 from pickle import PicklingError
 
+from . import _base
 from .backend import get_context
 from .backend.compat import queue
 from .backend.compat import wait
@@ -87,10 +88,6 @@ try:
 except ImportError:
     _BPPException = RuntimeError
 
-try:
-    from concurrent.futures import _base
-except ImportError:
-    from . import _base
 
 # Compatibility for python2.7
 if sys.version_info[0] == 2:
