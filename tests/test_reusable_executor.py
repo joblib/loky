@@ -6,6 +6,7 @@ import psutil
 import pytest
 import warnings
 import threading
+import weakref
 from time import sleep
 from tempfile import mkstemp
 from multiprocessing import util, current_process
@@ -766,3 +767,35 @@ def test_memory_leak_protection():
         # size + what has leaked since the last memory check.
         for _, leak_size in results:
             assert leak_size / 1e6 < 250
+
+
+def test_reference_cycle_collection():
+    # make the parallel call create a reference cycle and make
+    # a weak reference to be able to track the garbage collected objects
+
+    class A:
+        def __init__(self, size=int(1e6)):
+            self.data = b"\x00" * size
+            self.a = self
+
+    def dummy_func(delay=0.01):
+        from loky import process_executor
+        process_executor._USE_PSUTIL = False
+        if getattr(os, '__loky_cyclic_weakrefs', None) is None:
+            os.__loky_cyclic_weakrefs = []
+
+        a = A()
+        sleep(delay)
+        os.__loky_cyclic_weakrefs.append(weakref.ref(a))
+        return sum(1 for r in os.__loky_cyclic_weakrefs if r() is not None)
+
+    executor = get_reusable_executor(max_workers=1)
+
+    futures = []
+    for i in range(300):
+        # Total run time should be 3s which is way over the 1s cooldown
+        # period between two consecutive memory checks in the worker.
+        futures.append(executor.submit(dummy_func))
+
+    max_active_refs_count = max(f.result() for f in futures)
+    assert max_active_refs_count < 150

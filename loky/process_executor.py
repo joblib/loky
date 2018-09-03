@@ -123,8 +123,13 @@ _MEMORY_CHECK_DELAY = 1.
 # Number of bytes of memory usage allowed over the reference process size.
 _MAX_MEMORY_LEAK_SIZE = int(1e8)
 
+# Minimum time interval between two consecutive gc calls. Analogous to
+# _MEMORY_CHECK_DELAY, but when psutil is not installed
+_GC_CHECK_DELAY = 1
+
 try:
     from psutil import Process
+    _USE_PSUTIL = True
 
     def _get_memory_usage(pid, force_gc=False):
         if force_gc:
@@ -133,6 +138,7 @@ try:
         return Process(pid).memory_info().rss
 
 except ImportError:
+    _USE_PSUTIL = False
     _get_memory_usage = None
 
 
@@ -384,6 +390,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     _CURRENT_DEPTH = current_depth
     _process_reference_size = None
     _process_last_memory_check = None
+    _last_gc_call = None
     pid = os.getpid()
 
     mp.util.debug('Worker started with timeout=%s' % timeout)
@@ -428,7 +435,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         # open files or shared memory that is not needed anymore
         del call_item
 
-        if _get_memory_usage is not None:
+        if _USE_PSUTIL:
             if _process_reference_size is None:
                 # Make reference measurement after the first call
                 _process_reference_size = _get_memory_usage(pid, force_gc=True)
@@ -456,6 +463,13 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 result_queue.put(pid)
                 with worker_exit_lock:
                     return
+        else:
+            # if psutil is not installed, trigger gc.collect events
+            # regularly to limit potential memory leaks due to reference cycles
+            if ((_last_gc_call is None)
+                    or (time() - _last_gc_call > _GC_CHECK_DELAY)):
+                gc.collect()
+                _last_gc_call = time()
 
 
 def _add_call_item_to_queue(pending_work_items,
