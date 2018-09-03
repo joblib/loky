@@ -143,7 +143,7 @@ class ExecutorShutdownTest:
                                n_jobs=n_jobs,
                                tempdir=tempdir.replace("\\", "/"))
             stdout, stderr = check_subprocess_call(
-                [sys.executable, "-c", code], timeout=10)
+                [sys.executable, "-c", code], timeout=55)
 
             # On OSX, remove UserWarning for broken semaphores
             if sys.platform == "darwin":
@@ -685,7 +685,7 @@ class ExecutorTest:
                 patience -= 1
                 time.sleep(0.01)
 
-    @pytest.mark.timeout(50 if sys.platform == "win32" else 25)
+    @pytest.mark.timeout(60)
     def test_worker_timeout(self):
         self.executor.shutdown(wait=True)
         self.check_no_running_workers(patience=5)
