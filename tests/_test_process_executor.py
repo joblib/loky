@@ -209,8 +209,9 @@ class ExecutorShutdownTest:
         t_deadline = time.time() + 1
         while executor_reference() is not None and time.time() < t_deadline:
             if IS_PYPY:
-                # XXX: this is only required under PyPy for some unknown
-                # reason:
+                # PyPy can delay __del__ calls and GC compared to CPython.
+                # To ensure that this test pass without waiting too long we
+                # need an explicit GC.
                 gc.collect()
             time.sleep(0.001)
         assert executor_reference() is None
