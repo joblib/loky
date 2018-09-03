@@ -9,24 +9,14 @@ from ._base import TimeoutError, CancelledError
 from ._base import ALL_COMPLETED, FIRST_COMPLETED, FIRST_EXCEPTION
 
 from .backend.context import cpu_count
-from .process_executor import BrokenProcessPool
-from .process_executor import ProcessPoolExecutor
 from .reusable_executor import get_reusable_executor
+from .process_executor import BrokenProcessPool, ProcessPoolExecutor
 
 
-__all__ = ["get_reusable_executor",
-           "cpu_count",
-           "ProcessPoolExecutor",
-           "BrokenProcessPool",
-           "FIRST_COMPLETED",
-           "FIRST_EXCEPTION",
-           "ALL_COMPLETED",
-           "CancelledError",
-           "TimeoutError",
-           "Future",
-           "Executor",
-           "wait",
-           "as_completed"]
+__all__ = ["get_reusable_executor", "cpu_count", "wait", "as_completed",
+           "Future", "Executor", "ProcessPoolExecutor",
+           "BrokenProcessPool", "CancelledError", "TimeoutError",
+           "FIRST_COMPLETED", "FIRST_EXCEPTION", "ALL_COMPLETED", ]
 
 
 __version__ = '2.3.0.dev0'

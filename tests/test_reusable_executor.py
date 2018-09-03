@@ -612,8 +612,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # It should be possible to use a loky process pool executor as a dropin
         # replacement for a ProcessPoolExecutor, including when catching
         # exceptions:
-        pytest.importorskip('concurrent.futures')
-        import concurrent
+        concurrent = pytest.importorskip('concurrent')
         from concurrent.futures.process import BrokenProcessPool as BPPExc
 
         with pytest.raises(BPPExc):
