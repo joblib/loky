@@ -12,6 +12,8 @@ env:
     - LOKY_MAX_DEPTH=3
 matrix:
   include:
+    - python: "pypy3.5"
+      env: TOXENV="pypy3"
     - python: 2.7
       env: TOXENV="py27"
     - python: 3.4
