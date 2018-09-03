@@ -7,7 +7,7 @@ from ._executor_mixin import ExecutorMixin
 
 if (sys.version_info[:2] > (3, 3)
         and sys.platform != "win32"
-        and sys.implementation.name != 'pypy'):
+        and not hasattr(sys, "pypy_version_info")):
     # XXX: the forkserver backend is broken with pypy3.
 
     class ProcessPoolForkserverMixin(ExecutorMixin):

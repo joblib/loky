@@ -6,7 +6,7 @@ from ._executor_mixin import ExecutorMixin
 
 
 if (sys.version_info[:2] > (3, 3)
-        and sys.implementation.name != 'pypy'):
+        and not hasattr(sys, "pypy_version_info")):
     class ProcessPoolSpawnMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
         context = get_context('spawn')

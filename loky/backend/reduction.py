@@ -181,7 +181,7 @@ register(type(_C().f), _reduce_method)
 register(type(_C.h), _reduce_method)
 
 
-if sys.implementation.name != 'pypy':
+if not hasattr(sys, "pypy_version_info"):
     # PyPy uses functions instead of method_descriptors and wrapper_descriptors
     def _reduce_method_descriptor(m):
         return getattr, (m.__objclass__, m.__name__)

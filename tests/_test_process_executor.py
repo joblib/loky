@@ -47,6 +47,9 @@ else:
     from concurrent import futures
 
 
+IS_PYPY = hasattr(sys, "pypy_version_info")
+
+
 def create_future(state=PENDING, exception=None, result=None):
     f = Future()
     f._state = state
@@ -205,7 +208,7 @@ class ExecutorShutdownTest:
         # reference when we deleted self.executor.
         t_deadline = time.time() + 1
         while executor_reference() is not None and time.time() < t_deadline:
-            if sys.implementation.name == 'pypy':
+            if IS_PYPY:
                 # XXX: this is only required under PyPy for some unknown
                 # reason:
                 gc.collect()
@@ -248,7 +251,7 @@ class ExecutorShutdownTest:
         executor_reference = weakref.ref(self.executor)
         self.executor = None
 
-        if sys.implementation.name == 'pypy':
+        if IS_PYPY:
             gc.collect()
 
         # Make sure that there is not other reference to the executor object.
@@ -290,7 +293,7 @@ class ExecutorShutdownTest:
         queue_management_thread = executor._queue_management_thread
         processes = executor._processes
         del executor
-        if sys.implementation.name == 'pypy':
+        if IS_PYPY:
             gc.collect()
 
         queue_management_thread.join()
@@ -535,7 +538,7 @@ class ExecutorTest:
 
         collected = False
         for i in range(5):
-            if sys.implementation.name == 'pypy':
+            if IS_PYPY:
                 gc.collect()
             collected = collect.wait(timeout=1.0)
             if collected:
