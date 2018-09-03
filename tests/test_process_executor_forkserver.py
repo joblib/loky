@@ -5,7 +5,11 @@ from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
 
 
-if sys.version_info[:2] > (3, 3) and sys.platform != "win32":
+if (sys.version_info[:2] > (3, 3)
+        and sys.platform != "win32"
+        and sys.implementation.name != 'pypy'):
+    # XXX: the forkserver backend is broken with pypy3.
+
     class ProcessPoolForkserverMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
         context = get_context('forkserver')

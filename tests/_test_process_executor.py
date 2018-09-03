@@ -18,6 +18,7 @@ except ImportError:
 from loky import process_executor
 
 import os
+import gc
 import sys
 import time
 import shutil
@@ -186,6 +187,7 @@ class ExecutorShutdownTest:
             p.join()
 
     def test_processes_terminate_on_executor_gc(self):
+
         results = self.executor.map(sleep_and_return,
                                     [0.1] * 10, range(10))
         assert len(self.executor._processes) == self.worker_count
@@ -203,6 +205,10 @@ class ExecutorShutdownTest:
         # reference when we deleted self.executor.
         t_deadline = time.time() + 1
         while executor_reference() is not None and time.time() < t_deadline:
+            if sys.implementation.name == 'pypy':
+                # XXX: this is only required under PyPy for some unknown
+                # reason:
+                gc.collect()
             time.sleep(0.001)
         assert executor_reference() is None
 
@@ -241,6 +247,9 @@ class ExecutorShutdownTest:
         # complete first.
         executor_reference = weakref.ref(self.executor)
         self.executor = None
+
+        if sys.implementation.name == 'pypy':
+            gc.collect()
 
         # Make sure that there is not other reference to the executor object.
         assert executor_reference() is None
@@ -281,6 +290,8 @@ class ExecutorShutdownTest:
         queue_management_thread = executor._queue_management_thread
         processes = executor._processes
         del executor
+        if sys.implementation.name == 'pypy':
+            gc.collect()
 
         queue_management_thread.join()
         for p in processes.values():
@@ -500,9 +511,7 @@ class ExecutorTest:
     def test_map_timeout(self):
         results = []
         with pytest.raises(futures.TimeoutError):
-            for i in self.executor.map(time.sleep,
-                                       [0, 0, 5],
-                                       timeout=1):
+            for i in self.executor.map(time.sleep, [0, 0, 5], timeout=1):
                 results.append(i)
 
         assert [None, None] == results
@@ -524,7 +533,13 @@ class ExecutorTest:
         self.executor.submit(my_object.my_method)
         del my_object
 
-        collected = collect.wait(timeout=5.0)
+        collected = False
+        for i in range(5):
+            if sys.implementation.name == 'pypy':
+                gc.collect()
+            collected = collect.wait(timeout=1.0)
+            if collected:
+                return
         assert collected, "Stale reference not collected within timeout."
 
     def test_max_workers_negative(self):

@@ -422,6 +422,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             result_queue.put(_ResultItem(call_item.work_id, exception=exc))
         else:
             _sendback_result(result_queue, call_item.work_id, result=r)
+            del r
 
         # Free the resource as soon as possible, to avoid holding onto
         # open files or shared memory that is not needed anymore
