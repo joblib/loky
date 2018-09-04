@@ -1,5 +1,10 @@
 ### 2.3.0 - In developement
 
+- Add support for PyPy3.
+
+- `loky.cpu_count()` is now upper-bounded by the value of the
+  `LOKY_MAX_CPU_COUNT` environment variable (when defined).
+
 
 ### 2.2.2 - 2018-08-30 - Bug fix release
 

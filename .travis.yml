@@ -13,7 +13,7 @@ env:
 matrix:
   include:
     - python: "pypy3.5"
-      env: TOXENV="pypy3"
+      env: TOXENV="pypy3" LOKY_MAX_CPU_COUNT="2"
     - python: 2.7
       env: TOXENV="py27"
     - python: 3.4
