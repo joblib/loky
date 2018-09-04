@@ -778,9 +778,10 @@ def test_reference_cycle_collection():
             self.data = b"\x00" * size
             self.a = self
 
-    def dummy_func(delay=0.01):
+    def dummy_func(delay=0.001):
         from loky import process_executor
         process_executor._USE_PSUTIL = False
+        process_executor._GC_CHECK_DELAY = 0.1
         if getattr(os, '__loky_cyclic_weakrefs', None) is None:
             os.__loky_cyclic_weakrefs = []
 
