@@ -786,3 +786,76 @@ class ExecutorTest:
 
         with pytest.raises(RuntimeError):
             self.executor.submit(id, data).result()
+
+    def test_memory_leak_protection(self):
+        self.executor.shutdown(wait=True)
+
+        def leak_some_memory(size=int(1e6), delay=0.01):
+            if getattr(os, '__loky_leak', None) is None:
+                os.__loky_leak = []
+            os.__loky_leak.append(b"\x00" * size)
+
+            # Leave enough time for the memory leak detector to kick-in:
+            # by default the process does not check its memory usage
+            # more than once per second.
+            time.sleep(delay)
+
+            leaked_size = sum(len(buffer) for buffer in os.__loky_leak)
+            return os.getpid(), leaked_size
+
+        executor = self.executor_type(1, context=self.context)
+
+        with pytest.warns(UserWarning, match='memory leak'):
+            futures = []
+            for i in range(300):
+                # Total run time should be 3s which is way over the 1s cooldown
+                # period between two consecutive memory checks in the worker.
+                futures.append(executor.submit(leak_some_memory))
+
+            executor.shutdown(wait=True)
+            results = [f.result() for f in futures]
+
+            # The pid of the worker has changed when restarting the worker
+            first_pid, last_pid = results[0][0], results[-1][0]
+            assert first_pid != last_pid
+
+            # The restart happened after 100 MB of leak over the
+            # default process size + what has leaked since the last
+            # memory check.
+            for _, leak_size in results:
+                assert leak_size / 1e6 < 250
+
+    def test_reference_cycle_collection(self):
+        # make the parallel call create a reference cycle and make
+        # a weak reference to be able to track the garbage collected objects
+        self.executor.shutdown(wait=True)
+
+        class A:
+            def __init__(self, size=int(1e6)):
+                self.data = b"\x00" * size
+                self.a = self
+
+        def dummy_func(delay=0.001):
+            from loky import process_executor
+            process_executor._USE_PSUTIL = False
+            process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
+            if getattr(os, '__loky_cyclic_weakrefs', None) is None:
+                os.__loky_cyclic_weakrefs = []
+
+            a = A()
+            time.sleep(delay)
+            os.__loky_cyclic_weakrefs.append(weakref.ref(a))
+            return sum(1 for r in os.__loky_cyclic_weakrefs if r() is not None)
+
+        executor = self.executor_type(1, context=self.context)
+
+        futures = []
+        for i in range(300):
+            # Total run time should be 3s which is way over the 1s cooldown
+            # period between two consecutive memory checks in the worker.
+            futures.append(executor.submit(dummy_func))
+
+        executor.shutdown(wait=True)
+
+        max_active_refs_count = max(f.result() for f in futures)
+        assert max_active_refs_count < 150

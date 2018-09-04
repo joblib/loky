@@ -117,15 +117,12 @@ _global_shutdown = False
 MAX_DEPTH = int(os.environ.get("LOKY_MAX_DEPTH", 10))
 _CURRENT_DEPTH = 0
 
-# Minimum time interval between two consecutive memory usage checks.
-_MEMORY_CHECK_DELAY = 1.
+# Minimum time interval between two consecutive memory leak protection checks.
+_MEMORY_LEAK_CHECK_DELAY = 1.
 
 # Number of bytes of memory usage allowed over the reference process size.
 _MAX_MEMORY_LEAK_SIZE = int(1e8)
 
-# Minimum time interval between two consecutive gc calls. Analogous to
-# _MEMORY_CHECK_DELAY, but when psutil is not installed
-_GC_CHECK_DELAY = 1
 
 try:
     from psutil import Process
@@ -389,8 +386,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     global _CURRENT_DEPTH
     _CURRENT_DEPTH = current_depth
     _process_reference_size = None
-    _process_last_memory_check = None
-    _last_gc_call = None
+    _last_memory_leak_check = None
     pid = os.getpid()
 
     mp.util.debug('Worker started with timeout=%s' % timeout)
@@ -439,11 +435,11 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             if _process_reference_size is None:
                 # Make reference measurement after the first call
                 _process_reference_size = _get_memory_usage(pid, force_gc=True)
-                _process_last_memory_check = time()
+                _last_memory_leak_check = time()
                 continue
-            if time() - _process_last_memory_check > _MEMORY_CHECK_DELAY:
+            if time() - _last_memory_leak_check > _MEMORY_LEAK_CHECK_DELAY:
                 mem_usage = _get_memory_usage(pid)
-                _process_last_memory_check = time()
+                _last_memory_leak_check = time()
                 if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
                     # Memory usage stays within bounds: everything is fine.
                     continue
@@ -452,7 +448,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 # after a forced garbage collection to break any reference
                 # cycles.
                 mem_usage = _get_memory_usage(pid, force_gc=True)
-                _process_last_memory_check = time()
+                _last_memory_leak_check = time()
                 if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
                     # The GC managed to free the memory: everything is fine.
                     continue
@@ -466,10 +462,11 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         else:
             # if psutil is not installed, trigger gc.collect events
             # regularly to limit potential memory leaks due to reference cycles
-            if ((_last_gc_call is None)
-                    or (time() - _last_gc_call > _GC_CHECK_DELAY)):
+            if ((_last_memory_leak_check is None) or
+                    (time() - _last_memory_leak_check >
+                     _MEMORY_LEAK_CHECK_DELAY)):
                 gc.collect()
-                _last_gc_call = time()
+                _last_memory_leak_check = time()
 
 
 def _add_call_item_to_queue(pending_work_items,
