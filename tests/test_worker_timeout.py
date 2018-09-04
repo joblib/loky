@@ -94,6 +94,8 @@ class TestTimeoutExecutor():
                                    (0.001, .1)]:
                 executor = get_reusable_executor(max_workers=2,
                                                  timeout=timeout)
+                # First make sure the executor is started
+                executor.submit(id, 42).result()
                 results = list(executor.map(
                     id, [SlowlyPickling(delay)] * n_tasks))
                 assert len(results) == n_tasks
@@ -104,5 +106,10 @@ class TestTimeoutExecutor():
         with pytest.warns(UserWarning,
                           match=r'^A worker stopped while some jobs'):
             with get_reusable_executor(max_workers=2, timeout=.001) as e:
+                # First make sure the executor is started
+                e.submit(id, 42).result()
+
+                # Then give a task that will take more time to be pickled so
+                # we are sure that the worker timeout.
                 f = e.submit(id, SlowlyPickling(1))
         f.result()
