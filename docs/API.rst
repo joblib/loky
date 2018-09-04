@@ -19,7 +19,7 @@ There is two way to temper with the serialization in :mod:`loky`:
 - Setting the variable :code:`LOKY_PICKLER` to an available and valid serialization module. This module must present a valid :code:`Pickler` object. Setting the environment variable :code:`LOKY_PICKER=cloudpickle` will force :mod:`loky` to serialize everything with |cloudpickle| instead of just serializing the object detected to be in the :code:`__main__` module.
 
 
-Processes start methods in :mod`loky`
+Processes start methods in :mod:`loky`
 -------------------------------------
 
 The API in :mod:`loky` provides a :func:`set_start_method` function to set the default  :code:`start_method`, which controls the way :class:`Process` are started. The available methods are {:code:`'loky'`, :code:`'loky_int_main'`, :code:`'spawn'`}. On unix, the start methods {:code:`'fork'`, :code:`'forkserver'`} are also available.
@@ -29,3 +29,30 @@ Note that :mod:`loky` isnot compatible with :func:`multiprocessing.set_start_met
 .. |cloudpickle| raw:: html
 
     <a href="https://github.com/cloudpipe/cloudpickle"><code>cloudpickle</code></a>
+
+
+Protection against memory leaks
+-------------------------------
+The memory size of long running worker processes can increase indefinitely if a
+memory leak is created. This can result in processes being shut down by the OS if
+those leaks are not resolved. To
+prevent it, loky provides leak detection, memory cleanups, and workers 
+shutdown.
+
+If :mod:`psutil` is installed, each worker periodically [#periodically_fn]_ checks its 
+memory usage after it completes its task. If the usage is found to be
+unusual [#psutil_unusual_fn]_, an additional :code:`gc.collect()` event is triggered to remove 
+objects with potential cyclic references. 
+If even after that, the memory usage of a process worker remains too high, 
+it will shut down safely, and a fresh process will be automatically spawned by
+the executor. 
+
+If :mod:`psutil` is not installed, there is no easy way to monitor worker
+processes memory usage. :code:`gc.collect()` events will still be called
+periodially [#periodically_fn]_ inside each workers, but there is no guarantee that a leak is
+not happening.
+
+.. rubric:: Footnotes
+
+.. [#periodically_fn] every 1 second. This constant is define in :code:`loky.process_executor._MEMORY_LEAK_CHECK_DELAY`
+.. [#psutil_unusual_fn] an increase of 100MB compared to a reference, which is defined as the residual memory usage of the worker after it completed its first task

@@ -58,6 +58,35 @@ def create_future(state=PENDING, exception=None, result=None):
     return f
 
 
+PENDING_FUTURE = create_future(state=PENDING)
+RUNNING_FUTURE = create_future(state=RUNNING)
+CANCELLED_FUTURE = create_future(state=CANCELLED)
+CANCELLED_AND_NOTIFIED_FUTURE = create_future(state=CANCELLED_AND_NOTIFIED)
+EXCEPTION_FUTURE = create_future(state=FINISHED, exception=OSError())
+SUCCESSFUL_FUTURE = create_future(state=FINISHED, result=42)
+
+
+def mul(x, y):
+    return x * y
+
+
+def sleep_and_print(t, msg):
+    time.sleep(t)
+    print(msg)
+    sys.stdout.flush()
+
+
+def sleep_and_return(delay, x):
+    time.sleep(delay)
+    return x
+
+
+def sleep_and_write(t, filename, msg):
+    time.sleep(t)
+    with open(filename, 'wb') as f:
+        f.write(str(msg).encode('utf-8'))
+
+
 def _leak_some_memory(size=int(1e6), delay=0.001):
     """function that leaks some memory """
     from loky import process_executor
@@ -93,35 +122,6 @@ def _create_cyclic_reference(delay=0.001):
     time.sleep(delay)
     os.__loky_cyclic_weakrefs.append(weakref.ref(a))
     return sum(1 for r in os.__loky_cyclic_weakrefs if r() is not None)
-
-
-PENDING_FUTURE = create_future(state=PENDING)
-RUNNING_FUTURE = create_future(state=RUNNING)
-CANCELLED_FUTURE = create_future(state=CANCELLED)
-CANCELLED_AND_NOTIFIED_FUTURE = create_future(state=CANCELLED_AND_NOTIFIED)
-EXCEPTION_FUTURE = create_future(state=FINISHED, exception=OSError())
-SUCCESSFUL_FUTURE = create_future(state=FINISHED, result=42)
-
-
-def mul(x, y):
-    return x * y
-
-
-def sleep_and_print(t, msg):
-    time.sleep(t)
-    print(msg)
-    sys.stdout.flush()
-
-
-def sleep_and_return(delay, x):
-    time.sleep(delay)
-    return x
-
-
-def sleep_and_write(t, filename, msg):
-    time.sleep(t)
-    with open(filename, 'wb') as f:
-        f.write(str(msg).encode('utf-8'))
 
 
 class MyObject(object):
