@@ -6,6 +6,7 @@ import psutil
 import pytest
 import warnings
 import threading
+import weakref
 from time import sleep
 from tempfile import mkstemp
 from multiprocessing import util, current_process
@@ -732,37 +733,3 @@ class TestExecutorInitializer(ReusableExecutorMixin):
             assert x == 'uninitialized'
 
 
-def test_memory_leak_protection():
-
-    def leak_some_memory(size=int(1e6), delay=0.01):
-        if getattr(os, '__loky_leak', None) is None:
-            os.__loky_leak = []
-        os.__loky_leak.append(b"\x00" * size)
-
-        # Leave enough time for the memory leak detector to kick-in:
-        # by default the process does not check its memory usage
-        # more than once per second.
-        sleep(delay)
-
-        leaked_size = sum(len(buffer) for buffer in os.__loky_leak)
-        return os.getpid(), leaked_size
-
-    executor = get_reusable_executor(max_workers=1)
-
-    with pytest.warns(UserWarning, match='memory leak'):
-        futures = []
-        for i in range(300):
-            # Total run time should be 3s which is way over the 1s cooldown
-            # period between two consecutive memory checks in the worker.
-            futures.append(executor.submit(leak_some_memory))
-
-        results = [f.result() for f in futures]
-
-        # The pid of the worker has changed when restarting the worker
-        first_pid, last_pid = results[0][0], results[-1][0]
-        assert first_pid != last_pid
-
-        # The restart happened after 100 MB of leak over the default process
-        # size + what has leaked since the last memory check.
-        for _, leak_size in results:
-            assert leak_size / 1e6 < 250
