@@ -1,9 +1,12 @@
-### 2.3.0 - In developement
+### 2.3.0 - 2018-09-05 - Release highlights
 
 - Add support for PyPy3.
 
 - `loky.cpu_count()` is now upper-bounded by the value of the
   `LOKY_MAX_CPU_COUNT` environment variable (when defined).
+
+- Fix issue #165 to make `loky.cpu_count()` return an integer under
+  Python 2.7 with fractional docker CPU usage quotas.
 
 
 ### 2.2.2 - 2018-08-30 - Bug fix release
