@@ -142,7 +142,9 @@ def cpu_count():
             cfs_period_us = int(fh.read())
 
         if cfs_quota_us > 0 and cfs_period_us > 0:
-            cpu_count_cfs = math.ceil(cfs_quota_us / cfs_period_us)
+            # Make sure this quantity is an int as math.ceil returns a
+            # float in python2.7. (See issue #165)
+            cpu_count_cfs = int(math.ceil(cfs_quota_us / cfs_period_us))
 
     # User defined soft-limit passed as an loky specific environment variable.
     cpu_count_loky = int(os.environ.get('LOKY_MAX_CPU_COUNT', cpu_count_mp))
