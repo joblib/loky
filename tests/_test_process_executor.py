@@ -87,43 +87,6 @@ def sleep_and_write(t, filename, msg):
         f.write(str(msg).encode('utf-8'))
 
 
-def _leak_some_memory(size=int(1e6), delay=0.001):
-    """function that leaks some memory """
-    from loky import process_executor
-    process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
-    if getattr(os, '__loky_leak', None) is None:
-        os.__loky_leak = []
-
-    os.__loky_leak.append(b"\x00" * size)
-
-    # Leave enough time for the memory leak detector to kick-in:
-    # by default the process does not check its memory usage
-    # more than once per second.
-    time.sleep(delay)
-
-    leaked_size = sum(len(buffer) for buffer in os.__loky_leak)
-    return os.getpid(), leaked_size
-
-
-def _create_cyclic_reference(delay=0.001):
-    """function that creates a cyclic reference"""
-    from loky import process_executor
-    process_executor._USE_PSUTIL = False
-    process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
-
-    class A:
-        def __init__(self, size=int(1e6)):
-            self.data = b"\x00" * size
-            self.a = self
-    if getattr(os, '__loky_cyclic_weakrefs', None) is None:
-        os.__loky_cyclic_weakrefs = []
-
-    a = A()
-    time.sleep(delay)
-    os.__loky_cyclic_weakrefs.append(weakref.ref(a))
-    return sum(1 for r in os.__loky_cyclic_weakrefs if r() is not None)
-
-
 class MyObject(object):
     def __init__(self, value=0):
         self.value = value
@@ -829,6 +792,23 @@ class ExecutorTest:
 
         executor = self.executor_type(1, context=self.context)
 
+        def _leak_some_memory(size=int(1e6), delay=0.001):
+            """function that leaks some memory """
+            from loky import process_executor
+            process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
+            if getattr(os, '_loky_leak', None) is None:
+                os._loky_leak = []
+
+            os._loky_leak.append(b"\x00" * size)
+
+            # Leave enough time for the memory leak detector to kick-in:
+            # by default the process does not check its memory usage
+            # more than once per second.
+            time.sleep(delay)
+
+            leaked_size = sum(len(buffer) for buffer in os._loky_leak)
+            return os.getpid(), leaked_size
+
         with pytest.warns(UserWarning, match='memory leak'):
             futures = []
             for i in range(300):
@@ -855,6 +835,24 @@ class ExecutorTest:
         self.executor.shutdown(wait=True)
 
         executor = self.executor_type(1, context=self.context)
+
+        def _create_cyclic_reference(delay=0.001):
+            """function that creates a cyclic reference"""
+            from loky import process_executor
+            process_executor._USE_PSUTIL = False
+            process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
+
+            class A:
+                def __init__(self, size=int(1e6)):
+                    self.data = b"\x00" * size
+                    self.a = self
+            if getattr(os, '_loky_cyclic_weakrefs', None) is None:
+                os._loky_cyclic_weakrefs = []
+
+            a = A()
+            time.sleep(delay)
+            os._loky_cyclic_weakrefs.append(weakref.ref(a))
+            return sum(1 for r in os._loky_cyclic_weakrefs if r() is not None)
 
         futures = []
         for i in range(300):
