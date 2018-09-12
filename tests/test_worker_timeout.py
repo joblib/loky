@@ -1,3 +1,4 @@
+import sys
 import time
 import pytest
 import threading
@@ -100,8 +101,10 @@ class TestTimeoutExecutor():
                     id, [SlowlyPickling(delay)] * n_tasks))
                 assert len(results) == n_tasks
 
+    @pytest.mark.skipif(hasattr(sys, "pypy_version_info"),
+                        reason="Warning detection are unreliable on pypy")
     def test_worker_timeout_shutdown_deadlock(self):
-        """Check that worker timeout don't cause deadlock even when shutting down.
+        """Check that worker timeout don't cause deadlock when shutting down.
         """
         with pytest.warns(UserWarning,
                           match=r'^A worker stopped while some jobs'):
