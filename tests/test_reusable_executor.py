@@ -455,7 +455,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
         # The executor should automatically detect that the worker has crashed
         # when processing subsequently dispatched tasks:
-        with pytest.raises(TerminatedWorkerError):
+        with pytest.raises(BrokenProcessPool):
             executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass
