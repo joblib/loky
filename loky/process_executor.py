@@ -617,30 +617,33 @@ def _queue_management_worker(executor_reference,
         worker_sentinels = [p.sentinel for p in processes.values()]
         ready = wait(readers + worker_sentinels)
 
-        broken = ("A process in the executor was terminated abruptly", None)
+        broken = ("A process in the executor was terminated abruptly", None,
+                  TerminatedWorkerError)
         if result_reader in ready:
             try:
                 result_item = result_reader.recv()
                 broken = None
                 if isinstance(result_item, _RemoteTraceback):
                     cause = result_item.tb
-                    broken = ("A task has failed to un-serialize", cause)
+                    broken = ("A task has failed to un-serialize", cause,
+                              BrokenProcessPool)
             except BaseException as e:
                 tb = getattr(e, "__traceback__", None)
                 if tb is None:
                     _, _, tb = sys.exc_info()
                 broken = ("A result has failed to un-serialize",
-                          traceback.format_exception(type(e), e, tb))
+                          traceback.format_exception(type(e), e, tb),
+                          BrokenProcessPool)
         elif wakeup_reader in ready:
             broken = None
             result_item = None
         thread_wakeup.clear()
         if broken:
-            msg, cause = broken
+            msg, cause, exc_type = broken
             # Mark the process pool broken so that submits fail right now.
             executor_flags.flag_as_broken(
                 msg + ", the pool is not usable anymore.")
-            bpe = BrokenProcessPool(
+            bpe = exc_type(
                 msg + " while the future was running or pending.")
             if cause is not None:
                 bpe.__cause__ = _RemoteTraceback(
@@ -807,6 +810,13 @@ class LokyRecursionError(RuntimeError):
 
 
 class BrokenProcessPool(_BPPException):
+    """
+    Raised when the executor is broken while a future was in the running state.
+    The cause can be UnpicklingError, terminated workers
+    """
+
+
+class TerminatedWorkerError(BrokenProcessPool):
     """
     Raised when a process in a ProcessPoolExecutor terminated abruptly
     while a future was in the running state.
