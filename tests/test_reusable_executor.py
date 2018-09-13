@@ -321,7 +321,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # wait for the executor to be able to detect the issue and set itself
         # in broken state:
         sleep(.5)
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -455,7 +455,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
         # The executor should automatically detect that the worker has crashed
         # when processing subsequently dispatched tasks:
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError):
             executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass

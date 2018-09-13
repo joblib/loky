@@ -62,7 +62,6 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 import os
 import gc
 import sys
-import types
 import struct
 import weakref
 import warnings
@@ -642,7 +641,7 @@ def _queue_management_worker(executor_reference,
             msg, cause, exc_type = broken
             # Mark the process pool broken so that submits fail right now.
             executor_flags.flag_as_broken(
-                msg + ", the pool is not usable anymore.")
+                exc_type(msg + ", the pool is not usable anymore."))
             bpe = exc_type(
                 msg + " while the future was running or pending.")
             if cause is not None:
@@ -1008,7 +1007,7 @@ class ProcessPoolExecutor(_base.Executor):
     def submit(self, fn, *args, **kwargs):
         with self._flags.shutdown_lock:
             if self._flags.broken:
-                raise BrokenProcessPool(self._flags.broken)
+                raise self._flags.broken
             if self._flags.shutdown:
                 raise ShutdownExecutorError(
                     'cannot schedule new futures after shutdown')

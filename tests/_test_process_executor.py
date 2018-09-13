@@ -567,7 +567,7 @@ class ExecutorTest:
         with pytest.raises(TerminatedWorkerError):
             future.result()
         # Submitting other jobs fails as well.
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError):
             self.executor.submit(pow, 2, 8)
 
     def test_map_chunksize(self):
