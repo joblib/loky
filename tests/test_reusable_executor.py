@@ -14,7 +14,7 @@ from pickle import PicklingError, UnpicklingError
 
 from loky import cpu_count
 from loky import get_reusable_executor
-from loky.process_executor import _RemoteTraceback
+from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
@@ -211,19 +211,19 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         (id, (ErrorAtPickle(),), PicklingError, None),
         # Check problem occuring while unpickling a task on workers
         (id, (ExitAtUnpickle(),), BrokenProcessPool, "SystemExit"),
-        (id, (CExitAtUnpickle(),), BrokenProcessPool, None),
+        (id, (CExitAtUnpickle(),), TerminatedWorkerError, None),
         (id, (ErrorAtUnpickle(),), BrokenProcessPool, "UnpicklingError"),
-        (id, (CrashAtUnpickle(),), BrokenProcessPool, None),
+        (id, (CrashAtUnpickle(),), TerminatedWorkerError, None),
         # Check problem occuring during function execution on workers
-        (crash, (), BrokenProcessPool, None),
+        (crash, (), TerminatedWorkerError, None),
         (exit, (), SystemExit, None),
-        (c_exit, (), BrokenProcessPool, None),
+        (c_exit, (), TerminatedWorkerError, None),
         (raise_error, (RuntimeError,), RuntimeError, None),
         # Check problem occuring while pickling a task result
         # on workers
-        (return_instance, (CrashAtPickle,), BrokenProcessPool, None),
+        (return_instance, (CrashAtPickle,), TerminatedWorkerError, None),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), BrokenProcessPool, None),
+        (return_instance, (CExitAtPickle,), TerminatedWorkerError, None),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
@@ -321,7 +321,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # wait for the executor to be able to detect the issue and set itself
         # in broken state:
         sleep(.5)
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -343,7 +343,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
         assert all(list(res))
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -455,7 +455,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
         # The executor should automatically detect that the worker has crashed
         # when processing subsequently dispatched tasks:
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError):
             executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass
@@ -642,7 +642,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             get_reusable_executor(reuse=False).submit(id, 42).result()
         else:
             # Break the shared executor before launching the threads:
-            with pytest.raises(BrokenProcessPool):
+            with pytest.raises(TerminatedWorkerError):
                 executor = get_reusable_executor(reuse=False)
                 executor.submit(return_instance, CrashAtPickle).result()
 

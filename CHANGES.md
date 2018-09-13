@@ -1,3 +1,10 @@
+### 2.3.1
+
+- Improve error reporting when a worker process is terminated abruptly
+  (#169).
+
+- Remove spurious debug output.
+
 ### 2.3.0 - 2018-09-05 - Release highlights
 
 - Add support for PyPy3.
