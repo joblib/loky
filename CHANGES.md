@@ -1,4 +1,4 @@
-### 2.3.1
+### 2.3.1 - 2018-09-13 - Bug fix release
 
 - Improve error reporting when a worker process is terminated abruptly
   (#169).
