@@ -816,7 +816,7 @@ class BrokenProcessPool(_BPPException):
     """
     Raised when the executor is broken while a future was in the running state.
     The cause can an error raised when unpickling the task in the worker
-    process or when unpickling the result value in the parent process. I can
+    process or when unpickling the result value in the parent process. It can
     also be caused by a worker process being terminated unexpectedly.
     """
 
