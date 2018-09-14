@@ -2,6 +2,7 @@ import sys
 import time
 import pytest
 import threading
+import warnings
 import multiprocessing as mp
 from loky.backend import get_context
 from loky import ProcessPoolExecutor
@@ -104,7 +105,7 @@ class TestTimeoutExecutor():
     def test_worker_timeout_shutdown_deadlock(self):
         """Check that worker timeout don't cause deadlock when shutting down.
         """
-        with pytest.warns(UserWarning) as record:
+        with warnings.catch_warnings(record=True) as record:
             with get_reusable_executor(max_workers=2, timeout=.001) as e:
                 # First make sure the executor is started
                 e.submit(id, 42).result()
