@@ -1,4 +1,5 @@
 import re
+import os
 import sys
 import time
 import warnings
@@ -84,6 +85,10 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
     Also checks returncode is zero, stdout if stdout_regex is set, and
     stderr if stderr_regex is set.
     """
+    if env is not None:
+        env_ = os.environ.copy()
+        env_.update(env)
+        env = env_
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=env)
 
