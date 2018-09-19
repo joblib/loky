@@ -78,14 +78,14 @@ def id_sleep(x, delay=0):
 
 
 def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
-                          stderr_regex=None):
+                          stderr_regex=None, env=None):
     """Runs a command in a subprocess with timeout in seconds.
 
     Also checks returncode is zero, stdout if stdout_regex is set, and
     stderr if stderr_regex is set.
     """
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
+                            stderr=subprocess.PIPE, env=env)
 
     def kill_process():
         warnings.warn("Timeout running {}".format(cmd))
@@ -98,6 +98,7 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
         if sys.version_info[0] >= 3:
             stdout, stderr = stdout.decode(), stderr.decode()
+        print(stdout)
         if proc.returncode == -9:
             message = (
                 'Subprocess timeout after {}s.\nStdout:\n{}\n'
