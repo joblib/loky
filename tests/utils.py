@@ -103,7 +103,6 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
         if sys.version_info[0] >= 3:
             stdout, stderr = stdout.decode(), stderr.decode()
-        print(stdout)
         if proc.returncode == -9:
             message = (
                 'Subprocess timeout after {}s.\nStdout:\n{}\n'

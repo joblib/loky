@@ -104,11 +104,13 @@ class TestCloudpickleWrapper:
             assert test_obj.x == 42
             assert test_func(42) == 42
             assert test_obj.return_func() == 42
-            assert test_func(Test().return_func)() == 42
+            assert test_func(test_obj.return_func)() == 42
 
             # Make sure it is picklable even when the executor does not rely on
             # cloudpickle.
             e = get_reusable_executor()
+            result_obj = e.submit(test_func, 42).result()
+            result_obj = e.submit(id, test_obj).result()
             result_obj = e.submit(test_func, test_obj).result()
             assert result_obj.return_func() == 42
 

@@ -88,7 +88,7 @@ def wrap_non_picklable_objects(obj):
 
     # If obj is an  class, create a CloudpickledClassWrappers which instantiate
     # the object internally and wrap it directly in a CloudpickledObjectWrapper
-    if isinstance(obj, type):
+    if inspect.isclass(obj):
         class CloudpickledClassWrapper(CloudpickledObjectWrapper):
             def __init__(self, *args, **kwargs):
                 self._obj = obj(*args, **kwargs)
