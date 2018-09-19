@@ -23,11 +23,7 @@ class CloudpickledObjectWrapper(object):
         if not self._keep_wrapper:
             return loads, (_pickled_object,)
 
-        return self._reconstruct_wrapper, (_pickled_object, self._keep_wrapper)
-
-    @staticmethod
-    def _reconstruct_wrapper(_pickled_object, keep_wrapper):
-        return CloudpickledObjectWrapper(loads(_pickled_object), keep_wrapper)
+        return _reconstruct_wrapper, (_pickled_object, self._keep_wrapper)
 
     def __call__(self, *args, **kwargs):
         return self._obj(*args, **kwargs)
@@ -38,6 +34,10 @@ class CloudpickledObjectWrapper(object):
         if attr not in ['__reduce__', '_obj', '_keep_wrapper']:
             return getattr(self._obj, attr)
         return getattr(self, attr)
+
+
+def _reconstruct_wrapper(_pickled_object, keep_wrapper):
+    return CloudpickledObjectWrapper(loads(_pickled_object), keep_wrapper)
 
 
 def _wrap_objects_when_needed(obj):
@@ -90,9 +90,9 @@ def wrap_non_picklable_objects(obj):
     # the object internally and wrap it directly in a CloudpickledObjectWrapper
     if isinstance(obj, type):
         class CloudpickledClassWrapper(CloudpickledObjectWrapper):
-            def __init__(self, *args, _keep_wrapper=True, **kwargs):
+            def __init__(self, *args, **kwargs):
                 self._obj = obj(*args, **kwargs)
-                self._keep_wrapper = _keep_wrapper
+                self._keep_wrapper = True
 
         return CloudpickledClassWrapper
 
