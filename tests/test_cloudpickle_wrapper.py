@@ -108,8 +108,10 @@ class TestCloudpickleWrapper:
             assert test_func(test_obj.return_func)() == 42
 
             # Make sure the wrapper do not make the object callable
-            with pytest.raises(TypeError, match="Test'"):
-                test_obj()
+            # with pytest.raises(TypeError, match="Test'"):
+            #     test_obj()
+            
+            assert not callable(test_obj)
 
             # Make sure it is picklable even when the executor does not rely on
             # cloudpickle.

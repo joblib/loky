@@ -25,13 +25,6 @@ class CloudpickledObjectWrapper(object):
 
         return _reconstruct_wrapper, (_pickled_object, self._keep_wrapper)
 
-    def __call__(self, *args, **kwargs):
-        # Do not make a callable wrapper when the wrapped object is not.
-        if not callable(self._obj):
-            raise TypeError("'{}' object is not callable"
-                            .format(self._obj.__class__))
-        return self._obj(*args, **kwargs)
-
     def __getattr__(self, attr):
         # Ensure that the wrapped object can be used seemlessly as the
         # previous object.
@@ -40,8 +33,22 @@ class CloudpickledObjectWrapper(object):
         return getattr(self, attr)
 
 
+# Make sure the wrapped object conserves the callable property
+class CallableObjectWrapper(CloudpickledObjectWrapper):
+
+    def __call__(self, *args, **kwargs):
+        return self._obj(*args, **kwargs)
+
+
+def _wrap_non_picklable_objects(obj, keep_wrapper):
+    if callable(obj):
+        return CallableObjectWrapper(obj, keep_wrapper=keep_wrapper)
+    return CloudpickledObjectWrapper(obj, keep_wrapper=keep_wrapper)
+
+
 def _reconstruct_wrapper(_pickled_object, keep_wrapper):
-    return CloudpickledObjectWrapper(loads(_pickled_object), keep_wrapper)
+    obj = loads(_pickled_object)
+    return _wrap_non_picklable_objects(obj, keep_wrapper)
 
 
 def _wrap_objects_when_needed(obj):
@@ -71,7 +78,7 @@ def _wrap_objects_when_needed(obj):
 
     wrapped_obj = WRAP_CACHE.get(obj)
     if wrapped_obj is None:
-        wrapped_obj = CloudpickledObjectWrapper(obj, keep_wrapper=False)
+        wrapped_obj = _wrap_non_picklable_objects(obj, keep_wrapper=False)
         WRAP_CACHE[obj] = wrapped_obj
     return wrapped_obj
 
@@ -102,4 +109,4 @@ def wrap_non_picklable_objects(obj):
 
     # If obj is an instance of a class, just wrap it in a regular
     # CloudpickledObjectWrapper
-    return CloudpickledObjectWrapper(obj, keep_wrapper=True)
+    return _wrap_non_picklable_objects(obj, keep_wrapper=True)
