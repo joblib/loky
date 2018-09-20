@@ -28,7 +28,7 @@ class CloudpickledObjectWrapper(object):
     def __getattr__(self, attr):
         # Ensure that the wrapped object can be used seemlessly as the
         # previous object.
-        if attr not in ['__reduce__', '_obj', '_keep_wrapper']:
+        if attr not in ['_obj', '_keep_wrapper']:
             return getattr(self._obj, attr)
         return getattr(self, attr)
 
@@ -105,6 +105,7 @@ def wrap_non_picklable_objects(obj):
                 self._obj = obj(*args, **kwargs)
                 self._keep_wrapper = True
 
+        CloudpickledClassWrapper.__name__ = obj.__name__
         return CloudpickledClassWrapper
 
     # If obj is an instance of a class, just wrap it in a regular
