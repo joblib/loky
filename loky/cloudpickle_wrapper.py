@@ -26,6 +26,10 @@ class CloudpickledObjectWrapper(object):
         return _reconstruct_wrapper, (_pickled_object, self._keep_wrapper)
 
     def __call__(self, *args, **kwargs):
+        # Do not make a callable wrapper when the wrapped object is not.
+        if not callable(self._obj):
+            raise TypeError("'{}' object is not callable"
+                            .format(self._obj.__class__))
         return self._obj(*args, **kwargs)
 
     def __getattr__(self, attr):

@@ -84,6 +84,7 @@ class TestCloudpickleWrapper:
         # and thus test LokyProcess without the extra argument. For running
         # a script, it is necessary to use init_main_module=False.
         code = """if True:
+            import pytest
             from loky import get_reusable_executor
             from loky.cloudpickle_wrapper import wrap_non_picklable_objects
 
@@ -105,6 +106,10 @@ class TestCloudpickleWrapper:
             assert test_func(42) == 42
             assert test_obj.return_func() == 42
             assert test_func(test_obj.return_func)() == 42
+
+            # Make sure the wrapper do not make the object callable
+            with pytest.raises(TypeError, match="Test'"):
+                test_obj()
 
             # Make sure it is picklable even when the executor does not rely on
             # cloudpickle.
