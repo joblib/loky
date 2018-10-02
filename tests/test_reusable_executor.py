@@ -210,26 +210,26 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         (id, (ExitAtPickle(),), PicklingError, None),
         (id, (ErrorAtPickle(),), PicklingError, None),
         # Check problem occuring while unpickling a task on workers
-        (id, (ExitAtUnpickle(),), BrokenProcessPool, "SystemExit"),
-        (id, (CExitAtUnpickle(),), TerminatedWorkerError, "EXIT\(0\)"),
-        (id, (ErrorAtUnpickle(),), BrokenProcessPool, "UnpicklingError"),
-        (id, (CrashAtUnpickle(),), TerminatedWorkerError, "SIGSEGV"),
+        (id, (ExitAtUnpickle(),), BrokenProcessPool, r"SystemExit"),
+        (id, (CExitAtUnpickle(),), TerminatedWorkerError, r"EXIT\(0\)"),
+        (id, (ErrorAtUnpickle(),), BrokenProcessPool, r"UnpicklingError"),
+        (id, (CrashAtUnpickle(),), TerminatedWorkerError, r"SIGSEGV"),
         # Check problem occuring during function execution on workers
-        (crash, (), TerminatedWorkerError, "SIGSEGV"),
+        (crash, (), TerminatedWorkerError, r"SIGSEGV"),
         (exit, (), SystemExit, None),
-        (c_exit, (), TerminatedWorkerError, "EXIT\(0\)"),
+        (c_exit, (), TerminatedWorkerError, r"EXIT\(0\)"),
         (raise_error, (RuntimeError,), RuntimeError, None),
         # Check problem occuring while pickling a task result
         # on workers
-        (return_instance, (CrashAtPickle,), TerminatedWorkerError, "SIGSEGV"),
+        (return_instance, (CrashAtPickle,), TerminatedWorkerError, r"SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), TerminatedWorkerError, "EXIT\(0\)"),
+        (return_instance, (CExitAtPickle,), TerminatedWorkerError, r"EXIT\(0\)"),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
-        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, "SystemExit"),
+        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, r"SystemExit"),
         (return_instance, (ErrorAtUnpickle,), BrokenProcessPool,
-         "UnpicklingError"),
+         r"UnpicklingError"),
     ]
 
     @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
@@ -455,7 +455,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         assert f2.result() == 42
 
     @pytest.mark.parametrize("bad_object, match", [
-        (CrashAtGCInWorker, "SIGSEGV"), (CExitAtGCInWorker, "EXIT\(0\)")])
+        (CrashAtGCInWorker, r"SIGSEGV"), (CExitAtGCInWorker, r"EXIT\(0\)")])
     def test_call_item_gc_crash_or_exit(self, bad_object, match):
         executor = get_reusable_executor(max_workers=1)
         bad_object = bad_object()

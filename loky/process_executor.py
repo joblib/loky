@@ -81,7 +81,7 @@ from .backend.compat import set_cause
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
 from .cloudpickle_wrapper import _wrap_non_picklable_objects
-from .backend.utils import recursive_terminate, format_exitcodes
+from .backend.utils import recursive_terminate, get_exitcodes_terminated_worker
 
 try:
     from concurrent.futures.process import BrokenProcessPool as _BPPException
@@ -648,11 +648,8 @@ def _queue_management_worker(executor_reference,
         if broken is not None:
             msg, cause_tb, exc_type = broken
             if exc_type is TerminatedWorkerError:
-                # Catch the exitcode of the terminated workers
-                exitcodes = [p.exitcode for p in processes.values()
-                             if p.exitcode is not None]
                 msg += " The exit codes of the workers are {}".format(
-                    format_exitcodes(exitcodes))
+                    get_exitcodes_terminated_worker(processes))
 
             bpe = exc_type(msg)
             if cause_tb is not None:

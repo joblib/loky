@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import errno
 import signal
 import warnings
@@ -115,7 +116,29 @@ def _recursive_terminate(pid):
                 raise
 
 
-def format_exitcodes(exitcodes):
+def get_exitcodes_terminated_worker(processes):
+    """Return a formated string with the exitcodes of terminated workers.
+
+    If necessary, wait (up to .25s) for the system to correctly set the
+    exitcode of one terminated worker.
+    """
+    patience = 5
+
+    # Catch the exitcode of the terminated workers. There should at least be
+    # one. If not, wait a bit for the system to correctly set the exitcode of
+    # the terminated worker.
+    exitcodes = [p.exitcode for p in processes.values()
+                 if p.exitcode is not None]
+    while len(exitcodes) == 0 and patience > 0:
+        patience -= 1
+        exitcodes = [p.exitcode for p in processes.values()
+                     if p.exitcode is not None]
+        time.sleep(.05)
+
+    return _format_exitcodes(exitcodes)
+
+
+def _format_exitcodes(exitcodes):
     """Format a list of exit code with names of the signals if possible"""
     str_exitcodes = ["{}({})".format(_get_exitcode_name(e), e)
                      for e in exitcodes if e is not None]
@@ -128,7 +151,7 @@ def _get_exitcode_name(exitcode):
         # For this case, return UNKNOWN
         return "UNKNOWN"
 
-    if  exitcode < 0:
+    if exitcode < 0:
         try:
             import signal
             if sys.version_info > (3, 5):
