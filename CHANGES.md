@@ -2,6 +2,9 @@
 
 - Improve reporting of causes in python2.7 (#174)
 
+- Improve workers crash reporting by displaying the exitcodes of
+  workers in `TerminatedWorkerError` (#173)
+
 ### 2.3.1 - 2018-09-13 - Bug fix release
 
 - Improve error reporting when a worker process is terminated abruptly
