@@ -125,3 +125,11 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
     finally:
         timer.cancel()
+
+
+def filter_match(match, start_method=None):
+    if sys.platform == "win32":
+        return "UNKNOWN"
+
+    if start_method == "forkserver" and sys.version_info < (3, 7):
+        return "UNKNOWN"

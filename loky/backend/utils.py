@@ -11,6 +11,9 @@ except ImportError:
     psutil = None
 
 
+WIN32 = sys.platform == "win32"
+
+
 def _flag_current_thread_clean_exit():
     """Put a ``_clean_exit`` flag on the current thread"""
     thread = threading.current_thread()
@@ -113,24 +116,34 @@ def _recursive_terminate(pid):
 
 
 def format_exitcodes(exitcodes):
+    """Format a list of exit code with names of the signals if possible"""
     str_exitcodes = ["{}({})".format(_get_exitcode_name(e), e)
                      for e in exitcodes if e is not None]
     return "{" + ", ".join(str_exitcodes) + "}"
 
 
 def _get_exitcode_name(exitcode):
-    if exitcode < 0:
-
-        import signal
-        if sys.version_info > (3, 5):
-            return signal.Signals(-exitcode).name
-
-        # construct an inverse lookup table
-        for v, k in signal.__dict__.items():
-            if (v.startswith('SIG') and not v.startswith('SIG_') and
-                    k == -exitcode):
-                    return v
+    if sys.platform == "win32":
+        # The exitcode are unreliable  on windows (see bpo-31863).
+        # For this case, return UNKNOWN
         return "UNKNOWN"
 
-    else:
+    if  exitcode < 0:
+        try:
+            import signal
+            if sys.version_info > (3, 5):
+                return signal.Signals(-exitcode).name
+
+            # construct an inverse lookup table
+            for v, k in signal.__dict__.items():
+                if (v.startswith('SIG') and not v.startswith('SIG_') and
+                        k == -exitcode):
+                        return v
+        except ValueError:
+            return "UNKNOWN"
+    elif exitcode != 255:
+        # The exitcode are unreliable on forkserver were 255 is always returned
+        # (see bpo-30589). For this case, return UNKNOWN
         return "EXIT"
+
+    return "UNKNOWN"

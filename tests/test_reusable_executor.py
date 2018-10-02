@@ -18,7 +18,7 @@ from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
-from .utils import TimingWrapper, id_sleep, check_subprocess_call
+from .utils import TimingWrapper, id_sleep, check_subprocess_call, filter_match
 
 # Compat windows
 if sys.platform == "win32":
@@ -240,7 +240,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
         match_err = None
         if expected_err is TerminatedWorkerError:
-            match_err = match
+            match_err = filter_match(match)
             match = None
         with pytest.raises(expected_err, match=match_err) as exc_info:
             res.result()
@@ -278,7 +278,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
         match_err = None
         if expected_err is TerminatedWorkerError:
-            match_err = match
+            match_err = filter_match(match)
             match = None
         with pytest.raises(expected_err, match=match_err) as exc_info:
             f.callback_future.result()
@@ -331,7 +331,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # wait for the executor to be able to detect the issue and set itself
         # in broken state:
         sleep(.5)
-        with pytest.raises(TerminatedWorkerError, match=r"SIGKILL"):
+        with pytest.raises(TerminatedWorkerError,
+                           match=filter_match(r"SIGKILL")):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -353,7 +354,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
         assert all(list(res))
-        with pytest.raises(TerminatedWorkerError, match=r"SIGKILL"):
+        with pytest.raises(TerminatedWorkerError,
+                           match=filter_match(r"SIGKILL")):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -465,7 +467,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
         # The executor should automatically detect that the worker has crashed
         # when processing subsequently dispatched tasks:
-        with pytest.raises(TerminatedWorkerError, match=match):
+        with pytest.raises(TerminatedWorkerError, match=filter_match(match)):
             executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass
@@ -652,7 +654,8 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             get_reusable_executor(reuse=False).submit(id, 42).result()
         else:
             # Break the shared executor before launching the threads:
-            with pytest.raises(TerminatedWorkerError, match=r"SIGSEGV"):
+            with pytest.raises(TerminatedWorkerError,
+                               match=filter_match(r"SIGSEGV")):
                 executor = get_reusable_executor(reuse=False)
                 executor.submit(return_instance, CrashAtPickle).result()
 

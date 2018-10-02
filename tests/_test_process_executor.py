@@ -36,10 +36,11 @@ from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
 from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, LokyRecursionError
-from .test_reusable_executor import ErrorAtPickle
-from .test_reusable_executor import ExitAtPickle
+
 from . import _executor_mixin
-from .utils import id_sleep, check_subprocess_call
+from .test_reusable_executor import ExitAtPickle
+from .test_reusable_executor import ErrorAtPickle
+from .utils import id_sleep, check_subprocess_call, filter_match
 
 if sys.version_info[:2] < (3, 3):
     import loky._base as futures
@@ -269,7 +270,8 @@ class ExecutorShutdownTest:
 
         # The crashing job should be executed after the non-failing jobs
         # have completed. The crash should be detected.
-        with pytest.raises(TerminatedWorkerError, match=r"SIGSEGV"):
+        match = filter_match(r"SIGSEGV", self.context.get_start_method())
+        with pytest.raises(TerminatedWorkerError, match=match):
             crash_result.result()
 
         _executor_mixin._test_event.clear()
@@ -564,10 +566,12 @@ class ExecutorTest:
         # Get one of the processes, and terminate (kill) it
         p = next(iter(self.executor._processes.values()))
         p.terminate()
-        with pytest.raises(TerminatedWorkerError, match=r"SIGTERM"):
+        match = filter_match(r"SIGTERM", self.context.get_start_method())
+        with pytest.raises(TerminatedWorkerError, match=match):
             future.result()
         # Submitting other jobs fails as well.
-        with pytest.raises(TerminatedWorkerError, match=r"SIGTERM"):
+        match = filter_match(r"SIGTERM", self.context.get_start_method())
+        with pytest.raises(TerminatedWorkerError, match=match):
             self.executor.submit(pow, 2, 8)
 
     def test_map_chunksize(self):
