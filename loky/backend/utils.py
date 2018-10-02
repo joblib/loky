@@ -110,3 +110,27 @@ def _recursive_terminate(pid):
             # level function raise a warning and retry to kill the process.
             if e.errno != errno.ESRCH:
                 raise
+
+
+def format_exitcodes(exitcodes):
+    str_exitcodes = ["{}({})".format(_get_exitcode_name(e), e)
+                     for e in exitcodes if e is not None]
+    return "{" + ", ".join(str_exitcodes) + "}"
+
+
+def _get_exitcode_name(exitcode):
+    if exitcode < 0:
+
+        import signal
+        if sys.version_info > (3, 5):
+            return signal.Signals(-exitcode).name
+
+        # construct an inverse lookup table
+        for v, k in signal.__dict__.items():
+            if (v.startswith('SIG') and not v.startswith('SIG_') and
+                    k == -exitcode):
+                    return v
+        return "UNKNOWN"
+
+    else:
+        return "EXIT"
