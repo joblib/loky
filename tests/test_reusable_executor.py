@@ -211,19 +211,19 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         (id, (ErrorAtPickle(),), PicklingError, None),
         # Check problem occuring while unpickling a task on workers
         (id, (ExitAtUnpickle(),), BrokenProcessPool, "SystemExit"),
-        (id, (CExitAtUnpickle(),), TerminatedWorkerError, None),
+        (id, (CExitAtUnpickle(),), TerminatedWorkerError, "EXIT\(0\)"),
         (id, (ErrorAtUnpickle(),), BrokenProcessPool, "UnpicklingError"),
-        (id, (CrashAtUnpickle(),), TerminatedWorkerError, None),
+        (id, (CrashAtUnpickle(),), TerminatedWorkerError, "SIGSEGV"),
         # Check problem occuring during function execution on workers
-        (crash, (), TerminatedWorkerError, None),
+        (crash, (), TerminatedWorkerError, "SIGSEGV"),
         (exit, (), SystemExit, None),
-        (c_exit, (), TerminatedWorkerError, None),
+        (c_exit, (), TerminatedWorkerError, "EXIT\(0\)"),
         (raise_error, (RuntimeError,), RuntimeError, None),
         # Check problem occuring while pickling a task result
         # on workers
-        (return_instance, (CrashAtPickle,), TerminatedWorkerError, None),
+        (return_instance, (CrashAtPickle,), TerminatedWorkerError, "SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), TerminatedWorkerError, None),
+        (return_instance, (CExitAtPickle,), TerminatedWorkerError, "EXIT\(0\)"),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
@@ -237,7 +237,12 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         """Test various reusable_executor crash handling"""
         executor = get_reusable_executor(max_workers=2)
         res = executor.submit(func, *args)
-        with pytest.raises(expected_err) as exc_info:
+
+        match_err = None
+        if expected_err is TerminatedWorkerError:
+            match_err = match
+            match = None
+        with pytest.raises(expected_err, match=match_err) as exc_info:
             res.result()
 
         # For remote traceback, ensure that the cause contains the original
@@ -246,8 +251,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
             with pytest.raises(_RemoteTraceback, match=match):
                 raise exc_info.value.__cause__
 
-    @pytest.mark.parametrize("func, args, expected_exc, match", crash_cases)
-    def test_in_callback_submit_with_crash(self, func, args, expected_exc,
+    @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
+    def test_in_callback_submit_with_crash(self, func, args, expected_err,
                                            match):
         """Test the recovery from callback crash"""
         executor = get_reusable_executor(max_workers=2, timeout=12)
@@ -270,7 +275,12 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         assert f.result() == 42
         if not f.callback_done.wait(timeout=3):
             raise AssertionError('callback not done before timeout')
-        with pytest.raises(expected_exc) as exc_info:
+
+        match_err = None
+        if expected_err is TerminatedWorkerError:
+            match_err = match
+            match = None
+        with pytest.raises(expected_err, match=match_err) as exc_info:
             f.callback_future.result()
 
         # For remote traceback, ensure that the cause contains the original
@@ -321,7 +331,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # wait for the executor to be able to detect the issue and set itself
         # in broken state:
         sleep(.5)
-        with pytest.raises(TerminatedWorkerError):
+        with pytest.raises(TerminatedWorkerError, match=r"SIGKILL"):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -343,7 +353,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
         assert all(list(res))
-        with pytest.raises(TerminatedWorkerError):
+        with pytest.raises(TerminatedWorkerError, match=r"SIGKILL"):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -442,9 +452,9 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         f2 = executor.submit(id_sleep, 42, 0)
         assert f2.result() == 42
 
-    @pytest.mark.parametrize("bad_object", [CrashAtGCInWorker,
-                                            CExitAtGCInWorker])
-    def test_call_item_gc_crash_or_exit(self, bad_object):
+    @pytest.mark.parametrize("bad_object, match", [
+        (CrashAtGCInWorker, "SIGSEGV"), (CExitAtGCInWorker, "EXIT\(0\)")])
+    def test_call_item_gc_crash_or_exit(self, bad_object, match):
         executor = get_reusable_executor(max_workers=1)
         bad_object = bad_object()
         f = executor.submit(id, bad_object)
@@ -455,7 +465,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
         # The executor should automatically detect that the worker has crashed
         # when processing subsequently dispatched tasks:
-        with pytest.raises(TerminatedWorkerError):
+        with pytest.raises(TerminatedWorkerError, match=match):
             executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass
@@ -642,7 +652,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             get_reusable_executor(reuse=False).submit(id, 42).result()
         else:
             # Break the shared executor before launching the threads:
-            with pytest.raises(TerminatedWorkerError):
+            with pytest.raises(TerminatedWorkerError, match=r"SIGSEGV"):
                 executor = get_reusable_executor(reuse=False)
                 executor.submit(return_instance, CrashAtPickle).result()
 
