@@ -42,8 +42,10 @@ before_install:
       brew update
       brew upgrade $PYTHON
       $PYTHON --version
+      $PYTHON -m ensurepip
       which $PYTHON
       PATH="/usr/local/opt/python/libexec/bin:$PATH"
+      echo $PATH
       pip3 --version
       $PYTHON -m pip --version
     fi
