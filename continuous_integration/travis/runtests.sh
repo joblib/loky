@@ -5,13 +5,14 @@
 # License: 3-clause BSD
 
 set -e
+which $PYTHON
 $PYTHON --version
 echo $TOXENV
 
 # Make sure that we have the python docker image cached locally to avoid
 # a timeout in a test that needs it.
 
-if [ `which docker` != "" ]; then
+if [ "$(which docker)" != "" ]; then
     docker pull python:3.6
 fi
 
@@ -32,5 +33,5 @@ else
     if [ "$RUN_MEMORY" != "true" ]; then
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
-    COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" tox -- $PYTEST_ARGS
+    COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" $PYTHON -m tox -- $PYTEST_ARGS
 fi
