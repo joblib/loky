@@ -77,6 +77,7 @@ from . import _base
 from .backend import get_context
 from .backend.compat import queue
 from .backend.compat import wait
+from .backend.compat import set_cause
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
 from .backend.utils import recursive_terminate
@@ -218,7 +219,8 @@ class _RemoteTraceback(Exception):
 
 class _ExceptionWithTraceback(BaseException):
 
-    def __init__(self, exc, tb=None):
+    def __init__(self, exc):
+        tb = getattr(exc, "__traceback__", None)
         if tb is None:
             _, _, tb = sys.exc_info()
         tb = traceback.format_exception(type(exc), exc, tb)
@@ -231,7 +233,7 @@ class _ExceptionWithTraceback(BaseException):
 
 
 def _rebuild_exc(exc, tb):
-    exc.__cause__ = _RemoteTraceback(tb)
+    exc = set_cause(exc, _RemoteTraceback(tb))
     return exc
 
 
@@ -299,8 +301,8 @@ class _SafeQueue(Queue):
                     "Could not pickle the task to send it to the workers.")
             tb = traceback.format_exception(
                 type(e), e, getattr(e, "__traceback__", None))
-            raised_error.__cause__ = _RemoteTraceback(
-                '\n"""\n{}"""'.format(''.join(tb)))
+            raised_error = set_cause(raised_error, _RemoteTraceback(
+                                     '\n"""\n{}"""'.format(''.join(tb))))
             work_item = self.pending_work_items.pop(obj.work_id, None)
             self.running_work_items.remove(obj.work_id)
             # work_item can be None if another process terminated. In this
@@ -345,7 +347,7 @@ def _sendback_result(result_queue, work_id, result=None, exception=None):
         result_queue.put(_ResultItem(work_id, result=result,
                                      exception=exception))
     except BaseException as e:
-        exc = _ExceptionWithTraceback(e, getattr(e, "__traceback__", None))
+        exc = _ExceptionWithTraceback(e)
         result_queue.put(_ResultItem(work_id, exception=exc))
 
 
@@ -419,7 +421,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         try:
             r = call_item.fn(*call_item.args, **call_item.kwargs)
         except BaseException as e:
-            exc = _ExceptionWithTraceback(e, getattr(e, "__traceback__", None))
+            exc = _ExceptionWithTraceback(e)
             result_queue.put(_ResultItem(call_item.work_id, exception=exc))
         else:
             _sendback_result(result_queue, call_item.work_id, result=r)
@@ -647,8 +649,8 @@ def _queue_management_worker(executor_reference,
             msg, cause_tb, exc_type = broken
             bpe = exc_type(msg)
             if cause_tb is not None:
-                bpe.__cause__ = _RemoteTraceback(
-                    "\n'''\n{}'''".format(''.join(cause_tb)))
+                bpe = set_cause(bpe, _RemoteTraceback(
+                          "\n'''\n{}'''".format(''.join(cause_tb))))
             # Mark the process pool broken so that submits fail right now.
             executor_flags.flag_as_broken(bpe)
 
