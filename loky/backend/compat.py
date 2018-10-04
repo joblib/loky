@@ -1,4 +1,3 @@
-# flake8: noqa
 ###############################################################################
 # Compat file to import the correct modules for each platform and python
 # version.
@@ -6,7 +5,6 @@
 # author: Thomas Moreau and Olivier grisel
 #
 import sys
-import types
 
 PY3 = sys.version_info[:2] >= (3, 3)
 
@@ -15,8 +13,6 @@ if PY3:
 else:
     import Queue as queue
 
-from pickle import PicklingError
-
 if sys.version_info >= (3, 4):
     from multiprocessing.process import BaseProcess
 else:
@@ -24,9 +20,9 @@ else:
 
 # Platform specific compat
 if sys.platform == "win32":
-    from .compat_win32 import *
+    from .compat_win32 import wait
 else:
-    from .compat_posix import *
+    from .compat_posix import wait
 
 
 def set_cause(exc, cause):
@@ -40,3 +36,6 @@ def set_cause(exc, cause):
                                 str(exc.__cause__)),)
 
     return exc
+
+
+__all__ = ["queue", "BaseProcess", "set_cause", "wait"]
