@@ -597,7 +597,14 @@ class ExecutorTest:
 
         exc = cm.value
         assert type(exc) is RuntimeError
-        assert exc.args == (123,)
+        if sys.version_info > (3,):
+            assert exc.args == (123,)
+        else:
+            assert exc.args[0].startswith("123")
+            # Makes sure that the cause of the RuntimeError is properly
+            # reported in the error message.
+            assert "raise RuntimeError(123)  # some comment" in exc.args[0]
+
         cause = exc.__cause__
         assert type(cause) is process_executor._RemoteTraceback
         assert 'raise RuntimeError(123)  # some comment' in cause.tb

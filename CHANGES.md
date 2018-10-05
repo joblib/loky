@@ -1,3 +1,7 @@
+### 2.3.2dev0 - In development
+
+- Improve reporting of causes in python2.7 (#174)
+
 ### 2.3.1 - 2018-09-13 - Bug fix release
 
 - Improve error reporting when a worker process is terminated abruptly

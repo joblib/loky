@@ -41,6 +41,7 @@ before_install:
     if [ $TRAVIS_OS_NAME == 'osx' ] && [ $PYTHON == 'python3' ]; then
       brew update
       brew upgrade $PYTHON
+      $PYTHON -m ensurepip
     fi
 
 install: $PYTHON -m pip install tox
