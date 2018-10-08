@@ -77,9 +77,9 @@ def exit():
     sys.exit(0)
 
 
-def c_exit():
+def c_exit(exitcode=0):
     """Induces a libc exit with exitcode 0"""
-    libc.exit(0)
+    libc.exit(exitcode)
 
 
 def check_pids_exist_then_sleep(arg):
