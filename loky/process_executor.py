@@ -647,13 +647,13 @@ def _queue_management_worker(executor_reference,
         thread_wakeup.clear()
         if broken is not None:
             msg, cause_tb, exc_type = broken
-            if exc_type is TerminatedWorkerError:
+            if (issubclass(exc_type, TerminatedWorkerError) and
+                    (sys.platform != "win32")):
                 # In Windows, introspecting terminated workers exitcodes seems
                 # unstable, therefore they are not appended in the exception
                 # message.
-                if not sys.platform == "win32":
-                    msg += " The exit codes of the workers are {}".format(
-                        get_exitcodes_terminated_worker(processes))
+                msg += " The exit codes of the workers are {}".format(
+                    get_exitcodes_terminated_worker(processes))
 
             bpe = exc_type(msg)
             if cause_tb is not None:
