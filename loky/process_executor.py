@@ -829,13 +829,6 @@ class BrokenProcessPool(_BPPException):
     process or when unpickling the result value in the parent process. It can
     also be caused by a worker process being terminated unexpectedly.
     """
-    if sys.version_info < (3, ):
-        def __str__(self):
-            msg = repr(self)
-            if getattr(self, "__cause__", None) is not None:
-                msg += "\n\nThis was caused directly by "
-                msg += str(self.__cause__)
-            return msg
 
 
 class TerminatedWorkerError(BrokenProcessPool):

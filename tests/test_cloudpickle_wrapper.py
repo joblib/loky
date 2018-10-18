@@ -36,9 +36,10 @@ class TestCloudpickleWrapper:
             # Makes sure that if LOKY_PICKLER is set to default pickle, the
             # tasks are not wrapped with cloudpickle and it is not possible
             # using functions from the main module.
+            env = os.environ.copy()
+            env['LOKY_PICKLER'] = 'pickle'
             with pytest.raises(ValueError, match=r'A task has failed to un-s'):
-                check_subprocess_call(cmd, timeout=10,
-                                      env={'LOKY_PICKLER': 'pickle'})
+                check_subprocess_call(cmd, timeout=10, env=env)
         finally:
             os.unlink(filename)
 
@@ -79,10 +80,8 @@ class TestCloudpickleWrapper:
             os.unlink(filename)
 
     def test_cloudpickle_flag_wrapper(self):
-        # check that the init_main_module parameter works properly
-        # when using -c option, we don't need the safeguard if __name__ ..
-        # and thus test LokyProcess without the extra argument. For running
-        # a script, it is necessary to use init_main_module=False.
+        # check that the wrap_non_picklable_objects works properly on functions
+        # and classes.
         code = """if True:
             import pytest
             from loky import get_reusable_executor
@@ -131,7 +130,9 @@ class TestCloudpickleWrapper:
             with open(filename, mode='wb') as f:
                 f.write(code.encode('ascii'))
             cmd += [filename]
-            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10,
-                                  env={'LOKY_PICKLER': 'pickle'})
+
+            env = os.environ.copy()
+            env['LOKY_PICKLER'] = 'pickle'
+            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10, env=env)
         finally:
             os.unlink(filename)
