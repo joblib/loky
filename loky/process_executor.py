@@ -80,8 +80,8 @@ from .backend.compat import wait
 from .backend.compat import set_cause
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
-from .backend.utils import recursive_terminate
 from .cloudpickle_wrapper import _wrap_non_picklable_objects
+from .backend.utils import recursive_terminate, get_exitcodes_terminated_worker
 
 try:
     from concurrent.futures.process import BrokenProcessPool as _BPPException
@@ -647,6 +647,14 @@ def _queue_management_worker(executor_reference,
         thread_wakeup.clear()
         if broken is not None:
             msg, cause_tb, exc_type = broken
+            if (issubclass(exc_type, TerminatedWorkerError) and
+                    (sys.platform != "win32")):
+                # In Windows, introspecting terminated workers exitcodes seems
+                # unstable, therefore they are not appended in the exception
+                # message.
+                msg += " The exit codes of the workers are {}".format(
+                    get_exitcodes_terminated_worker(processes))
+
             bpe = exc_type(msg)
             if cause_tb is not None:
                 bpe = set_cause(bpe, _RemoteTraceback(
