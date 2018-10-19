@@ -36,8 +36,7 @@ class TestCloudpickleWrapper:
             # Makes sure that if LOKY_PICKLER is set to default pickle, the
             # tasks are not wrapped with cloudpickle and it is not possible
             # using functions from the main module.
-            env = os.environ.copy()
-            env['LOKY_PICKLER'] = 'pickle'
+            env = {'LOKY_PICKLER': 'pickle'}
             with pytest.raises(ValueError, match=r'A task has failed to un-s'):
                 check_subprocess_call(cmd, timeout=10, env=env)
         finally:
