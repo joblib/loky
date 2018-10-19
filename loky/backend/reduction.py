@@ -163,22 +163,22 @@ def set_loky_pickler(pickler=None):
         if sys.version_info < (3,):
             # Make the dispatch registry an instance level attribute instead of
             # a reference to the class dictionary under Python 2
-            dispatch = pickler_cls.dispatch.copy()
-            dispatch.update(_ReducerRegistry.dispatch_table)
+            _dispatch = pickler_cls.dispatch.copy()
+            _dispatch.update(_ReducerRegistry.dispatch_table)
         else:
             # Under Python 3 initialize the dispatch table with a copy of the
             # default registry
-            dispatch_table = copyreg.dispatch_table.copy()
-            dispatch_table.update(_ReducerRegistry.dispatch_table)
+            _dispatch_table = copyreg.dispatch_table.copy()
+            _dispatch_table.update(_ReducerRegistry.dispatch_table)
 
         def __init__(self, writer, reducers=None, protocol=HIGHEST_PROTOCOL):
             pickler_cls.__init__(self, writer, protocol=protocol)
             if reducers is None:
                 reducers = {}
             if sys.version_info < (3,):
-                self.dispatch = self.dispatch.copy()
+                self.dispatch = self._dispatch.copy()
             else:
-                self.dispatch_table = self.dispatch_table.copy()
+                self.dispatch_table = self._dispatch_table.copy()
             for type, reduce_func in reducers.items():
                 self.register(type, reduce_func)
 

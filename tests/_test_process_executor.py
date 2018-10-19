@@ -749,14 +749,15 @@ class ExecutorTest:
             max_workers=2, context=self.context, job_reducers=job_reducers,
             result_reducers=result_reducers
         )
-        # self.executor = self.executor_type(max_workers=2, context=self.context)
+        self.executor = self.executor_type(max_workers=2, context=self.context)
 
         obj = MyObject(1)
         try:
-            # ret_obj = self.executor.submit(self.return_inputs, obj).result()[0]
-            ret_obj_custom = executor.submit(self.return_inputs, obj).result()[0]
+            ret_obj_custom = executor.submit(
+                    self.return_inputs, obj).result()[0]
+            ret_obj = self.executor.submit(self.return_inputs, obj).result()[0]
 
-            # assert ret_obj.value == 1
+            assert ret_obj.value == 1
             assert ret_obj_custom.value == 42
         finally:
             executor.shutdown(wait=True)
