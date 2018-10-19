@@ -216,15 +216,7 @@ def loads(buf):
 def dump(obj, file, reducers=None, protocol=None):
     '''Replacement for pickle.dump() using _LokyPickler.'''
     global _LokyPickler
-    pickler = _LokyPickler(file, reducers=reducers, protocol=protocol)
-
-    from pickle import Pickler
-    assert issubclass(_LokyPickler, Pickler)
-    if reducers is None:
-        reducers = {}
-    for type, reduce_func in reducers.items():
-        pickler.dispatch_table[type] = reduce_func
-    pickler.dump(obj)
+    _LokyPickler(file, reducers=reducers, protocol=protocol).dump(obj)
 
 
 def dumps(obj, reducers=None, protocol=None):
