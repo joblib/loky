@@ -63,7 +63,7 @@ class _ReducerRegistry(object):
             def dispatcher(cls, obj):
                 reduced = reduce_func(obj)
                 cls.save_reduce(obj=obj, *reduced)
-            cls.dispatch[type] = dispatcher
+            cls.dispatch_table[type] = dispatcher
         else:
             cls.dispatch_table[type] = reduce_func
 
