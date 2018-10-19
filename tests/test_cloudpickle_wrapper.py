@@ -135,3 +135,69 @@ class TestCloudpickleWrapper:
             check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10, env=env)
         finally:
             os.unlink(filename)
+
+    @pytest.mark.parametrize('loky_pickler, should_fail', [
+        (None, False), ("''", False), ("'cloudpickle'", False),
+        ("'pickle'", True)
+    ])
+    def test_set_loky_pickler(self, loky_pickler, should_fail):
+        # Test that the function set_loky_pickler correctly changes the pickler
+        # used in loky.
+        code = """if True:
+            from pickle import Pickler
+            from loky import set_loky_pickler
+            from loky import get_reusable_executor
+            from loky.backend.reduction import get_loky_pickler
+            from loky.backend.reduction import use_cloudpickle_wrapper
+
+            loky_pickler = {loky_pickler}
+            set_loky_pickler(loky_pickler)
+
+            def test_func(x):
+                pass
+
+            current_loky_pickler = get_loky_pickler()
+            if loky_pickler == "cloudpickle":
+                from cloudpickle import CloudPickler
+                assert current_loky_pickler == 'CloudPickler', (
+                    "Expected CloudPickler and got {{}}"
+                    .format(current_loky_pickler))
+            else:
+                assert current_loky_pickler == 'Pickler', (
+                    "Expected Pickler and got {{}}"
+                    .format(current_loky_pickler))
+
+            if loky_pickler in ['cloudpickle', 'pickle']:
+                assert not use_cloudpickle_wrapper()
+            else:
+                assert use_cloudpickle_wrapper()
+
+            # Make sure that the default behavior is restored when
+            # set_loky_pickler is used without arguments
+            set_loky_pickler()
+            current_loky_pickler = get_loky_pickler()
+            assert current_loky_pickler == 'Pickler', (
+                "default got loky_pickler={{}}".format(current_loky_pickler))
+            assert use_cloudpickle_wrapper()
+
+            # Test that the behavior expected. This should only fail when
+            # using the default pickle without the cloudpickle_wrapper.
+            set_loky_pickler(loky_pickler)
+            e = get_reusable_executor()
+            e.submit(test_func, 42).result()
+            print("ok")
+        """.format(loky_pickler=loky_pickler)
+        cmd = [sys.executable]
+        try:
+            fid, filename = mkstemp(suffix="_joblib.py")
+            os.close(fid)
+            with open(filename, mode='wb') as f:
+                f.write(code.encode('ascii'))
+            cmd += [filename]
+            if should_fail:
+                with pytest.raises(ValueError, match=r'task has failed to un'):
+                    check_subprocess_call(cmd, timeout=10)
+            else:
+                check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+        finally:
+            os.unlink(filename)

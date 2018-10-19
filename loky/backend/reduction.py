@@ -9,9 +9,9 @@
 #    on the fly.
 #
 import io
+import os
 import sys
 import functools
-import warnings
 from multiprocessing import util
 try:
     # Python 2 compat
@@ -21,13 +21,16 @@ except ImportError:
     import copyreg
 
 from pickle import HIGHEST_PROTOCOL
-from . import LOKY_PICKLER
+
 
 if sys.platform == "win32":
     if sys.version_info[:2] > (3, 3):
         from multiprocessing.reduction import duplicate
     else:
         from multiprocessing.forking import duplicate
+
+
+ENV_LOKY_PICKLER = os.environ.get("LOKY_PICKLER")
 
 
 ###############################################################################
@@ -125,45 +128,48 @@ _LokyPickler = None
 _use_cloudpickle_wrapper = True
 
 
-def set_loky_pickler(pickler=None):
+def set_loky_pickler(loky_pickler=None):
     global _LokyPickler, _use_cloudpickle_wrapper
 
-    if pickler is None:
-        pickler = LOKY_PICKLER
+    if loky_pickler is None:
+        loky_pickler = ENV_LOKY_PICKLER
 
-    pickler_cls = None
+    loky_pickler_cls = None
 
-    if pickler in ["pickle", "", None]:
-        # Only use the cloudpickle_wrapper when pickler is None or ''
-        from pickle import Pickler as pickler_cls
-        _use_cloudpickle_wrapper = pickler != "pickle"
+    if loky_pickler in ["pickle", "", None]:
+        # Only use the cloudpickle_wrapper when loky_pickler is None or ''
+        from pickle import Pickler as loky_pickler_cls
+        _use_cloudpickle_wrapper = loky_pickler != "pickle"
     else:
         _use_cloudpickle_wrapper = False
         try:
-            if pickler == 'cloudpickle':
-                from cloudpickle import CloudPickler as pickler_cls
+            if loky_pickler == 'cloudpickle':
+                from cloudpickle import CloudPickler as loky_pickler_cls
             else:
                 from importlib import import_module
-                module_pickle = import_module(pickler)
+                module_pickle = import_module(loky_pickler)
                 if not hasattr(module_pickle, 'Pickler'):
                     raise ValueError("Failed to find Pickler object in module "
                                      "'{}', requested for pickling."
-                                     .format(pickler))
-                pickler_cls = module_pickle.Pickler
+                                     .format(loky_pickler))
+                loky_pickler_cls = module_pickle.Pickler
         except ImportError:
-            raise ValueError("Failed to import '{}' requested for pickler. "
-                             "Make sure it is available on your system."
-                             .format(pickler))
+            raise ValueError("Failed to import '{}' as a loky_pickler. Make "
+                             "sure it is available on your system and the "
+                             "value passed to set_loky_pickler or to the "
+                             "environment variable LOKY_PICKLER is valid."
+                             .format(loky_pickler))
 
     util.debug("Using default backend {} for pickling."
-               .format(pickler if pickler else "pickle"))
+               .format(loky_pickler if loky_pickler else "pickle"))
 
-    class CustomizablePickler(pickler_cls):
+    class CustomizablePickler(loky_pickler_cls):
+        _loky_pickler_cls = loky_pickler_cls
 
         if sys.version_info < (3,):
             # Make the dispatch registry an instance level attribute instead of
             # a reference to the class dictionary under Python 2
-            _dispatch = pickler_cls.dispatch.copy()
+            _dispatch = loky_pickler_cls.dispatch.copy()
             _dispatch.update(_ReducerRegistry.dispatch_table)
         else:
             # Under Python 3 initialize the dispatch table with a copy of the
@@ -172,7 +178,7 @@ def set_loky_pickler(pickler=None):
             _dispatch_table.update(_ReducerRegistry.dispatch_table)
 
         def __init__(self, writer, reducers=None, protocol=HIGHEST_PROTOCOL):
-            pickler_cls.__init__(self, writer, protocol=protocol)
+            loky_pickler_cls.__init__(self, writer, protocol=protocol)
             if reducers is None:
                 reducers = {}
             if sys.version_info < (3,):
@@ -183,7 +189,8 @@ def set_loky_pickler(pickler=None):
                 self.register(type, reduce_func)
 
         def register(self, type, reduce_func):
-            """Attach a reducer function to a given type in the dispatch table."""
+            """Attach a reducer function to a given type in the dispatch table.
+            """
             util.debug((type, "register", reduce_func))
             if sys.version_info < (3,):
                 # Python 2 pickler dispatching is not explicitly customizable.
@@ -196,6 +203,11 @@ def set_loky_pickler(pickler=None):
                 self.dispatch_table[type] = reduce_func
 
     _LokyPickler = CustomizablePickler
+
+
+def get_loky_pickler():
+    global _LokyPickler
+    return _LokyPickler._loky_pickler_cls.__name__
 
 
 def use_cloudpickle_wrapper():
