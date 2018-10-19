@@ -8,7 +8,7 @@ from loky.backend import get_context
 from loky import ProcessPoolExecutor
 from loky import get_reusable_executor
 from loky.backend.queues import SimpleQueue
-from loky.backend.reduction import CustomizableLokyPickler
+from loky.backend.reduction import dumps
 
 
 class SlowlyPickling(object):
@@ -52,7 +52,7 @@ class DelayedSimpleQueue(SimpleQueue):
     @staticmethod
     def _feed(readlock, reader, writer, delay):
 
-        PICKLE_NONE = CustomizableLokyPickler.dumps(None)
+        PICKLE_NONE = dumps(None)
 
         while True:
             with readlock:

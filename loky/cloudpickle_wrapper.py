@@ -1,7 +1,7 @@
 import inspect
 from functools import partial
 
-from .backend import LOKY_PICKLER
+from .backend.reduction import use_cloudpickle_wrapper
 
 try:
     from cloudpickle import dumps, loads
@@ -52,7 +52,7 @@ def _reconstruct_wrapper(_pickled_object, keep_wrapper):
 
 
 def _wrap_objects_when_needed(obj):
-    if LOKY_PICKLER or not cloudpickle:
+    if not use_cloudpickle_wrapper() or not cloudpickle:
         return obj
 
     need_wrap = "__main__" in getattr(obj, "__module__", "")

@@ -91,6 +91,9 @@ class MyObject(object):
     def __init__(self, value=0):
         self.value = value
 
+    def __repr__(self):
+        return "MyObject({})".format(self.value)
+
     def my_method(self):
         pass
 
@@ -746,16 +749,17 @@ class ExecutorTest:
             max_workers=2, context=self.context, job_reducers=job_reducers,
             result_reducers=result_reducers
         )
-        self.executor = self.executor_type(max_workers=2, context=self.context)
+        # self.executor = self.executor_type(max_workers=2, context=self.context)
 
         obj = MyObject(1)
-        ret_obj = self.executor.submit(self.return_inputs, obj).result()[0]
-        ret_obj_custom = executor.submit(self.return_inputs, obj).result()[0]
+        try:
+            # ret_obj = self.executor.submit(self.return_inputs, obj).result()[0]
+            ret_obj_custom = executor.submit(self.return_inputs, obj).result()[0]
 
-        assert ret_obj.value == 1
-        assert ret_obj_custom.value == 42
-
-        executor.shutdown(wait=True)
+            # assert ret_obj.value == 1
+            assert ret_obj_custom.value == 42
+        finally:
+            executor.shutdown(wait=True)
 
     @classmethod
     def _test_max_depth(cls, max_depth=10, kill_workers=False, ctx=None):
