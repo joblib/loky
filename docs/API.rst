@@ -13,12 +13,16 @@ To share function definition across multiple python processes, it is necessary t
 
 To avoid this limitation, :mod:`loky` relies on |cloudpickle| when it is present. |cloudpickle| is a fork of the pickle protocol which allows the serialization of a greater number of objects and it can be installed using :code:`pip install cloudpickle`. As this library is slower than the :mod:`pickle` module in the standard library, by default, :mod:`loky` uses it only to serialize objects which are detected to be in the :code:`__main__` module.
 
-There is three ways to temper with the serialization in :mod:`loky`:
+There are three ways to temper with the serialization in :mod:`loky`:
 
 - Using the arguments :code:`job_reducers` and :code:`result_reducers`, it is possible to register custom reducers for the serialization process.
 - Setting the variable :code:`LOKY_PICKLER` to an available and valid serialization module. This module must present a valid :code:`Pickler` object. Setting the environment variable :code:`LOKY_PICKER=cloudpickle` will force :mod:`loky` to serialize everything with |cloudpickle| instead of just serializing the object detected to be in the :code:`__main__` module.
-- Using the decorator :func:`loky.wrap_unpicklable_objects` on the objects and functions which cannot be pickled by the regular protocol. This decorator forces the use of |cloudpickle| for the decorated object. Note that this sometimes include a performance overhead.
+- Finally, it is possible to get an object-level control of the serialization protocol. Take this specific use case: a function call is done via :code:`ProcessPoolExecutor.submit`, with two arguments defined in the :code:`__main__`:
 
+    + one of them is a non-picklable object.
+    + another is a picklable object on which |cloudpickle| is known to perform significantly slower than pickle, for instance a large list or a large and dict.
+
+  By default, the two arguments would be serialized using |cloudpickle|. However, the pickling performance can be improved by imposing :code:`LOKY_PICKER=pickle`, and wrapping the first argument using using :code:`loky.wrap_non_picklable_objects`. In this case, all objects that can be pickled are going through the faster :mod:`pickle`, and there is no more unnecessary overhead during serialization.
 
 Processes start methods in :mod:`loky`
 -------------------------------------
