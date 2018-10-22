@@ -15,7 +15,6 @@ import sys
 import time
 import traceback
 from loky import set_loky_pickler
-from loky import BrokenProcessPool
 from loky import get_reusable_executor
 from loky import wrap_non_picklable_objects
 
