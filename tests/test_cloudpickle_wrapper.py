@@ -130,8 +130,7 @@ class TestCloudpickleWrapper:
                 f.write(code.encode('ascii'))
             cmd += [filename]
 
-            env = os.environ.copy()
-            env['LOKY_PICKLER'] = 'pickle'
+            env = {'LOKY_PICKLER': 'pickle'}
             check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10, env=env)
         finally:
             os.unlink(filename)
