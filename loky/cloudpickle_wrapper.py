@@ -97,7 +97,7 @@ def wrap_non_picklable_objects(obj):
                           "cloudpickle to allow extended serialization. "
                           "(`pip install cloudpickle`).")
 
-    # If obj is an  class, create a CloudpickledClassWrappers which instantiate
+    # If obj is a  class, create a CloudpickledClassWrapper which instantiates
     # the object internally and wrap it directly in a CloudpickledObjectWrapper
     if inspect.isclass(obj):
         class CloudpickledClassWrapper(CloudpickledObjectWrapper):

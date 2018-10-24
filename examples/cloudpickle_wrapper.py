@@ -20,8 +20,9 @@ from loky import wrap_non_picklable_objects
 
 ###############################################################################
 # First, define functions which cannot be pickled with the standard ``pickle``
-# protocol. They cannot be serialized with ``pickle`` because they leave in the
-# `` __main__`` module. They can however be serialized with ``cloudpickle``.
+# protocol. They cannot be serialized with ``pickle`` because they are defined
+# in the ``__main__`` module. They can however be serialized with
+# ``cloudpickle``.
 #
 
 
@@ -45,10 +46,10 @@ executor = get_reusable_executor(max_workers=1)
 print(executor.submit(call_function, func_async, 21).result())
 
 ###############################################################################
-# However, the mechanism to detect that the wrapper is needed can be costly in
-# the case where this function is nested in objects that are picklable. For
-# instance, if this function is given in a list of list, loky won't be able
-# to wrap it and the de-serialization of the task will fail.
+# However, the mechanism to detect that the wrapper is needed fails when this
+# function is nested in objects that are picklable. For instance, if this
+# function is given in a list of list, loky won't be able to wrap it and the
+# serialization of the task will fail.
 #
 
 try:
@@ -60,7 +61,7 @@ except Exception:
 
 ###############################################################################
 # To avoid this, it is possible to fully rely on ``cloudpickle`` to serialize
-# all communication between the main process and the workers. This can be done
+# all communications between the main process and the workers. This can be done
 # with an environment variable ``LOKY_PICKLER=cloudpickle`` set before the
 # script is launched, or with the switch ``set_loky_pickler`` provided in the
 # ``loky`` API.
@@ -72,7 +73,7 @@ print(executor.submit(call_function, [[func_async]], 21).result())
 
 
 ###############################################################################
-# For most use-case, this solution is sufficient. However, ``cloudpickle``
+# For most use-cases, this solution is sufficient. However, ``cloudpickle``
 # can be slow to serialize large python objects, such as dict or list.
 #
 
@@ -96,7 +97,7 @@ print("With default serialization: {:.3f}s".format(time.time() - t_start))
 ###############################################################################
 # To temper this, it is possible to wrap the non-picklable function using
 # :func:`wrap_non_picklable_objects`. This changes the serialization behavior
-# only for this function and keep the default behavior for all objects. The
+# only for this function and keeps the default behavior for all objects. The
 # drawback of this solution is that it modifies the object and it can have side
 # effects.
 #
@@ -116,6 +117,6 @@ print("With default and wrapper n: {:.3f}s".format(time.time() - t_start))
 # for this wrapper include ``dict`` with non-serializable objects or other
 # serializable objects containing a field with non-serializable objects. Note
 # that the side effects of :func:`wrap_non_picklable_objects` can be worst as
-# it can breaks the magic methods such as ``_add__`` and can mess up the
+# it can breaks the magic methods such as ``__add__`` and can mess up the
 # ``isinstance`` and ``issubclass`` functions.
 #
