@@ -162,9 +162,9 @@ class TestCloudpickleWrapper:
                     "Expected CloudPickler and got {{}}"
                     .format(current_loky_pickler))
             else:
-                assert current_loky_pickler == 'Pickler', (
-                    "Expected Pickler and got {{}}"
-                    .format(current_loky_pickler))
+                assert current_loky_pickler == Pickler.__name__, (
+                    "Expected {{}} and got {{}}"
+                    .format(Pickler.__name__, current_loky_pickler))
 
             if loky_pickler in ['cloudpickle', 'pickle']:
                 assert not use_cloudpickle_wrapper()
@@ -175,7 +175,7 @@ class TestCloudpickleWrapper:
             # set_loky_pickler is used without arguments
             set_loky_pickler()
             current_loky_pickler = get_loky_pickler()
-            assert current_loky_pickler == 'Pickler', (
+            assert current_loky_pickler == Pickler.__name__, (
                 "default got loky_pickler={{}}".format(current_loky_pickler))
             assert use_cloudpickle_wrapper()
 
