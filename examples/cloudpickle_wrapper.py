@@ -60,6 +60,9 @@ except Exception:
 
 
 ###############################################################################
+# Other failures include ``dict`` with non-serializable objects or a
+# serializable object containing a field with non-serializable objects.
+#
 # To avoid this, it is possible to fully rely on ``cloudpickle`` to serialize
 # all communications between the main process and the workers. This can be done
 # with an environment variable ``LOKY_PICKLER=cloudpickle`` set before the
@@ -73,20 +76,24 @@ print(executor.submit(call_function, [[func_async]], 21).result())
 
 
 ###############################################################################
-# For most use-cases, this solution is sufficient. However, ``cloudpickle``
-# can be slow to serialize large python objects, such as dict or list.
+# For most use-cases, using ``cloudpickle``` is sufficient. However, this
+# solution can be slow to serialize large python objects, such as dict or list.
 #
+
+# We have to pass an extra argument with a large list (or another large python
+# object).
+large_list = list(range(1000000))
 
 # We are still using ``cloudpickle`` to serialize the task as we did not reset
 # the loky_pickler.
-large_list = list(range(1000000))
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
 executor.submit(call_function, [[func_async]], 21, large_list).result()
 print("With cloudpickle serialization: {:.3f}s".format(time.time() - t_start))
 
-# Now reset the `loky_pickler` to the default behavior, with a picklable
-# function ``id``.
+# Now reset the `loky_pickler` to the default behavior. Note that here, we do
+# not pass the desired function ``func_async`` as it is not picklable but it is
+# replaced by ``id`` for demonstration purposes.
 set_loky_pickler()
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
@@ -95,11 +102,13 @@ print("With default serialization: {:.3f}s".format(time.time() - t_start))
 
 
 ###############################################################################
-# To temper this, it is possible to wrap the non-picklable function using
-# :func:`wrap_non_picklable_objects`. This changes the serialization behavior
-# only for this function and keeps the default behavior for all objects. The
-# drawback of this solution is that it modifies the object and it can have side
-# effects.
+# To avoid this performance drop, it is possible to wrap the non-picklable
+# function using :func:`wrap_non_picklable_objects` to indicate to the
+# serialization process that this object should be serialized using
+# ``cloudpickle``. This changes the serialization behavior only for this
+# function and keeps the default behavior for all other objects. The drawback
+# of this solution is that it modifies the object. This should not cause many
+# issues with functions but can have side effects with object instances.
 #
 
 @wrap_non_picklable_objects
@@ -110,13 +119,13 @@ def func_async(i):
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
 executor.submit(call_function, [[func_async]], 21, large_list).result()
-print("With default and wrapper n: {:.3f}s".format(time.time() - t_start))
+print("With default and wrapper: {:.3f}s".format(time.time() - t_start))
+
 
 ###############################################################################
-# The same wrapper can also be used for non-picklable classes. Other use cases
-# for this wrapper include ``dict`` with non-serializable objects or other
-# serializable objects containing a field with non-serializable objects. Note
-# that the side effects of :func:`wrap_non_picklable_objects` can be worst as
-# it can breaks the magic methods such as ``__add__`` and can mess up the
-# ``isinstance`` and ``issubclass`` functions.
+# The same wrapper can also be used for non-picklable classes. Note that the
+# side effects of :func:`wrap_non_picklable_objects` on objects can break magic
+# methods such as ``__add__`` and can mess up the ``isinstance`` and
+# ``issubclass`` functions. Some improvements will be considered if use-cases
+# are reported.
 #
