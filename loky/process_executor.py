@@ -80,7 +80,7 @@ from .backend.compat import wait
 from .backend.compat import set_cause
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
-from .cloudpickle_wrapper import _wrap_non_picklable_objects
+from .cloudpickle_wrapper import _wrap_objects_when_needed
 from .backend.utils import recursive_terminate, get_exitcodes_terminated_worker
 
 try:
@@ -271,9 +271,9 @@ class _CallItem(object):
     def __getstate__(self):
         return (
             self.work_id,
-            _wrap_non_picklable_objects(self.fn),
-            [_wrap_non_picklable_objects(a) for a in self.args],
-            {k: _wrap_non_picklable_objects(a) for k, a in self.kwargs.items()}
+            _wrap_objects_when_needed(self.fn),
+            [_wrap_objects_when_needed(a) for a in self.args],
+            {k: _wrap_objects_when_needed(a) for k, a in self.kwargs.items()}
         )
 
     def __setstate__(self, state):
@@ -313,11 +313,11 @@ class _SafeQueue(Queue):
                 del work_item
             self.thread_wakeup.wakeup()
         else:
-            super()._on_queue_feeder_error(e, obj)
+            super(_SafeQueue, self)._on_queue_feeder_error(e, obj)
 
 
 def _get_chunks(chunksize, *iterables):
-    """ Iterates over zip()ed iterables in chunks. """
+    """Iterates over zip()ed iterables in chunks. """
     if sys.version_info < (3, 3):
         it = itertools.izip(*iterables)
     else:
@@ -330,7 +330,7 @@ def _get_chunks(chunksize, *iterables):
 
 
 def _process_chunk(fn, chunk):
-    """ Processes a chunk of an iterable passed to map.
+    """Processes a chunk of an iterable passed to map.
 
     Runs the function passed to map() on a chunk of the
     iterable passed to map.
@@ -894,8 +894,8 @@ class ProcessPoolExecutor(_base.Executor):
 
         if initializer is not None and not callable(initializer):
             raise TypeError("initializer must be a callable")
-        self._initializer = _wrap_non_picklable_objects(initializer)
-        self._initargs = [_wrap_non_picklable_objects(a) for a in initargs]
+        self._initializer = _wrap_objects_when_needed(initializer)
+        self._initargs = [_wrap_objects_when_needed(a) for a in initargs]
 
         _check_max_depth(self._context)
 

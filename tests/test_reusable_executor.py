@@ -6,7 +6,6 @@ import psutil
 import pytest
 import warnings
 import threading
-import weakref
 from time import sleep
 from tempfile import mkstemp
 from multiprocessing import util, current_process
@@ -744,5 +743,3 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=4)
         for x in executor.map(self._test_initializer, delay=.1):
             assert x == 'uninitialized'
-
-

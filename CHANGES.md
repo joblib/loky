@@ -5,6 +5,10 @@
 - Improve workers crash reporting by displaying the exitcodes of
   workers in `TerminatedWorkerError` (#173)
 
+- Add a `wrap_non_picklable_objects` decorator in `loky` to make it
+  easy to fix serialization failure for nested functions defined in
+  the `__main__` module. (#171)
+
 ### 2.3.1 - 2018-09-13 - Bug fix release
 
 - Improve error reporting when a worker process is terminated abruptly

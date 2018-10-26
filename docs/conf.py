@@ -194,6 +194,8 @@ sphinx_gallery_conf = {
     'examples_dirs': '../examples',
     # path where to save gallery generated examples
     'gallery_dirs': 'auto_examples',
+    'filename_pattern': '',
+    'ignore_pattern': 'deadlock_',
     'reference_url': {
         'loky': None
     },
