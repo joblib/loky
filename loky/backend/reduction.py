@@ -30,9 +30,6 @@ if sys.platform == "win32":
         from multiprocessing.forking import duplicate
 
 
-ENV_LOKY_PICKLER = os.environ.get("LOKY_PICKLER", "cloudpickle")
-
-
 ###############################################################################
 # Enable custom pickling in Loky.
 # To allow instance customization of the pickling process, we use 2 classes.
@@ -124,7 +121,15 @@ else:
     from . import _win_reduction  # noqa: F401
 
 # global variable to change the pickler behavior
-_LokyPickler = 'cloudpickle'
+try:
+    import cloudpickle  # noqa: F401
+    DEFAULT_ENV = "cloudpickle"
+except ImportError:
+    # If cloudpickle is not present, fallback to pickle
+    DEFAULT_ENV = "pickle"
+
+ENV_LOKY_PICKLER = os.environ.get("LOKY_PICKLER", DEFAULT_ENV)
+_LokyPickler = ENV_LOKY_PICKLER
 _use_cloudpickle_wrapper = False
 
 
