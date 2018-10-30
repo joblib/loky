@@ -30,7 +30,7 @@ if sys.platform == "win32":
         from multiprocessing.forking import duplicate
 
 
-ENV_LOKY_PICKLER = os.environ.get("LOKY_PICKLER")
+ENV_LOKY_PICKLER = os.environ.get("LOKY_PICKLER", "cloudpickle")
 
 
 ###############################################################################
@@ -124,8 +124,8 @@ else:
     from . import _win_reduction  # noqa: F401
 
 # global variable to change the pickler behavior
-_LokyPickler = None
-_use_cloudpickle_wrapper = True
+_LokyPickler = 'cloudpickle'
+_use_cloudpickle_wrapper = False
 
 
 def set_loky_pickler(loky_pickler=None):
@@ -135,24 +135,23 @@ def set_loky_pickler(loky_pickler=None):
         loky_pickler = ENV_LOKY_PICKLER
 
     loky_pickler_cls = None
+    _use_cloudpickle_wrapper = False
 
-    if loky_pickler in ["pickle", "", None]:
+    if loky_pickler in ["cloudpickle", "", None]:
+        from cloudpickle import CloudPickler as loky_pickler_cls
+    elif loky_pickler == "wrapped_pickle":
         # Only use the cloudpickle_wrapper when loky_pickler is None or ''
         from pickle import Pickler as loky_pickler_cls
-        _use_cloudpickle_wrapper = loky_pickler != "pickle"
+        _use_cloudpickle_wrapper = True
     else:
-        _use_cloudpickle_wrapper = False
         try:
-            if loky_pickler == 'cloudpickle':
-                from cloudpickle import CloudPickler as loky_pickler_cls
-            else:
-                from importlib import import_module
-                module_pickle = import_module(loky_pickler)
-                if not hasattr(module_pickle, 'Pickler'):
-                    raise ValueError("Failed to find Pickler object in module "
-                                     "'{}', requested for pickling."
-                                     .format(loky_pickler))
-                loky_pickler_cls = module_pickle.Pickler
+            from importlib import import_module
+            module_pickle = import_module(loky_pickler)
+            if not hasattr(module_pickle, 'Pickler'):
+                raise ValueError("Failed to find Pickler object in module "
+                                 "'{}', requested for pickling."
+                                 .format(loky_pickler))
+            loky_pickler_cls = module_pickle.Pickler
         except ImportError:
             raise ValueError("Failed to import '{}' as a loky_pickler. Make "
                              "sure it is available on your system and the "
@@ -160,8 +159,8 @@ def set_loky_pickler(loky_pickler=None):
                              "environment variable LOKY_PICKLER is valid."
                              .format(loky_pickler))
 
-    util.debug("Using default backend {} for pickling."
-               .format(loky_pickler if loky_pickler else "pickle"))
+    util.debug("Using '{}' for serialization."
+               .format(loky_pickler if loky_pickler else "cloudpickle"))
 
     class CustomizablePickler(loky_pickler_cls):
         _loky_pickler_cls = loky_pickler_cls

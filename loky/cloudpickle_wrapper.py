@@ -83,7 +83,7 @@ def _wrap_objects_when_needed(obj):
     return wrapped_obj
 
 
-def wrap_non_picklable_objects(obj):
+def wrap_non_picklable_objects(obj, keep_wrapper=True):
     """Wrapper for non-picklable object to use cloudpickle to serialize them.
 
     Note that this wrapper tends to slow down the serialization process as it
@@ -103,11 +103,11 @@ def wrap_non_picklable_objects(obj):
         class CloudpickledClassWrapper(CloudpickledObjectWrapper):
             def __init__(self, *args, **kwargs):
                 self._obj = obj(*args, **kwargs)
-                self._keep_wrapper = True
+                self._keep_wrapper = keep_wrapper
 
         CloudpickledClassWrapper.__name__ = obj.__name__
         return CloudpickledClassWrapper
 
     # If obj is an instance of a class, just wrap it in a regular
     # CloudpickledObjectWrapper
-    return _wrap_non_picklable_objects(obj, keep_wrapper=True)
+    return _wrap_non_picklable_objects(obj, keep_wrapper=keep_wrapper)

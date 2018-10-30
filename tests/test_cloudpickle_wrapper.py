@@ -109,7 +109,7 @@ class TestCloudpickleWrapper:
             with pytest.raises(TypeError,
                               match="'Test' object is not callable"):
                 test_obj()
-            
+
             assert not callable(test_obj)
 
             # Make sure it is picklable even when the executor does not rely on
@@ -137,7 +137,7 @@ class TestCloudpickleWrapper:
 
     @pytest.mark.parametrize('loky_pickler, should_fail', [
         (None, False), ("''", False), ("'cloudpickle'", False),
-        ("'pickle'", True)
+        ("'pickle'", True), ("'wrapped_pickle'", False)
     ])
     def test_set_loky_pickler(self, loky_pickler, should_fail):
         # Test that the function set_loky_pickler correctly changes the pickler
@@ -145,6 +145,7 @@ class TestCloudpickleWrapper:
         code = """if True:
             from pickle import Pickler
             from loky import set_loky_pickler
+            from cloudpickle import CloudPickler
             from loky import get_reusable_executor
             from loky.backend.reduction import get_loky_pickler
             from loky.backend.reduction import use_cloudpickle_wrapper
@@ -156,8 +157,7 @@ class TestCloudpickleWrapper:
                 pass
 
             current_loky_pickler = get_loky_pickler()
-            if loky_pickler == "cloudpickle":
-                from cloudpickle import CloudPickler
+            if loky_pickler in [None, "", "cloudpickle"]:
                 assert current_loky_pickler == 'CloudPickler', (
                     "Expected CloudPickler and got {{}}"
                     .format(current_loky_pickler))
@@ -166,18 +166,16 @@ class TestCloudpickleWrapper:
                     "Expected {{}} and got {{}}"
                     .format(Pickler.__name__, current_loky_pickler))
 
-            if loky_pickler in ['cloudpickle', 'pickle']:
-                assert not use_cloudpickle_wrapper()
-            else:
-                assert use_cloudpickle_wrapper()
+            # Make sure the wrapper is used only when  explicitly required
+            should_use_wrapper = loky_pickler == 'wrapped_pickle'
+            assert use_cloudpickle_wrapper() == should_use_wrapper
 
             # Make sure that the default behavior is restored when
             # set_loky_pickler is used without arguments
             set_loky_pickler()
             current_loky_pickler = get_loky_pickler()
-            assert current_loky_pickler == Pickler.__name__, (
+            assert current_loky_pickler == 'CloudPickler', (
                 "default got loky_pickler={{}}".format(current_loky_pickler))
-            assert use_cloudpickle_wrapper()
 
             # Test that the behavior expected. This should only fail when
             # using the default pickle without the cloudpickle_wrapper.
