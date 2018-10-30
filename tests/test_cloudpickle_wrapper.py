@@ -2,6 +2,7 @@ import os
 import sys
 import pytest
 from tempfile import mkstemp
+from loky import set_loky_pickler
 
 
 from .utils import check_subprocess_call
@@ -198,3 +199,11 @@ class TestCloudpickleWrapper:
                 check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
         finally:
             os.unlink(filename)
+
+    def test_set_loky_pickler_failures(self):
+
+        with pytest.raises(ValueError, match=r"Failed to import 'no_module'"):
+            set_loky_pickler("no_module")
+
+        with pytest.raises(ValueError, match=r"Failed to find Pickler"):
+            set_loky_pickler("os")
