@@ -148,9 +148,9 @@ def set_loky_pickler(loky_pickler=None):
             module_pickle = import_module(loky_pickler)
             loky_pickler_cls = module_pickle.Pickler
         except (ImportError, AttributeError) as e:
-            extra_info = ("\nThis error occured while setting loky_pickler to "
-                          "'{}', as required by the env variable LOKY_PICKLER "
-                          "or teh function set_loky_pickler."
+            extra_info = ("\nThis error occurred while setting loky_pickler to"
+                          " '{}', as required by the env variable LOKY_PICKLER"
+                          " or the function set_loky_pickler."
                           .format(loky_pickler))
             e.args = (e.args[0] + extra_info,) + e.args[1:]
             e.msg = e.args[0]

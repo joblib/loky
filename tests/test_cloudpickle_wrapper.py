@@ -196,9 +196,12 @@ class TestCloudpickleWrapper:
             os.unlink(filename)
 
     def test_set_loky_pickler_failures(self):
-
+        # Check that `set_loky_pickler` fails when a non-existing module is
+        # required.
         with pytest.raises(ImportError, match=r"loky_pickler to 'no_module'"):
             set_loky_pickler("no_module")
 
+        # The module passed to `set_loky_pickler` should have a Pickler
+        # attribute.
         with pytest.raises(AttributeError, match=r"loky_pickler to 'os'"):
             set_loky_pickler("os")
