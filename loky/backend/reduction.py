@@ -146,17 +146,15 @@ def set_loky_pickler(loky_pickler=None):
         try:
             from importlib import import_module
             module_pickle = import_module(loky_pickler)
-            if not hasattr(module_pickle, 'Pickler'):
-                raise ValueError("Failed to find Pickler object in module "
-                                 "'{}', requested for pickling."
-                                 .format(loky_pickler))
             loky_pickler_cls = module_pickle.Pickler
-        except ImportError:
-            raise ValueError("Failed to import '{}' as a loky_pickler. Make "
-                             "sure it is available on your system and the "
-                             "value passed to set_loky_pickler or to the "
-                             "environment variable LOKY_PICKLER is valid."
-                             .format(loky_pickler))
+        except (ImportError, AttributeError) as e:
+            extra_info = ("\nThis error occured while setting loky_pickler to "
+                          "'{}', as required by the env variable LOKY_PICKLER "
+                          "or teh function set_loky_pickler."
+                          .format(loky_pickler))
+            e.args = (e.args[0] + extra_info,) + e.args[1:]
+            e.msg = e.args[0]
+            raise e
 
     util.debug("Using '{}' for serialization."
                .format(loky_pickler if loky_pickler else "cloudpickle"))

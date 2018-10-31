@@ -197,8 +197,8 @@ class TestCloudpickleWrapper:
 
     def test_set_loky_pickler_failures(self):
 
-        with pytest.raises(ValueError, match=r"Failed to import 'no_module'"):
+        with pytest.raises(ImportError, match=r"loky_pickler to 'no_module'"):
             set_loky_pickler("no_module")
 
-        with pytest.raises(ValueError, match=r"Failed to find Pickler"):
+        with pytest.raises(AttributeError, match=r"loky_pickler to 'os'"):
             set_loky_pickler("os")

@@ -267,17 +267,6 @@ class _CallItem(object):
         return "CallItem({}, {}, {}, {})".format(
             self.work_id, self.fn, self.args, self.kwargs)
 
-    def __getstate__(self):
-        return (
-            self.work_id,
-            self.fn,
-            [a for a in self.args],
-            {k: a for k, a in self.kwargs.items()}
-        )
-
-    def __setstate__(self, state):
-        self.work_id, self.fn, self.args, self.kwargs = state
-
 
 class _SafeQueue(Queue):
     """Safe Queue set exception to the future object linked to a job"""
@@ -894,7 +883,7 @@ class ProcessPoolExecutor(_base.Executor):
         if initializer is not None and not callable(initializer):
             raise TypeError("initializer must be a callable")
         self._initializer = initializer
-        self._initargs = [a for a in initargs]
+        self._initargs = initargs
 
         _check_max_depth(self._context)
 
