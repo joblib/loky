@@ -130,24 +130,18 @@ except ImportError:
 
 ENV_LOKY_PICKLER = os.environ.get("LOKY_PICKLER", DEFAULT_ENV)
 _LokyPickler = ENV_LOKY_PICKLER
-_use_cloudpickle_wrapper = False
 
 
 def set_loky_pickler(loky_pickler=None):
-    global _LokyPickler, _use_cloudpickle_wrapper
+    global _LokyPickler
 
     if loky_pickler is None:
         loky_pickler = ENV_LOKY_PICKLER
 
     loky_pickler_cls = None
-    _use_cloudpickle_wrapper = False
 
     if loky_pickler in ["cloudpickle", "", None]:
         from cloudpickle import CloudPickler as loky_pickler_cls
-    elif loky_pickler == "wrapped_pickle":
-        # Only use the cloudpickle_wrapper when loky_pickler is None or ''
-        from pickle import Pickler as loky_pickler_cls
-        _use_cloudpickle_wrapper = True
     else:
         try:
             from importlib import import_module
@@ -214,10 +208,6 @@ def get_loky_pickler():
     return _LokyPickler._loky_pickler_cls.__name__
 
 
-def use_cloudpickle_wrapper():
-    return _use_cloudpickle_wrapper
-
-
 # Set it to its default value
 set_loky_pickler()
 
@@ -245,8 +235,7 @@ def dumps(obj, reducers=None, protocol=None):
     return buf.getbuffer()
 
 
-__all__ = ["dump", "dumps", "loads", "register",
-           "set_loky_pickler", "use_cloudpickle_wrapper"]
+__all__ = ["dump", "dumps", "loads", "register", "set_loky_pickler"]
 
 if sys.platform == "win32":
     __all__ += ["duplicate"]

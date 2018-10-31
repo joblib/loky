@@ -1,7 +1,6 @@
 ### 2.3.2dev0 - In development
 
-- Default serialization is now `cloudpickle`. The previous behavior is now 
-  accessible with `loky_pickler='wrapped_pickle'`. (#178)
+- Default serialization is now done with `cloudpickle`. (#178)
 
 - The base `Pickler` in `loky` can now be changed through the `LOKY_PICKLER`
   variable or programmatically with `set_loky_pickler`. (#171)

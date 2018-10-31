@@ -115,13 +115,3 @@ print("With default and wrapper: {:.3f}s".format(time.time() - t_start))
 # ``issubclass`` functions. Some improvements will be considered if use-cases
 # are reported.
 #
-# Note that it is also possible to use ``set_loky_pickler('wrapped_pickle')``.
-# This will automatically wrap all functions and objects detected to be in the
-# ``__main__`` module or to be dynamically defined.
-
-set_loky_pickler('wrapped_pickle')
-
-t_start = time.time()
-executor = get_reusable_executor(max_workers=1)
-executor.submit(func_async, 21, large_list).result()
-print("With default and wrapper: {:.3f}s".format(time.time() - t_start))

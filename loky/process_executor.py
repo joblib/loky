@@ -80,7 +80,6 @@ from .backend.compat import wait
 from .backend.compat import set_cause
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
-from .cloudpickle_wrapper import _wrap_objects_when_needed
 from .backend.utils import recursive_terminate, get_exitcodes_terminated_worker
 
 try:
@@ -271,9 +270,9 @@ class _CallItem(object):
     def __getstate__(self):
         return (
             self.work_id,
-            _wrap_objects_when_needed(self.fn),
-            [_wrap_objects_when_needed(a) for a in self.args],
-            {k: _wrap_objects_when_needed(a) for k, a in self.kwargs.items()}
+            self.fn,
+            [a for a in self.args],
+            {k: a for k, a in self.kwargs.items()}
         )
 
     def __setstate__(self, state):
@@ -894,8 +893,8 @@ class ProcessPoolExecutor(_base.Executor):
 
         if initializer is not None and not callable(initializer):
             raise TypeError("initializer must be a callable")
-        self._initializer = _wrap_objects_when_needed(initializer)
-        self._initargs = [_wrap_objects_when_needed(a) for a in initargs]
+        self._initializer = initializer
+        self._initargs = [a for a in initargs]
 
         _check_max_depth(self._context)
 

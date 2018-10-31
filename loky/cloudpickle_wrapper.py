@@ -1,8 +1,6 @@
 import inspect
 from functools import partial
 
-from .backend.reduction import use_cloudpickle_wrapper
-
 try:
     from cloudpickle import dumps, loads
     cloudpickle = True
@@ -52,7 +50,9 @@ def _reconstruct_wrapper(_pickled_object, keep_wrapper):
 
 
 def _wrap_objects_when_needed(obj):
-    if not use_cloudpickle_wrapper() or not cloudpickle:
+    # Function to introspect an object and decide if it should be wrapped or
+    # not.
+    if not cloudpickle:
         return obj
 
     need_wrap = "__main__" in getattr(obj, "__module__", "")
