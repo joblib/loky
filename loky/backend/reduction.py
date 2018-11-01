@@ -187,7 +187,6 @@ def set_loky_pickler(loky_pickler=None):
         def register(self, type, reduce_func):
             """Attach a reducer function to a given type in the dispatch table.
             """
-            util.debug((type, "register", reduce_func))
             if sys.version_info < (3,):
                 # Python 2 pickler dispatching is not explicitly customizable.
                 # Let us use a closure to workaround this limitation.
