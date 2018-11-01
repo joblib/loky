@@ -1,4 +1,4 @@
-### 2.3.2dev0 - In development
+### 2.4.0 - 2018-11-01 - Release highlights
 
 - Default serialization is now done with `cloudpickle`. (#178)
 
