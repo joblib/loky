@@ -38,6 +38,7 @@ The recommended way to install :mod:`loky` is with :mod:`pip`,
     cd loky
     python setup.py install
 
+Note that `loky` has an optional dependency on |psutil| to allow early memory leak detections.
 
 Usage
 ~~~~~
@@ -91,6 +92,14 @@ IDEX Paris-Saclay, ANR-11-IDEX-0003-02
 
 .. |cloudpickle| raw:: html
 
-    <a href="https://github.com/cloudpipe/cloudpickle"><code>cloudpickle</code></a>
+    <a href="https://github.com/cloudpipe/cloudpickle">
+        <code>cloudpickle</code>
+    </a>
+
+.. |psutil| raw:: html
+
+    <a href="https://github.com/giampaolo/psutil">
+        <code>psutil</code>
+    </a>
 
 .. _documentation:  http://loky.readthedocs.io/en/stable

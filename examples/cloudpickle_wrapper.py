@@ -26,99 +26,85 @@ from loky import wrap_non_picklable_objects
 #
 
 
-def call_function(list_or_func, x, *args):
-    while isinstance(list_or_func, list):
-        list_or_func = list_or_func[0]
-    return list_or_func(x)
-
-
-def func_async(i):
+def func_async(i, *args):
     return 2 * i
 
 
 ###############################################################################
-# With the default behavior, ``loky`` is able to detect that this function is
-# in the ``__main__`` module and internally use a wrapper with ``cloudpickle``
-# to serialize it.
+# With the default behavior, ``loky`` is to use ``cloudpickle`` to serialize
+# the objects that are sent to the workers.
 #
 
 executor = get_reusable_executor(max_workers=1)
-print(executor.submit(call_function, func_async, 21).result())
-
-###############################################################################
-# However, the mechanism to detect that the wrapper is needed fails when this
-# function is nested in objects that are picklable. For instance, if this
-# function is given in a list of list, loky won't be able to wrap it and the
-# serialization of the task will fail.
-#
-
-try:
-    executor = get_reusable_executor(max_workers=1)
-    executor.submit(id, [[func_async]]).result()
-except Exception:
-    traceback.print_exc(file=sys.stdout)
+print(executor.submit(func_async, 21).result())
 
 
 ###############################################################################
-# Other failures include ``dict`` with non-serializable objects or a
-# serializable object containing a field with non-serializable objects.
-#
-# To avoid this, it is possible to fully rely on ``cloudpickle`` to serialize
-# all communications between the main process and the workers. This can be done
-# with an environment variable ``LOKY_PICKLER=cloudpickle`` set before the
-# script is launched, or with the switch ``set_loky_pickler`` provided in the
-# ``loky`` API.
-#
-
-set_loky_pickler('cloudpickle')
-executor = get_reusable_executor(max_workers=1)
-print(executor.submit(call_function, [[func_async]], 21).result())
-
-
-###############################################################################
-# For most use-cases, using ``cloudpickle``` is sufficient. However, this
-# solution can be slow to serialize large python objects, such as dict or list.
+# For most use-cases, using ``cloudpickle``` is efficient enough. However, this
+# solution can be very slow to serialize large python objects, such as dict or
+# list, compared to the standard ``pickle`` serialization.
 #
 
 # We have to pass an extra argument with a large list (or another large python
 # object).
 large_list = list(range(1000000))
 
-# We are still using ``cloudpickle`` to serialize the task as we did not reset
-# the loky_pickler.
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
-executor.submit(call_function, [[func_async]], 21, large_list).result()
+executor.submit(func_async, 21, large_list).result()
 print("With cloudpickle serialization: {:.3f}s".format(time.time() - t_start))
-
-# Now reset the `loky_pickler` to the default behavior. Note that here, we do
-# not pass the desired function ``func_async`` as it is not picklable but it is
-# replaced by ``id`` for demonstration purposes.
-set_loky_pickler()
-t_start = time.time()
-executor = get_reusable_executor(max_workers=1)
-executor.submit(call_function, [[id]], 21, large_list).result()
-print("With default serialization: {:.3f}s".format(time.time() - t_start))
 
 
 ###############################################################################
-# To avoid this performance drop, it is possible to wrap the non-picklable
-# function using :func:`wrap_non_picklable_objects` to indicate to the
-# serialization process that this object should be serialized using
-# ``cloudpickle``. This changes the serialization behavior only for this
-# function and keeps the default behavior for all other objects. The drawback
-# of this solution is that it modifies the object. This should not cause many
-# issues with functions but can have side effects with object instances.
+# To mitigate this, it is possible to fully rely on ``pickle`` to serialize
+# all communications between the main process and the workers. This can be done
+# with an environment variable ``LOKY_PICKLER=pickle`` set before the
+# script is launched, or with the switch ``set_loky_pickler`` provided in the
+# ``loky`` API.
+#
+
+# Now set the `loky_pickler` to use the pickle serialization from stdlib. Here,
+# we do not pass the desired function ``call_function`` as it is not picklable
+# but it is replaced by ``id`` for demonstration purposes.
+set_loky_pickler('pickle')
+t_start = time.time()
+executor = get_reusable_executor(max_workers=1)
+executor.submit(id, large_list).result()
+print("With pickle serialization: {:.3f}s".format(time.time() - t_start))
+
+
+###############################################################################
+# However, the function and objects defined in ``__main__`` are not
+# serializable anymore using ``pickle`` and it is not possible to call
+# ``func_async`` using this pickler.
+#
+
+try:
+    executor = get_reusable_executor(max_workers=1)
+    executor.submit(func_async, 21, large_list).result()
+except Exception:
+    traceback.print_exc(file=sys.stdout)
+
+
+###############################################################################
+# ``loky`` provides a wrapper function
+# :func:`wrap_non_picklable_objects` to wrap the non-picklable function and
+# indicate to the serialization process that this specific function should be
+# serialized using ``cloudpickle``. This changes the serialization behavior
+# only for this function and keeps using ``pickle`` for all other objects. The
+# drawback of this solution is that it modifies the object. This should not
+# cause many issues with functions but can have side effects with object
+# instances.
 #
 
 @wrap_non_picklable_objects
-def func_async(i):
+def func_async_wrapped(i, *args):
     return 2 * i
 
 
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
-executor.submit(call_function, [[func_async]], 21, large_list).result()
+executor.submit(func_async_wrapped, 21, large_list).result()
 print("With default and wrapper: {:.3f}s".format(time.time() - t_start))
 
 

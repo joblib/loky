@@ -2,6 +2,7 @@ import os
 import sys
 import pytest
 from tempfile import mkstemp
+from loky import set_loky_pickler
 
 
 from .utils import check_subprocess_call
@@ -109,7 +110,7 @@ class TestCloudpickleWrapper:
             with pytest.raises(TypeError,
                               match="'Test' object is not callable"):
                 test_obj()
-            
+
             assert not callable(test_obj)
 
             # Make sure it is picklable even when the executor does not rely on
@@ -145,9 +146,9 @@ class TestCloudpickleWrapper:
         code = """if True:
             from pickle import Pickler
             from loky import set_loky_pickler
+            from cloudpickle import CloudPickler
             from loky import get_reusable_executor
             from loky.backend.reduction import get_loky_pickler
-            from loky.backend.reduction import use_cloudpickle_wrapper
 
             loky_pickler = {loky_pickler}
             set_loky_pickler(loky_pickler)
@@ -156,8 +157,7 @@ class TestCloudpickleWrapper:
                 pass
 
             current_loky_pickler = get_loky_pickler()
-            if loky_pickler == "cloudpickle":
-                from cloudpickle import CloudPickler
+            if loky_pickler in [None, "", "cloudpickle"]:
                 assert current_loky_pickler == 'CloudPickler', (
                     "Expected CloudPickler and got {{}}"
                     .format(current_loky_pickler))
@@ -166,18 +166,12 @@ class TestCloudpickleWrapper:
                     "Expected {{}} and got {{}}"
                     .format(Pickler.__name__, current_loky_pickler))
 
-            if loky_pickler in ['cloudpickle', 'pickle']:
-                assert not use_cloudpickle_wrapper()
-            else:
-                assert use_cloudpickle_wrapper()
-
             # Make sure that the default behavior is restored when
             # set_loky_pickler is used without arguments
             set_loky_pickler()
             current_loky_pickler = get_loky_pickler()
-            assert current_loky_pickler == Pickler.__name__, (
+            assert current_loky_pickler == 'CloudPickler', (
                 "default got loky_pickler={{}}".format(current_loky_pickler))
-            assert use_cloudpickle_wrapper()
 
             # Test that the behavior expected. This should only fail when
             # using the default pickle without the cloudpickle_wrapper.
@@ -200,3 +194,14 @@ class TestCloudpickleWrapper:
                 check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
         finally:
             os.unlink(filename)
+
+    def test_set_loky_pickler_failures(self):
+        # Check that `set_loky_pickler` fails when a non-existing module is
+        # required.
+        with pytest.raises(ImportError, match=r"loky_pickler to 'no_module'"):
+            set_loky_pickler("no_module")
+
+        # The module passed to `set_loky_pickler` should have a Pickler
+        # attribute.
+        with pytest.raises(AttributeError, match=r"loky_pickler to 'os'"):
+            set_loky_pickler("os")

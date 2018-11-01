@@ -52,6 +52,8 @@ pip install loky
 python setup.py install
 ```
 
+Note that `loky` has an optional dependency on [`psutil`][1] to allow early memory leak detections.
+
 ### Usage
 
 ```python
@@ -107,3 +109,6 @@ from the root of the project.
 
 This work is supported by the Center for Data Science, funded by the IDEX
 Paris-Saclay, ANR-11-IDEX-0003-02
+
+
+[1]: https://github.com/giampaolo/psutil
