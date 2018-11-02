@@ -1,5 +1,7 @@
-### 2.4.1dev0 - In development
+### 2.4.1 - 2018-11-02 - Bugfix release
 
+- Fixed a bug when setting the cause of an exception without message
+  under Python 2.7 (#179).
 
 ### 2.4.0 - 2018-11-01 - Release highlights
 
