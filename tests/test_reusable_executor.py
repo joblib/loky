@@ -723,6 +723,10 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         return INITIALIZER_STATUS
 
     def test_reusable_initializer(self):
+        cloudpickle = pytest.importorskip('cloudpickle')
+        if cloudpickle.__version__.split('.')[:3] < ['0', '6', '1']:
+            pytest.skip('Need cloudpickle 0.6.1 or later, got %s'
+                        % cloudpickle.__version__)
         executor = get_reusable_executor(
             max_workers=2, initializer=self._initializer, initargs=('done',))
 
