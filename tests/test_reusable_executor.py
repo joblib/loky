@@ -548,7 +548,6 @@ class TestResizeExecutor(ReusableExecutorMixin):
         assert executor.submit(id_sleep, 42, 0.).result() == 42
         executor.shutdown()
 
-    @pytest.mark.timeout(30 if sys.platform == "win32" else 15)
     def test_resize_after_timeout(self):
         with warnings.catch_warnings(record=True) as recorded_warnings:
             warnings.simplefilter("always")
