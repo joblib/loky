@@ -162,12 +162,15 @@ class TestCloudpickleWrapper:
             loky_pickler = {loky_pickler}
             set_loky_pickler(loky_pickler)
 
-            expected_loky_pickler_name = loky_pickler
             if loky_pickler in [None, '', 'cloudpickle']:
-                expected_loky_pickler_name = 'cloudpickle'
                 expected_loky_pickler = CloudPickler
-            else:
+                expected_loky_pickler_name = 'cloudpickle'
+            elif loky_pickler == 'pickle':
                 expected_loky_pickler = Pickler
+                expected_loky_pickler_name = 'pickle'
+            else:
+                raise RuntimeError("unexpected value {{}} for loky_pickler"
+                                   .format(loky_pickler))
 
 
             current_loky_pickler_name = get_loky_pickler_name()
@@ -185,21 +188,18 @@ class TestCloudpickleWrapper:
                 .format(current_loky_pickler_name))
             assert issubclass(get_loky_pickler(), CloudPickler)
 
-            # Test that the behavior expected. This should only fail when
-            # using the default pickle without the cloudpickle_wrapper.
-
-            @wrap_non_picklable_objects
-            def get_worker_loky_pickler():
-                return get_loky_pickler_name()
-
+            # Check that the loky pickler in the workers is the correct one.
             set_loky_pickler(loky_pickler)
             e = get_reusable_executor()
-            worker_loky_pickler = e.submit(get_worker_loky_pickler).result()
+            worker_loky_pickler = e.submit(get_loky_pickler_name).result()
             assert worker_loky_pickler == expected_loky_pickler_name, (
                 "expected {{}} but got {{}} for the worker loky pickler"
                 .format(loky_pickler, worker_loky_pickler)
             )
 
+
+            # Check that for cloudpickle, this does not fail and for pickle, it
+            # fails with the correct Error.
             def test_func(x):
                 return x
 
