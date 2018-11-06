@@ -129,18 +129,26 @@ except ImportError:
     DEFAULT_ENV = "pickle"
 
 ENV_LOKY_PICKLER = os.environ.get("LOKY_PICKLER", DEFAULT_ENV)
-_LokyPickler = ENV_LOKY_PICKLER
+_LokyPickler = None
+_loky_pickler_name = None
 
 
 def set_loky_pickler(loky_pickler=None):
-    global _LokyPickler
+    global _LokyPickler, _loky_pickler_name
 
     if loky_pickler is None:
         loky_pickler = ENV_LOKY_PICKLER
 
     loky_pickler_cls = None
 
-    if loky_pickler in ["cloudpickle", "", None]:
+    # The default loky_pickler is cloudpickle
+    if loky_pickler in ["", None]:
+        loky_pickler = "cloudpickle"
+
+    if loky_pickler == _loky_pickler_name:
+        return
+
+    if loky_pickler == "cloudpickle":
         from cloudpickle import CloudPickler as loky_pickler_cls
     else:
         try:
@@ -198,11 +206,17 @@ def set_loky_pickler(loky_pickler=None):
                 self.dispatch_table[type] = reduce_func
 
     _LokyPickler = CustomizablePickler
+    _loky_pickler_name = loky_pickler
+
+
+def get_loky_pickler_name():
+    global _loky_pickler_name
+    return _loky_pickler_name
 
 
 def get_loky_pickler():
     global _LokyPickler
-    return _LokyPickler._loky_pickler_cls.__name__
+    return _LokyPickler
 
 
 # Set it to its default value
