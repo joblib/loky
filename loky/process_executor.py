@@ -80,6 +80,7 @@ from .backend.compat import wait
 from .backend.compat import set_cause
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
+from .backend.reduction import set_loky_pickler, get_loky_pickler_name
 from .backend.utils import recursive_terminate, get_exitcodes_terminated_worker
 
 try:
@@ -263,6 +264,13 @@ class _CallItem(object):
         self.args = args
         self.kwargs = kwargs
 
+        # Store the current loky_pickler so it is correctly set in the worker
+        self.loky_pickler = get_loky_pickler_name()
+
+    def __call__(self):
+        set_loky_pickler(self.loky_pickler)
+        return self.fn(*self.args, **self.kwargs)
+
     def __repr__(self):
         return "CallItem({}, {}, {}, {})".format(
             self.work_id, self.fn, self.args, self.kwargs)
@@ -407,7 +415,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             with worker_exit_lock:
                 return
         try:
-            r = call_item.fn(*call_item.args, **call_item.kwargs)
+            r = call_item()
         except BaseException as e:
             exc = _ExceptionWithTraceback(e)
             result_queue.put(_ResultItem(call_item.work_id, exception=exc))
