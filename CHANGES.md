@@ -1,3 +1,9 @@
+### 2.4.2 - 2018-11-06 - Bugfix release
+
+- Fixed loky pickler in workers. (#184)
+
+- Fixed compat with python2.7 in semaphore tracker. (#186)
+
 ### 2.4.1 - 2018-11-02 - Bugfix release
 
 - Fixed a bug when setting the cause of an exception without message
