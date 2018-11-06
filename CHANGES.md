@@ -1,3 +1,6 @@
+### 2.5.0dev0 - In development
+
+
 ### 2.4.2 - 2018-11-06 - Bugfix release
 
 - Fixed loky pickler in workers. (#184)
