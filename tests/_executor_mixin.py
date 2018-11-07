@@ -10,6 +10,7 @@ import threading
 from loky._base import TimeoutError
 from loky.backend import get_context
 from loky import get_reusable_executor, cpu_count
+from loky import get_reusable_thread_executor
 
 
 # Compat Travis
@@ -191,6 +192,37 @@ class ExecutorMixin:
             % (len(workers), patience))
 
 
+class ThreadExecutorMixin(object):
+    worker_count = 5
+    executor_kwargs = {}
+
+    def setUp(self):
+        super(ThreadExecutorMixin, self).setUp()
+
+        self.t1 = time.time()
+        self.executor = self.executor_type(
+            max_workers=self.worker_count,
+            **self.executor_kwargs)
+        self._prime_executor()
+
+    def tearDown(self):
+        self.executor.shutdown(wait=True)
+        self.executor = None
+
+        dt = time.time() - self.t1
+        self.assertLess(dt, 300, "synchronization issue: test lasted too long")
+
+        super(ThreadExecutorMixin, self).tearDown()
+
+    def _prime_executor(self):
+        # Make sure that the executor is ready to do work before running the
+        # tests. This should reduce the probability of timeouts in the tests.
+        futures = [self.executor.submit(time.sleep, 0.1)
+                   for _ in range(self.worker_count)]
+        for f in futures:
+            f.result()
+
+
 class ReusableExecutorMixin:
 
     def setup_method(self, method):
@@ -200,6 +232,24 @@ class ReusableExecutorMixin:
         _check_executor_started(executor)
         # There can be less than 2 workers because of the worker timeout
         _check_subprocesses_number(executor, expected_max_process_number=2)
+
+    def teardown_method(self, method):
+        """Make sure the executor can be recovered after the tests"""
+        executor = get_reusable_executor(max_workers=2)
+        assert executor.submit(math.sqrt, 1).result() == 1
+        # There can be less than 2 workers because of the worker timeout
+        _check_subprocesses_number(executor, expected_max_process_number=2)
+
+    @classmethod
+    def teardown_class(cls):
+        executor = get_reusable_executor(max_workers=2)
+        executor.shutdown(wait=True)
+
+
+class ReusableThreadingExecutorMixin:
+    def setup_method(self, method):
+        executor = get_reusable_thread_executor(max_workers=2)
+        # _check_executor_started(executor)
 
     def teardown_method(self, method):
         """Make sure the executor can be recovered after the tests"""

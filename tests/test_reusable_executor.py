@@ -13,10 +13,12 @@ from pickle import PicklingError, UnpicklingError
 
 from loky import cpu_count
 from loky import get_reusable_executor
+from loky import get_reusable_thread_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
+from ._executor_mixin import ReusableThreadingExecutorMixin
 from .utils import TimingWrapper, id_sleep, check_subprocess_call, filter_match
 
 # Compat windows
@@ -222,7 +224,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # on workers
         (return_instance, (CrashAtPickle,), TerminatedWorkerError, r"SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), TerminatedWorkerError, r"EXIT\(0\)"),
+        (return_instance, (CExitAtPickle,), TerminatedWorkerError,
+         r"EXIT\(0\)"),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
@@ -746,3 +749,50 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=4)
         for x in executor.map(self._test_initializer, delay=.1):
             assert x == 'uninitialized'
+
+
+class TestThreadingExecutorInitializer(ReusableThreadingExecutorMixin):
+    def _initializer(self, x):
+        global INITIALIZER_STATUS
+        INITIALIZER_STATUS = x
+
+    def _test_initializer(self, delay=0):
+        sleep(delay)
+
+        global INITIALIZER_STATUS
+        return INITIALIZER_STATUS
+
+    def test_reusable_initializer(self):
+        executor = get_reusable_thread_executor(
+            max_workers=2, initializer=self._initializer, initargs=('done',))
+
+        assert executor.submit(self._test_initializer).result() == 'done'
+
+        # when the initializer change, the executor is re-spawned
+        executor = get_reusable_thread_executor(
+            max_workers=2, initializer=self._initializer, initargs=(42,))
+
+        assert executor.submit(self._test_initializer).result() == 42
+
+        # With reuse=True, the executor use the same initializer
+        executor = get_reusable_thread_executor(max_workers=4, reuse=True)
+        for x in executor.map(self._test_initializer):
+            assert x == 42
+
+        # With reuse='auto', the initializer is not used anymore
+        executor = get_reusable_thread_executor(max_workers=4)
+        for x in executor.map(self._test_initializer):
+            assert x == 'uninitialized'
+
+    def test_invalid_process_number(self):
+        """Raise error on invalid process number"""
+
+        with pytest.raises(ValueError):
+            get_reusable_thread_executor(max_workers=0)
+
+        with pytest.raises(ValueError):
+            get_reusable_thread_executor(max_workers=-1)
+
+        executor = get_reusable_thread_executor()
+        with pytest.raises(ValueError):
+            executor._resize(max_workers=None)
