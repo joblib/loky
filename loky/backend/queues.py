@@ -15,6 +15,7 @@ import errno
 import weakref
 import threading
 
+from collections import deque
 from multiprocessing import util
 from multiprocessing import connection
 from multiprocessing.synchronize import SEM_VALUE_MAX
