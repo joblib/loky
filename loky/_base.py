@@ -16,6 +16,13 @@ import logging
 import threading
 import collections
 
+if sys.version_info[:2] >= (3, 7):
+    from concurrent.futures._base import BrokenExecutor
+else:
+    class BrokenExecutor(RuntimeError):
+        """
+        Raise when a executor became non-functional after a severe failure.
+        """
 
 if sys.version_info[:2] >= (3, 3):
 

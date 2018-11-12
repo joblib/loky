@@ -1,4 +1,4 @@
-###############################################################################
+##############################################################################
 # Reusable ProcessPoolExecutor
 #
 # author: Thomas Moreau and Olivier Grisel
@@ -9,6 +9,7 @@ import threading
 import multiprocessing as mp
 
 from .process_executor import ProcessPoolExecutor, EXTRA_QUEUED_CALLS
+from .reusable_thread_executor import _ReusableThreadPoolExecutor
 from .backend.context import cpu_count
 from .backend import get_context
 
@@ -24,6 +25,11 @@ _executor = None
 _executor_args = None
 
 
+_next_thread_executor_id = 0
+_thread_executor_kwargs = None
+_thread_executor = None
+
+
 def _get_next_executor_id():
     """Ensure that each successive executor instance has a unique, monotonic id.
 
@@ -35,6 +41,18 @@ def _get_next_executor_id():
         executor_id = _next_executor_id
         _next_executor_id += 1
         return executor_id
+
+
+def _get_next_thread_executor_id():
+    """Ensure that each successive executor instance has a unique monotonic id.
+
+    The purpose of this monotonic id is to help debug and test automated
+    instance creation.
+    """
+    global _next_thread_executor_id
+    thread_executor_id = _next_thread_executor_id
+    _next_thread_executor_id += 1
+    return thread_executor_id
 
 
 def get_reusable_executor(max_workers=None, context=None, timeout=10,
@@ -103,7 +121,7 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
                           .format(max_workers))
             executor_id = _get_next_executor_id()
             _executor_kwargs = kwargs
-            _executor = executor = _ReusablePoolExecutor(
+            _executor = executor = _ReusableProcessPoolExecutor(
                 _executor_lock, max_workers=max_workers,
                 executor_id=executor_id, **kwargs)
         else:
@@ -134,11 +152,11 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     return executor
 
 
-class _ReusablePoolExecutor(ProcessPoolExecutor):
+class _ReusableProcessPoolExecutor(ProcessPoolExecutor):
     def __init__(self, submit_resize_lock, max_workers=None, context=None,
                  timeout=None, executor_id=0, job_reducers=None,
                  result_reducers=None, initializer=None, initargs=()):
-        super(_ReusablePoolExecutor, self).__init__(
+        super(_ReusableProcessPoolExecutor, self).__init__(
             max_workers=max_workers, context=context, timeout=timeout,
             job_reducers=job_reducers, result_reducers=result_reducers,
             initializer=initializer, initargs=initargs)
@@ -147,7 +165,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
 
     def submit(self, fn, *args, **kwargs):
         with self._submit_resize_lock:
-            return super(_ReusablePoolExecutor, self).submit(
+            return super(_ReusableProcessPoolExecutor, self).submit(
                 fn, *args, **kwargs)
 
     def _resize(self, max_workers):
@@ -201,5 +219,78 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         # As this executor can be resized, use a large queue size to avoid
         # underestimating capacity and introducing overhead
         queue_size = 2 * cpu_count() + EXTRA_QUEUED_CALLS
-        super(_ReusablePoolExecutor, self)._setup_queues(
+        super(_ReusableProcessPoolExecutor, self)._setup_queues(
             job_reducers, result_reducers, queue_size=queue_size)
+
+
+def get_reusable_thread_executor(max_workers=None, reuse='auto',
+                                 initializer=None, initargs=()):
+    """Return the current _ReusableThreadPoolExectutor instance.
+
+    Start a new instance if it has not been started already or if the previous
+    instance was left in a broken state.
+
+    If the previous instance does not have the requested number of workers, the
+    executor is dynamically resized to adjust the number of workers prior to
+    returning.
+
+    Reusing a singleton instance spares the overhead of starting new worker
+    threads and re-executing initializer functions each time.
+
+    ``max_workers`` controls the maximum number of tasks that can be running in
+    parallel in worker threads. By default this is set to the number of
+    5 times the number of CPUs on the host.
+
+    When provided, the ``initializer`` is run first in newly created
+    threads with argument ``initargs``.
+    """
+    global _thread_executor, _thread_executor_kwargs
+    thread_executor = _thread_executor
+
+    if max_workers is None:
+        if reuse is True and thread_executor is not None:
+            max_workers = thread_executor._max_workers
+        else:
+            max_workers = (mp.cpu_count() or 1) * 5
+    elif max_workers <= 0:
+        raise ValueError(
+            "max_workers must be greater than 0, got {}."
+            .format(max_workers))
+
+    kwargs = dict(initializer=initializer, initargs=initargs)
+    if thread_executor is None:
+        mp.util.debug("Create a thread_executor with max_workers={}."
+                      .format(max_workers))
+        executor_id = _get_next_thread_executor_id()
+        _thread_executor_kwargs = kwargs
+        _thread_executor = thread_executor = _ReusableThreadPoolExecutor(
+            max_workers=max_workers,
+            executor_id=executor_id, **kwargs)
+    else:
+        if reuse == 'auto':
+            reuse = kwargs == _thread_executor_kwargs
+        if (thread_executor._broken or thread_executor._shutdown
+                or not reuse):
+            if thread_executor._broken:
+                reason = "broken"
+            elif thread_executor._shutdown:
+                reason = "shutdown"
+            else:
+                reason = "arguments have changed"
+            mp.util.debug(
+                "Creating a new thread_executor with max_workers={} as the "
+                "previous instance cannot be reused ({})."
+                .format(max_workers, reason))
+            thread_executor.shutdown(wait=True)
+            _thread_executor = thread_executor = \
+                _thread_executor_kwargs = None
+            # Recursive call to build a new instance
+            return get_reusable_thread_executor(
+                    max_workers=max_workers, **kwargs)
+        else:
+            mp.util.debug("Reusing existing thread_executor with "
+                          "max_workers={}.".format(
+                              thread_executor._max_workers))
+            thread_executor._resize(max_workers)
+
+    return thread_executor

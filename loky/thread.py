@@ -14,9 +14,11 @@ import sys
 
 from loky.backend.compat import queue
 from loky.backend.threading_queues import threading_SimpleQueue
+from loky._base import BrokenExecutor
 
 
-if sys.version_info[:2] >= (3, 3):
+if sys.version_info[:2] >= (3, 7):
+    from concurrent.futures.thread import BrokenThreadPool
     from concurrent.futures import _base
     from concurrent.futures.thread import (
             _threads_queues,
@@ -24,13 +26,10 @@ if sys.version_info[:2] >= (3, 3):
             _python_exit,
             _WorkItem,
             _worker,
-            BrokenThreadPool,
             ThreadPoolExecutor
             )
-
 else:
     from loky import _base
-
     # Workers are created as daemon threads. This is done to allow the
     # interpreter to exit when there are still idle threads in a
     # ThreadPoolExecutor's thread pool (i.e. shutdown() was not called).
@@ -183,6 +182,15 @@ else:
                 return f
         submit.__doc__ = _base.Executor.submit.__doc__
 
+        def map(self, fn, *args, **kwargs):
+            # This function drops the chunksize argument, and passes all the
+            # other ones to _base.Executor.map. The reason is that the
+            # chunksize argument does not exist in python versions below 3.5,
+            # so not overriding this method will yield error in existing tests
+            # using the chunksize argument.
+            return super(ThreadPoolExecutor, self).map(
+                    fn, *args, timeout=kwargs.get('timeout'))
+
         def _adjust_thread_count(self):
             # When the executor gets lost, the weakref callback will wake up
             # the worker threads.
@@ -226,3 +234,8 @@ else:
                 for t in self._threads:
                     t.join()
         shutdown.__doc__ = _base.Executor.shutdown.__doc__
+
+    class BrokenThreadPool(BrokenExecutor):
+        """
+        Raise when a worker thread in a ThreadPoolExecutor failed initializing.
+        """
