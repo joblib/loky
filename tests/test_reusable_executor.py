@@ -11,6 +11,7 @@ from tempfile import mkstemp
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
 
+import loky
 from loky import cpu_count
 from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
@@ -41,9 +42,6 @@ try:
     PICKLING_ERRORS += (cPickle.PicklingError,)
 except ImportError:
     pass
-
-
-INITIALIZER_STATUS = 'uninitialized'
 
 
 def clean_warning_registry():
@@ -712,20 +710,13 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
 class TestExecutorInitializer(ReusableExecutorMixin):
     def _initializer(self, x):
-        global INITIALIZER_STATUS
-        INITIALIZER_STATUS = x
+        loky._initialized_state = x
 
     def _test_initializer(self, delay=0):
         sleep(delay)
-
-        global INITIALIZER_STATUS
-        return INITIALIZER_STATUS
+        return getattr(loky, "_initialized_state", "uninitialized")
 
     def test_reusable_initializer(self):
-        cloudpickle = pytest.importorskip('cloudpickle')
-        if cloudpickle.__version__.split('.')[:3] < ['0', '6', '1']:
-            pytest.skip('Need cloudpickle 0.6.1 or later, got %s'
-                        % cloudpickle.__version__)
         executor = get_reusable_executor(
             max_workers=2, initializer=self._initializer, initargs=('done',))
 
