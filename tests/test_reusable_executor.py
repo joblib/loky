@@ -603,7 +603,28 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         code = """if True:
             from loky import get_reusable_executor
             e = get_reusable_executor()
+
+            # Force a start of the children processes:
             e.submit(id, 42).result()
+
+            # Test that it's possible to call interactively defined, nested
+            # functions:
+
+            def inner_func(x):
+                return -x
+
+            def outer_func(x):
+                return inner_func(x)
+
+            assert e.submit(outer_func, 1).result() == outer_func(1) == -1
+
+            # Test that changes to the definition of the inner function are
+            # taken into account in subsequent calls to the outer function.
+
+            def inner_func(x):
+                return x
+
+            assert e.submit(outer_func, 1).result() == outer_func(1) == 1
             print("ok")
         """
         cmd = [sys.executable]
