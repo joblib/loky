@@ -7,7 +7,6 @@ import pytest
 import warnings
 import threading
 from time import sleep
-from tempfile import mkstemp
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
 
@@ -18,7 +17,8 @@ from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
-from .utils import TimingWrapper, id_sleep, check_subprocess_call, filter_match
+from .utils import TimingWrapper, id_sleep, check_python_subprocess_call
+from .utils import filter_match
 
 # Compat windows
 if sys.platform == "win32":
@@ -595,7 +595,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         with pytest.raises(ValueError):
             get_reusable_executor(max_workers=2, context='bad_start_method')
 
-    def test_interactively_define_executor_no_main(self):
+    def test_interactively_defined_executor_no_main(self):
         # check that the init_main_module parameter works properly
         # when using -c option, we don't need the safeguard if __name__ ..
         # and thus test LokyProcess without the extra argument. For running
@@ -604,7 +604,20 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             from loky import get_reusable_executor
             e = get_reusable_executor()
 
-            # Force a start of the children processes:
+            e.submit(id, 42).result()
+            print("ok")
+        """
+        check_python_subprocess_call(code, stdout_regex=r"ok")
+
+    def test_interactively_defined_nested_functions(self):
+        # Check that it's possible to call nested interactively defined
+        # functions and furthermore that changing the code interactively
+        # is taken into account by the worker process.
+        code = """if True:
+            from loky import get_reusable_executor
+            e = get_reusable_executor(max_workers=1)
+
+            # Force a start of the children process:
             e.submit(id, 42).result()
 
             # Test that it's possible to call interactively defined, nested
@@ -625,18 +638,38 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 return x
 
             assert e.submit(outer_func, 1).result() == outer_func(1) == 1
+        """
+        check_python_subprocess_call(code, stdout_regex=r"ok")
+
+    def test_interactively_defined_recursive_functions(self):
+        # Check that it's possible to call a recursive function defined
+        # in a closure.
+        # Also check that calling several function that stems from the same
+        # factory with different closure states results in the expected result:
+        # the function definitions should not collapse in the worker process.
+        code = """if True:
+            from loky import get_reusable_executor
+            e = get_reusable_executor(max_workers=1)
+
+            # Force a start of the children process:
+            e.submit(id, 42).result()
+
+            def make_func(seed):
+                def func(x):
+                    if x <= 0:
+                        return seed
+                    return func(x - 1) + 1
+                return func
+
+            func = make_func(0)
+            assert e.submit(func, 5).result() == func(5) == 5
+
+            func = make_func(1)
+            assert e.submit(func, 5).result() == func(5) == 6
+
             print("ok")
         """
-        cmd = [sys.executable]
-        try:
-            fid, filename = mkstemp(suffix="_joblib.py")
-            os.close(fid)
-            with open(filename, mode='wb') as f:
-                f.write(code.encode('ascii'))
-            cmd += [filename]
-            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
-        finally:
-            os.unlink(filename)
+        check_python_subprocess_call(code, stdout_regex=r"ok")
 
     def test_compat_with_concurrent_futures_exception(self):
         # It should be possible to use a loky process pool executor as a dropin
