@@ -9,16 +9,20 @@ import threading
 from time import sleep
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
+from distutils.version import LooseVersion
 
 import loky
 from loky import cpu_count
 from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
+import cloudpickle
 
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep, check_python_subprocess_call
 from .utils import filter_match
+
+cloudpickle_version = LooseVersion(cloudpickle.__version__)
 
 # Compat windows
 if sys.platform == "win32":
@@ -609,10 +613,14 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         """
         check_python_subprocess_call(code, stdout_regex=r"ok")
 
+    @pytest.mark.xfail(cloudpickle_version >= LooseVersion("0.5.4") and
+                       cloudpickle_version <= LooseVersion("0.7.0"),
+                       reason="Known issue in cloudpickle")
+    # https://github.com/cloudpipe/cloudpickle/pull/240
     def test_interactively_defined_nested_functions(self):
         # Check that it's possible to call nested interactively defined
         # functions and furthermore that changing the code interactively
-        # is taken into account by the worker process.
+        # is taken into account by the single worker process.
         code = """if True:
             from loky import get_reusable_executor
             e = get_reusable_executor(max_workers=1)
@@ -646,7 +654,8 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # in a closure.
         # Also check that calling several function that stems from the same
         # factory with different closure states results in the expected result:
-        # the function definitions should not collapse in the worker process.
+        # the function definitions should not collapse in the single worker
+        # process.
         code = """if True:
             from loky import get_reusable_executor
             e = get_reusable_executor(max_workers=1)
