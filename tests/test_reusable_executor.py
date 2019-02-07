@@ -646,6 +646,8 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 return x
 
             assert e.submit(outer_func, 1).result() == outer_func(1) == 1
+
+            print("ok")
         """
         check_python_subprocess_call(code, stdout_regex=r"ok")
 
