@@ -9,12 +9,12 @@ if sys.platform == "darwin":
     os.environ["CC"] = "gcc-4.9"
     os.environ["CXX"] = "g++-4.9"
 
-if sys.platform != "win32":
-    extra_compile_args = ["-ffast-math", "-fopenmp"]
-    extra_link_args = ['-fopenmp']
-else:
+if sys.platform == "win32":
     extra_compile_args = ["/openmp"]
     extra_link_args = None
+else:
+    extra_compile_args = ["-ffast-math", "-fopenmp"]
+    extra_link_args = ['-fopenmp']
 
 ext_modules = [
     Extension(

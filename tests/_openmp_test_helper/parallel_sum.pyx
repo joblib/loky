@@ -5,7 +5,7 @@ from libc.stdlib cimport malloc, free
 
 
 def parallel_sum(int n):
-    cdef double n_sum = 0
+    cdef long n_sum = 0
     cdef int i, num_threads
 
     for i in prange(n, nogil=True):

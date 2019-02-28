@@ -193,6 +193,5 @@ def test_openmp_limit_num_threads(n_threads):
     old_num_threads = parallel_sum(100)
 
     with thread_pool_limits(limits=n_threads):
-        assert parallel_sum(100) in (n_threads, os.cpu_count(),
-                                     os.cpu_count() / 2)
+        assert parallel_sum(100) in (n_threads, cpu_count(), cpu_count() / 2)
     assert parallel_sum(100) == old_num_threads
