@@ -16,7 +16,7 @@ environment:
       PYTHON_ARCH_SUFFIX: "-x64"
 
 matrix:
-  fast_finish: false
+  fast_finish: true
 
 # init:
 #   - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))

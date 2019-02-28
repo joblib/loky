@@ -30,7 +30,7 @@ function RunTestsWithTox () {
 
 function RunTestsWithConda () {
 
-    conda install -y numpy psutil pytest cython
+    conda install -y numpy=1.14 psutil pytest cython
     pip install pytest-timeout
     pip install .
 

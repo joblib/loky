@@ -97,7 +97,7 @@ def test_thread_pool_limits(openblas_test_noskip, mkl_win32_test_noskip, clib):
 
     thread_pool_limits(limits={clib: 3})
     new_limits = get_thread_limits()
-    assert new_limits[clib] in (3, os.cpu_count(), os.cpu_count() / 2)
+    assert new_limits[clib] in (3, cpu_count(), cpu_count() / 2)
 
     thread_pool_limits(limits=old_limits)
     new_limits = get_thread_limits()
@@ -132,7 +132,7 @@ def test_set_thread_limits_subset(subset):
     new_limits = get_thread_limits()
     for clib in clibs:
         if old_limits[clib] is not None:
-            assert new_limits[clib] in (3, os.cpu_count(), os.cpu_count() / 2)
+            assert new_limits[clib] in (3, cpu_count(), cpu_count() / 2)
 
     thread_pool_limits(limits=old_limits)
     new_limits = get_thread_limits()
