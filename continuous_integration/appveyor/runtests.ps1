@@ -30,12 +30,12 @@ function RunTestsWithTox () {
 
 function RunTestsWithConda () {
 
-    pip uninstall numpy
-    conda update -y python
-    conda install -y numpy psutil pytest cython
+    conda install -y python numpy psutil pytest cython
     pip install pytest-timeout
     pip install .
-    conda update -y numpy
+
+    python --version
+    python -c "import numpy"
 
     bash ./continuous_integration/build_test_ext.sh
 
