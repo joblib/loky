@@ -83,8 +83,13 @@ def test_thread_pool_limits(openblas_test_noskip, mkl_win32_test_noskip, clib):
         if clib == "openblas" and openblas_test_noskip:
             raise RuntimeError("Could not load the OpenBLAS library")
         elif clib == "mkl_win32" and mkl_win32_test_noskip:
-            raise RuntimeError("Could not load the MKL library")
-        pytest.skip("Need {} support".format(clib))
+            import numpy as np
+            np.dot(np.ones(1000), np.ones(1000))
+            old_limits = get_thread_limits()
+            if old_limits[clib] is None:
+                raise RuntimeError("Could not load the MKL library")
+        else:
+            pytest.skip("Need {} support".format(clib))
 
     dynamic_scaling = _set_thread_limits(limits={clib: 1})
     assert get_thread_limits()[clib] == 1
