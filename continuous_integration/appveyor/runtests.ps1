@@ -3,7 +3,7 @@
 # Authors: Thomas Moreau
 # License: 3-clause BSD
 
-$VERSION=(36, 34, 27)
+$VERSION=(36, 27)
 $TOX_CMD = "python ./continuous_integration/appveyor/tox"
 $DEFAULT_PYTEST_ARGS = "-vlx --timeout=50 --skip-high-memory"
 

@@ -149,11 +149,16 @@ class ExecutorMixin:
         _check_subprocesses_number(self.executor, self.worker_count)
 
     def teardown_method(self, method):
-        # Make sure is not broken if it should not be
+        # Make sure executor is not broken if it should not be
         executor = getattr(self, 'executor', None)
         if executor is not None:
-            assert hasattr(method, 'broken_pool') != (
-                not self.executor._flags.broken)
+            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
+            for mark in getattr(method, "pytestmark", []):
+                if mark.name == "broken_pool":
+                    expect_broken_pool = True
+            is_actually_broken = executor._flags.broken is not None
+            assert is_actually_broken == expect_broken_pool
+
             t_start = time.time()
             executor.shutdown(wait=True, kill_workers=True)
             dt = time.time() - t_start

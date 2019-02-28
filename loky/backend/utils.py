@@ -134,11 +134,11 @@ def get_exitcodes_terminated_worker(processes):
     # Catch the exitcode of the terminated workers. There should at least be
     # one. If not, wait a bit for the system to correctly set the exitcode of
     # the terminated worker.
-    exitcodes = [p.exitcode for p in processes.values()
+    exitcodes = [p.exitcode for p in list(processes.values())
                  if p.exitcode is not None]
     while len(exitcodes) == 0 and patience > 0:
         patience -= 1
-        exitcodes = [p.exitcode for p in processes.values()
+        exitcodes = [p.exitcode for p in list(processes.values())
                      if p.exitcode is not None]
         time.sleep(.05)
 
@@ -594,8 +594,6 @@ class thread_pool_limits:
 
     def unregister(self):
         _set_thread_limits(limits=self.old_limits)
-
-
 
 
 def get_openblas_version(reload_clib=True):

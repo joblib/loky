@@ -7,6 +7,7 @@ import warnings
 import threading
 import subprocess
 import contextlib
+from tempfile import mkstemp
 
 if sys.version_info[0] == 2:
     class TimeoutError(OSError):
@@ -165,6 +166,19 @@ except ImportError:
     def with_parallel_sum(func):
         """A decorator to skip tests if parallel_sum is not compiled."""
         return skip_func('Test requires parallel_sum to be compiled')
+
+
+def check_python_subprocess_call(code, stdout_regex=None):
+    cmd = [sys.executable]
+    try:
+        fid, filename = mkstemp(suffix="_joblib.py")
+        os.close(fid)
+        with open(filename, mode='wb') as f:
+            f.write(code.encode('ascii'))
+        cmd += [filename]
+        check_subprocess_call(cmd, stdout_regex=stdout_regex, timeout=10)
+    finally:
+        os.unlink(filename)
 
 
 def filter_match(match, start_method=None):
