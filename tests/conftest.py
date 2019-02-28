@@ -45,6 +45,14 @@ def pytest_configure(config):
 
     warnings.simplefilter('always')
 
+    # When using this option, make sure numpy is accessible
+    if config.getoption("--mkl-win32-test-noskip"):
+        try:
+            import numpy as np  # noqa: F401
+        except ImportError:
+            raise ImportError("Need 'numpy' with option "
+                              "--mkl-win32-test-noskip")
+
 
 def pytest_collection_modifyitems(config, items):
     if not config.getoption("--skip-high-memory"):
