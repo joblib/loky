@@ -18,6 +18,7 @@ except ImportError:
 from loky import process_executor
 
 import os
+import gc
 import sys
 import time
 import shutil
@@ -31,19 +32,22 @@ from math import sqrt
 from threading import Thread
 from collections import defaultdict
 
+from loky.process_executor import LokyRecursionError
+from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
-from loky.process_executor import ShutdownExecutorError
-from loky.process_executor import BrokenProcessPool, LokyRecursionError
-from .test_reusable_executor import ErrorAtPickle
-from .test_reusable_executor import ExitAtPickle
+
 from . import _executor_mixin
-from .utils import id_sleep, check_subprocess_call
+from .utils import id_sleep, check_subprocess_call, filter_match
+from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
 
 if sys.version_info[:2] < (3, 3):
     import loky._base as futures
 else:
     from concurrent import futures
+
+
+IS_PYPY = hasattr(sys, "pypy_version_info")
 
 
 def create_future(state=PENDING, exception=None, result=None):
@@ -86,6 +90,9 @@ def sleep_and_write(t, filename, msg):
 class MyObject(object):
     def __init__(self, value=0):
         self.value = value
+
+    def __repr__(self):
+        return "MyObject({})".format(self.value)
 
     def my_method(self):
         pass
@@ -139,7 +146,7 @@ class ExecutorShutdownTest:
                                n_jobs=n_jobs,
                                tempdir=tempdir.replace("\\", "/"))
             stdout, stderr = check_subprocess_call(
-                [sys.executable, "-c", code], timeout=10)
+                [sys.executable, "-c", code], timeout=55)
 
             # On OSX, remove UserWarning for broken semaphores
             if sys.platform == "darwin":
@@ -186,6 +193,7 @@ class ExecutorShutdownTest:
             p.join()
 
     def test_processes_terminate_on_executor_gc(self):
+
         results = self.executor.map(sleep_and_return,
                                     [0.1] * 10, range(10))
         assert len(self.executor._processes) == self.worker_count
@@ -203,6 +211,11 @@ class ExecutorShutdownTest:
         # reference when we deleted self.executor.
         t_deadline = time.time() + 1
         while executor_reference() is not None and time.time() < t_deadline:
+            if IS_PYPY:
+                # PyPy can delay __del__ calls and GC compared to CPython.
+                # To ensure that this test pass without waiting too long we
+                # need an explicit GC.
+                gc.collect()
             time.sleep(0.001)
         assert executor_reference() is None
 
@@ -242,6 +255,11 @@ class ExecutorShutdownTest:
         executor_reference = weakref.ref(self.executor)
         self.executor = None
 
+        if IS_PYPY:
+            # Object deletion and garbage collection can be delayed under PyPy.
+            time.sleep(1.)
+            gc.collect()
+
         # Make sure that there is not other reference to the executor object.
         assert executor_reference() is None
 
@@ -254,7 +272,8 @@ class ExecutorShutdownTest:
 
         # The crashing job should be executed after the non-failing jobs
         # have completed. The crash should be detected.
-        with pytest.raises(BrokenProcessPool):
+        match = filter_match(r"SIGSEGV", self.context.get_start_method())
+        with pytest.raises(TerminatedWorkerError, match=match):
             crash_result.result()
 
         _executor_mixin._test_event.clear()
@@ -281,6 +300,10 @@ class ExecutorShutdownTest:
         queue_management_thread = executor._queue_management_thread
         processes = executor._processes
         del executor
+        if IS_PYPY:
+            # Object deletion and garbage collection can be delayed under PyPy.
+            time.sleep(1.)
+            gc.collect()
 
         queue_management_thread.join()
         for p in processes.values():
@@ -500,9 +523,7 @@ class ExecutorTest:
     def test_map_timeout(self):
         results = []
         with pytest.raises(futures.TimeoutError):
-            for i in self.executor.map(time.sleep,
-                                       [0, 0, 5],
-                                       timeout=1):
+            for i in self.executor.map(time.sleep, [0, 0, 5], timeout=1):
                 results.append(i)
 
         assert [None, None] == results
@@ -524,7 +545,13 @@ class ExecutorTest:
         self.executor.submit(my_object.my_method)
         del my_object
 
-        collected = collect.wait(timeout=5.0)
+        collected = False
+        for i in range(5):
+            if IS_PYPY:
+                gc.collect()
+            collected = collect.wait(timeout=1.0)
+            if collected:
+                return
         assert collected, "Stale reference not collected within timeout."
 
     def test_max_workers_negative(self):
@@ -541,10 +568,11 @@ class ExecutorTest:
         # Get one of the processes, and terminate (kill) it
         p = next(iter(self.executor._processes.values()))
         p.terminate()
-        with pytest.raises(BrokenProcessPool):
+        match = filter_match(r"SIGTERM", self.context.get_start_method())
+        with pytest.raises(TerminatedWorkerError, match=match):
             future.result()
         # Submitting other jobs fails as well.
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError, match=match):
             self.executor.submit(pow, 2, 8)
 
     def test_map_chunksize(self):
@@ -574,7 +602,14 @@ class ExecutorTest:
 
         exc = cm.value
         assert type(exc) is RuntimeError
-        assert exc.args == (123,)
+        if sys.version_info > (3,):
+            assert exc.args == (123,)
+        else:
+            assert exc.args[0].startswith("123")
+            # Makes sure that the cause of the RuntimeError is properly
+            # reported in the error message.
+            assert "raise RuntimeError(123)  # some comment" in exc.args[0]
+
         cause = exc.__cause__
         assert type(cause) is process_executor._RemoteTraceback
         assert 'raise RuntimeError(123)  # some comment' in cause.tb
@@ -667,7 +702,7 @@ class ExecutorTest:
                 patience -= 1
                 time.sleep(0.01)
 
-    @pytest.mark.timeout(50 if sys.platform == "win32" else 25)
+    @pytest.mark.timeout(60)
     def test_worker_timeout(self):
         self.executor.shutdown(wait=True)
         self.check_no_running_workers(patience=5)
@@ -717,13 +752,15 @@ class ExecutorTest:
         self.executor = self.executor_type(max_workers=2, context=self.context)
 
         obj = MyObject(1)
-        ret_obj = self.executor.submit(self.return_inputs, obj).result()[0]
-        ret_obj_custom = executor.submit(self.return_inputs, obj).result()[0]
+        try:
+            ret_obj_custom = executor.submit(
+                    self.return_inputs, obj).result()[0]
+            ret_obj = self.executor.submit(self.return_inputs, obj).result()[0]
 
-        assert ret_obj.value == 1
-        assert ret_obj_custom.value == 42
-
-        executor.shutdown(wait=True)
+            assert ret_obj.value == 1
+            assert ret_obj_custom.value == 42
+        finally:
+            executor.shutdown(wait=True)
 
     @classmethod
     def _test_max_depth(cls, max_depth=10, kill_workers=False, ctx=None):
@@ -763,3 +800,95 @@ class ExecutorTest:
 
         with pytest.raises(RuntimeError):
             self.executor.submit(id, data).result()
+
+    def test_memory_leak_protection(self):
+        self.executor.shutdown(wait=True)
+
+        executor = self.executor_type(1, context=self.context)
+
+        def _leak_some_memory(size=int(1e6), delay=0.001):
+            """function that leaks some memory """
+            from loky import process_executor
+            process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
+            if getattr(os, '_loky_leak', None) is None:
+                os._loky_leak = []
+
+            os._loky_leak.append(b"\x00" * size)
+
+            # Leave enough time for the memory leak detector to kick-in:
+            # by default the process does not check its memory usage
+            # more than once per second.
+            time.sleep(delay)
+
+            leaked_size = sum(len(buffer) for buffer in os._loky_leak)
+            return os.getpid(), leaked_size
+
+        with pytest.warns(UserWarning, match='memory leak'):
+            futures = []
+            for i in range(300):
+                # Total run time should be 3s which is way over the 1s cooldown
+                # period between two consecutive memory checks in the worker.
+                futures.append(executor.submit(_leak_some_memory))
+
+            executor.shutdown(wait=True)
+            results = [f.result() for f in futures]
+
+            # The pid of the worker has changed when restarting the worker
+            first_pid, last_pid = results[0][0], results[-1][0]
+            assert first_pid != last_pid
+
+            # The restart happened after 100 MB of leak over the
+            # default process size + what has leaked since the last
+            # memory check.
+            for _, leak_size in results:
+                assert leak_size / 1e6 < 250
+
+    def test_reference_cycle_collection(self):
+        # make the parallel call create a reference cycle and make
+        # a weak reference to be able to track the garbage collected objects
+        self.executor.shutdown(wait=True)
+
+        executor = self.executor_type(1, context=self.context)
+
+        def _create_cyclic_reference(delay=0.001):
+            """function that creates a cyclic reference"""
+            from loky import process_executor
+            process_executor._USE_PSUTIL = False
+            process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
+
+            class A:
+                def __init__(self, size=int(1e6)):
+                    self.data = b"\x00" * size
+                    self.a = self
+            if getattr(os, '_loky_cyclic_weakrefs', None) is None:
+                os._loky_cyclic_weakrefs = []
+
+            a = A()
+            time.sleep(delay)
+            os._loky_cyclic_weakrefs.append(weakref.ref(a))
+            return sum(1 for r in os._loky_cyclic_weakrefs if r() is not None)
+
+        futures = []
+        for i in range(300):
+            # Total run time should be 3s which is way over the 1s cooldown
+            # period between two consecutive memory checks in the worker.
+            futures.append(executor.submit(_create_cyclic_reference))
+
+        executor.shutdown(wait=True)
+
+        max_active_refs_count = max(f.result() for f in futures)
+        assert max_active_refs_count < 150
+        assert max_active_refs_count != 1
+
+    @pytest.mark.broken_pool
+    def test_exited_child(self):
+        # When a child process is abruptly terminated, the whole pool gets
+        # "broken".
+        print(self.context.get_start_method())
+        match = filter_match(r"EXIT\(42\)", self.context.get_start_method())
+        future = self.executor.submit(c_exit, 42)
+        with pytest.raises(TerminatedWorkerError, match=match):
+            future.result()
+        # Submitting other jobs fails as well.
+        with pytest.raises(TerminatedWorkerError, match=match):
+            self.executor.submit(pow, 2, 8)

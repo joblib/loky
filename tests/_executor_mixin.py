@@ -20,12 +20,8 @@ if os.environ.get("TRAVIS_OS_NAME") is not None and sys.version_info < (3, 4):
     # This is done automatically by cpu_count for Python >= 3.4
     CPU_COUNT = 2
 
-# Compat windows
-try:
-    # Increase time if the test is perform on a slow machine
-    TIMEOUT = max(20 / CPU_COUNT, 5)
-except ImportError:
-    TIMEOUT = 20
+# Set a large timeout as it should only be reached in case of deadlocks
+TIMEOUT = 40
 
 _test_event = None
 

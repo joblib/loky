@@ -1,4 +1,5 @@
 import re
+import os
 import sys
 import time
 import pytest
@@ -79,14 +80,18 @@ def id_sleep(x, delay=0):
 
 
 def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
-                          stderr_regex=None):
+                          stderr_regex=None, env=None):
     """Runs a command in a subprocess with timeout in seconds.
 
     Also checks returncode is zero, stdout if stdout_regex is set, and
     stderr if stderr_regex is set.
     """
+    if env is not None:
+        env_ = os.environ.copy()
+        env_.update(env)
+        env = env_
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
+                            stderr=subprocess.PIPE, env=env)
 
     def kill_process():
         warnings.warn("Timeout running {}".format(cmd))
@@ -160,3 +165,13 @@ except ImportError:
     def with_parallel_sum(func):
         """A decorator to skip tests if parallel_sum is not compiled."""
         return skip_func('Test requires parallel_sum to be compiled')
+
+
+def filter_match(match, start_method=None):
+    if sys.platform == "win32":
+        return
+
+    if start_method == "forkserver" and sys.version_info < (3, 7):
+        return "UNKNOWN"
+
+    return match

@@ -13,11 +13,11 @@ from pickle import PicklingError, UnpicklingError
 
 from loky import cpu_count
 from loky import get_reusable_executor
-from loky.process_executor import _RemoteTraceback
+from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 
 from ._executor_mixin import ReusableExecutorMixin
-from .utils import TimingWrapper, id_sleep, check_subprocess_call
+from .utils import TimingWrapper, id_sleep, check_subprocess_call, filter_match
 
 # Compat windows
 if sys.platform == "win32":
@@ -76,9 +76,9 @@ def exit():
     sys.exit(0)
 
 
-def c_exit():
+def c_exit(exitcode=0):
     """Induces a libc exit with exitcode 0"""
-    libc.exit(0)
+    libc.exit(exitcode)
 
 
 def check_pids_exist_then_sleep(arg):
@@ -209,26 +209,26 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         (id, (ExitAtPickle(),), PicklingError, None),
         (id, (ErrorAtPickle(),), PicklingError, None),
         # Check problem occuring while unpickling a task on workers
-        (id, (ExitAtUnpickle(),), BrokenProcessPool, "SystemExit"),
-        (id, (CExitAtUnpickle(),), BrokenProcessPool, None),
-        (id, (ErrorAtUnpickle(),), BrokenProcessPool, "UnpicklingError"),
-        (id, (CrashAtUnpickle(),), BrokenProcessPool, None),
+        (id, (ExitAtUnpickle(),), BrokenProcessPool, r"SystemExit"),
+        (id, (CExitAtUnpickle(),), TerminatedWorkerError, r"EXIT\(0\)"),
+        (id, (ErrorAtUnpickle(),), BrokenProcessPool, r"UnpicklingError"),
+        (id, (CrashAtUnpickle(),), TerminatedWorkerError, r"SIGSEGV"),
         # Check problem occuring during function execution on workers
-        (crash, (), BrokenProcessPool, None),
+        (crash, (), TerminatedWorkerError, r"SIGSEGV"),
         (exit, (), SystemExit, None),
-        (c_exit, (), BrokenProcessPool, None),
+        (c_exit, (), TerminatedWorkerError, r"EXIT\(0\)"),
         (raise_error, (RuntimeError,), RuntimeError, None),
         # Check problem occuring while pickling a task result
         # on workers
-        (return_instance, (CrashAtPickle,), BrokenProcessPool, None),
+        (return_instance, (CrashAtPickle,), TerminatedWorkerError, r"SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), BrokenProcessPool, None),
+        (return_instance, (CExitAtPickle,), TerminatedWorkerError, r"EXIT\(0\)"),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
-        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, "SystemExit"),
+        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, r"SystemExit"),
         (return_instance, (ErrorAtUnpickle,), BrokenProcessPool,
-         "UnpicklingError"),
+         r"UnpicklingError"),
     ]
 
     @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
@@ -236,7 +236,12 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         """Test various reusable_executor crash handling"""
         executor = get_reusable_executor(max_workers=2)
         res = executor.submit(func, *args)
-        with pytest.raises(expected_err) as exc_info:
+
+        match_err = None
+        if expected_err is TerminatedWorkerError:
+            match_err = filter_match(match)
+            match = None
+        with pytest.raises(expected_err, match=match_err) as exc_info:
             res.result()
 
         # For remote traceback, ensure that the cause contains the original
@@ -245,8 +250,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
             with pytest.raises(_RemoteTraceback, match=match):
                 raise exc_info.value.__cause__
 
-    @pytest.mark.parametrize("func, args, expected_exc, match", crash_cases)
-    def test_in_callback_submit_with_crash(self, func, args, expected_exc,
+    @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
+    def test_in_callback_submit_with_crash(self, func, args, expected_err,
                                            match):
         """Test the recovery from callback crash"""
         executor = get_reusable_executor(max_workers=2, timeout=12)
@@ -269,7 +274,12 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         assert f.result() == 42
         if not f.callback_done.wait(timeout=3):
             raise AssertionError('callback not done before timeout')
-        with pytest.raises(expected_exc) as exc_info:
+
+        match_err = None
+        if expected_err is TerminatedWorkerError:
+            match_err = filter_match(match)
+            match = None
+        with pytest.raises(expected_err, match=match_err) as exc_info:
             f.callback_future.result()
 
         # For remote traceback, ensure that the cause contains the original
@@ -320,7 +330,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # wait for the executor to be able to detect the issue and set itself
         # in broken state:
         sleep(.5)
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError,
+                           match=filter_match(r"SIGKILL")):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -342,7 +353,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
         assert all(list(res))
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError,
+                           match=filter_match(r"SIGKILL")):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -391,9 +403,9 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         pool is started in the parent.
         """
         a = np.random.randn(1000, 1000)
-        np.dot(a, a)
+        np.dot(a, a)  # trigger the thread pool init in the parent process
         executor = get_reusable_executor(max_workers=2)
-        executor.submit(np.dot, a, a)
+        executor.submit(np.dot, a, a).result()
         executor.shutdown(wait=True)
 
     @pytest.mark.skipif(np is None, reason="requires numpy")
@@ -451,9 +463,9 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         f2 = executor.submit(id_sleep, 42, 0)
         assert f2.result() == 42
 
-    @pytest.mark.parametrize("bad_object", [CrashAtGCInWorker,
-                                            CExitAtGCInWorker])
-    def test_call_item_gc_crash_or_exit(self, bad_object):
+    @pytest.mark.parametrize("bad_object, match", [
+        (CrashAtGCInWorker, r"SIGSEGV"), (CExitAtGCInWorker, r"EXIT\(0\)")])
+    def test_call_item_gc_crash_or_exit(self, bad_object, match):
         executor = get_reusable_executor(max_workers=1)
         bad_object = bad_object()
         f = executor.submit(id, bad_object)
@@ -464,7 +476,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
         # The executor should automatically detect that the worker has crashed
         # when processing subsequently dispatched tasks:
-        with pytest.raises(BrokenProcessPool):
+        with pytest.raises(TerminatedWorkerError, match=filter_match(match)):
             executor.submit(gc.collect).result()
             for r in executor.map(sleep, [.1] * 100):
                 pass
@@ -546,7 +558,6 @@ class TestResizeExecutor(ReusableExecutorMixin):
         assert executor.submit(id_sleep, 42, 0.).result() == 42
         executor.shutdown()
 
-    @pytest.mark.timeout(30 if sys.platform == "win32" else 15)
     def test_resize_after_timeout(self):
         with warnings.catch_warnings(record=True) as recorded_warnings:
             warnings.simplefilter("always")
@@ -623,11 +634,19 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # It should be possible to use a loky process pool executor as a dropin
         # replacement for a ProcessPoolExecutor, including when catching
         # exceptions:
-        pytest.importorskip('concurrent.futures')
+        concurrent = pytest.importorskip('concurrent')
         from concurrent.futures.process import BrokenProcessPool as BPPExc
 
         with pytest.raises(BPPExc):
             get_reusable_executor(max_workers=2).submit(crash).result()
+        e = get_reusable_executor(max_workers=2)
+        f = e.submit(id, 42)
+
+        # Ensure that loky.Future are compatible with concurrent.futures
+        # (see #155)
+        assert isinstance(f, concurrent.futures.Future)
+        (done, running) = concurrent.futures.wait([f], timeout=15)
+        assert len(running) == 0
 
     thread_configurations = [
         ('constant', 'clean_start'),
@@ -644,7 +663,8 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             get_reusable_executor(reuse=False).submit(id, 42).result()
         else:
             # Break the shared executor before launching the threads:
-            with pytest.raises(BrokenProcessPool):
+            with pytest.raises(TerminatedWorkerError,
+                               match=filter_match(r"SIGSEGV")):
                 executor = get_reusable_executor(reuse=False)
                 executor.submit(return_instance, CrashAtPickle).result()
 
@@ -713,6 +733,10 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         return INITIALIZER_STATUS
 
     def test_reusable_initializer(self):
+        cloudpickle = pytest.importorskip('cloudpickle')
+        if cloudpickle.__version__.split('.')[:3] < ['0', '6', '1']:
+            pytest.skip('Need cloudpickle 0.6.1 or later, got %s'
+                        % cloudpickle.__version__)
         executor = get_reusable_executor(
             max_workers=2, initializer=self._initializer, initargs=('done',))
 
@@ -733,39 +757,3 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=4)
         for x in executor.map(self._test_initializer, delay=.1):
             assert x == 'uninitialized'
-
-
-def test_memory_leak_protection():
-
-    def leak_some_memory(size=int(1e6), delay=0.01):
-        if getattr(os, '__loky_leak', None) is None:
-            os.__loky_leak = []
-        os.__loky_leak.append(b"\x00" * size)
-
-        # Leave enough time for the memory leak detector to kick-in:
-        # by default the process does not check its memory usage
-        # more than once per second.
-        sleep(delay)
-
-        leaked_size = sum(len(buffer) for buffer in os.__loky_leak)
-        return os.getpid(), leaked_size
-
-    executor = get_reusable_executor(max_workers=1)
-
-    with pytest.warns(UserWarning, match='memory leak'):
-        futures = []
-        for i in range(300):
-            # Total run time should be 3s which is way over the 1s cooldown
-            # period between two consecutive memory checks in the worker.
-            futures.append(executor.submit(leak_some_memory))
-
-        results = [f.result() for f in futures]
-
-        # The pid of the worker has changed when restarting the worker
-        first_pid, last_pid = results[0][0], results[-1][0]
-        assert first_pid != last_pid
-
-        # The restart happened after 100 MB of leak over the default process
-        # size + what has leaked since the last memory check.
-        for _, leak_size in results:
-            assert leak_size / 1e6 < 250

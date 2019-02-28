@@ -12,6 +12,8 @@ env:
     - LOKY_MAX_DEPTH=3
 matrix:
   include:
+    - python: "pypy3.5"
+      env: TOXENV="pypy3" LOKY_MAX_CPU_COUNT="2"
     - python: 2.7
       env: TOXENV="py27"
     - python: 3.4
@@ -39,6 +41,7 @@ before_install:
     if [ $TRAVIS_OS_NAME == 'osx' ] && [ $PYTHON == 'python3' ]; then
       brew update
       brew upgrade $PYTHON
+      $PYTHON -m ensurepip
     fi
 
 install: $PYTHON -m pip install tox

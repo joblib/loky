@@ -1,12 +1,14 @@
+import sys
 import time
 import pytest
 import threading
+import warnings
 import multiprocessing as mp
 from loky.backend import get_context
 from loky import ProcessPoolExecutor
 from loky import get_reusable_executor
 from loky.backend.queues import SimpleQueue
-from loky.backend.reduction import CustomizableLokyPickler
+from loky.backend.reduction import dumps
 
 
 class SlowlyPickling(object):
@@ -50,7 +52,7 @@ class DelayedSimpleQueue(SimpleQueue):
     @staticmethod
     def _feed(readlock, reader, writer, delay):
 
-        PICKLE_NONE = CustomizableLokyPickler.dumps(None)
+        PICKLE_NONE = dumps(None)
 
         while True:
             with readlock:
@@ -94,15 +96,27 @@ class TestTimeoutExecutor():
                                    (0.001, .1)]:
                 executor = get_reusable_executor(max_workers=2,
                                                  timeout=timeout)
+                # First make sure the executor is started
+                executor.submit(id, 42).result()
                 results = list(executor.map(
                     id, [SlowlyPickling(delay)] * n_tasks))
                 assert len(results) == n_tasks
 
     def test_worker_timeout_shutdown_deadlock(self):
-        """Check that worker timeout don't cause deadlock even when shutting down.
+        """Check that worker timeout don't cause deadlock when shutting down.
         """
-        with pytest.warns(UserWarning,
-                          match=r'^A worker stopped while some jobs'):
+        with warnings.catch_warnings(record=True) as record:
             with get_reusable_executor(max_workers=2, timeout=.001) as e:
+                # First make sure the executor is started
+                e.submit(id, 42).result()
+
+                # Then give a task that will take more time to be pickled so
+                # we are sure that the worker timeout.
                 f = e.submit(id, SlowlyPickling(1))
         f.result()
+
+        # The warning detection is unreliable on pypy
+        if not hasattr(sys, "pypy_version_info"):
+            assert len(record) > 0, "No warnings was emitted."
+            msg = record[0].message.args[0]
+            assert 'A worker stopped while some jobs' in msg

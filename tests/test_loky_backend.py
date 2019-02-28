@@ -304,7 +304,7 @@ class TestLokyBackend:
         assert p.is_alive()
 
         # wait for child process to be fully setup
-        event.wait(1)
+        event.wait(5)
 
         p.terminate()
 
@@ -383,7 +383,7 @@ class TestLokyBackend:
 
     @classmethod
     def _test_sentinel(cls, event):
-        event.wait(10.0)
+        event.wait(30.0)
 
     def test_sentinel(self):
         event = self.Event()
@@ -702,7 +702,7 @@ def test_recursive_terminate(use_psutil):
     p.start()
 
     # Wait for all the processes to be launched
-    if not event.wait(10):
+    if not event.wait(30):
         recursive_terminate(p, use_psutil=use_psutil)
         raise RuntimeError("test_recursive_terminate was not able to launch "
                            "all nested processes.")

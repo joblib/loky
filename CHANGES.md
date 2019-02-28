@@ -1,4 +1,52 @@
-### 2.2.2.dev0 - In development
+### 2.5.0dev0 - In development
+
+
+### 2.4.2 - 2018-11-06 - Bugfix release
+
+- Fixed loky pickler in workers. (#184)
+
+- Fixed compat with python2.7 in semaphore tracker. (#186)
+
+### 2.4.1 - 2018-11-02 - Bugfix release
+
+- Fixed a bug when setting the cause of an exception without message
+  under Python 2.7 (#179).
+
+### 2.4.0 - 2018-11-01 - Release highlights
+
+- Default serialization is now done with `cloudpickle`. (#178)
+
+- The base `Pickler` in `loky` can now be changed through the `LOKY_PICKLER`
+  variable or programmatically with `set_loky_pickler`. (#171)
+
+- Improve reporting of causes in python2.7 (#174)
+
+- Improve workers crash reporting by displaying the exitcodes of
+  workers in `TerminatedWorkerError` (#173)
+
+- Add a `wrap_non_picklable_objects` decorator in `loky` to make it
+  easy to fix serialization failure for nested functions defined in
+  the `__main__` module. (#171)
+
+### 2.3.1 - 2018-09-13 - Bug fix release
+
+- Improve error reporting when a worker process is terminated abruptly
+  (#169).
+
+- Remove spurious debug output.
+
+### 2.3.0 - 2018-09-05 - Release highlights
+
+- Add support for PyPy3.
+
+- `loky.cpu_count()` is now upper-bounded by the value of the
+  `LOKY_MAX_CPU_COUNT` environment variable (when defined).
+
+- Fix issue #165 to make `loky.cpu_count()` return an integer under
+  Python 2.7 with fractional docker CPU usage quotas.
+
+
+### 2.2.2 - 2018-08-30 - Bug fix release
 
 - Add a `set_start_method` function in `loky.backend.context`. Note
   that now, `loky` does not respect the start method set using
