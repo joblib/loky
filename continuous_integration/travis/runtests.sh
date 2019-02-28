@@ -36,7 +36,7 @@ else
     fi
     if [ "$RUN_MEMORY" != "true" ]; then
         # Skip high memory usage tests when there are not required on CI
-        PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory -sk 'limit or osx'"
+        PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
 
     # Run the tests and collect trace coverage data both in the subprocesses

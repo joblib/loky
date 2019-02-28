@@ -163,10 +163,8 @@ def test_thread_limit_context(subset):
 
     old_limits = get_thread_limits()
 
-
     with thread_pool_limits(limits=None, subset=subset):
         assert get_thread_limits() == old_limits
-
 
     with thread_pool_limits(limits=1, subset=subset):
         limits = get_thread_limits()
@@ -196,5 +194,5 @@ def test_openmp_limit_num_threads(n_threads):
 
     with thread_pool_limits(limits=n_threads):
         assert parallel_sum(100) in (n_threads, os.cpu_count(),
-                                            os.cpu_count() / 2)
+                                     os.cpu_count() / 2)
     assert parallel_sum(100) == old_num_threads

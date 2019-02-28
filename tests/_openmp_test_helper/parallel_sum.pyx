@@ -4,14 +4,14 @@ from cython.parallel import prange
 from libc.stdlib cimport malloc, free
 
 
-def parallel_sum(int N):
-    cdef double Ysum = 0
+def parallel_sum(int n):
+    cdef double n_sum = 0
     cdef int i, num_threads
-    cdef double* X = <double *>malloc(N*cython.sizeof(double))
 
-    for i in prange(N, nogil=True):
+    for i in prange(n, nogil=True):
         num_threads = openmp.omp_get_num_threads()
-        Ysum += X[i]
+        n_sum += i
 
-    free(X)
+    assert n_sum == (n - 1) * n / 2
+
     return num_threads

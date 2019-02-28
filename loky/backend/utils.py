@@ -32,7 +32,7 @@ def recursive_terminate(process, use_psutil=True):
 def _recursive_terminate_with_psutil(process, retries=5):
     try:
         children = psutil.Process(process.pid).children(recursive=True)
-    except psutil.NoSuch_process:
+    except psutil.NoSuchProcess:
         return
 
     # Kill the children in reverse order to avoid killing the parents before
@@ -40,7 +40,7 @@ def _recursive_terminate_with_psutil(process, retries=5):
     for child in children[::-1]:
         try:
             child.kill()
-        except psutil.NoSuch_process:
+        except psutil.NoSuchProcess:
             pass
 
     process.terminate()
