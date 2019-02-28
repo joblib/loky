@@ -1,3 +1,8 @@
+###############################################################################
+# Utilities to terminate processes and to limit thread-pool num_threads
+#
+# author: Thomas Moreau
+#
 import os
 import sys
 import errno
@@ -7,6 +12,8 @@ import warnings
 import threading
 import subprocess
 from ctypes.util import find_library
+
+from ..backend.context import cpu_count
 
 try:
     import psutil
@@ -24,7 +31,7 @@ def recursive_terminate(process, use_psutil=True):
 def _recursive_terminate_with_psutil(process, retries=5):
     try:
         children = psutil.Process(process.pid).children(recursive=True)
-    except psutil.NoSuchProcess:
+    except psutil.NoSuch_process:
         return
 
     # Kill the children in reverse order to avoid killing the parents before
@@ -32,7 +39,7 @@ def _recursive_terminate_with_psutil(process, retries=5):
     for child in children[::-1]:
         try:
             child.kill()
-        except psutil.NoSuchProcess:
+        except psutil.NoSuch_process:
             pass
 
     process.terminate()
@@ -114,6 +121,36 @@ def _recursive_terminate(pid):
 #
 #
 
+if sys.platform == "darwin":
+
+    # On OSX, we can get a runtime error due to multiple OpenMP libraries
+    # loaded simultaneously. This can happen for instance when calling BLAS
+    # inside a prange. Setting the following environment variable allows
+    # multiple OpenMP libraries to be loaded. It should not degrade
+    # performances since we manually take care of potential over-subscription
+    # performance issues, in sections of the code where nested OpenMP loops can
+    # happen, by dynamically reconfiguring the inner OpenMP runtime to
+    # temporarily disable it while under the scope of the outer OpenMP parallel
+    # section.
+    os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "True")
+
+
+def openmp_num_threads(n_threads=None):
+    """Determine the effective number of threads used for parallel OpenMP calls
+
+    For n_threads=None, returns openmp.omp_get_max_threads().
+    For n_threads > 0, use this as the maximal number of threads for parallel
+    OpenMP calls and for n_threads < 0, use the maximal number of threads minus
+    - n_threads + 1.
+    Raise a ValueError for n_threads=0.
+    """
+    if n_threads == 0:
+        raise ValueError("n_threads=0 is invalid")
+    elif n_threads < 0:
+        return max(1, cpu_count() + n_threads + 1)
+    else:
+        return n_threads
+
 
 # Structure to cast the info on dynamically loaded library. See
 # https://linux.die.net/man/3/dl_iterate_phdr for more details.
@@ -138,20 +175,21 @@ class _CLibsWrapper:
     # Supported C-libraries for this wrapper, index with their name. The items
     # hold the name of the library file and the functions to call.
     SUPPORTED_CLIBS = {
-        "openblas": (
-            "libopenblas", "openblas_set_num_threads",
-            "openblas_get_num_threads"),
         "openmp_intel": (
             "libiomp", "omp_set_num_threads", "omp_get_max_threads"),
         "openmp_gnu": (
             "libgomp", "omp_set_num_threads", "omp_get_max_threads"),
+        "openmp_llvm": (
+            "libomp", "omp_set_num_threads", "omp_get_max_threads"),
         "openmp_win32": (
             "vcomp", "omp_set_num_threads", "omp_get_max_threads"),
+        "openblas": (
+            "libopenblas", "openblas_set_num_threads",
+            "openblas_get_num_threads"),
         "mkl": (
             "libmkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads"),
         "mkl_win32": (
-            "mkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads")
-    }
+            "mkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads")}
 
     cls_thread_locals = threading.local()
 
@@ -166,20 +204,40 @@ class _CLibsWrapper:
         for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
             delattr(self, clib)
 
-    def limit_threads_clibs(self, max_threads_per_process):
-        """Limit maximal number of threads used by supported C-libraries"""
-        msg = ("max_threads_per_process should be an interger. Got {}"
-               .format(max_threads_per_process))
-        assert isinstance(max_threads_per_process, int), msg
+    def set_thread_limits(self, limits=None, subset=None):
+        """Limit maximal number of threads used by supported C-libraries.
+
+        Return a dict of pairs {clib: bool} where bool is True when clib can be
+        dynamically scaled with this function.
+        """
+        if isinstance(limits, int) or limits is None:
+            if subset in ("all", None):
+                clibs = self.SUPPORTED_CLIBS.keys()
+            elif subset == "blas":
+                clibs = ("openblas", "mkl", "mkl_win32")
+            elif subset == "openmp":
+                clibs = (c for c in self.SUPPORTED_CLIBS if "openmp" in c)
+            else:
+                raise ValueError("subset must be either 'all', 'blas' or "
+                                 "'openmp'. Got {} instead.".format(subset))
+            limits = {clib: limits for clib in clibs}
+
+        if not isinstance(limits, dict):
+            raise TypeError("limits must either be an int, a dict or None. "
+                            "Got {} instead".format(type(limits)))
 
         dynamic_threadpool_size = {}
         self._load()
         for clib, (_, _set, _) in self.SUPPORTED_CLIBS.items():
-            module = getattr(self, clib, None)
-            if module is not None:
-                _set = getattr(module, _set)
-                _set(max_threads_per_process)
-                dynamic_threadpool_size[clib] = True
+            if clib in limits:
+                module = getattr(self, clib, None)
+                if module is not None:
+                    _set = getattr(module, _set)
+                    if limits[clib] is not None:
+                        _set(openmp_num_threads(limits[clib]))
+                    dynamic_threadpool_size[clib] = True
+                else:
+                    dynamic_threadpool_size[clib] = False
             else:
                 dynamic_threadpool_size[clib] = False
         self._unload()
@@ -199,6 +257,17 @@ class _CLibsWrapper:
                 limits[clib] = None
         self._unload()
         return limits
+
+    def get_openblas_version(self):
+        module = getattr(self, "openblas", None)
+        if module is not None:
+            get_config = getattr(module, "openblas_get_config")
+            get_config.restype = ctypes.c_char_p
+            config = get_config().split()
+            if config[0] == b"OpenBLAS":
+                return config[1].decode('utf-8')
+            return
+        return
 
     def _load_lib(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
@@ -291,13 +360,13 @@ class _CLibsWrapper:
 
         LIST_MODULES_ALL = 0x03
 
-        Psapi = self._get_windll('Psapi')
-        Kernel32 = self._get_windll('kernel32')
+        ps_api = self._get_windll('Psapi')
+        kernel_32 = self._get_windll('kernel32')
 
-        hProcess = Kernel32.OpenProcess(
+        h_process = kernel_32.OpenProcess(
             PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
             False, os.getpid())
-        if not hProcess:
+        if not h_process:
             raise OSError('Could not open PID %s' % os.getpid())
 
         found_module_path = None
@@ -309,8 +378,8 @@ class _CLibsWrapper:
             while True:
                 buf = (HMODULE * buf_count)()
                 buf_size = ctypes.sizeof(buf)
-                if not Psapi.EnumProcessModulesEx(
-                        hProcess, ctypes.byref(buf), buf_size,
+                if not ps_api.EnumProcessModulesEx(
+                        h_process, ctypes.byref(buf), buf_size,
                         ctypes.byref(needed), LIST_MODULES_ALL):
                     raise OSError('EnumProcessModulesEx failed')
                 if buf_size >= needed.value:
@@ -318,22 +387,22 @@ class _CLibsWrapper:
                 buf_count = needed.value // (buf_size // buf_count)
 
             count = needed.value // (buf_size // buf_count)
-            hModules = map(HMODULE, buf[:count])
+            h_modules = map(HMODULE, buf[:count])
 
             # Loop through all the module headers and get the module file name
             buf = ctypes.create_unicode_buffer(MAX_PATH)
-            nSize = DWORD()
-            for hModule in hModules:
-                if not Psapi.GetModuleFileNameExW(
-                        hProcess, hModule, ctypes.byref(buf),
-                        ctypes.byref(nSize)):
+            n_size = DWORD()
+            for h_module in h_modules:
+                if not ps_api.GetModuleFileNameExW(
+                        h_process, h_module, ctypes.byref(buf),
+                        ctypes.byref(n_size)):
                     raise OSError('GetModuleFileNameEx failed')
                 module_path = buf.value
                 module_basename = os.path.basename(module_path).lower()
                 if module_basename.startswith(module_name):
                     found_module_path = module_path
         finally:
-            Kernel32.CloseHandle(hProcess)
+            kernel_32.CloseHandle(h_process)
 
         if found_module_path:
             return ctypes.CDLL(found_module_path)
@@ -368,13 +437,27 @@ def _get_wrapper(reload_clib=False):
     return _clibs_wrapper
 
 
-def limit_threads_clib(max_threads_per_process, reload_clib=False):
+def _set_thread_limits(limits=None, subset=None, reload_clib=False):
     """Limit the number of threads available for threadpools in supported C-lib
 
     Set the maximal number of thread that can be used in thread pools used in
     the supported C-libraries to `max_threads_per_process`. This function works
     for libraries that are already loaded in the interpreter and can be changed
     dynamically.
+
+    The `limits` parameter can be either an interger or a dict to specify the
+    maximal number of thread that can be used in thread pools. If it is an
+    integer, sets the maximum number of thread to `limits` for each C-lib
+    selected by `subset`. If it is a dictionary
+    `{supported_libraries: max_threads}`, this function sets a custom maximum
+    number of thread for each C-lib. If None, does not do anything.
+
+    The `subset` parameter select a subset of C-libs to limit. Used only if
+    `limits` is an int. If it is "all" or None, this function will limit all
+    supported C-libs. If it is "blas", it will limit only BLAS supported
+    C-libs and if it is "openmp", only only OpenMP supported C-libs will be
+    limited. Note that the latter can affect the number of threads used by the
+    BLAS C-libs if they rely on OpenMP.
 
     If `reload_clib` is `True`, first loop through the loaded libraries to
     ensure that this function is called on all available libraries.
@@ -384,7 +467,7 @@ def limit_threads_clib(max_threads_per_process, reload_clib=False):
     maximal number of threads dynamically.
     """
     wrapper = _get_wrapper(reload_clib)
-    return wrapper.limit_threads_clibs(max_threads_per_process)
+    return wrapper.set_thread_limits(limits, subset)
 
 
 def get_thread_limits(reload_clib=False):
@@ -392,11 +475,79 @@ def get_thread_limits(reload_clib=False):
 
     Return a dictionary containing the maximal number of threads that can be
     used in supported libraries or None when the library is not available. The
-    key of the dictionary are {`'mkl'`, `'openblas'`, `'openmp_gnu'`,
-    `'openmp_intel'`, `'openmp_win32'`}.
+    key of the dictionary are {}.
 
     If `reload_clib` is `True`, first loop through the loaded libraries to
     ensure that this function is called on all available libraries.
-    """
+    """.format(list(_CLibsWrapper.SUPPORTED_CLIBS.keys()))
     wrapper = _get_wrapper(reload_clib)
     return wrapper.get_thread_limits()
+
+
+class thread_pool_limits:
+    """Change the default number of threads used in thread pools.
+
+    This class can be used either as a function (the construction of this
+    object limits the number of threads) or as a context manager, in a `with`
+    block.
+
+    Parameters
+    ----------
+    limits : int or dict, (default=None)
+        Maximum number of thread that can be used in thread pools
+
+        If int, sets the maximum number of thread to `limits` for each C-lib
+        selected by `subset`.
+
+        If dict(supported_libraries: max_threads), sets a custom maximum number
+        of thread for each C-lib.
+
+        If None, does not do anything.
+
+    subset : string or None, optional (default="all")
+        Subset of C-libs to limit. Used only if `limits` is an int
+
+        "all" : limit all supported C-libs.
+
+        "blas" : limit only BLAS supported C-libs.
+
+        "openmp" : limit only OpenMP supported C-libs. It can affect the number
+                   of threads used by the BLAS C-libs if they rely on OpenMP.
+
+    .. versionadded:: 0.21
+
+    """
+    def __init__(self, limits=None, subset=None):
+
+        self.old_limits = get_thread_limits()
+        _set_thread_limits(limits=limits, subset=subset)
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, type, value, traceback):
+        self.unregister()
+
+    def unregister(self):
+        _set_thread_limits(limits=self.old_limits)
+
+
+
+
+def get_openblas_version(reload_clib=True):
+    """Return the OpenBLAS version
+
+    Parameters
+    ----------
+    reload_clib : bool, (default=True)
+        If `reload_clib` is `True`, first loop through the loaded libraries to
+        ensure that this function is called on all available libraries.
+
+    Returns
+    -------
+    version : string or None
+        None means OpenBLAS is not loaded or version < 0.3.4, since OpenBLAS
+        did not expose it's verion before that.
+    """
+    wrapper = _get_wrapper(reload_clib)
+    return wrapper.get_openblas_version()
