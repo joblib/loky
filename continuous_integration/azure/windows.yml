@@ -23,7 +23,7 @@ jobs:
       displayName: 'Install'
     - script: |
         continuous_integration\\azure\\test_script.cmd
-      displayName: 'Test Library'
+      displayName: 'Test loky'
     - task: PublishTestResults@2
       inputs:
         testResultsFiles: '$(TMP_FOLDER)\$(JUNITXML)'
