@@ -12,6 +12,7 @@ jobs:
     VIRTUALENV: 'testvenv'
     JUNITXML: 'test-data.xml'
     LOKY_MAX_DEPTH: 5
+    COVERAGE_PROCESS_START: '.coveragerc'
   strategy:
     matrix:
       ${{ insert }}: ${{ parameters.matrix }}
