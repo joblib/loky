@@ -22,7 +22,7 @@ if "%PACKAGER%" == "conda" (%CONDA_INSTALL% numpy psutil pytest cython)
 if "%PACKAGER%" == "pip" (%PIP_INSTALL% numpy psutil pytest cython)
 
 @rem Install extra dependency
-pip install pytest-timeout
+pip install -q pytest-timeout
 
 @rem Install package
 pip install -e .

@@ -2,6 +2,7 @@ import re
 import os
 import sys
 import time
+import pytest
 import warnings
 import threading
 import subprocess
@@ -131,6 +132,45 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
     finally:
         timer.cancel()
+
+
+def skip_func(msg):
+    def test_func(*args, **kwargs):
+        pytest.skip(msg)
+    return test_func
+
+
+# A decorator to run tests only when numpy is available
+try:
+    import numpy  # noqa F401
+
+    def with_numpy(func):
+        """A decorator to skip tests requiring numpy."""
+        return func
+
+except ImportError:
+    def with_numpy(func):
+        """A decorator to skip tests requiring numpy."""
+        return skip_func('Test require numpy')
+
+
+# A decorator to run tests only when numpy is available
+try:
+    from ._openmp_test_helper.parallel_sum import parallel_sum  # noqa F401
+
+    def with_parallel_sum(func):
+        """A decorator to skip tests if parallel_sum is not compiled."""
+        return func
+
+    def _run_openmp_parallel_sum(*args):
+        return parallel_sum(*args)
+
+except ImportError:
+    def with_parallel_sum(func):
+        """A decorator to skip tests if parallel_sum is not compiled."""
+        return skip_func('Test requires parallel_sum to be compiled')
+
+    _run_openmp_parallel_sum = None
 
 
 def check_python_subprocess_call(code, stdout_regex=None):
