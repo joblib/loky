@@ -7,10 +7,10 @@ jobs:
     vmImage: vs2017-win2016
     matrix:
       py37_conda:
-        VERSION_PYTHON: '3.7'
+        VERSION_PYTHON: '3.6'
         PACKAGER: 'conda'
-      py35_conda:
-        VERSION_PYTHON: '3.5'
+      py36_conda:
+        VERSION_PYTHON: '3.6'
         PACKAGER: 'conda'
       py37_pip:
         VERSION_PYTHON: '3.5'
