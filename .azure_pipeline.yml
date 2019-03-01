@@ -1,0 +1,17 @@
+# Adapted from https://github.com/pandas-dev/pandas/blob/master/azure-pipelines.yml
+jobs:
+
+- template: continuous_integration/azure/windows.yml
+  parameters:
+    name: Windows
+    vmImage: vs2017-win2016
+    matrix:
+      py37_conda:
+        VERSION_PYTHON: '3.7'
+        PACKAGER: 'conda'
+      py35_conda:
+        VERSION_PYTHON: '3.5'
+        PACKAGER: 'conda'
+      py37_pip:
+        VERSION_PYTHON: '3.5'
+        PACKAGER: 'pip'
