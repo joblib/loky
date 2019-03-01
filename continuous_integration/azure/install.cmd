@@ -18,8 +18,8 @@ python --version
 pip --version
 
 @rem Install dependencies with either conda or pip.
-if %PACKAGER% == "conda" (%CONDA_INSTALL% numpy psutil pytest cython)
-if %PACKAGER% == "pip" (%PIP_INSTALL% numpy psutil pytest cython)
+if "%PACKAGER%" == "conda" (%CONDA_INSTALL% numpy psutil pytest cython)
+else (%PIP_INSTALL% numpy psutil pytest cython)
 pip install -q pytest-timeout
 
 @rem Install package
