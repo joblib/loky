@@ -7,6 +7,8 @@ $BASE_URL = "https://www.python.org/ftp/python/"
 $GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
 $GET_PIP_PATH = "C:\get-pip.py"
 
+$env:VIRTUALENV = "test_env"
+
 
 function DownloadPython ($python_version, $platform_suffix) {
     $webclient = New-Object System.Net.WebClient
@@ -93,13 +95,43 @@ function InstallPip ($python_home) {
     }
 }
 
+function InstallConda (){
+
+    conda update -y -q conda
+    conda init powershell
+    . C:\Users\appveyor\Documents\PowerShell\profile.ps1
+
+    # Clean all previous environment that might exists
+    conda remove --all -q -y -n $env:VIRTUALENV
+    conda create -n $env:VIRTUALENV -q -y python numpy cython pytest psutil
+
+    # Activate the envrionment
+    conda activate $env:VIRTUALENV
+
+    # Print the information on the conda env
+    conda info
+
+    # Install test dependencies and loky
+    pip install pytest-timeout
+    pip install .
+
+    # Build external test dependency
+    bash ./continuous_integration/build_test_ext.sh
+}
+
 
 function main () {
     If( $env:TEST_CONDA -eq "true" ){
         $env:PATH = "C:\\Miniconda3-x64;C:\\Miniconda3-x64\\Scripts;$env:PATH"
+        InstallConda
     }Else{
         InstallPython $env:PYTHON_VERSION $env:PYTHON_ARCH $env:PYTHON
         InstallPip $env:PYTHON
+
+
+        $env:PATH = "$PYTHON;$PYTHON\\Scripts;$env:PATH"
+
+        pip install tox
     }
 }
 

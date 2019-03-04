@@ -25,9 +25,7 @@ install:
   # Install Python (from the official .msi of http://python.org) and pip when
   # not already installed.
   - ps: ./continuous_integration/appveyor/install.ps1
-  - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
   - "SET LOKY_MAX_DEPTH=3"
-  - "pip install tox"
 
 # Not a .NET project, we build in the install step instead
 build: false

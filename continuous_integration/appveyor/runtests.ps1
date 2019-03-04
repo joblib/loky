@@ -6,7 +6,6 @@
 $VERSION=(36, 27)
 $TOX_CMD = "python ./continuous_integration/appveyor/tox"
 $DEFAULT_PYTEST_ARGS = "-vlx --timeout=50 --skip-high-memory"
-$VIRTUALENV = "test_env"
 
 function RunTestsWithTox () {
     Write-Host $PYTHON
@@ -31,30 +30,13 @@ function RunTestsWithTox () {
 
 
 function RunTestsWithConda () {
-    conda update -y -q conda
-    conda init powershell
-    .$profile
-
-    # Clean all previous environment that might exists
-    conda remove --all -q -y -n $VIRTUALENV
-    conda create -n $VIRTUALENV -q -y python numpy cython pytest psutil
 
     # Activate the envrionment
-    conda activate $VIRTUALENV
-
-    # Print the information on the conda env
-    conda info
-
-    # Install test dependencies and loky
-    pip install pytest-timeout
-    pip install .
+    conda activate $env:VIRTUALENV
 
     # test numpy installation
     python --version
     python -c "import numpy"
-
-    # Build external test dependency
-    bash ./continuous_integration/build_test_ext.sh
 
     iex "pytest $DEFAULT_PYTEST_ARGS --mkl-win32-test-noskip"
     If( $LASTEXITCODE -ne 0){
