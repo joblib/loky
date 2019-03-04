@@ -31,19 +31,28 @@ function RunTestsWithTox () {
 
 function RunTestsWithConda () {
 
+    # Activate the conda environment
+    . C:\Miniconda3-x64/etc/profile.d/conda.sh
+
+    # Print the conda version
     conda --version
 
+    # Clean all previous environment that might exists
     conda remove --all -q -y -n $VIRTUALENV
     conda create -n $VIRTUALENV -q -y python numpy cython pytest psutil
 
+    # Activate the envrionment
     conda activate $VIRTUALENV
 
+    # Install test dependencies and loky
     pip install pytest-timeout
     pip install .
 
+    # test numpy installation
     python --version
     python -c "import numpy"
 
+    # Build external test dependency
     bash ./continuous_integration/build_test_ext.sh
 
     iex "pytest $DEFAULT_PYTEST_ARGS --mkl-win32-test-noskip"
