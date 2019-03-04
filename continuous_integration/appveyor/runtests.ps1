@@ -6,6 +6,7 @@
 $VERSION=(36, 27)
 $TOX_CMD = "python ./continuous_integration/appveyor/tox"
 $DEFAULT_PYTEST_ARGS = "-vlx --timeout=50 --skip-high-memory"
+$VIRTUALENV = "test_env"
 
 function RunTestsWithTox () {
     Write-Host $PYTHON
@@ -30,8 +31,12 @@ function RunTestsWithTox () {
 
 function RunTestsWithConda () {
 
-    conda update -y --all
-    conda install -y python numpy psutil pytest cython
+    conda remove --all -q -y -n $VIRTUALENV
+    conda create -n $VIRTUALENV -q -y python numpy cython pytest psutil
+
+    activate $VIRTUALENV
+
+
     pip install pytest-timeout
     pip install .
 
