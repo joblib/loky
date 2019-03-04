@@ -29,11 +29,11 @@ function RunTestsWithTox () {
     Exit 0
 }
 
+
 function RunTestsWithConda () {
     conda update -y -q conda
-
-    # Print the conda version
-    conda --version
+    conda init powershell
+    .$profile
 
     # Clean all previous environment that might exists
     conda remove --all -q -y -n $VIRTUALENV
@@ -41,6 +41,9 @@ function RunTestsWithConda () {
 
     # Activate the envrionment
     conda activate $VIRTUALENV
+
+    # Print the information on the conda env
+    conda info
 
     # Install test dependencies and loky
     pip install pytest-timeout
