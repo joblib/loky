@@ -31,11 +31,12 @@ function RunTestsWithTox () {
 
 function RunTestsWithConda () {
 
+    conda --version
+
     conda remove --all -q -y -n $VIRTUALENV
     conda create -n $VIRTUALENV -q -y python numpy cython pytest psutil
 
-    activate $VIRTUALENV
-
+    conda activate $VIRTUALENV
 
     pip install pytest-timeout
     pip install .
