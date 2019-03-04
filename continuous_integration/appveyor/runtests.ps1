@@ -30,9 +30,7 @@ function RunTestsWithTox () {
 }
 
 function RunTestsWithConda () {
-
-    # Activate the conda environment
-    . C:\Miniconda3-x64/etc/profile.d/conda.sh
+    conda update -y -q conda
 
     # Print the conda version
     conda --version
