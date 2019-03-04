@@ -28,7 +28,7 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 else
 
-    export PYTEST_ARGS="-vl --timeout=30 --maxfail=5"
+    export PYTEST_ARGS="-vl --timeout=60 --maxfail=5"
     if [ "$LOKY_TEST_FORCE_OPENBLAS" = "true" ]; then
         # Fail if OpenBlas is not found. This should be used when numpy is
         # installed via pip.
