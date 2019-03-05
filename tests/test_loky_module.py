@@ -6,11 +6,11 @@ import pytest
 
 import loky
 from loky import cpu_count
-from loky.backend.utils import _CLibsWrapper
-from loky.backend.utils import get_thread_limits
-from loky.backend.utils import _set_thread_limits
-from loky.backend.utils import thread_pool_limits
-from loky.backend.utils import get_openblas_version
+from loky.backend import thread_pool_limits
+from loky.backend._thread_pool_limiters import _CLibsWrapper
+from loky.backend._thread_pool_limiters import get_thread_limits
+from loky.backend._thread_pool_limiters import _set_thread_limits
+from loky.backend._thread_pool_limiters import get_openblas_version
 
 from .utils import with_parallel_sum
 

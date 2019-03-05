@@ -4,7 +4,7 @@ API Reference
 .. automodule:: loky
     :members: get_reusable_executor, cpu_count
 
-.. autofunction:: loky.backend.utils.limit_threads_clib
+.. autofunction:: loky.backend.thread_pool_limits
 
 
 Task & results serialization
@@ -38,16 +38,16 @@ Protection against memory leaks
 The memory size of long running worker processes can increase indefinitely if a
 memory leak is created. This can result in processes being shut down by the OS if
 those leaks are not resolved. To
-prevent it, loky provides leak detection, memory cleanups, and workers 
+prevent it, loky provides leak detection, memory cleanups, and workers
 shutdown.
 
-If :mod:`psutil` is installed, each worker periodically [#periodically_fn]_ checks its 
+If :mod:`psutil` is installed, each worker periodically [#periodically_fn]_ checks its
 memory usage after it completes its task. If the usage is found to be
-unusual [#psutil_unusual_fn]_, an additional :code:`gc.collect()` event is triggered to remove 
-objects with potential cyclic references. 
-If even after that, the memory usage of a process worker remains too high, 
+unusual [#psutil_unusual_fn]_, an additional :code:`gc.collect()` event is triggered to remove
+objects with potential cyclic references.
+If even after that, the memory usage of a process worker remains too high,
 it will shut down safely, and a fresh process will be automatically spawned by
-the executor. 
+the executor.
 
 If :mod:`psutil` is not installed, there is no easy way to monitor worker
 processes memory usage. :code:`gc.collect()` events will still be called
