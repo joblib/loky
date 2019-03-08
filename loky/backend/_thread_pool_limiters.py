@@ -120,16 +120,15 @@ class _CLibsWrapper:
 
         dynamic_threadpool_size = {}
         self._load()
-        for clib, (_, _set, _) in self.SUPPORTED_CLIBS.items():
+        for clib, (_, _set_name, _) in self.SUPPORTED_CLIBS.items():
             if clib in limits:
-                module = getattr(self, clib, None)
-                if module is not None:
-                    _set = getattr(module, _set)
+                modules = getattr(self, clib, [])
+                dynamic_threadpool_size[clib] = False
+                for module in modules:
+                    _set = getattr(module, _set_name)
                     if limits[clib] is not None:
                         _set(openmp_num_threads(limits[clib]))
                     dynamic_threadpool_size[clib] = True
-                else:
-                    dynamic_threadpool_size[clib] = False
             else:
                 dynamic_threadpool_size[clib] = False
         self._unload()
@@ -140,26 +139,25 @@ class _CLibsWrapper:
         """
         limits = {}
         self._load()
-        for clib, (_, _, _get) in self.SUPPORTED_CLIBS.items():
-            module = getattr(self, clib, None)
-            if module is not None:
-                _get = getattr(module, _get)
-                limits[clib] = _get()
-            else:
-                limits[clib] = None
+        for clib, (_, _, _get_name) in self.SUPPORTED_CLIBS.items():
+            limits[clib] = None
+            modules = getattr(self, clib, [])
+            for module in modules:
+                _get = getattr(module, _get_name)
+                # If multiple version of a library are present, return the max
+                limit = limits[clib]
+                limits[clib] = max(_get(), limit) if limit else _get()
         self._unload()
         return limits
 
     def get_openblas_version(self):
-        module = getattr(self, "openblas", None)
-        if module is not None:
+        modules = getattr(self, "openblas", [])
+        for module in modules:
             get_config = getattr(module, "openblas_get_config")
             get_config.restype = ctypes.c_char_p
             config = get_config().split()
             if config[0] == b"OpenBLAS":
                 return config[1].decode('utf-8')
-            return
-        return
 
     def _load_lib(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
@@ -180,11 +178,12 @@ class _CLibsWrapper:
         Copyright (c) 2017, Intel Corporation published under the BSD 3-Clause
         license
         """
-        self.cls_thread_locals._module_path = None
 
         libc = self._get_libc()
         if not hasattr(libc, "dl_iterate_phdr"):
             return
+
+        self.cls_thread_locals._module_paths = []
 
         # Callback function for `dl_iterate_phdr` which is called for every
         # module loaded in the current process until it returns 1.
@@ -197,12 +196,11 @@ class _CLibsWrapper:
             module_path = info.contents.dlpi_name
 
             # If the current library is the one we are looking for, store the
-            # path and return 1 to stop the loop in `dl_iterate_phdr`.
+            # path and return 0 to continue the loop in `dl_iterate_phdr`.
             if module_path:
                 module_path = module_path.decode("utf-8")
                 if os.path.basename(module_path).startswith(module_name):
-                    self.cls_thread_locals._module_path = module_path
-                    return 1
+                    self.cls_thread_locals._module_paths.append(module_path)
             return 0
 
         c_func_signature = ctypes.CFUNCTYPE(
@@ -211,9 +209,10 @@ class _CLibsWrapper:
         c_match_module_callback = c_func_signature(match_module_callback)
 
         data = ctypes.c_char_p(module_name.encode('utf-8'))
-        res = libc.dl_iterate_phdr(c_match_module_callback, data)
-        if res == 1:
-            return ctypes.CDLL(self.cls_thread_locals._module_path)
+        libc.dl_iterate_phdr(c_match_module_callback, data)
+
+        return [ctypes.CDLL(path)
+                for path in self.cls_thread_locals._module_paths]
 
     def _find_with_clibs_dyld(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
@@ -224,7 +223,7 @@ class _CLibsWrapper:
         if not hasattr(libc, "_dyld_image_count"):
             return
 
-        found_module_path = None
+        self.cls_thread_locals._module_paths = []
 
         n_dyld = libc._dyld_image_count()
         libc._dyld_get_image_name.restype = ctypes.c_char_p
@@ -233,10 +232,10 @@ class _CLibsWrapper:
             module_path = ctypes.string_at(libc._dyld_get_image_name(i))
             module_path = module_path.decode("utf-8")
             if os.path.basename(module_path).startswith(module_name):
-                found_module_path = module_path
+                self.cls_thread_locals.found_module_paths.append(module_path)
 
-        if found_module_path:
-            return ctypes.CDLL(found_module_path)
+        return [ctypes.CDLL(path)
+                for path in self.cls_thread_locals.found_module_paths]
 
     def _find_with_clibs_enum_process_module_ex(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
@@ -261,7 +260,7 @@ class _CLibsWrapper:
         if not h_process:
             raise OSError('Could not open PID %s' % os.getpid())
 
-        found_module_path = None
+        self.cls_thread_locals._module_paths = []
         try:
             buf_count = 256
             needed = DWORD()
@@ -292,12 +291,13 @@ class _CLibsWrapper:
                 module_path = buf.value
                 module_basename = os.path.basename(module_path).lower()
                 if module_basename.startswith(module_name):
-                    found_module_path = module_path
+                    self.cls_thread_locals.found_module_paths.append(
+                        module_path)
         finally:
             kernel_32.CloseHandle(h_process)
 
-        if found_module_path:
-            return ctypes.CDLL(found_module_path)
+        return [ctypes.CDLL(path)
+                for path in self.cls_thread_locals.found_module_paths]
 
     def _get_libc(self):
         if not hasattr(self, "libc"):

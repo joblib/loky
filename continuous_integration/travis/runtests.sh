@@ -33,6 +33,11 @@ else
         # Fail if OpenBlas is not found. This should be used when numpy is
         # installed via pip.
         export PYTEST_ARGS="$PYTEST_ARGS --openblas-test-noskip"
+
+        # With this option, also install scipy with pip and check that the
+        # both shipped openblas (numpy and scipy) have limited thread pool
+        # sizes
+        pip install scipy
     fi
     if [ "$RUN_MEMORY" != "true" ]; then
         # Skip high memory usage tests when there are not required on CI

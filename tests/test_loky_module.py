@@ -12,7 +12,7 @@ from loky.backend._thread_pool_limiters import get_thread_limits
 from loky.backend._thread_pool_limiters import _set_thread_limits
 from loky.backend._thread_pool_limiters import get_openblas_version
 
-from .utils import with_parallel_sum
+from .utils import with_parallel_sum, with_numpy
 
 
 SKIP_OPENBLAS = get_openblas_version() is None
@@ -200,3 +200,30 @@ def test_openmp_limit_num_threads(n_threads):
     with thread_pool_limits(limits=n_threads):
         assert parallel_sum(100) in (n_threads, cpu_count(), cpu_count() / 2)
     assert parallel_sum(100) == old_num_threads
+
+
+@with_numpy
+def test_shipped_openblas():
+    import ctypes
+    import numpy as np
+    from glob import glob
+    libopenblas_patterns = [os.path.join(np.__path__[0], ".libs",
+                                         "libopenblas*")]
+    try:
+        import scipy
+
+        libopenblas_patterns += [os.path.join(scipy.__path__[0], ".libs",
+                                              "libopenblas*")]
+    except ImportError:
+        pass
+    libopenblas = [ctypes.CDLL(path) for pattern in libopenblas_patterns
+                   for path in glob(pattern)]
+
+    old_limits = [blas.openblas_get_num_threads() for blas in libopenblas]
+
+    with thread_pool_limits(1):
+        assert np.all([blas.openblas_get_num_threads() == 1
+                       for blas in libopenblas])
+
+    assert np.all([blas.openblas_get_num_threads() == l
+                   for blas, l in zip(libopenblas, old_limits)])
