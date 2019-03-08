@@ -232,10 +232,10 @@ class _CLibsWrapper:
             module_path = ctypes.string_at(libc._dyld_get_image_name(i))
             module_path = module_path.decode("utf-8")
             if os.path.basename(module_path).startswith(module_name):
-                self.cls_thread_locals.found_module_paths.append(module_path)
+                self.cls_thread_locals._module_paths.append(module_path)
 
         return [ctypes.CDLL(path)
-                for path in self.cls_thread_locals.found_module_paths]
+                for path in self.cls_thread_locals._module_paths]
 
     def _find_with_clibs_enum_process_module_ex(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
@@ -291,13 +291,13 @@ class _CLibsWrapper:
                 module_path = buf.value
                 module_basename = os.path.basename(module_path).lower()
                 if module_basename.startswith(module_name):
-                    self.cls_thread_locals.found_module_paths.append(
+                    self.cls_thread_locals._module_paths.append(
                         module_path)
         finally:
             kernel_32.CloseHandle(h_process)
 
         return [ctypes.CDLL(path)
-                for path in self.cls_thread_locals.found_module_paths]
+                for path in self.cls_thread_locals._module_paths]
 
     def _get_libc(self):
         if not hasattr(self, "libc"):
