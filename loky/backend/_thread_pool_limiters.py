@@ -132,8 +132,10 @@ class _CLibsWrapper:
 
     def _mk_module(self, clib, module_path, api):
         lib = ctypes.CDLL(module_path)
-        set_func = getattr(lib, self.SUPPORTED_API[api]['set'], NOT_ACCESSIBLE)
-        get_func = getattr(lib, self.SUPPORTED_API[api]['get'], NOT_ACCESSIBLE)
+        set_func = getattr(lib, self.SUPPORTED_API[api]['set'],
+                           lambda n_thread: NOT_ACCESSIBLE)
+        get_func = getattr(lib, self.SUPPORTED_API[api]['get'],
+                           lambda: NOT_ACCESSIBLE)
         return dict(name=clib, api=api, module_path=module_path,
                     lib=lib, version=self.get_version(lib, api),
                     set=set_func, get=get_func)
@@ -174,16 +176,12 @@ class _CLibsWrapper:
         for module in self._modules:
             n_thread = self.get_limit(module['name'], module['api'], limits)
             set_func = module['set']
-            if n_thread is not None and set_func != NOT_ACCESSIBLE:
+            if n_thread is not None:
                 set_func(openmp_num_threads(n_thread))
 
-            # Store the report
+            # Store the report and remove un-necessary info
             report = module.copy()
-            if report['get'] != NOT_ACCESSIBLE:
-                report['n_thread'] = report['get']()
-            else:
-                report['n_thread'] = NOT_ACCESSIBLE
-            # Remove un-necessary info from the report
+            report['n_thread'] = report['get']()
             del report['set'], report['get'], report['lib']
             report_threadpool_size.append(report)
         self._unload()
@@ -196,8 +194,7 @@ class _CLibsWrapper:
         self._load()
         for module in self._modules:
             report = module.copy()
-            if report['get'] != NOT_ACCESSIBLE:
-                report['n_thread'] = report['get']()
+            report['n_thread'] = report['get']()
             del report['set'], report['get'], report['lib']
             report_threadpool_size.append(report)
         self._unload()
@@ -242,8 +239,8 @@ class _CLibsWrapper:
         """
 
         libc = self._get_libc()
-        if not hasattr(libc, "dl_iterate_phdr"):
-            return
+        if not hasattr(libc, "dl_iterate_phdr"):  # pragma: no cover
+            return []
 
         self.cls_thread_locals._modules = []
 
@@ -280,8 +277,8 @@ class _CLibsWrapper:
         This function is expected to work on OSX system only
         """
         libc = self._get_libc()
-        if not hasattr(libc, "_dyld_image_count"):
-            return
+        if not hasattr(libc, "_dyld_image_count"):  # pragma: no cover
+            return []
 
         self.cls_thread_locals._modules = []
 
@@ -318,7 +315,7 @@ class _CLibsWrapper:
         h_process = kernel_32.OpenProcess(
             PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
             False, os.getpid())
-        if not h_process:
+        if not h_process:  # pragma: no cover
             raise OSError('Could not open PID %s' % os.getpid())
 
         self.cls_thread_locals._modules = []
@@ -362,7 +359,7 @@ class _CLibsWrapper:
     def _get_libc(self):
         if not hasattr(self, "libc"):
             libc_name = find_library("c")
-            if libc_name is None:
+            if libc_name is None:  # pragma: no cover
                 self.libc = None
             self.libc = ctypes.CDLL(libc_name)
 

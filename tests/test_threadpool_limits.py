@@ -8,12 +8,27 @@ from loky.backend._thread_pool_limiters import _CLibsWrapper
 from loky.backend._thread_pool_limiters import NOT_ACCESSIBLE
 from loky.backend._thread_pool_limiters import get_thread_limits
 from loky.backend._thread_pool_limiters import _set_thread_limits
+from loky.backend._thread_pool_limiters import openmp_num_threads
 
 from .utils import with_parallel_sum, with_numpy
 
 
 def should_skip_module(module):
     return module['name'] == "openblas" and module['version'] == NOT_ACCESSIBLE
+
+
+def test_openmp_num_threads():
+    with pytest.raises(ValueError, message="n_threads=0 is invalid"):
+        openmp_num_threads(0)
+
+    assert openmp_num_threads(1) == 1
+    assert openmp_num_threads(2) == 2
+    assert openmp_num_threads(3) == 3
+
+    # Assert negative value give the right number
+    assert openmp_num_threads(-1) == cpu_count()
+    assert openmp_num_threads(-2) == max(1, cpu_count() - 1)
+    assert openmp_num_threads(-3) == max(1, cpu_count() - 2)
 
 
 @pytest.mark.parametrize("library", _CLibsWrapper.SUPPORTED_CLIBS)
