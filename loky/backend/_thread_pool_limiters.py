@@ -119,13 +119,9 @@ class _CLibsWrapper:
             self._modules = self._find_with_clibs_enum_process_module_ex()
         else:
             self._modules = self._find_with_clibs_dl_iterate_phdr()
-        # for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
-        #     setattr(self, clib, self._load_lib(module_name))
 
     def _unload(self):
         del self._modules
-        # for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
-        #     delattr(self, clib)
 
     def _is_supported_clib(self, module_path):
         module_basename = os.path.basename(module_path).lower()
@@ -230,17 +226,8 @@ class _CLibsWrapper:
         version = res.value.decode('utf-8')
         return version.strip()
 
-    def _load_lib(self, module_name):
-        """Return a binder on module_name by looping through loaded libraries
-        """
-        if sys.platform == "darwin":
-            return self._find_with_clibs_dyld(module_name)
-        elif sys.platform == "win32":
-            return self._find_with_clibs_enum_process_module_ex(module_name)
-        return self._find_with_clibs_dl_iterate_phdr(module_name)
-
     def _find_with_clibs_dl_iterate_phdr(self):
-        """Return a binder on module_name by looping through loaded libraries
+        """Loop through loaded libraries and return binders on supported ones
 
         This function is expected to work on POSIX system only.
         This code is adapted from code by Intel developper @anton-malakhov
@@ -283,8 +270,8 @@ class _CLibsWrapper:
 
         return self.cls_thread_locals._modules
 
-    def _find_with_clibs_dyld(self, module_name):
-        """Return a binder on module_name by looping through loaded libraries
+    def _find_with_clibs_dyld(self):
+        """Loop through loaded libraries and return binders on supported ones
 
         This function is expected to work on OSX system only
         """
@@ -292,7 +279,7 @@ class _CLibsWrapper:
         if not hasattr(libc, "_dyld_image_count"):
             return
 
-        self.cls_thread_locals._module_paths = []
+        self.cls_thread_locals._modules = []
 
         n_dyld = libc._dyld_image_count()
         libc._dyld_get_image_name.restype = ctypes.c_char_p
@@ -300,14 +287,15 @@ class _CLibsWrapper:
         for i in range(n_dyld):
             module_path = ctypes.string_at(libc._dyld_get_image_name(i))
             module_path = module_path.decode("utf-8")
-            if os.path.basename(module_path).startswith(module_name):
-                self.cls_thread_locals._module_paths.append(module_path)
+            clib, api = self._is_supported_clib(module_path)
+            if clib is not None:
+                self.cls_thread_locals._modules.append(
+                    self._mk_module(clib, module_path, api))
 
-        return [ctypes.CDLL(path)
-                for path in self.cls_thread_locals._module_paths]
+        return self.cls_thread_locals._modules
 
-    def _find_with_clibs_enum_process_module_ex(self, module_name):
-        """Return a binder on module_name by looping through loaded libraries
+    def _find_with_clibs_enum_process_module_ex(self):
+        """Loop through loaded libraries and return binders on supported ones
 
         This function is expected to work on windows system only.
         This code is adapted from code by Philipp Hagemeister @phihag available
@@ -329,7 +317,7 @@ class _CLibsWrapper:
         if not h_process:
             raise OSError('Could not open PID %s' % os.getpid())
 
-        self.cls_thread_locals._module_paths = []
+        self.cls_thread_locals._modules = []
         try:
             buf_count = 256
             needed = DWORD()
@@ -358,15 +346,14 @@ class _CLibsWrapper:
                         ctypes.byref(n_size)):
                     raise OSError('GetModuleFileNameEx failed')
                 module_path = buf.value
-                module_basename = os.path.basename(module_path).lower()
-                if module_basename.startswith(module_name):
-                    self.cls_thread_locals._module_paths.append(
-                        module_path)
+                clib, api = self._is_supported_clib(module_path)
+                if clib is not None:
+                    self.cls_thread_locals._modules.append(
+                        self._mk_module(clib, module_path, api))
         finally:
             kernel_32.CloseHandle(h_process)
 
-        return [ctypes.CDLL(path)
-                for path in self.cls_thread_locals._module_paths]
+        return self.cls_thread_locals._modules
 
     def _get_libc(self):
         if not hasattr(self, "libc"):
