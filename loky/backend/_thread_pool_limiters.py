@@ -210,6 +210,10 @@ class _CLibsWrapper:
             # There is no way to get the version number programmatically in
             # OpenMP.
             return NOT_ACCESSIBLE
+        elif api == "openblas":
+            return self.get_openblas_version(module)
+        else:
+            raise NotImplementedError("Unsupported API {}".format(api))
 
     def get_openblas_version(self, openblas_module):
         get_config = getattr(openblas_module, "openblas_get_config")
