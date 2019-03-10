@@ -50,6 +50,10 @@ UINT_SYSTEM = ctypes.c_uint64 if sys.maxsize > 2**32 else ctypes.c_uint32
 UINT_HALF_SYSTEM = ctypes.c_uint32 if sys.maxsize > 2**32 else ctypes.c_uint16
 
 
+# Constants of the module
+NOT_ACCESSIBLE = 'Not accessible'
+
+
 class dl_phdr_info(ctypes.Structure):
     _fields_ = [
         ("dlpi_addr",  UINT_SYSTEM),       # Base address of object
@@ -64,24 +68,44 @@ class _CLibsWrapper:
     # get the maximum number of threads they are allowed to used for inner
     # parallelism.
 
+    # supported API
+    SUPPORTED_API = {
+        "omp": {
+            "set": "omp_set_num_threads",
+            "get": "omp_get_max_threads"},
+        "openblas": {
+            "set": "openblas_set_num_threads",
+            "get": "openblas_get_num_threads"},
+        "mkl": {
+            "set": "MKL_Set_Num_Threads",
+            "get": "MKL_Get_Max_Threads"},
+    }
+
     # Supported C-libraries for this wrapper, index with their name. The items
     # hold the name of the library file and the functions to call.
     SUPPORTED_CLIBS = {
-        "openmp_intel": (
-            "libiomp", "omp_set_num_threads", "omp_get_max_threads"),
-        "openmp_gnu": (
-            "libgomp", "omp_set_num_threads", "omp_get_max_threads"),
-        "openmp_llvm": (
-            "libomp", "omp_set_num_threads", "omp_get_max_threads"),
-        "openmp_win32": (
-            "vcomp", "omp_set_num_threads", "omp_get_max_threads"),
-        "openblas": (
-            "libopenblas", "openblas_set_num_threads",
-            "openblas_get_num_threads"),
-        "mkl": (
-            "libmkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads"),
-        "mkl_win32": (
-            "mkl_rt", "MKL_Set_Num_Threads", "MKL_Get_Max_Threads")}
+        "openmp_intel": {
+            "pattern": "libiomp",
+            "api": "omp"},
+        "openmp_gnu": {
+            "pattern": "libgomp",
+            "api": "omp"},
+        "openmp_llvm": {
+            "pattern": "libomp",
+            "api": "omp"},
+        "openmp_win32": {
+            "pattern": "vcomp",
+            "api": "omp"},
+        "openblas": {
+            "pattern": "libopenblas",
+            "api": "openblas"},
+        "mkl": {
+            "pattern": "libmkl_rt",
+            "api": "mkl"},
+        "mkl_win32": {
+            "pattern": "mkl_rt",
+            "api": "mkl"},
+    }
 
     cls_thread_locals = threading.local()
 
@@ -89,12 +113,41 @@ class _CLibsWrapper:
         self._load()
 
     def _load(self):
-        for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
-            setattr(self, clib, self._load_lib(module_name))
+        if sys.platform == "darwin":
+            self._modules = self._find_with_clibs_dyld()
+        elif sys.platform == "win32":
+            self._modules = self._find_with_clibs_enum_process_module_ex()
+        else:
+            self._modules = self._find_with_clibs_dl_iterate_phdr()
+        # for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
+        #     setattr(self, clib, self._load_lib(module_name))
 
     def _unload(self):
-        for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
-            delattr(self, clib)
+        del self._modules
+        # for clib, (module_name, _, _) in self.SUPPORTED_CLIBS.items():
+        #     delattr(self, clib)
+
+    def _is_supported_clib(self, module_path):
+        module_basename = os.path.basename(module_path).lower()
+        for clib, info in self.SUPPORTED_CLIBS.items():
+            if module_basename.startswith(info['pattern']):
+                return clib, info['api']
+        return None, None
+
+    def _mk_module(self, clib, module_path, api):
+        lib = ctypes.CDLL(module_path)
+        set_func = getattr(lib, self.SUPPORTED_API[api]['set'], NOT_ACCESSIBLE)
+        get_func = getattr(lib, self.SUPPORTED_API[api]['get'], NOT_ACCESSIBLE)
+        return dict(name=clib, api=api, module_path=module_path,
+                    lib=lib, version=self.get_version(lib, api),
+                    set=set_func, get=get_func)
+
+    def get_limit(self, name, api, limits):
+        if name in limits:
+            return limits[name]
+        if api in limits:
+            return limits[api]
+        return None
 
     def set_thread_limits(self, limits=None, subset=None):
         """Limit maximal number of threads used by supported C-libraries.
@@ -104,60 +157,78 @@ class _CLibsWrapper:
         """
         if isinstance(limits, int) or limits is None:
             if subset in ("all", None):
-                clibs = self.SUPPORTED_CLIBS.keys()
+                apis = self.SUPPORTED_API.keys()
             elif subset == "blas":
-                clibs = ("openblas", "mkl", "mkl_win32")
+                apis = ("openblas", "mkl")
             elif subset == "openmp":
-                clibs = (c for c in self.SUPPORTED_CLIBS if "openmp" in c)
+                apis = ("omp",)
             else:
                 raise ValueError("subset must be either 'all', 'blas' or "
                                  "'openmp'. Got {} instead.".format(subset))
-            limits = {clib: limits for clib in clibs}
+            limits = {api: limits for api in apis}
+        if isinstance(limits, list):
+            limits = {module['name']: module['n_thread'] for module in limits}
 
         if not isinstance(limits, dict):
             raise TypeError("limits must either be an int, a dict or None. "
                             "Got {} instead".format(type(limits)))
 
-        dynamic_threadpool_size = {}
+        report_threadpool_size = []
         self._load()
-        for clib, (_, _set_name, _) in self.SUPPORTED_CLIBS.items():
-            if clib in limits:
-                modules = getattr(self, clib, [])
-                dynamic_threadpool_size[clib] = False
-                for module in modules:
-                    _set = getattr(module, _set_name)
-                    if limits[clib] is not None:
-                        _set(openmp_num_threads(limits[clib]))
-                    dynamic_threadpool_size[clib] = True
+        for module in self._modules:
+            n_thread = self.get_limit(module['name'], module['api'], limits)
+            set_func = module['set']
+            if n_thread is not None and set_func != NOT_ACCESSIBLE:
+                set_func(openmp_num_threads(n_thread))
+
+            # Store the report
+            report = module.copy()
+            if report['get'] != NOT_ACCESSIBLE:
+                report['n_thread'] = report['get']()
             else:
-                dynamic_threadpool_size[clib] = False
+                report['n_thread'] = NOT_ACCESSIBLE
+            # Remove un-necessary info from the report
+            del report['set'], report['get'], report['lib']
+            report_threadpool_size.append(report)
         self._unload()
-        return dynamic_threadpool_size
+        return report_threadpool_size
 
     def get_thread_limits(self):
         """Return maximal number of threads available for supported C-libraries
         """
-        limits = {}
+        report_threadpool_size = []
         self._load()
-        for clib, (_, _, _get_name) in self.SUPPORTED_CLIBS.items():
-            limits[clib] = None
-            modules = getattr(self, clib, [])
-            for module in modules:
-                _get = getattr(module, _get_name)
-                # If multiple version of a library are present, return the max
-                limit = limits[clib]
-                limits[clib] = max(_get(), limit) if limit else _get()
+        for module in self._modules:
+            report = module.copy()
+            if report['get'] != NOT_ACCESSIBLE:
+                report['n_thread'] = report['get']()
+            del report['set'], report['get'], report['lib']
+            report_threadpool_size.append(report)
         self._unload()
-        return limits
+        return report_threadpool_size
 
-    def get_openblas_version(self):
-        modules = getattr(self, "openblas", [])
-        for module in modules:
-            get_config = getattr(module, "openblas_get_config")
-            get_config.restype = ctypes.c_char_p
-            config = get_config().split()
-            if config[0] == b"OpenBLAS":
-                return config[1].decode('utf-8')
+    def get_version(self, module, api):
+        if api == "mkl":
+            return self.get_mkl_version(module)
+        elif api == "omp":
+            # There is no way to get the version number programmatically in
+            # OpenMP.
+            return NOT_ACCESSIBLE
+
+    def get_openblas_version(self, openblas_module):
+        get_config = getattr(openblas_module, "openblas_get_config")
+        get_config.restype = ctypes.c_char_p
+        config = get_config().split()
+        if config[0] == b"OpenBLAS":
+            return config[1].decode('utf-8')
+        return NOT_ACCESSIBLE
+
+    def get_mkl_version(self, mkl_module):
+        res = ctypes.create_string_buffer(200)
+        mkl_module.mkl_get_version_string(res, 200)
+
+        version = res.value.decode('utf-8')
+        return version.strip()
 
     def _load_lib(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
@@ -168,7 +239,7 @@ class _CLibsWrapper:
             return self._find_with_clibs_enum_process_module_ex(module_name)
         return self._find_with_clibs_dl_iterate_phdr(module_name)
 
-    def _find_with_clibs_dl_iterate_phdr(self, module_name):
+    def _find_with_clibs_dl_iterate_phdr(self):
         """Return a binder on module_name by looping through loaded libraries
 
         This function is expected to work on POSIX system only.
@@ -183,14 +254,11 @@ class _CLibsWrapper:
         if not hasattr(libc, "dl_iterate_phdr"):
             return
 
-        self.cls_thread_locals._module_paths = []
+        self.cls_thread_locals._modules = []
 
         # Callback function for `dl_iterate_phdr` which is called for every
         # module loaded in the current process until it returns 1.
-        def match_module_callback(info, size, module_name):
-
-            # recast the name of the module as a string
-            module_name = ctypes.string_at(module_name).decode('utf-8')
+        def match_module_callback(info, size, data):
 
             # Get the name of the current library
             module_path = info.contents.dlpi_name
@@ -199,8 +267,10 @@ class _CLibsWrapper:
             # path and return 0 to continue the loop in `dl_iterate_phdr`.
             if module_path:
                 module_path = module_path.decode("utf-8")
-                if os.path.basename(module_path).startswith(module_name):
-                    self.cls_thread_locals._module_paths.append(module_path)
+                clib, api = self._is_supported_clib(module_path)
+                if clib is not None:
+                    self.cls_thread_locals._modules.append(
+                        self._mk_module(clib, module_path, api))
             return 0
 
         c_func_signature = ctypes.CFUNCTYPE(
@@ -208,11 +278,10 @@ class _CLibsWrapper:
             ctypes.POINTER(dl_phdr_info), ctypes.c_size_t, ctypes.c_char_p)
         c_match_module_callback = c_func_signature(match_module_callback)
 
-        data = ctypes.c_char_p(module_name.encode('utf-8'))
+        data = ctypes.c_char_p(''.encode('utf-8'))
         libc.dl_iterate_phdr(c_match_module_callback, data)
 
-        return [ctypes.CDLL(path)
-                for path in self.cls_thread_locals._module_paths]
+        return self.cls_thread_locals._modules
 
     def _find_with_clibs_dyld(self, module_name):
         """Return a binder on module_name by looping through loaded libraries
@@ -422,22 +491,3 @@ class thread_pool_limits:
 
     def unregister(self):
         _set_thread_limits(limits=self.old_limits)
-
-
-def get_openblas_version(reload_clib=True):
-    """Return the OpenBLAS version
-
-    Parameters
-    ----------
-    reload_clib : bool, (default=True)
-        If `reload_clib` is `True`, first loop through the loaded libraries to
-        ensure that this function is called on all available libraries.
-
-    Returns
-    -------
-    version : string or None
-        None means OpenBLAS is not loaded or version < 0.3.4, since OpenBLAS
-        did not expose it's verion before that.
-    """
-    wrapper = _get_wrapper(reload_clib)
-    return wrapper.get_openblas_version()
