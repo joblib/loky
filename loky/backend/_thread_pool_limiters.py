@@ -147,22 +147,22 @@ class _CLibsWrapper:
             return limits[api]
         return None
 
-    def set_thread_limits(self, limits=None, subset=None):
+    def set_thread_limits(self, limits=None, apis=None):
         """Limit maximal number of threads used by supported C-libraries.
 
         Return a dict of pairs {clib: bool} where bool is True when clib can be
         dynamically scaled with this function.
         """
         if isinstance(limits, int) or limits is None:
-            if subset in ("all", None):
+            if apis in ("all", None):
                 apis = self.SUPPORTED_API.keys()
-            elif subset == "blas":
+            elif apis == "blas":
                 apis = ("openblas", "mkl")
-            elif subset == "openmp":
+            elif apis == "openmp":
                 apis = ("omp",)
             else:
-                raise ValueError("subset must be either 'all', 'blas' or "
-                                 "'openmp'. Got {} instead.".format(subset))
+                raise ValueError("apis must be either 'all', 'blas' or "
+                                 "'openmp'. Got {} instead.".format(apis))
             limits = {api: limits for api in apis}
         if isinstance(limits, list):
             limits = {module['name']: module['n_thread'] for module in limits}
@@ -386,7 +386,7 @@ def _get_wrapper(reload_clib=False):
     return _clibs_wrapper
 
 
-def _set_thread_limits(limits=None, subset=None, reload_clib=False):
+def _set_thread_limits(limits=None, apis=None, reload_clib=False):
     """Limit the number of threads available for threadpools in supported C-lib
 
     Set the maximal number of thread that can be used in thread pools used in
@@ -397,11 +397,11 @@ def _set_thread_limits(limits=None, subset=None, reload_clib=False):
     The `limits` parameter can be either an interger or a dict to specify the
     maximal number of thread that can be used in thread pools. If it is an
     integer, sets the maximum number of thread to `limits` for each C-lib
-    selected by `subset`. If it is a dictionary
+    selected by `apis`. If it is a dictionary
     `{supported_libraries: max_threads}`, this function sets a custom maximum
     number of thread for each C-lib. If None, does not do anything.
 
-    The `subset` parameter select a subset of C-libs to limit. Used only if
+    The `apis` parameter select a apis of C-libs to limit. Used only if
     `limits` is an int. If it is "all" or None, this function will limit all
     supported C-libs. If it is "blas", it will limit only BLAS supported
     C-libs and if it is "openmp", only only OpenMP supported C-libs will be
@@ -416,7 +416,7 @@ def _set_thread_limits(limits=None, subset=None, reload_clib=False):
     maximal number of threads dynamically.
     """
     wrapper = _get_wrapper(reload_clib)
-    return wrapper.set_thread_limits(limits, subset)
+    return wrapper.set_thread_limits(limits, apis)
 
 
 def get_thread_limits(reload_clib=False):
@@ -446,14 +446,14 @@ class thread_pool_limits:
         Maximum number of thread that can be used in thread pools
 
         If int, sets the maximum number of thread to `limits` for each C-lib
-        selected by `subset`.
+        selected by `apis`.
 
         If dict(supported_libraries: max_threads), sets a custom maximum number
         of thread for each C-lib.
 
         If None, does not do anything.
 
-    subset : string or None, optional (default="all")
+    apis : string or None, optional (default="all")
         Subset of C-libs to limit. Used only if `limits` is an int
 
         "all" : limit all supported C-libs.
@@ -466,10 +466,10 @@ class thread_pool_limits:
     .. versionadded:: 0.21
 
     """
-    def __init__(self, limits=None, subset=None):
+    def __init__(self, limits=None, apis=None):
 
         self.old_limits = get_thread_limits()
-        _set_thread_limits(limits=limits, subset=subset)
+        _set_thread_limits(limits=limits, apis=apis)
 
     def __enter__(self):
         pass

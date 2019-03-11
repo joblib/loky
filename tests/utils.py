@@ -7,6 +7,7 @@ import warnings
 import threading
 import subprocess
 import contextlib
+from glob import glob
 from tempfile import mkstemp
 
 if sys.version_info[0] == 2:
@@ -26,7 +27,7 @@ def captured_output(stream_name):
         s.wrt = s.write
 
         def write(self, msg):
-            self.wrt(unicode(msg))
+            self.wrt(unicode(msg))  # noqa F821: compat with python2.7
         s.write = types.MethodType(write, s)
 
     setattr(sys, stream_name, s)
@@ -140,6 +141,10 @@ def skip_func(msg):
     return test_func
 
 
+# Path to shipped openblas for libraries such as numpy or scipy
+libopenblas_patterns = []
+
+
 # A decorator to run tests only when numpy is available
 try:
     import numpy  # noqa F401
@@ -148,10 +153,26 @@ try:
         """A decorator to skip tests requiring numpy."""
         return func
 
+    libopenblas_patterns.append(os.path.join(numpy.__path__[0], ".libs",
+                                             "libopenblas*"))
+
 except ImportError:
     def with_numpy(func):
         """A decorator to skip tests requiring numpy."""
         return skip_func('Test require numpy')
+
+
+try:
+    import scipy
+
+    libopenblas_patterns.append(os.path.join(scipy.__path__[0], ".libs",
+                                             "libopenblas*"))
+except ImportError:
+    pass
+
+libopenblas_paths = set(path for pattern in libopenblas_patterns
+                        for path in glob(pattern))
+print(libopenblas_paths)
 
 
 # A decorator to run tests only when numpy is available
