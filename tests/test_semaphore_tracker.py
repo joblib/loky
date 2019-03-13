@@ -2,6 +2,7 @@
 import errno
 import gc
 import os
+import pytest
 import re
 import signal
 import sys
@@ -37,10 +38,11 @@ class TestSemaphoreTracker:
         #
         import subprocess
         cmd = '''if 1:
-            import multiprocessing as mp, time, os
-            mp.set_start_method("spawn")
-            lock1 = mp.Lock()
-            lock2 = mp.Lock()
+            import time, os
+            from loky.backend.synchronize import Lock
+
+            lock1 = Lock()
+            lock2 = Lock()
             os.write(%d, lock1._semlock.name.encode("ascii") + b"\\n")
             os.write(%d, lock2._semlock.name.encode("ascii") + b"\\n")
             time.sleep(10)
@@ -61,20 +63,20 @@ class TestSemaphoreTracker:
         p.terminate()
         p.wait()
         time.sleep(2.0)
-        with self.assertRaises(OSError) as ctx:
+        with pytest.raises(OSError) as ctx:
             sem_unlink(name2)
         # docs say it should be ENOENT, but OSX seems to give EINVAL
-        self.assertIn(ctx.exception.errno, (errno.ENOENT, errno.EINVAL))
+        assert ctx.value.errno in (errno.ENOENT, errno.EINVAL)
         err = p.stderr.read().decode('utf-8')
         p.stderr.close()
-        expected = re.compile(
-            'semaphore_tracker: There appear to be 2 leaked semaphores')
-        assert expected.match(err) is not None
+        expected = ('semaphore_tracker: There appear to be 2 leaked '
+                    'semaphores')
+        assert expected in err
 
         # lock1 is still registered, but was destroyed externally: the tracker
         # is expected to complain.
-        expected = re.compile(r'semaphore_tracker: %r: \[Errno' % name1)
-        assert expected.match(err) is not None
+        expected = 'semaphore_tracker: %r: FileNotFoundError' % name1
+        assert expected in err
 
     def check_semaphore_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
