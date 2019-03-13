@@ -41,6 +41,9 @@ if sys.version_info < (3,):
 
 __all__ = ['ensure_running', 'register', 'unregister']
 
+_HAVE_SIGMASK = hasattr(signal, 'pthread_sigmask')
+_IGNORED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+
 VERBOSE = False
 
 
@@ -97,6 +100,21 @@ class SemaphoreTracker(object):
                 args += ['-c', cmd % r]
                 util.debug("launching Semaphore tracker: {}".format(args))
                 pid = spawnv_passfds(exe, args, fds_to_pass)
+                # bpo-33613: Register a signal mask that will block the
+                # signals.  This signal mask will be inherited by the child
+                # that is going to be spawned and will protect the child from a
+                # race condition that can make the child die before it
+                # registers signal handlers for SIGINT and SIGTERM. The mask is
+                # unregistered after spawning the child.
+                try:
+                    if _HAVE_SIGMASK:
+                        signal.pthread_sigmask(signal.SIG_BLOCK,
+                                               _IGNORED_SIGNALS)
+                    pid = util.spawnv_passfds(exe, args, fds_to_pass)
+                finally:
+                    if _HAVE_SIGMASK:
+                        signal.pthread_sigmask(signal.SIG_UNBLOCK,
+                                               _IGNORED_SIGNALS)
             except BaseException:
                 os.close(w)
                 raise
@@ -147,6 +165,9 @@ def main(fd):
     # protect the process from ^C and "killall python" etc
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+    if _HAVE_SIGMASK:
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, _IGNORED_SIGNALS)
 
     for f in (sys.stdin, sys.stdout):
         try:
