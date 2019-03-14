@@ -74,6 +74,7 @@ class SemaphoreTracker(object):
                 self._fd = None
                 self._pid = None
 
+                warnings.filterwarnings('always', module=__name__)
                 warnings.warn('semaphore_tracker: process died unexpectedly, '
                               'relaunching.  Some semaphores might leak.')
 
@@ -230,7 +231,7 @@ def main(fd):
                                          .format(name))
                         sys.stderr.flush()
                 except Exception as e:
-                    warnings.warn('semaphore_tracker: %r: %r' % (name, e))
+                    warnings.warn('semaphore_tracker: %s: %r' % (name, e))
             finally:
                 pass
 
