@@ -1,6 +1,7 @@
 """Tests for the SemaphoreTracker class"""
 import errno
 import gc
+import io
 import os
 import pytest
 import re
@@ -41,6 +42,10 @@ class TestSemaphoreTracker:
             import time, os
             from loky.backend.synchronize import Lock
 
+            # close manually the read end of the pipe in the child process
+            # because pass_fds does not exist for python < 3.2
+            os.close(%d)
+
             lock1 = Lock()
             lock2 = Lock()
             os.write(%d, lock1._semlock.name.encode("ascii") + b"\\n")
@@ -48,12 +53,17 @@ class TestSemaphoreTracker:
             time.sleep(10)
         '''
         r, w = os.pipe()
+
+        if sys.version_info[:2] >= (3, 2):
+            fd_kws = {'pass_fds': [w, r]}
+        else:
+            fd_kws = {'close_fds': False}
         p = subprocess.Popen([sys.executable,
-                             '-E', '-c', cmd % (w, w)],
-                             pass_fds=[w],
-                             stderr=subprocess.PIPE)
+                             '-E', '-c', cmd % (r, w, w)],
+                             stderr=subprocess.PIPE,
+                             **fd_kws)
         os.close(w)
-        with open(r, 'rb', closefd=True) as f:
+        with io.open(r, 'rb', closefd=True) as f:
             name1 = f.readline().rstrip().decode('ascii')
             name2 = f.readline().rstrip().decode('ascii')
 
@@ -71,12 +81,13 @@ class TestSemaphoreTracker:
         p.stderr.close()
         expected = ('semaphore_tracker: There appear to be 2 leaked '
                     'semaphores')
-        assert expected in err
+        assert re.search(expected, err) is not None
 
         # lock1 is still registered, but was destroyed externally: the tracker
         # is expected to complain.
-        expected = 'semaphore_tracker: %r: FileNotFoundError' % name1
-        assert expected in err
+        expected = ("semaphore_tracker: %s: (OSError\\(%d|"
+                    "FileNotFoundError)" % (name1, errno.ENOENT))
+        assert re.search(expected, err) is not None
 
     def check_semaphore_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
@@ -90,6 +101,10 @@ class TestSemaphoreTracker:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             _semaphore_tracker.ensure_running()
+            # in python2.7, the race condition described in bpo-33613 still
+            # exists.
+            # TODO: prevent race condition in python2.7?
+            time.sleep(1.0)
         pid = _semaphore_tracker._pid
 
         os.kill(pid, signum)
