@@ -99,7 +99,6 @@ class SemaphoreTracker(object):
                         args[i] = re.sub("-R+", "-R", args[i])
                 args += ['-c', cmd % r]
                 util.debug("launching Semaphore tracker: {}".format(args))
-                pid = spawnv_passfds(exe, args, fds_to_pass)
                 # bpo-33613: Register a signal mask that will block the
                 # signals.  This signal mask will be inherited by the child
                 # that is going to be spawned and will protect the child from a
@@ -110,7 +109,7 @@ class SemaphoreTracker(object):
                     if _HAVE_SIGMASK:
                         signal.pthread_sigmask(signal.SIG_BLOCK,
                                                _IGNORED_SIGNALS)
-                    pid = util.spawnv_passfds(exe, args, fds_to_pass)
+                    pid = spawnv_passfds(exe, args, fds_to_pass)
                 finally:
                     if _HAVE_SIGMASK:
                         signal.pthread_sigmask(signal.SIG_UNBLOCK,
