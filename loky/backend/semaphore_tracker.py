@@ -37,7 +37,7 @@ except ImportError:
     from .semlock import sem_unlink
 
 if sys.version_info < (3,):
-    BrokenPipeError = IOError
+    BrokenPipeError = OSError
 
 __all__ = ['ensure_running', 'register', 'unregister']
 
