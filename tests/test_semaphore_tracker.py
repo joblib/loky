@@ -113,6 +113,11 @@ class TestSemaphoreTracker:
         ctx = get_context("loky")
         with warnings.catch_warnings(record=True) as all_warn:
             warnings.simplefilter("always")
+
+            # remove unrelated MacOS warning messages first
+            warnings.filterwarnings(
+                "ignore", message='semaphore are broken on OSX')
+
             sem = ctx.Semaphore()
             sem.acquire()
             sem.release()
