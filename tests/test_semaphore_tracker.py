@@ -23,6 +23,9 @@ def get_sem_tracker_pid():
 
 
 class TestSemaphoreTracker:
+
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="no semaphore_tracker on windows")
     def tests_child_retrieves_semaphore_tracker(self):
         # Worker processes created with loky should retrieve the
         # semaphore_tracker of their parent. This is tested by an equality
@@ -33,6 +36,8 @@ class TestSemaphoreTracker:
         assert child_sem_tracker_pid == parent_sem_tracker_pid
 
     # The following four tests are inspired from cpython _test_multiprocessing
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="no semaphore_tracker on windows")
     def test_semaphore_tracker(self):
         #
         # Check that killing process does not leak named semaphores
@@ -137,14 +142,20 @@ class TestSemaphoreTracker:
                 print(all_warn)
                 assert len(all_warn) == 0
 
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="no semaphore_tracker on windows")
     def test_semaphore_tracker_sigint(self):
         # Catchable signal (ignored by semaphore tracker)
         self.check_semaphore_tracker_death(signal.SIGINT, False)
 
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="no semaphore_tracker on windows")
     def test_semaphore_tracker_sigterm(self):
         # Catchable signal (ignored by semaphore tracker)
         self.check_semaphore_tracker_death(signal.SIGTERM, False)
 
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="no semaphore_tracker on windows")
     def test_semaphore_tracker_sigkill(self):
         # Uncatchable signal.
         self.check_semaphore_tracker_death(signal.SIGKILL, True)
