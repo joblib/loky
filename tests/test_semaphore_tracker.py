@@ -26,14 +26,80 @@ class TestSemaphoreTracker:
 
     @pytest.mark.skipif(sys.platform == "win32",
                         reason="no semaphore_tracker on windows")
-    def tests_child_retrieves_semaphore_tracker(self):
-        # Worker processes created with loky should retrieve the
-        # semaphore_tracker of their parent. This is tested by an equality
-        # check on the tracker's process id.
+    @pytest.mark.skipif(sys.version_info[:2] < (3, 3),
+                        reason="multiprocessing spawn context not available")
+    def test_child_retrieves_semaphore_tracker(self):
         parent_sem_tracker_pid = get_sem_tracker_pid()
         executor = ProcessPoolExecutor(max_workers=2)
         child_sem_tracker_pid = executor.submit(get_sem_tracker_pid).result()
+
+        # First simple pid retrieval check (see #200)
         assert child_sem_tracker_pid == parent_sem_tracker_pid
+
+        # Register a semaphore in the parent process, and un-register it in the
+        # child process. If the two processes do not share the same
+        # semaphore_tracker, a cache KeyError should be printed in stderr.
+        import subprocess
+        r, w = os.pipe()
+        cmd = '''if 1:
+        import os, sys
+        import multiprocessing as mp
+
+        from loky import ProcessPoolExecutor
+        from loky.backend import semaphore_tracker
+
+        semaphore_tracker.VERBOSE=True
+
+        os.close(%d)
+
+        # The benefit of using multiprocessing locks in this test is that they
+        # do not trigger custom un-registration callbacks during garabge
+        # collection.
+        # Therefore, un-registering the lock manually as we do here will not
+        # pollute the stderr pipe with a cache KeyError afterwards.
+        lock = mp.get_context("spawn").Lock()
+        name = lock._semlock.name
+        semaphore_tracker.register(name)
+
+        def unregister(name):
+            # semaphore_tracker.unregister is actually a bound method of the
+            # SemaphoreTracker. We need a custom wrapper to avoid object
+            # serialization.
+            from loky.backend import semaphore_tracker
+            semaphore_tracker.unregister(name)
+
+        e = ProcessPoolExecutor(1)
+        e.submit(unregister, name).result()
+
+        from multiprocessing import semaphore_tracker
+        from _multiprocessing import sem_unlink
+        semaphore_tracker.unregister(name)
+        sem_unlink(name)
+
+        e.shutdown()
+        os.write(%d, name.encode("ascii") + b"\\n")
+        '''
+        if sys.version_info[:2] >= (3, 2):
+            fd_kws = {'pass_fds': [w, r]}
+        else:
+            fd_kws = {'close_fds': False}
+
+        p = subprocess.Popen([sys.executable, '-E', '-c', cmd % (r, w)],
+                             stderr=subprocess.PIPE, **fd_kws)
+
+        os.close(w)
+        with io.open(r, 'rb', closefd=True) as f:
+            name1 = f.readline().rstrip().decode('ascii')
+
+        p.terminate()
+        p.wait()
+        time.sleep(1.0)
+
+        err = p.stderr.read().decode('utf-8')
+        p.stderr.close()
+
+        assert re.search('unregister %s' % name1, err) is not None
+        assert re.search("KeyError: '%s'" % name1, err) is None
 
     # The following four tests are inspired from cpython _test_multiprocessing
     @pytest.mark.skipif(sys.platform == "win32",
