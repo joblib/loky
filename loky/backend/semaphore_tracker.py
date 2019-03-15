@@ -84,7 +84,8 @@ class SemaphoreTracker(object):
             except Exception:
                 pass
 
-            cmd = 'from {} import main; main(%d)'.format(main.__module__)
+            cmd = 'from {} import main; main(%d, %d)'.format(main.__module__,
+                                                             int(VERBOSE))
             r, w = os.pipe()
             try:
                 fds_to_pass.append(r)
@@ -98,7 +99,7 @@ class SemaphoreTracker(object):
                     import re
                     for i in range(1, len(args)):
                         args[i] = re.sub("-R+", "-R", args[i])
-                args += ['-c', cmd % r]
+                args += ['-c', cmd % (r, VERBOSE)]
                 util.debug("launching Semaphore tracker: {}".format(args))
                 # bpo-33613: Register a signal mask that will block the
                 # signals.  This signal mask will be inherited by the child
@@ -160,7 +161,7 @@ unregister = _semaphore_tracker.unregister
 getfd = _semaphore_tracker.getfd
 
 
-def main(fd):
+def main(fd, verbose=0):
     '''Run semaphore tracker.'''
     # protect the process from ^C and "killall python" etc
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -175,7 +176,7 @@ def main(fd):
         except Exception:
             pass
 
-    if VERBOSE:  # pragma: no cover
+    if verbose:  # pragma: no cover
         sys.stderr.write("Main semaphore tracker is running\n")
         sys.stderr.flush()
 
@@ -189,14 +190,14 @@ def main(fd):
                     if cmd == b'REGISTER':
                         name = name.decode('ascii')
                         cache.add(name)
-                        if VERBOSE:  # pragma: no cover
+                        if verbose:  # pragma: no cover
                             sys.stderr.write("[SemaphoreTracker] register {}\n"
                                              .format(name))
                             sys.stderr.flush()
                     elif cmd == b'UNREGISTER':
                         name = name.decode('ascii')
                         cache.remove(name)
-                        if VERBOSE:  # pragma: no cover
+                        if verbose:  # pragma: no cover
                             sys.stderr.write("[SemaphoreTracker] unregister {}"
                                              ": cache({})\n"
                                              .format(name, len(cache)))
@@ -226,7 +227,7 @@ def main(fd):
             try:
                 try:
                     sem_unlink(name)
-                    if VERBOSE:  # pragma: no cover
+                    if verbose:  # pragma: no cover
                         sys.stderr.write("[SemaphoreTracker] unlink {}\n"
                                          .format(name))
                         sys.stderr.flush()
@@ -235,7 +236,7 @@ def main(fd):
             finally:
                 pass
 
-    if VERBOSE:  # pragma: no cover
+    if verbose:  # pragma: no cover
         sys.stderr.write("semaphore tracker shut down\n")
         sys.stderr.flush()
 
