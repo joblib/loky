@@ -116,7 +116,7 @@ class ExecutorShutdownTest:
             e.submit(id, ExitAtPickle())
 
     def test_interpreter_shutdown(self):
-        # Free ressources to avoid random timeout in CI
+        # Free resources to avoid random timeout in CI
         self.executor.shutdown(wait=True, kill_workers=True)
 
         tempdir = tempfile.mkdtemp(prefix='loky_')
