@@ -74,7 +74,6 @@ class SemaphoreTracker(object):
                 self._fd = None
                 self._pid = None
 
-                warnings.filterwarnings('always', module=__name__)
                 warnings.warn('semaphore_tracker: process died unexpectedly, '
                               'relaunching.  Some semaphores might leak.')
 
