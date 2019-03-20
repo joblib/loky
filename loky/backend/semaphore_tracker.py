@@ -71,6 +71,13 @@ class SemaphoreTracker(object):
                     return
                 # => dead, launch it again
                 os.close(self._fd)
+                try:
+                    # Clean-up to avoid dangling processes.
+                    os.waitpid(self._pid, 0)
+                except OSError:
+                    # The process terminated or is a child from an ancestor of
+                    # the current process.
+                    pass
                 self._fd = None
                 self._pid = None
 
@@ -125,9 +132,11 @@ class SemaphoreTracker(object):
                 os.close(r)
 
     def _check_alive(self):
-        '''Check for the existence of the semaphore tracker process.'''
+        '''Check for that the pipe has not been closed by sending a probe.'''
         try:
-            self._send('PROBE', '')
+            # We cannot use send here as it calls ensure_running, creating
+            # a cycle.
+            os.write(self._fd, b'PROBE:0\n')
         except BrokenPipeError:
             return False
         else:
