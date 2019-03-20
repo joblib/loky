@@ -204,6 +204,8 @@ class TestSemaphoreTracker:
 
     @pytest.mark.skipif(sys.platform == "win32",
                         reason="no semaphore_tracker on windows")
+    @pytest.mark.skipif(sys.version_info[0] < 3,
+                        reason="warnings.catch_warnings limitation")
     def test_semaphore_tracker_sigkill(self):
         # Uncatchable signal.
         self.check_semaphore_tracker_death(signal.SIGKILL, True)
