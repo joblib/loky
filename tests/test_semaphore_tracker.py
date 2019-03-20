@@ -188,7 +188,6 @@ class TestSemaphoreTracker:
                 assert "semaphore_tracker: process died" in str(
                     the_warn.message)
             else:
-                print(all_warn)
                 assert len(all_warn) == 0
 
     @pytest.mark.skipif(sys.platform == "win32",
