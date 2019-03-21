@@ -147,7 +147,6 @@ class TestSemaphoreTracker:
         # bpo-31310: if the semaphore tracker process has died, it should
         # be restarted implicitly.
         from loky.backend.semaphore_tracker import _semaphore_tracker
-        # _semaphore_tracker.ensure_running()
         pid = _semaphore_tracker._pid
         if pid is not None:
             os.kill(pid, signal.SIGKILL)
