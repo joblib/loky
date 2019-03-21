@@ -134,8 +134,6 @@ class SemaphoreTracker(object):
     def _check_alive(self):
         '''Check for the existence of the semaphore tracker process.'''
         try:
-            # We cannot use send here as it calls ensure_running, creating
-            # a cycle.
             self._send('PROBE', '')
         except BrokenPipeError:
             return False
