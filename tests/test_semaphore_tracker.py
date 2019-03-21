@@ -155,9 +155,8 @@ class TestSemaphoreTracker:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             _semaphore_tracker.ensure_running()
-            # in python2.7, the race condition described in bpo-33613 still
-            # exists.
-            # TODO: prevent race condition in python2.7?
+            # in python < 3.3 , the race condition described in bpo-33613 still
+            # exists, as this fixe requires signal.pthread_sigmask
             time.sleep(1.0)
         pid = _semaphore_tracker._pid
 
