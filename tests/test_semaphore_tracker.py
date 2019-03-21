@@ -38,7 +38,7 @@ class TestSemaphoreTracker:
         # child process. If the two processes do not share the same
         # semaphore_tracker, a cache KeyError should be printed in stderr.
         import subprocess
-        lname = 'loky-mysemaphore'
+        semlock_name = 'loky-mysemaphore'
         cmd = '''if 1:
         import os, sys
 
@@ -47,41 +47,41 @@ class TestSemaphoreTracker:
         from loky.backend.semlock import SemLock
 
         semaphore_tracker.VERBOSE=True
-        lname = "{}"
+        semlock_name = "{}"
 
         # The benefit of using _SemLock objects in this test is that they do
-        # not trigger custom un-registration callbacks during garabge
+        # not trigger custom un-registration callbacks during garbage
         # collection. Therefore, un-registering the lock manually as we do
         # here will not pollute the stderr pipe with a cache KeyError
         # afterwards.
-        lock = SemLock(1, 1, 1, name=lname)
-        semaphore_tracker.register(lname)
+        lock = SemLock(1, 1, 1, name=semlock_name)
+        semaphore_tracker.register(semlock_name)
 
         def unregister(name):
             # semaphore_tracker.unregister is actually a bound method of the
             # SemaphoreTracker. We need a custom wrapper to avoid object
             # serialization.
             from loky.backend import semaphore_tracker
-            semaphore_tracker.unregister(lname)
+            semaphore_tracker.unregister(semlock_name)
 
         e = ProcessPoolExecutor(1)
-        e.submit(unregister, lname).result()
+        e.submit(unregister, semlock_name).result()
         e.shutdown()
         '''
         try:
             p = subprocess.Popen(
-                [sys.executable, '-E', '-c', cmd.format(lname)],
+                [sys.executable, '-E', '-c', cmd.format(semlock_name)],
                 stderr=subprocess.PIPE)
             p.wait()
 
             err = p.stderr.read().decode('utf-8')
             p.stderr.close()
 
-            assert re.search("unregister %s" % lname, err) is not None
-            assert re.search("KeyError: '%s'" % lname, err) is None
+            assert re.search("unregister %s" % semlock_name, err) is not None
+            assert re.search("KeyError: '%s'" % semlock_name, err) is None
 
         finally:
-            sem_unlink(lname)
+            sem_unlink(semlock_name)
 
 
     # The following four tests are inspired from cpython _test_multiprocessing

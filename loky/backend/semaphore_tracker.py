@@ -75,8 +75,8 @@ class SemaphoreTracker(object):
                     # Clean-up to avoid dangling processes.
                     os.waitpid(self._pid, 0)
                 except OSError:
-                    # The process terminated or is a child from an ancestor of
-                    # the current process.
+                    # The process was terminated or is a child from an ancestor
+                    # of the current process.
                     pass
                 self._fd = None
                 self._pid = None
