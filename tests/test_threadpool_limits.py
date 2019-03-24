@@ -4,34 +4,18 @@ import pytest
 
 from loky import cpu_count
 from loky.backend import thread_pool_limits
-from loky.backend._thread_pool_limiters import _CLibsWrapper
-from loky.backend._thread_pool_limiters import NOT_ACCESSIBLE
+from loky.backend._thread_pool_limiters import SUPPORTED_IMPLEMENTATION
 from loky.backend._thread_pool_limiters import get_thread_limits
 from loky.backend._thread_pool_limiters import _set_thread_limits
-from loky.backend._thread_pool_limiters import openmp_num_threads
 
 from .utils import with_parallel_sum, libopenblas_paths
 
 
 def should_skip_module(module):
-    return module['name'] == "openblas" and module['version'] == NOT_ACCESSIBLE
+    return module['name'] == "openblas" and module['version'] is None
 
 
-def test_openmp_num_threads():
-    with pytest.raises(ValueError, match=r"n_threads=0 is invalid"):
-        openmp_num_threads(0)
-
-    assert openmp_num_threads(1) == 1
-    assert openmp_num_threads(2) == 2
-    assert openmp_num_threads(3) == 3
-
-    # Assert negative value give the right number
-    assert openmp_num_threads(-1) == cpu_count()
-    assert openmp_num_threads(-2) == max(1, cpu_count() - 1)
-    assert openmp_num_threads(-3) == max(1, cpu_count() - 2)
-
-
-@pytest.mark.parametrize("library", _CLibsWrapper.SUPPORTED_CLIBS)
+@pytest.mark.parametrize("library", SUPPORTED_IMPLEMENTATION)
 def test_thread_pool_limits(openblas_present, mkl_present, library):
     old_limits = get_thread_limits()
     old_limits = {clib['name']: clib['n_thread'] for clib in old_limits}
@@ -55,7 +39,7 @@ def test_thread_pool_limits(openblas_present, mkl_present, library):
     thread_pool_limits(limits={library: 3})
     new_limits = get_thread_limits()
     new_limits = {clib['name']: clib['n_thread'] for clib in new_limits}
-    assert new_limits[library] in (3, cpu_count(), cpu_count() / 2)
+    assert new_limits[library] in (3, cpu_count(), cpu_count() // 2)
 
     thread_pool_limits(limits=old_limits)
     new_limits = get_thread_limits()
@@ -69,11 +53,11 @@ def test_set_thread_limits_apis(apis):
     # modified dynamically.
 
     if apis == "all":
-        api_modules = list(_CLibsWrapper.SUPPORTED_CLIBS.keys())
+        api_modules = list(SUPPORTED_IMPLEMENTATION.keys())
     elif apis == "blas":
-        api_modules = ["openblas", "mkl", "mkl_win32"]
+        api_modules = ["openblas", "mkl"]
     elif apis == "openmp":
-        api_modules = list(c for c in _CLibsWrapper.SUPPORTED_CLIBS
+        api_modules = list(c for c in SUPPORTED_IMPLEMENTATION
                            if "openmp" in c)
 
     old_limits = get_thread_limits()
@@ -81,14 +65,14 @@ def test_set_thread_limits_apis(apis):
 
     new_limits = _set_thread_limits(limits=1, apis=apis)
     for module in new_limits:
-        if module['api'] in api_modules and not should_skip_module(module):
+        if module['library'] in api_modules and not should_skip_module(module):
             assert module['n_thread'] == 1
 
     thread_pool_limits(limits=3, apis=apis)
     new_limits = get_thread_limits()
     for module in new_limits:
-        if module['api'] in api_modules and not should_skip_module(module):
-            assert module['n_thread'] in (3, cpu_count(), cpu_count() / 2)
+        if module['library'] in api_modules and not should_skip_module(module):
+            assert module['n_thread'] in (3, cpu_count(), cpu_count() // 2)
 
     thread_pool_limits(limits=old_limits)
     new_limits = get_thread_limits()
@@ -105,7 +89,7 @@ def test_set_thread_limits_bad_input():
         thread_pool_limits(limits=1, apis="wrong")
 
     with pytest.raises(TypeError,
-                       match="limits must either be an int, a dict"):
+                       match="limits must either be an int, a dict or None"):
         thread_pool_limits(limits=(1, 2, 3))
 
 
@@ -114,11 +98,11 @@ def test_thread_limit_context(apis):
     # Tests the thread limits context manager
 
     if apis in [None, "all"]:
-        apis_clibs = list(_CLibsWrapper.SUPPORTED_CLIBS.keys())
+        apis_clibs = list(SUPPORTED_IMPLEMENTATION.keys())
     elif apis == "blas":
-        apis_clibs = ["openblas", "mkl", "mkl_win32"]
+        apis_clibs = ["openblas", "mkl"]
     elif apis == "openmp":
-        apis_clibs = list(c for c in _CLibsWrapper.SUPPORTED_CLIBS
+        apis_clibs = list(c for c in SUPPORTED_IMPLEMENTATION
                           if "openmp" in c)
 
     old_limits = get_thread_limits()
@@ -158,7 +142,7 @@ def test_openmp_limit_num_threads(n_threads):
     old_num_threads = parallel_sum(100)
 
     with thread_pool_limits(limits=n_threads):
-        assert parallel_sum(100) in (n_threads, cpu_count(), cpu_count() / 2)
+        assert parallel_sum(100) in (n_threads, cpu_count(), cpu_count() // 2)
     assert parallel_sum(100) == old_num_threads
 
 

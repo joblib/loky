@@ -163,7 +163,7 @@ except ImportError:
 
 
 try:
-    import scipy
+    import scipy.linalg
 
     libopenblas_patterns.append(os.path.join(scipy.__path__[0], ".libs",
                                              "libopenblas*"))
@@ -172,7 +172,6 @@ except ImportError:
 
 libopenblas_paths = set(path for pattern in libopenblas_patterns
                         for path in glob(pattern))
-print(libopenblas_paths)
 
 
 # A decorator to run tests only when numpy is available

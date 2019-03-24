@@ -25,13 +25,13 @@ def log_lvl(request):
 
 @pytest.fixture
 def openblas_present(request):
-    """Fail the test is OpenBLAS is not found"""
+    """Fail the test if OpenBLAS is not found"""
     return request.config.getoption("--openblas-present")
 
 
 @pytest.fixture
 def mkl_present(request):
-    """Fail the test is OpenBLAS is not found"""
+    """Fail the test if MKL is not found"""
     return request.config.getoption("--mkl-present")
 
 

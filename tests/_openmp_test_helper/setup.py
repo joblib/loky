@@ -13,7 +13,7 @@ if sys.platform == "win32":
     extra_compile_args = ["/openmp"]
     extra_link_args = None
 else:
-    extra_compile_args = ["-ffast-math", "-fopenmp"]
+    extra_compile_args = ["-fopenmp"]
     extra_link_args = ['-fopenmp']
 
 ext_modules = [
@@ -29,5 +29,5 @@ setup(
     name='_openmp_test_helper',
     ext_modules=cythonize(
         ext_modules,
-        language_level="2"),
+        language_level=3),
 )
