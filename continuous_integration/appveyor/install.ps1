@@ -75,6 +75,7 @@ function InstallPython ($python_version, $architecture, $python_home) {
     }
 }
 
+
 function RunCommand ($command, $command_args) {
     Write-Host $command $command_args
     Start-Process -FilePath $command -ArgumentList $command_args -Wait -Passthru
@@ -94,6 +95,7 @@ function InstallPip ($python_home) {
         Write-Host "pip already installed."
     }
 }
+
 
 function InstallConda (){
 
@@ -127,7 +129,6 @@ function main () {
     }Else{
         InstallPython $env:PYTHON_VERSION $env:PYTHON_ARCH $env:PYTHON
         InstallPip $env:PYTHON
-
 
         $env:PATH = "$PYTHON;$PYTHON\\Scripts;$env:PATH"
 

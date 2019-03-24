@@ -7,6 +7,7 @@ $VERSION=(36, 27)
 $TOX_CMD = "python ./continuous_integration/appveyor/tox"
 $DEFAULT_PYTEST_ARGS = "-vlx --timeout=50 --skip-high-memory"
 
+
 function RunTestsWithTox () {
     Write-Host $PYTHON
     ForEach($ver in $VERSION){
@@ -43,8 +44,8 @@ function RunTestsWithConda () {
             Exit 1
     }
     Exit 0
-
 }
+
 
 function main () {
     If( $env:TEST_CONDA -eq "true" ){
