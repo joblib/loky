@@ -10,10 +10,10 @@ def pytest_addoption(parser):
                      help="log-level: integer, SUBDEBUG(5) - INFO(20)")
     parser.addoption("--skip-high-memory", action="store_true",
                      help="skip high-memory test to avoid conflict on CI.")
-    parser.addoption("--openblas-test-noskip", action='store_true',
+    parser.addoption("--openblas-present", action='store_true',
                      help="Fail test_limit_openblas_threads if BLAS is not "
                      "found")
-    parser.addoption("--mkl-win32-test-noskip", action='store_true',
+    parser.addoption("--mkl-present", action='store_true',
                      help="Fail test_limit_mkl_threads if MKL is not "
                      "found")
 
@@ -24,15 +24,15 @@ def log_lvl(request):
 
 
 @pytest.fixture
-def openblas_test_noskip(request):
+def openblas_present(request):
     """Fail the test is OpenBLAS is not found"""
-    return request.config.getoption("--openblas-test-noskip")
+    return request.config.getoption("--openblas-present")
 
 
 @pytest.fixture
-def mkl_win32_test_noskip(request):
+def mkl_present(request):
     """Fail the test is OpenBLAS is not found"""
-    return request.config.getoption("--mkl-win32-test-noskip")
+    return request.config.getoption("--mkl-present")
 
 
 def pytest_configure(config):
@@ -46,12 +46,11 @@ def pytest_configure(config):
     warnings.simplefilter('always')
 
     # When using this option, make sure numpy is accessible
-    if config.getoption("--mkl-win32-test-noskip"):
+    if config.getoption("--mkl-present"):
         try:
             import numpy as np  # noqa: F401
         except ImportError:
-            raise ImportError("Need 'numpy' with option "
-                              "--mkl-win32-test-noskip")
+            raise ImportError("Need 'numpy' with option --mkl-present")
 
 
 def pytest_collection_modifyitems(config, items):

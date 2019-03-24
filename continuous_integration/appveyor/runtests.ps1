@@ -17,7 +17,7 @@ function RunTestsWithTox () {
         $PYTEST_ARGS = $DEFAULT_PYTEST_ARGS
 
         If( $ver -eq 36){
-            $PYTEST_ARGS = "$PYTEST_ARGS --openblas-test-noskip"
+            $PYTEST_ARGS = "$PYTEST_ARGS --openblas-present"
         }
         # Launch the tox command for the correct python version. We use `iex`
         # to correctly pass PYTEST_ARGS, which are parsed as files otherwise.
@@ -39,7 +39,7 @@ function RunTestsWithConda () {
     python --version
     python -c "import numpy"
 
-    iex "pytest $DEFAULT_PYTEST_ARGS --mkl-win32-test-noskip"
+    iex "pytest $DEFAULT_PYTEST_ARGS --mkl-present"
     If( $LASTEXITCODE -ne 0){
             Exit 1
     }

@@ -32,15 +32,14 @@ def test_openmp_num_threads():
 
 
 @pytest.mark.parametrize("library", _CLibsWrapper.SUPPORTED_CLIBS)
-def test_thread_pool_limits(openblas_test_noskip, mkl_win32_test_noskip,
-                            library):
+def test_thread_pool_limits(openblas_present, mkl_present, library):
     old_limits = get_thread_limits()
     old_limits = {clib['name']: clib['n_thread'] for clib in old_limits}
 
     if library not in old_limits:
-        if library == "openblas" and openblas_test_noskip:
+        if library == "openblas" and openblas_present:
             raise RuntimeError("Could not load the OpenBLAS library")
-        elif library == "mkl_win32" and mkl_win32_test_noskip:
+        elif library == "mkl" and mkl_present:
             import numpy as np
             np.dot(np.ones(1000), np.ones(1000))
             old_limits = get_thread_limits()
