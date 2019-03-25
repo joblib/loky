@@ -4,7 +4,7 @@ import pytest
 
 from loky import cpu_count
 from loky.backend import thread_pool_limits
-from loky.backend._thread_pool_limiters import SUPPORTED_IMPLEMENTATION
+from loky.backend._thread_pool_limiters import IMPLEMENTATIONS_NAME
 from loky.backend._thread_pool_limiters import get_thread_limits
 from loky.backend._thread_pool_limiters import _set_thread_limits
 
@@ -15,7 +15,7 @@ def should_skip_module(module):
     return module['name'] == "openblas" and module['version'] is None
 
 
-@pytest.mark.parametrize("library", SUPPORTED_IMPLEMENTATION)
+@pytest.mark.parametrize("library", IMPLEMENTATIONS_NAME)
 def test_thread_pool_limits(openblas_present, mkl_present, library):
     old_limits = get_thread_limits()
     old_limits = {clib['name']: clib['n_thread'] for clib in old_limits}
@@ -47,31 +47,32 @@ def test_thread_pool_limits(openblas_present, mkl_present, library):
     assert new_limits[library] == old_limits[library]
 
 
-@pytest.mark.parametrize("apis", ("all", "blas", "openmp"))
-def test_set_thread_limits_apis(apis):
+@pytest.mark.parametrize("user_api", ("all", None, "blas", "openmp"))
+def test_set_thread_limits_apis(user_api):
     # Check that the number of threads used by the multithreaded C-libs can be
     # modified dynamically.
 
-    if apis == "all":
-        api_modules = list(SUPPORTED_IMPLEMENTATION.keys())
-    elif apis == "blas":
-        api_modules = ["openblas", "mkl"]
-    elif apis == "openmp":
-        api_modules = list(c for c in SUPPORTED_IMPLEMENTATION
-                           if "openmp" in c)
+    if user_api in ("all", None):
+        api_modules = ('blas', 'openmp')
+    else:
+        api_modules = (user_api,)
 
     old_limits = get_thread_limits()
     old_limits = {clib['name']: clib['n_thread'] for clib in old_limits}
 
-    new_limits = _set_thread_limits(limits=1, apis=apis)
+    new_limits = _set_thread_limits(limits=1, user_api=user_api)
     for module in new_limits:
-        if module['library'] in api_modules and not should_skip_module(module):
+        if should_skip_module(module):
+            continue
+        if module['user_api'] in api_modules:
             assert module['n_thread'] == 1
 
-    thread_pool_limits(limits=3, apis=apis)
+    thread_pool_limits(limits=3, user_api=user_api)
     new_limits = get_thread_limits()
     for module in new_limits:
-        if module['library'] in api_modules and not should_skip_module(module):
+        if should_skip_module(module):
+            continue
+        if module['user_api'] in api_modules:
             assert module['n_thread'] in (3, cpu_count(), cpu_count() // 2)
 
     thread_pool_limits(limits=old_limits)
@@ -84,47 +85,42 @@ def test_set_thread_limits_bad_input():
     # Check that appropriate errors are raised for invalid arguments
 
     with pytest.raises(ValueError,
-                       match="apis must be either 'all', 'blas' "
+                       match="user_api must be either 'all', 'blas' "
                              "or 'openmp'"):
-        thread_pool_limits(limits=1, apis="wrong")
+        thread_pool_limits(limits=1, user_api="wrong")
 
     with pytest.raises(TypeError,
                        match="limits must either be an int, a dict or None"):
         thread_pool_limits(limits=(1, 2, 3))
 
 
-@pytest.mark.parametrize("apis", (None, "all", "blas", "openmp"))
-def test_thread_limit_context(apis):
+@pytest.mark.parametrize("user_api", (None, "all", "blas", "openmp"))
+def test_thread_limit_context(user_api):
     # Tests the thread limits context manager
 
-    if apis in [None, "all"]:
-        apis_clibs = list(SUPPORTED_IMPLEMENTATION.keys())
-    elif apis == "blas":
-        apis_clibs = ["openblas", "mkl"]
-    elif apis == "openmp":
-        apis_clibs = list(c for c in SUPPORTED_IMPLEMENTATION
-                          if "openmp" in c)
+    if user_api in [None, "all"]:
+        apis = ('blas', 'openmp')
+    else:
+        apis = (user_api,)
 
     old_limits = get_thread_limits()
     old_limits = {clib['name']: clib['n_thread'] for clib in old_limits}
 
-    with thread_pool_limits(limits=None, apis=apis):
+    with thread_pool_limits(limits=None, user_api=user_api):
         limits = get_thread_limits()
         limits = {clib['name']: clib['n_thread'] for clib in limits}
         assert limits == old_limits
 
-    with thread_pool_limits(limits=1, apis=apis):
+    with thread_pool_limits(limits=1, user_api=user_api):
         limits = get_thread_limits()
-        limits = {clib['name']: clib['n_thread'] for clib in limits
-                  if not should_skip_module(clib)}
 
-        for clib in limits:
-            if old_limits[clib] is None:
-                assert limits[clib] is None
-            elif clib in apis_clibs:
-                assert limits[clib] == 1
+        for module in limits:
+            if should_skip_module(module):
+                continue
+            elif module['user_api'] in apis:
+                assert module['n_thread'] == 1
             else:
-                assert limits[clib] == old_limits[clib]
+                assert module['n_thread'] == old_limits[module['name']]
 
     limits = get_thread_limits()
     limits = {clib['name']: clib['n_thread'] for clib in limits}
