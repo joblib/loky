@@ -15,7 +15,7 @@ from loky.backend.context import START_METHODS
 from loky.backend.utils import recursive_terminate
 
 from .utils import TimingWrapper, check_subprocess_call
-from .utils import with_parallel_sum, _run_openmp_parallel_sum
+from .utils import with_check_openmp_n_threads, _run_check_openmp_n_threads
 
 if sys.version_info < (3, 3):
     FileNotFoundError = NameError
@@ -566,13 +566,13 @@ class TestLokyBackend:
 
                 assert p.exitcode == 0
 
-    @with_parallel_sum
+    @with_check_openmp_n_threads
     def test_openmp_compatibility(self):
         # Use OpenMP before launching subprocesses. With fork backend, some fds
         # are nto correctly clean up, causing a freeze. No freeze should be
         # detected with loky.
-        _run_openmp_parallel_sum(10)
-        p = self.Process(target=_run_openmp_parallel_sum, args=(100,))
+        _run_check_openmp_n_threads(10)
+        p = self.Process(target=_run_check_openmp_n_threads, args=(100,))
         p.start()
         p.join()
         assert p.exitcode == 0

@@ -18,8 +18,8 @@ else:
 
 ext_modules = [
     Extension(
-        "parallel_sum",
-        ["parallel_sum.pyx"],
+        "openmp_helpers",
+        ["openmp_helpers.pyx"],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args
         )

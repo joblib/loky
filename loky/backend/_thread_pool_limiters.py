@@ -175,6 +175,8 @@ class _ThreadPoolLibrariesWrapper:
                                       .format(internal_api))
 
     def _get_mkl_version(self, mkl_clib):
+        """Return the MKL version
+        """
         res = ctypes.create_string_buffer(200)
         mkl_clib.mkl_get_version_string(res, 200)
 
@@ -182,6 +184,11 @@ class _ThreadPoolLibrariesWrapper:
         return version.strip()
 
     def _get_openblas_version(self, openblas_clib):
+        """Return the OpenBLAS version
+
+        None means OpenBLAS is not loaded or version < 0.3.4, since OpenBLAS
+        did not expose it's verion before that.
+        """
         get_config = getattr(openblas_clib, "openblas_get_config")
         get_config.restype = ctypes.c_char_p
         config = get_config().split()

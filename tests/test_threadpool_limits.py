@@ -8,10 +8,12 @@ from loky.backend._thread_pool_limiters import ALL_PREFIXES
 from loky.backend._thread_pool_limiters import get_thread_limits
 from loky.backend._thread_pool_limiters import _set_thread_limits
 
-from .utils import with_parallel_sum, libopenblas_paths
+from .utils import with_check_openmp_n_threads, libopenblas_paths
 
 
 def should_skip_module(module):
+    # Possible bug in getting maximum number of threads with OpenBLAS < 0.2.16
+    # and OpenBLAS does not expose its version before 0.3.4.
     return module['internal_api'] == "openblas" and module['version'] is None
 
 
@@ -127,19 +129,20 @@ def test_thread_limit_context(user_api):
     assert limits == old_limits
 
 
-@with_parallel_sum
+@with_check_openmp_n_threads
 @pytest.mark.parametrize('n_threads', [1, 2, 4])
 def test_openmp_limit_num_threads(n_threads):
     # checks that OpenMP effectively uses the number of threads requested by
     # the context manager
 
-    from ._openmp_test_helper.parallel_sum import parallel_sum
+    from ._openmp_test_helper import check_openmp_n_threads
 
-    old_num_threads = parallel_sum(100)
+    old_num_threads = check_openmp_n_threads(100)
 
     with thread_pool_limits(limits=n_threads):
-        assert parallel_sum(100) in (n_threads, cpu_count(), cpu_count() // 2)
-    assert parallel_sum(100) == old_num_threads
+        assert check_openmp_n_threads(100) in (n_threads, cpu_count(),
+                                               cpu_count() // 2)
+    assert check_openmp_n_threads(100) == old_num_threads
 
 
 def test_shipped_openblas():

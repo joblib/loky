@@ -177,23 +177,25 @@ libopenblas_paths = set(path for pattern in libopenblas_patterns
                         for path in glob(pattern))
 
 
-# A decorator to run tests only when numpy is available
+# A decorator to run tests only when check_openmp_n_threads is available
 try:
-    from ._openmp_test_helper.parallel_sum import parallel_sum  # noqa F401
+    from ._openmp_test_helper import check_openmp_n_threads
 
-    def with_parallel_sum(func):
-        """A decorator to skip tests if parallel_sum is not compiled."""
+    def with_check_openmp_n_threads(func):
+        """A decorator to skip tests if check_openmp_n_threads is not compiled.
+        """
         return func
 
-    def _run_openmp_parallel_sum(*args):
-        return parallel_sum(*args)
+    def _run_check_openmp_n_threads(*args):
+        return check_openmp_n_threads(*args)
 
 except ImportError:
-    def with_parallel_sum(func):
-        """A decorator to skip tests if parallel_sum is not compiled."""
-        return skip_func('Test requires parallel_sum to be compiled')
+    def with_check_openmp_n_threads(func):
+        """A decorator to skip tests if check_openmp_n_threads is not compiled.
+        """
+        return skip_func('Test requires check_openmp_n_threads to be compiled')
 
-    _run_openmp_parallel_sum = None
+    _run_check_openmp_n_threads = None
 
 
 def check_python_subprocess_call(code, stdout_regex=None):
