@@ -4,7 +4,7 @@ import pytest
 
 from loky import cpu_count
 from loky.backend import thread_pool_limits
-from loky.backend._thread_pool_limiters import IMPLEMENTATIONS_NAME
+from loky.backend._thread_pool_limiters import ALL_PREFIXES
 from loky.backend._thread_pool_limiters import get_thread_limits
 from loky.backend._thread_pool_limiters import _set_thread_limits
 
@@ -12,39 +12,42 @@ from .utils import with_parallel_sum, libopenblas_paths
 
 
 def should_skip_module(module):
-    return module['name'] == "openblas" and module['version'] is None
+    return module['internal_api'] == "openblas" and module['version'] is None
 
 
-@pytest.mark.parametrize("library", IMPLEMENTATIONS_NAME)
-def test_thread_pool_limits(openblas_present, mkl_present, library):
+@pytest.mark.parametrize("prefix", ALL_PREFIXES)
+def test_thread_pool_limits(openblas_present, mkl_present, prefix):
     old_limits = get_thread_limits()
-    old_limits = {clib['name']: clib['n_thread'] for clib in old_limits}
 
-    if library not in old_limits:
-        if library == "openblas" and openblas_present:
-            raise RuntimeError("Could not load the OpenBLAS library")
-        elif library == "mkl" and mkl_present:
+    prefix_found = len([1 for module in old_limits
+                        if prefix == module['prefix']])
+    old_limits = {clib['prefix']: clib['n_thread'] for clib in old_limits}
+
+    if not prefix_found:
+        if prefix == "libopenblas" and openblas_present:
+            raise RuntimeError("Could not load the OpenBLAS prefix")
+        elif "mkl_rt" in prefix and mkl_present:
             import numpy as np
             np.dot(np.ones(1000), np.ones(1000))
             old_limits = get_thread_limits()
-            if old_limits[library] is None:
-                raise RuntimeError("Could not load the MKL library")
+            if old_limits[prefix] is None:
+                raise RuntimeError("Could not load the MKL prefix")
         else:
-            pytest.skip("Need {} support".format(library))
+            pytest.skip("Need {} support".format(prefix))
 
-    new_limits = _set_thread_limits(limits={library: 1})
-    new_limits = {clib['name']: clib['n_thread'] for clib in new_limits}
-    assert new_limits[library] == 1
+    new_limits = _set_thread_limits(limits={prefix: 1})
+    new_limits = {clib['prefix']: clib['n_thread'] for clib in new_limits}
+    assert new_limits[prefix] == 1
 
-    thread_pool_limits(limits={library: 3})
+    thread_pool_limits(limits={prefix: 3})
     new_limits = get_thread_limits()
-    new_limits = {clib['name']: clib['n_thread'] for clib in new_limits}
-    assert new_limits[library] in (3, cpu_count(), cpu_count() // 2)
+    new_limits = {clib['prefix']: clib['n_thread'] for clib in new_limits}
+    assert new_limits[prefix] in (3, cpu_count(), cpu_count() // 2)
 
     thread_pool_limits(limits=old_limits)
     new_limits = get_thread_limits()
-    new_limits = {clib['name']: clib['n_thread'] for clib in new_limits}
-    assert new_limits[library] == old_limits[library]
+    new_limits = {clib['prefix']: clib['n_thread'] for clib in new_limits}
+    assert new_limits[prefix] == old_limits[prefix]
 
 
 @pytest.mark.parametrize("user_api", ("all", None, "blas", "openmp"))
@@ -58,7 +61,7 @@ def test_set_thread_limits_apis(user_api):
         api_modules = (user_api,)
 
     old_limits = get_thread_limits()
-    old_limits = {clib['name']: clib['n_thread'] for clib in old_limits}
+    old_limits = {clib['prefix']: clib['n_thread'] for clib in old_limits}
 
     new_limits = _set_thread_limits(limits=1, user_api=user_api)
     for module in new_limits:
@@ -78,7 +81,7 @@ def test_set_thread_limits_apis(user_api):
     thread_pool_limits(limits=old_limits)
     new_limits = get_thread_limits()
     for module in new_limits:
-        assert module['n_thread'] == old_limits[module['name']]
+        assert module['n_thread'] == old_limits[module['prefix']]
 
 
 def test_set_thread_limits_bad_input():
@@ -104,11 +107,11 @@ def test_thread_limit_context(user_api):
         apis = (user_api,)
 
     old_limits = get_thread_limits()
-    old_limits = {clib['name']: clib['n_thread'] for clib in old_limits}
+    old_limits = {clib['prefix']: clib['n_thread'] for clib in old_limits}
 
     with thread_pool_limits(limits=None, user_api=user_api):
         limits = get_thread_limits()
-        limits = {clib['name']: clib['n_thread'] for clib in limits}
+        limits = {clib['prefix']: clib['n_thread'] for clib in limits}
         assert limits == old_limits
 
     with thread_pool_limits(limits=1, user_api=user_api):
@@ -120,10 +123,10 @@ def test_thread_limit_context(user_api):
             elif module['user_api'] in apis:
                 assert module['n_thread'] == 1
             else:
-                assert module['n_thread'] == old_limits[module['name']]
+                assert module['n_thread'] == old_limits[module['prefix']]
 
     limits = get_thread_limits()
-    limits = {clib['name']: clib['n_thread'] for clib in limits}
+    limits = {clib['prefix']: clib['n_thread'] for clib in limits}
     assert limits == old_limits
 
 

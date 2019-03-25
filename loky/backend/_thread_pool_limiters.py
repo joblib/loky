@@ -42,6 +42,31 @@ class dl_phdr_info(ctypes.Structure):
         ]
 
 
+# List of the supported implementations. The items hold the prefix loaded
+# shared object, the name of the internal_api to call, matching the
+# MAP_API_TO_FUNC keys and the name of the user_api, in {"blas", "openmp"}.
+SUPPORTED_IMPLEMENTATIONS = [
+    {
+        "filename_prefixes": ("libiomp", "libgomp", "libomp", "vcomp",),
+        "internal_api": "openmp",
+        "user_api": "openmp"
+    },
+    {
+        "filename_prefixes": ("libopenblas",),
+        "internal_api": "openblas",
+        "user_api": "blas"
+    },
+    {
+        "filename_prefixes": ("libmkl_rt", "mkl_rt",),
+        "internal_api": "mkl",
+        "user_api": "blas"
+    },
+]
+ALL_USER_APIS = set(impl['user_api'] for impl in SUPPORTED_IMPLEMENTATIONS)
+ALL_PREFIXES = [prefix for impl in SUPPORTED_IMPLEMENTATIONS
+                for prefix in impl['filename_prefixes']]
+
+
 # map a internal_api (openmp, openblas, mkl) to set and get functions
 MAP_API_TO_FUNC = {
     "openmp": {
@@ -56,51 +81,6 @@ MAP_API_TO_FUNC = {
 }
 
 
-# Supported implementation, indexed with their name. The items hold the name of
-# the implementation, the prefix loaded shared object and the name of the
-# internal_api to call, matching the MAP_API_TO_FUNC keys.
-SUPPORTED_IMPLEMENTATIONS = [
-    {
-        "name": "openmp_intel",
-        "filename_prefixes": ("libiomp",),
-        "internal_api": "openmp",
-        "user_api": "openmp"
-    },
-    {
-        "name": "openmp_gnu",
-        "filename_prefixes": ("libgomp",),
-        "internal_api": "openmp",
-        "user_api": "openmp"
-    },
-    {
-        "name": "openmp_llvm",
-        "filename_prefixes": ("libomp",),
-        "internal_api": "openmp",
-        "user_api": "openmp"
-    },
-    {
-        "name": "openmp_msvc",
-        "filename_prefixes": ("vcomp",),
-        "internal_api": "openmp",
-        "user_api": "openmp"
-    },
-    {
-        "name": "openblas",
-        "filename_prefixes": ("libopenblas",),
-        "internal_api": "openblas",
-        "user_api": "blas"
-    },
-    {
-        "name": "mkl",
-        "filename_prefixes": ("libmkl_rt", "mkl_rt",),
-        "internal_api": "mkl",
-        "user_api": "blas"
-    },
-]
-IMPLEMENTATIONS_NAME = [impl['name'] for impl in SUPPORTED_IMPLEMENTATIONS]
-ALL_USER_API = set(impl['user_api'] for impl in SUPPORTED_IMPLEMENTATIONS)
-
-
 class _ThreadPoolLibrariesWrapper:
     # Wrapper around classic C-libraries for scientific computations which use
     # thread-pools. Give access to functions to set and get the maximum number
@@ -111,29 +91,35 @@ class _ThreadPoolLibrariesWrapper:
     def __init__(self):
         self._load()
 
-    def _load(self, names=None, user_api=None):
-        if names is None:
-            names = []
+    def _load(self, prefixes=None, user_api=None):
+        if prefixes is None:
+            prefixes = []
         if user_api is None:
             user_api = []
         if sys.platform == "darwin":
             return self._find_modules_with_clibs_dyld(
-                names=names, user_api=user_api)
+                prefixes=prefixes, user_api=user_api)
         elif sys.platform == "win32":
             return self._find_modules_with_enum_process_module_ex(
-                names=names, user_api=user_api)
+                prefixes=prefixes, user_api=user_api)
         else:
             return self._find_modules_with_clibs_dl_iterate_phdr(
-                names=names, user_api=user_api)
+                prefixes=prefixes, user_api=user_api)
 
     def starts_with_any(self, library_basename, filename_prefixes):
-        return any([library_basename.startswith(prefix)
-                    for prefix in filename_prefixes])
+        for prefix in filename_prefixes:
+            if library_basename.startswith(prefix):
+                return prefix
+        return None
 
     def _get_module_info_from_path(self, module_path):
         module_name = os.path.basename(module_path).lower()
         for info in SUPPORTED_IMPLEMENTATIONS:
-            if self.starts_with_any(module_name, info['filename_prefixes']):
+            prefix = self.starts_with_any(module_name,
+                                          info['filename_prefixes'])
+            if prefix is not None:
+                info = info.copy()
+                info['prefix'] = prefix
                 return info
         return None
 
@@ -151,9 +137,9 @@ class _ThreadPoolLibrariesWrapper:
                            version=self.get_version(clib, internal_api))
         return module_info
 
-    def get_limit(self, name, user_api, limits):
-        if name in limits:
-            return limits[name]
+    def get_limit(self, prefix, user_api, limits):
+        if prefix in limits:
+            return limits[prefix]
         if user_api in limits:
             return limits[user_api]
         return None
@@ -166,29 +152,34 @@ class _ThreadPoolLibrariesWrapper:
         """
         if isinstance(limits, int) or limits is None:
             if user_api in ('all', None):
-                user_api = ALL_USER_API
-            elif user_api in ALL_USER_API:
+                user_api = ALL_USER_APIS
+            elif user_api in ALL_USER_APIS:
                 user_api = (user_api,)
             else:
                 raise ValueError("user_api must be either 'all', 'blas' or "
                                  "'openmp'. Got {} instead.".format(user_api))
             limits = {api: limits for api in user_api}
-            names = []
+            prefixes = []
         else:
             if isinstance(limits, list):
-                limits = {module['name']: module['n_thread']
+                # This should be a list of module, for compatibility with
+                # the result from get_thread_limits.
+                limits = {module['prefix']: module['n_thread']
                           for module in limits}
 
             if not isinstance(limits, dict):
                 raise TypeError("limits must either be an int, a dict or None."
                                 " Got {} instead".format(type(limits)))
 
-            names = [module for module in limits]
+            # With a dictionary, can set both specific limit for given modules
+            # and global limit for user_api. Fetch each separately.
+            prefixes = [module for module in limits if module in ALL_PREFIXES]
+            user_api = [module for module in limits if module in ALL_USER_APIS]
 
         report_threadpool_size = []
-        modules = self._load(names=names, user_api=user_api)
+        modules = self._load(prefixes=prefixes, user_api=user_api)
         for module in modules:
-            n_thread = self.get_limit(module['name'], module['user_api'],
+            n_thread = self.get_limit(module['prefix'], module['user_api'],
                                       limits)
             if n_thread is not None:
                 set_func = module['set']
@@ -205,7 +196,7 @@ class _ThreadPoolLibrariesWrapper:
         """Return maximal number of threads available for supported C-libraries
         """
         report_threadpool_size = []
-        modules = self._load(user_api=ALL_USER_API)
+        modules = self._load(user_api=ALL_USER_APIS)
         for module in modules:
             module['n_thread'] = module['get']()
             # Remove the wrapper for the module and its function
@@ -242,13 +233,12 @@ class _ThreadPoolLibrariesWrapper:
         version = res.value.decode('utf-8')
         return version.strip()
 
-    def _include_modules(self, module_info, names, user_api):
-        print(names, user_api)
+    def _include_modules(self, module_info, prefixes, user_api):
         return module_info is not None and (
-            module_info['name'] in names or
+            module_info['prefix'] in prefixes or
             module_info['user_api'] in user_api)
 
-    def _find_modules_with_clibs_dl_iterate_phdr(self, names, user_api):
+    def _find_modules_with_clibs_dl_iterate_phdr(self, prefixes, user_api):
         """Loop through loaded libraries and return binders on supported ones
 
         This function is expected to work on POSIX system only.
@@ -269,7 +259,7 @@ class _ThreadPoolLibrariesWrapper:
         # module loaded in the current process until it returns 1.
         def match_module_callback(info, size, data):
 
-            # Get the name of the current module
+            # Get the path of the current module
             module_path = info.contents.dlpi_name
 
             # If the current module is a supported module, store it in the
@@ -278,7 +268,7 @@ class _ThreadPoolLibrariesWrapper:
             if module_path:
                 module_path = module_path.decode("utf-8")
                 module_info = self._get_module_info_from_path(module_path)
-                if self._include_modules(module_info, names, user_api):
+                if self._include_modules(module_info, prefixes, user_api):
                     self.cls_thread_locals._modules.append(
                         self._make_module(module_path, module_info))
             return 0
@@ -293,7 +283,7 @@ class _ThreadPoolLibrariesWrapper:
 
         return self.cls_thread_locals._modules
 
-    def _find_modules_with_clibs_dyld(self, names, user_api):
+    def _find_modules_with_clibs_dyld(self, prefixes, user_api):
         """Loop through loaded libraries and return binders on supported ones
 
         This function is expected to work on OSX system only
@@ -315,13 +305,13 @@ class _ThreadPoolLibrariesWrapper:
             # _modules, with a wrapper to its set and get functions and
             # extra information on the type of module it is.
             module_info = self._get_module_info_from_path(module_path)
-            if self._include_modules(module_info, names, user_api):
+            if self._include_modules(module_info, prefixes, user_api):
                 self.cls_thread_locals._modules.append(
                     self._make_module(module_path, module_info))
 
         return self.cls_thread_locals._modules
 
-    def _find_modules_with_enum_process_module_ex(self, names, user_api):
+    def _find_modules_with_enum_process_module_ex(self, prefixes, user_api):
         """Loop through loaded libraries and return binders on supported ones
 
         This function is expected to work on windows system only.
@@ -364,7 +354,7 @@ class _ThreadPoolLibrariesWrapper:
             count = needed.value // (buf_size // buf_count)
             h_modules = map(HMODULE, buf[:count])
 
-            # Loop through all the module headers and get the module file name
+            # Loop through all the module headers and get the module path
             buf = ctypes.create_unicode_buffer(MAX_PATH)
             n_size = DWORD()
             for h_module in h_modules:
@@ -378,7 +368,7 @@ class _ThreadPoolLibrariesWrapper:
                 # _modules, with a wrapper to its set and get functions and
                 # extra information on the type of module it is.
                 module_info = self._get_module_info_from_path(module_path)
-                if self._include_modules(module_info, names, user_api):
+                if self._include_modules(module_info, prefixes, user_api):
                     self.cls_thread_locals._modules.append(
                         self._make_module(module_path, module_info))
         finally:
@@ -416,7 +406,7 @@ def _get_wrapper(reload_modules=False):
     return _thread_pool_libraries_wrapper
 
 
-@_format_docstring(IMPLEMENTATIONS_NAME=IMPLEMENTATIONS_NAME,
+@_format_docstring(ALL_PREFIXES=ALL_PREFIXES,
                    LIBRARIES=list(MAP_API_TO_FUNC.keys()))
 def _set_thread_limits(limits=None, user_api=None, reload_modules=False):
     """Limit the maximal number of threads available for supported C-libraries.
@@ -445,8 +435,8 @@ def _set_thread_limits(limits=None, user_api=None, reload_modules=False):
 
     Return a list with all the supported modules that have been found. Each
     module is represented by a dict with the following information:
-      - 'name' : name of the specific implementation of this module.
-                 Possible values are {IMPLEMENTATIONS_NAME}.
+      - 'filename-prefixes' : prefix of the specific implementation of this
+            module. Possible values are {ALL_PREFIXES}.
       - 'internal_api': API for this module. Possible values are {LIBRARIES}.
       - 'module_path': path to the loaded module.
       - 'version': version of the library implemented (if available).
@@ -456,13 +446,13 @@ def _set_thread_limits(limits=None, user_api=None, reload_modules=False):
     return wrapper.set_thread_limits(limits, user_api)
 
 
-@_format_docstring(IMPLEMENTATIONS_NAME=IMPLEMENTATIONS_NAME)
+@_format_docstring(ALL_PREFIXES=ALL_PREFIXES)
 def get_thread_limits(reload_modules=False):
     """Return maximal thread number for threadpools in supported C-lib
 
     Return a dictionary containing the maximal number of threads that can be
     used in supported libraries or None when the library is not available. The
-    key of the dictionary are {IMPLEMENTATIONS_NAME}.
+    key of the dictionary are {ALL_PREFIXES}.
 
     If `reload_modules` is `True`, first loop through the loaded libraries to
     ensure that this function is called on all available libraries.
