@@ -42,8 +42,8 @@ class dl_phdr_info(ctypes.Structure):
         ]
 
 
-# List of the supported implementations. The items hold the prefix loaded
-# shared object, the name of the internal_api to call, matching the
+# List of the supported implementations. The items hold the prefix of loaded
+# shared objects, the name of the internal_api to call, matching the
 # MAP_API_TO_FUNC keys and the name of the user_api, in {"blas", "openmp"}.
 SUPPORTED_IMPLEMENTATIONS = [
     {

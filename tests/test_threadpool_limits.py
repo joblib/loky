@@ -27,11 +27,7 @@ def test_thread_pool_limits(openblas_present, mkl_present, prefix):
         if prefix == "libopenblas" and openblas_present:
             raise RuntimeError("Could not load the OpenBLAS prefix")
         elif "mkl_rt" in prefix and mkl_present:
-            import numpy as np
-            np.dot(np.ones(1000), np.ones(1000))
-            old_limits = get_thread_limits()
-            if old_limits[prefix] is None:
-                raise RuntimeError("Could not load the MKL prefix")
+            raise RuntimeError("Could not load the MKL prefix")
         else:
             pytest.skip("Need {} support".format(prefix))
 

@@ -147,13 +147,15 @@ libopenblas_patterns = []
 
 # A decorator to run tests only when numpy is available
 try:
-    import numpy  # noqa F401
+    # make sure the mkl/blas are loaded for test_threadpool_limits
+    import numpy as np
+    np.dot(np.ones(1000), np.ones(1000))
 
     def with_numpy(func):
         """A decorator to skip tests requiring numpy."""
         return func
 
-    libopenblas_patterns.append(os.path.join(numpy.__path__[0], ".libs",
+    libopenblas_patterns.append(os.path.join(np.__path__[0], ".libs",
                                              "libopenblas*"))
 
 except ImportError:
@@ -163,7 +165,8 @@ except ImportError:
 
 
 try:
-    import scipy.linalg
+    import scipy
+    import scipy.linalg  # noqa: F401
 
     libopenblas_patterns.append(os.path.join(scipy.__path__[0], ".libs",
                                              "libopenblas*"))
