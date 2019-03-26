@@ -1,3 +1,4 @@
+import re
 import ctypes
 import pytest
 
@@ -86,9 +87,9 @@ def test_set_threadpool_limits_apis(user_api):
 def test_set_threadpool_limits_bad_input():
     # Check that appropriate errors are raised for invalid arguments
 
-    with pytest.raises(ValueError,
-                       match="user_api must be either in {} or None."
-                       .format(ALL_USER_APIS)):
+    match = re.escape("user_api must be either in {} or None."
+                      .format(ALL_USER_APIS))
+    with pytest.raises(ValueError, match=match):
         threadpool_limits(limits=1, user_api="wrong")
 
     with pytest.raises(TypeError,
