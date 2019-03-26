@@ -2,7 +2,7 @@ import os
 import sys
 
 from .context import get_context
-from ._thread_pool_limiters import thread_pool_limits
+from ._thread_pool_limiters import threadpool_limits
 
 if sys.version_info > (3, 4):
 
@@ -14,4 +14,4 @@ if sys.version_info > (3, 4):
     from multiprocessing import synchronize
     synchronize.SemLock._make_name = staticmethod(_make_name)
 
-__all__ = ["get_context", "thread_pool_limits"]
+__all__ = ["get_context", "threadpool_limits"]
