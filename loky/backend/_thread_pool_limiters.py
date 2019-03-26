@@ -436,10 +436,7 @@ def _get_libc():
 
 def _get_windll(dll_name):
     """Load a windows DLL"""
-    if not hasattr(dll_name):
-        setattr(dll_name, ctypes.WinDLL("{}.dll".format(dll_name)))
-
-    return getattr(dll_name)
+    return ctypes.WinDLL("{}.dll".format(dll_name))
 
 
 class threadpool_limits:
