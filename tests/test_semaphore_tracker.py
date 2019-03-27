@@ -22,10 +22,9 @@ def get_sem_tracker_pid():
     return semaphore_tracker._semaphore_tracker._pid
 
 
+@pytest.mark.skipif(sys.platform == "win32",
+                    reason="no semaphore_tracker on windows")
 class TestSemaphoreTracker:
-
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="no semaphore_tracker on windows")
     def test_child_retrieves_semaphore_tracker(self):
         parent_sem_tracker_pid = get_sem_tracker_pid()
         executor = ProcessPoolExecutor(max_workers=2)
@@ -85,8 +84,6 @@ class TestSemaphoreTracker:
 
 
     # The following four tests are inspired from cpython _test_multiprocessing
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="no semaphore_tracker on windows")
     def test_semaphore_tracker(self):
         #
         # Check that killing process does not leak named semaphores
@@ -188,20 +185,14 @@ class TestSemaphoreTracker:
             else:
                 assert len(all_warn) == 0
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="no semaphore_tracker on windows")
     def test_semaphore_tracker_sigint(self):
         # Catchable signal (ignored by semaphore tracker)
         self.check_semaphore_tracker_death(signal.SIGINT, False)
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="no semaphore_tracker on windows")
     def test_semaphore_tracker_sigterm(self):
         # Catchable signal (ignored by semaphore tracker)
         self.check_semaphore_tracker_death(signal.SIGTERM, False)
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="no semaphore_tracker on windows")
     @pytest.mark.skipif(sys.version_info[0] < 3,
                         reason="warnings.catch_warnings limitation")
     def test_semaphore_tracker_sigkill(self):
