@@ -90,9 +90,9 @@ class SemaphoreTracker(object):
             except Exception:
                 pass
 
-            cmd = 'from {} import main; main(%d, %d)'.format(main.__module__,
-                                                             int(VERBOSE))
             r, w = os.pipe()
+            cmd = 'from {} import main; main({}, {})'.format(
+                main.__module__, r, VERBOSE)
             try:
                 fds_to_pass.append(r)
                 # process will out live us, so no need to wait on pid
@@ -105,7 +105,7 @@ class SemaphoreTracker(object):
                     import re
                     for i in range(1, len(args)):
                         args[i] = re.sub("-R+", "-R", args[i])
-                args += ['-c', cmd % (r, VERBOSE)]
+                args += ['-c', cmd]
                 util.debug("launching Semaphore tracker: {}".format(args))
                 # bpo-33613: Register a signal mask that will block the
                 # signals.  This signal mask will be inherited by the child
