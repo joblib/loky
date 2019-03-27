@@ -27,11 +27,7 @@ def get_sem_tracker_pid():
 class TestSemaphoreTracker:
     def test_child_retrieves_semaphore_tracker(self):
         parent_sem_tracker_pid = get_sem_tracker_pid()
-        executor = ProcessPoolExecutor(max_workers=2)
-        child_sem_tracker_pid = executor.submit(get_sem_tracker_pid).result()
-
-        # First simple pid retrieval check (see #200)
-        assert child_sem_tracker_pid == parent_sem_tracker_pid
+        executor = ProcessPoolExecutor(max_workers=1)
 
         # Register a semaphore in the parent process, and un-register it in the
         # child process. If the two processes do not share the same
@@ -68,6 +64,12 @@ class TestSemaphoreTracker:
         e.shutdown()
         '''
         try:
+            child_sem_tracker_pid = executor.submit(
+                get_sem_tracker_pid).result()
+
+            # First simple pid retrieval check (see #200)
+            assert child_sem_tracker_pid == parent_sem_tracker_pid
+
             p = subprocess.Popen(
                 [sys.executable, '-E', '-c', cmd.format(semlock_name)],
                 stderr=subprocess.PIPE)
@@ -81,6 +83,7 @@ class TestSemaphoreTracker:
 
         finally:
             sem_unlink(semlock_name)
+            executor.shutdown()
 
 
     # The following four tests are inspired from cpython _test_multiprocessing
