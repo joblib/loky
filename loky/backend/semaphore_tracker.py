@@ -37,9 +37,12 @@ except ImportError:
     from .semlock import sem_unlink
 
 if sys.version_info < (3,):
-    BrokenPipeError = IOError
+    BrokenPipeError = OSError
 
 __all__ = ['ensure_running', 'register', 'unregister']
+
+_HAVE_SIGMASK = hasattr(signal, 'pthread_sigmask')
+_IGNORED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
 VERBOSE = False
 
@@ -68,6 +71,13 @@ class SemaphoreTracker(object):
                     return
                 # => dead, launch it again
                 os.close(self._fd)
+                try:
+                    # Clean-up to avoid dangling processes.
+                    os.waitpid(self._pid, 0)
+                except OSError:
+                    # The process was terminated or is a child from an ancestor
+                    # of the current process.
+                    pass
                 self._fd = None
                 self._pid = None
 
@@ -80,8 +90,9 @@ class SemaphoreTracker(object):
             except Exception:
                 pass
 
-            cmd = 'from {} import main; main(%d)'.format(main.__module__)
             r, w = os.pipe()
+            cmd = 'from {} import main; main({}, {})'.format(
+                main.__module__, r, VERBOSE)
             try:
                 fds_to_pass.append(r)
                 # process will out live us, so no need to wait on pid
@@ -94,9 +105,23 @@ class SemaphoreTracker(object):
                     import re
                     for i in range(1, len(args)):
                         args[i] = re.sub("-R+", "-R", args[i])
-                args += ['-c', cmd % r]
+                args += ['-c', cmd]
                 util.debug("launching Semaphore tracker: {}".format(args))
-                pid = spawnv_passfds(exe, args, fds_to_pass)
+                # bpo-33613: Register a signal mask that will block the
+                # signals.  This signal mask will be inherited by the child
+                # that is going to be spawned and will protect the child from a
+                # race condition that can make the child die before it
+                # registers signal handlers for SIGINT and SIGTERM. The mask is
+                # unregistered after spawning the child.
+                try:
+                    if _HAVE_SIGMASK:
+                        signal.pthread_sigmask(signal.SIG_BLOCK,
+                                               _IGNORED_SIGNALS)
+                    pid = spawnv_passfds(exe, args, fds_to_pass)
+                finally:
+                    if _HAVE_SIGMASK:
+                        signal.pthread_sigmask(signal.SIG_UNBLOCK,
+                                               _IGNORED_SIGNALS)
             except BaseException:
                 os.close(w)
                 raise
@@ -142,11 +167,14 @@ unregister = _semaphore_tracker.unregister
 getfd = _semaphore_tracker.getfd
 
 
-def main(fd):
+def main(fd, verbose=0):
     '''Run semaphore tracker.'''
     # protect the process from ^C and "killall python" etc
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+    if _HAVE_SIGMASK:
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, _IGNORED_SIGNALS)
 
     for f in (sys.stdin, sys.stdout):
         try:
@@ -154,7 +182,7 @@ def main(fd):
         except Exception:
             pass
 
-    if VERBOSE:  # pragma: no cover
+    if verbose:  # pragma: no cover
         sys.stderr.write("Main semaphore tracker is running\n")
         sys.stderr.flush()
 
@@ -168,14 +196,14 @@ def main(fd):
                     if cmd == b'REGISTER':
                         name = name.decode('ascii')
                         cache.add(name)
-                        if VERBOSE:  # pragma: no cover
+                        if verbose:  # pragma: no cover
                             sys.stderr.write("[SemaphoreTracker] register {}\n"
                                              .format(name))
                             sys.stderr.flush()
                     elif cmd == b'UNREGISTER':
                         name = name.decode('ascii')
                         cache.remove(name)
-                        if VERBOSE:  # pragma: no cover
+                        if verbose:  # pragma: no cover
                             sys.stderr.write("[SemaphoreTracker] unregister {}"
                                              ": cache({})\n"
                                              .format(name, len(cache)))
@@ -205,16 +233,16 @@ def main(fd):
             try:
                 try:
                     sem_unlink(name)
-                    if VERBOSE:  # pragma: no cover
+                    if verbose:  # pragma: no cover
                         sys.stderr.write("[SemaphoreTracker] unlink {}\n"
                                          .format(name))
                         sys.stderr.flush()
                 except Exception as e:
-                    warnings.warn('semaphore_tracker: %r: %r' % (name, e))
+                    warnings.warn('semaphore_tracker: %s: %r' % (name, e))
             finally:
                 pass
 
-    if VERBOSE:  # pragma: no cover
+    if verbose:  # pragma: no cover
         sys.stderr.write("semaphore tracker shut down\n")
         sys.stderr.flush()
 

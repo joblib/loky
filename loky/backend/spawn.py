@@ -151,7 +151,7 @@ def prepare(data):
     if 'orig_dir' in data:
         process.ORIGINAL_DIR = data['orig_dir']
 
-    if 'tacker_pid' in data:
+    if 'tracker_pid' in data:
         from . import semaphore_tracker
         semaphore_tracker._semaphore_tracker._pid = data["tracker_pid"]
 
