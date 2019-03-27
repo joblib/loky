@@ -44,12 +44,9 @@ class TestSemaphoreTracker:
         semaphore_tracker.VERBOSE=True
         semlock_name = "{}"
 
-        # The benefit of using _SemLock objects in this test is that they do
-        # not trigger custom un-registration callbacks during garbage
-        # collection. Therefore, un-registering the lock manually as we do
-        # here will not pollute the stderr pipe with a cache KeyError
-        # afterwards.
-        lock = SemLock(1, 1, 1, name=semlock_name)
+        # We don't need to create the semaphore as registering / unregistering
+        # operations simply add / remove entries from a cache, but do not
+        # manipulate the actual semaphores.
         semaphore_tracker.register(semlock_name)
 
         def unregister(name):
@@ -82,7 +79,6 @@ class TestSemaphoreTracker:
             assert re.search("KeyError: '%s'" % semlock_name, err) is None
 
         finally:
-            sem_unlink(semlock_name)
             executor.shutdown()
 
 
