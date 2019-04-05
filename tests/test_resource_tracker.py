@@ -24,8 +24,6 @@ def get_rtracker_pid():
     resource_tracker.ensure_running()
     return resource_tracker._resource_tracker._pid
 
-@pytest.mark.skipif(sys.platform == "win32",
-                    reason="no resource_tracker on windows")
 class TestResourceTracker:
     def test_child_retrieves_resource_tracker(self):
         parent_rtracker_pid = get_rtracker_pid()
@@ -87,8 +85,8 @@ class TestResourceTracker:
         #
         # Check that killing process does not leak named resources
         #
-        if sys.platform == "win32":
-            # no resource_tracker on windows
+        if (sys.platform == "win32") and rtype == "semlock":
+            # no semlock on windows
             return
 
         import subprocess
@@ -201,14 +199,20 @@ class TestResourceTracker:
             else:
                 assert len(all_warn) == 0
 
+    @pytest.mark.skipif(sys.platform == "win32",
+                        "Limited signal support on Windows")
     def test_resource_tracker_sigint(self):
         # Catchable signal (ignored by resource tracker)
         self.check_resource_tracker_death(signal.SIGINT, False)
 
+    @pytest.mark.skipif(sys.platform == "win32",
+                        "Limited signal support on Windows")
     def test_resource_tracker_sigterm(self):
         # Catchable signal (ignored by resource tracker)
         self.check_resource_tracker_death(signal.SIGTERM, False)
 
+    @pytest.mark.skipif(sys.platform == "win32",
+                        "Limited signal support on Windows")
     @pytest.mark.skipif(sys.version_info[0] < 3,
                         reason="warnings.catch_warnings limitation")
     def test_resource_tracker_sigkill(self):
