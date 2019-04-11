@@ -200,19 +200,19 @@ class TestResourceTracker:
                 assert len(all_warn) == 0
 
     @pytest.mark.skipif(sys.platform == "win32",
-                        "Limited signal support on Windows")
+                        reason="Limited signal support on Windows")
     def test_resource_tracker_sigint(self):
         # Catchable signal (ignored by resource tracker)
         self.check_resource_tracker_death(signal.SIGINT, False)
 
     @pytest.mark.skipif(sys.platform == "win32",
-                        "Limited signal support on Windows")
+                        reason="Limited signal support on Windows")
     def test_resource_tracker_sigterm(self):
         # Catchable signal (ignored by resource tracker)
         self.check_resource_tracker_death(signal.SIGTERM, False)
 
     @pytest.mark.skipif(sys.platform == "win32",
-                        "Limited signal support on Windows")
+                        reason="Limited signal support on Windows")
     @pytest.mark.skipif(sys.version_info[0] < 3,
                         reason="warnings.catch_warnings limitation")
     def test_resource_tracker_sigkill(self):
