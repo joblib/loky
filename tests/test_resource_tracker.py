@@ -51,7 +51,7 @@ class TestResourceTracker:
         # We don't need to create the semaphore as registering / unregistering
         # operations simply add / remove entries from a cache, but do not
         # manipulate the actual semaphores.
-        semaphore_tracker.register(semlock_name)
+        resource_tracker.register(semlock_name, "semlock")
 
         def unregister(name, rtype):
             # resource_tracker.unregister is actually a bound method of the
