@@ -82,16 +82,14 @@ def get_preparation_data(name, init_main_module=True):
         dir=os.getcwd()
     )
 
-    if sys.platform != "win32":
-        # TODO: enable resource tracking for other resources than semaphore
-        # on windows?
-        # Pass the resource_tracker pid to avoid re-spawning it in every child
-        from . import resource_tracker
-        resource_tracker.ensure_running()
-        d['tracker_args'] = {
-            'pid': resource_tracker._resource_tracker._pid,
-            'fd': resource_tracker.getfd()
-        }
+    # Pass the resource_tracker pid to avoid re-spawning it in every child
+    from . import resource_tracker
+    # resource_tracker.ensure_running()
+    d['tracker_args'] = {
+        'pid': resource_tracker._resource_tracker._pid,
+        'fd': resource_tracker.getfd(),
+        'fh': resource_tracker._resource_tracker._fh
+    }
 
     # Figure out whether to initialise main in the subprocess as a module
     # or through direct execution (or to leave it alone entirely)
@@ -158,8 +156,13 @@ def prepare(data):
 
     if 'tracker_args' in data:
         from . import resource_tracker
+        import msvcrt
         resource_tracker._resource_tracker._pid = data["tracker_args"]['pid']
-        resource_tracker._resource_tracker._fd = data["tracker_args"]['fd']
+        # resource_tracker._resource_tracker._fd = msvcrt.open_osfhandle(
+        #     data["tracker_args"]['fd'], 0)
+        resource_tracker._resource_tracker._fh = data["tracker_args"]['fh']
+        resource_tracker._resource_tracker._fd = msvcrt.open_osfhandle(
+            resource_tracker._resource_tracker._fh, 0)
 
     if 'init_main_from_name' in data:
         _fixup_main_from_name(data['init_main_from_name'])

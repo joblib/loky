@@ -37,7 +37,7 @@ class TestResourceTracker:
         # child process. If the two processes do not share the same
         # resource_tracker, a cache KeyError should be printed in stderr.
         import subprocess
-        semlock_name = 'loky-mysemaphore'
+        folder_name = 'loky_tempfolder'
         cmd = '''if 1:
         import os, sys
 
@@ -46,35 +46,39 @@ class TestResourceTracker:
         from loky.backend.semlock import SemLock
 
         resource_tracker.VERBOSE=True
-        semlock_name = "{}"
+        folder_name = "{}"
 
         # We don't need to create the semaphore as registering / unregistering
         # operations simply add / remove entries from a cache, but do not
         # manipulate the actual semaphores.
-        resource_tracker.register(semlock_name, "semlock")
+        resource_tracker.register(folder_name, "folder")
 
         def unregister(name, rtype):
             # resource_tracker.unregister is actually a bound method of the
             # ResourceTracker. We need a custom wrapper to avoid object
             # serialization.
             from loky.backend import resource_tracker
-            resource_tracker.unregister(semlock_name, rtype)
+            resource_tracker.unregister(folder_name, rtype)
 
         e = ProcessPoolExecutor(1)
-        e.submit(unregister, semlock_name, "semlock").result()
+        try:
+            e.submit(unregister, folder_name, "folder").result()
+            unregister(folder_name, "folder")
+        except Exception as e:
+            pass
         e.shutdown()
         '''
         try:
             p = subprocess.Popen(
-                [sys.executable, '-E', '-c', cmd.format(semlock_name)],
+                [sys.executable, '-E', '-c', cmd.format(folder_name)],
                 stderr=subprocess.PIPE)
             p.wait()
 
             err = p.stderr.read().decode('utf-8')
             p.stderr.close()
 
-            assert re.search("unregister %s" % semlock_name, err) is not None
-            assert re.search("KeyError: '%s'" % semlock_name, err) is None
+            assert re.search("unregister %s" % folder_name, err) is not None
+            assert re.search("KeyError: '%s'" % folder_name, err) is None
 
         finally:
             executor.shutdown()

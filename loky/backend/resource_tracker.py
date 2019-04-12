@@ -32,6 +32,10 @@ import threading
 from . import spawn
 from multiprocessing import util
 
+if sys.platform == "win32":
+    from .compat_win32 import _winapi
+    import msvcrt
+
 try:
     from _multiprocessing import sem_unlink
 except ImportError:
@@ -99,7 +103,22 @@ class ResourceTracker(object):
             except Exception:
                 pass
 
-            r, w = os.pipe()
+            # r, w = os.pipe()
+            if sys.platform == "win32":
+                r, w = _winapi.CreatePipe(None, 0)
+
+                # for potential child processes
+                os.set_handle_inheritable(w, True)
+
+                # for the semaphore_tracker
+                os.set_handle_inheritable(r, True)
+
+                # store the file handle
+                self._fh = w
+
+                # emulate the file descriptor
+                w = msvcrt.open_osfhandle(w, 0)
+
             cmd = 'from {} import main; main({}, {})'.format(
                 main.__module__, r, VERBOSE)
             try:
@@ -131,19 +150,22 @@ class ResourceTracker(object):
                     if _HAVE_SIGMASK:
                         signal.pthread_sigmask(signal.SIG_UNBLOCK,
                                                _IGNORED_SIGNALS)
-            except BaseException:
+            except BaseException as e:
+                print(e)
+                # also close the handle in for windows?
                 os.close(w)
                 raise
             else:
                 self._fd = w
                 self._pid = pid
             finally:
-                os.close(r)
+                # os.close(r)
+                _winapi.CloseHandle(r)
 
     def _check_alive(self):
         '''Check for the existence of the resource tracker process.'''
         try:
-            self._send('PROBE', '', 'semlock')
+            self._send('PROBE', '', 'folder')
         except BrokenPipeError:
             return False
         else:
@@ -198,7 +220,10 @@ def main(fd, verbose=0):
     cache = {rtype: set() for rtype in _CLEANUP_FUNCS.keys()}
     try:
         # keep track of registered/unregistered resources
-        with os.fdopen(fd, 'rb') as f:
+        if sys.platform == "win32":
+            import msvcrt
+            fd = msvcrt.open_osfhandle(fd, 0)
+        with open(fd, 'rb') as f:
             for line in f:
                 try:
                     cmd, name, rtype = line.strip().decode('ascii').split(':')
@@ -267,14 +292,27 @@ def main(fd, verbose=0):
 
 def spawnv_passfds(path, args, passfds):
     passfds = sorted(passfds)
-    errpipe_read, errpipe_write = os.pipe()
-    try:
-        from .reduction import _mk_inheritable
-        _pass = []
-        for fd in passfds:
-            _pass += [_mk_inheritable(fd)]
-        from .fork_exec import fork_exec
-        return fork_exec(args, _pass)
-    finally:
-        os.close(errpipe_read)
-        os.close(errpipe_write)
+    if sys.platform != "win32":
+        errpipe_read, errpipe_write = os.pipe()
+        try:
+            from .reduction import _mk_inheritable
+            _pass = []
+            for fd in passfds:
+                _pass += [_mk_inheritable(fd)]
+            from .fork_exec import fork_exec
+            return fork_exec(args, _pass)
+        finally:
+            os.close(errpipe_read)
+            os.close(errpipe_write)
+    else:
+        # 3.3+ only
+        import msvcrt
+        from .compat_win32 import _winapi
+        cmd = ' '.join('"%s"' % x for x in args)
+        try:
+            hp, ht, pid, tid = _winapi.CreateProcess(
+                path, cmd, None, None, True, 0, None, None, None)
+            _winapi.CloseHandle(ht)
+        except BaseException:
+            pass
+        return pid

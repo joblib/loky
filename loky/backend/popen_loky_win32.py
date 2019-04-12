@@ -50,6 +50,7 @@ class Popen(_Popen):
         rhandle, wfd = _winapi.CreatePipe(None, 0)
         if sys.version_info[:2] > (3, 3):
             wfd = msvcrt.open_osfhandle(wfd, 0)
+        os.set_handle_inheritable(rhandle, True)
 
         cmd = get_command_line(parent_pid=os.getpid(), pipe_handle=rhandle)
         cmd = ' '.join('"%s"' % x for x in cmd)
@@ -58,7 +59,8 @@ class Popen(_Popen):
             with open(wfd, 'wb') as to_child:
                 # start process
                 try:
-                    inherit = sys.version_info[:2] < (3, 4)
+                    # inherit = sys.version_info[:2] < (3, 4)
+                    inherit = True
                     hp, ht, pid, tid = _winapi.CreateProcess(
                         spawn.get_executable(), cmd,
                         None, None, inherit, 0,
@@ -94,12 +96,13 @@ class Popen(_Popen):
             util.debug("While starting {}, ignored a IOError 22"
                        .format(process_obj._name))
 
+    # this function is never called?
     def duplicate_for_child(self, handle):
         assert self is get_spawning_popen()
         return reduction.duplicate(handle, self.sentinel)
 
 
-if sys.version_info[:2] >= (3, 4):
+if sys.version_info[:2] >= (3, 8):
     from multiprocessing.spawn import get_command_line
 else:
     # compatibility for python2.7. Duplicate here the code from
@@ -135,10 +138,10 @@ else:
         assert is_forking(sys.argv)
 
         handle = int(sys.argv[-1])
+        process.current_process()._inheriting = True
         fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
         from_parent = os.fdopen(fd, 'rb')
 
-        process.current_process()._inheriting = True
         preparation_data = load(from_parent)
         spawn.prepare(preparation_data)
         self = load(from_parent)
