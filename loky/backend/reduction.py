@@ -25,7 +25,7 @@ from pickle import HIGHEST_PROTOCOL
 
 if sys.platform == "win32":
     if sys.version_info[:2] > (3, 3):
-        from multiprocessing.reduction import duplicate
+        from multiprocessing.reduction import duplicate, steal_handle
     else:
         from multiprocessing.forking import duplicate
 
@@ -253,4 +253,4 @@ def dumps(obj, reducers=None, protocol=None):
 __all__ = ["dump", "dumps", "loads", "register", "set_loky_pickler"]
 
 if sys.platform == "win32":
-    __all__ += ["duplicate"]
+    __all__ += ["duplicate", "steal_handle"]

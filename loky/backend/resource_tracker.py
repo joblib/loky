@@ -103,24 +103,19 @@ class ResourceTracker(object):
             except Exception:
                 pass
 
-            # r, w = os.pipe()
             if sys.platform == "win32":
                 r, w = _winapi.CreatePipe(None, 0)
-
-                # for potential child processes
-                os.set_handle_inheritable(w, True)
-
-                # for the semaphore_tracker
-                os.set_handle_inheritable(r, True)
 
                 # store the file handle
                 self._fh = w
 
                 # emulate the file descriptor
                 w = msvcrt.open_osfhandle(w, 0)
+            else:
+                r, w = os.pipe()
 
-            cmd = 'from {} import main; main({}, {})'.format(
-                main.__module__, r, VERBOSE)
+            cmd = 'from {} import main; main({}, {}, {})'.format(
+                main.__module__, r, VERBOSE, os.getpid())
             try:
                 fds_to_pass.append(r)
                 # process will out live us, so no need to wait on pid
@@ -159,8 +154,9 @@ class ResourceTracker(object):
                 self._fd = w
                 self._pid = pid
             finally:
-                # os.close(r)
-                _winapi.CloseHandle(r)
+                if os.name == "posix":
+                    # handle is stolen on windows
+                    os.close(r)
 
     def _check_alive(self):
         '''Check for the existence of the resource tracker process.'''
@@ -198,7 +194,7 @@ unregister = _resource_tracker.unregister
 getfd = _resource_tracker.getfd
 
 
-def main(fd, verbose=0):
+def main(fd, verbose=0, parent_pid=None):
     '''Run resource tracker.'''
     # protect the process from ^C and "killall python" etc
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -206,6 +202,11 @@ def main(fd, verbose=0):
 
     if _HAVE_SIGMASK:
         signal.pthread_sigmask(signal.SIG_UNBLOCK, _IGNORED_SIGNALS)
+
+    if sys.platform == 'win32':
+        import msvcrt
+        from multiprocessing import reduction
+        fd = reduction.steal_handle(parent_pid, fd)
 
     for f in (sys.stdin, sys.stdout):
         try:
@@ -306,8 +307,6 @@ def spawnv_passfds(path, args, passfds):
             os.close(errpipe_write)
     else:
         # 3.3+ only
-        import msvcrt
-        from .compat_win32 import _winapi
         cmd = ' '.join('"%s"' % x for x in args)
         try:
             hp, ht, pid, tid = _winapi.CreateProcess(

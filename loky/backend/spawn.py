@@ -84,7 +84,7 @@ def get_preparation_data(name, init_main_module=True):
 
     # Pass the resource_tracker pid to avoid re-spawning it in every child
     from . import resource_tracker
-    # resource_tracker.ensure_running()
+    resource_tracker.ensure_running()
     d['tracker_args'] = {
         'pid': resource_tracker._resource_tracker._pid,
         'fd': resource_tracker.getfd(),
@@ -155,14 +155,13 @@ def prepare(data):
         process.ORIGINAL_DIR = data['orig_dir']
 
     if 'tracker_args' in data:
-        from . import resource_tracker
-        import msvcrt
-        resource_tracker._resource_tracker._pid = data["tracker_args"]['pid']
-        # resource_tracker._resource_tracker._fd = msvcrt.open_osfhandle(
-        #     data["tracker_args"]['fd'], 0)
-        resource_tracker._resource_tracker._fh = data["tracker_args"]['fh']
-        resource_tracker._resource_tracker._fd = msvcrt.open_osfhandle(
-            resource_tracker._resource_tracker._fh, 0)
+        from .resource_tracker import _resource_tracker
+        _resource_tracker._pid = data["tracker_args"]['pid']
+        if sys.platform == 'win32':
+            _resource_tracker._fh = data["tracker_args"]['fh']
+        else:
+            _resource_tracker._fd = data["tracker_args"]['fd']
+
 
     if 'init_main_from_name' in data:
         _fixup_main_from_name(data['init_main_from_name'])

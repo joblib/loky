@@ -59,8 +59,7 @@ class Popen(_Popen):
             with open(wfd, 'wb') as to_child:
                 # start process
                 try:
-                    # inherit = sys.version_info[:2] < (3, 4)
-                    inherit = True
+                    inherit = sys.version_info[:2] < (3, 4)
                     hp, ht, pid, tid = _winapi.CreateProcess(
                         spawn.get_executable(), cmd,
                         None, None, inherit, 0,
@@ -116,7 +115,8 @@ else:
         if getattr(sys, 'frozen', False):
             return ([sys.executable, '--multiprocessing-fork', pipe_handle])
         else:
-            prog = 'from loky.backend.popen_loky_win32 import main; main()'
+            prog = 'from loky.backend.popen_loky_win32 import main; main(%s)'
+            prog %= 'parent_pid=%d' % os.getpid()
             opts = util._args_from_interpreter_flags()
             return [spawn.get_executable()] + opts + [
                 '-c', prog, '--multiprocessing-fork', pipe_handle]
@@ -131,21 +131,33 @@ else:
         else:
             return False
 
-    def main():
+    def main(parent_pid=None):
         '''
         Run code specified by data received over pipe
         '''
         assert is_forking(sys.argv)
 
         handle = int(sys.argv[-1])
-        process.current_process()._inheriting = True
-        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+        new_handle = reduction.steal_handle(parent_pid, handle)
+        fd = msvcrt.open_osfhandle(new_handle, os.O_RDONLY)
         from_parent = os.fdopen(fd, 'rb')
 
+        process.current_process()._inheriting = True
         preparation_data = load(from_parent)
         spawn.prepare(preparation_data)
         self = load(from_parent)
         process.current_process()._inheriting = False
+
+        from .resource_tracker import _resource_tracker
+        # duplicate the write end of the pipe to the resource tracker.
+        source_process_handle = _winapi.OpenProcess(
+            _winapi.PROCESS_DUP_HANDLE, False, parent_pid)
+        _resource_tracker._fh = _winapi.DuplicateHandle(
+            source_process_handle, _resource_tracker._fh,
+            _winapi.GetCurrentProcess(), 0, False,
+            _winapi.DUPLICATE_SAME_ACCESS)
+        _resource_tracker._fd = msvcrt.open_osfhandle(
+            _resource_tracker._fh, 0)
 
         from_parent.close()
 
