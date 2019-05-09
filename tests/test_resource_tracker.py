@@ -61,11 +61,7 @@ class TestResourceTracker:
             resource_tracker.unregister(folder_name, rtype)
 
         e = ProcessPoolExecutor(1)
-        try:
-            e.submit(unregister, folder_name, "folder").result()
-            unregister(folder_name, "folder")
-        except Exception as e:
-            pass
+        e.submit(unregister, folder_name, "folder").result()
         e.shutdown()
         '''
         try:
@@ -95,44 +91,55 @@ class TestResourceTracker:
 
         import subprocess
         cmd = '''if 1:
-            import time, os, tempfile
+            import time, os, tempfile, sys
+
             from loky.backend.semlock import SemLock
-            from loky.backend import resource_tracker
+            from loky.backend import resource_tracker, reduction
 
             def create_resource(rtype):
                 if rtype == "folder":
-                    return tempfile.mkdtemp()
+                    return tempfile.mkdtemp(dir=os.getcwd())
+
                 elif rtype == "semlock":
                     name = "/loky-%i-%s" % (os.getpid(), next(SemLock._rand))
                     lock = SemLock(1, 1, 1, name)
                     return name
                 else:
                     raise ValueError(
-                        "Resource type {{}} not understood".format(rtype))
+                        "Resource type %s not understood" % rtype)
 
 
-            # close manually the read end of the pipe in the child process
-            # because pass_fds does not exist for python < 3.2
-            os.close({r})
+            if sys.platform == "win32":
+                import msvcrt
+                w = msvcrt.open_osfhandle(
+                        reduction.steal_handle({parent_pid}, {{w}}), 0)
+            else:
+                w = {{w}}
 
             for _ in range(2):
                 rname = create_resource("{rtype}")
                 resource_tracker.register(rname, "{rtype}")
-                os.write({w}, rname.encode("ascii") + b"\\n")
+                # give the resource_tracker time to register the new resource
+                time.sleep(0.5)
+                os.write(w, rname.encode("ascii") + b"\\n")
             time.sleep(10)
         '''
         r, w = os.pipe()
 
-        if sys.version_info[:2] >= (3, 2):
-            fd_kws = {'pass_fds': [w, r]}
+        cmd = cmd.format(r=r, rtype=rtype, parent_pid=os.getpid())
+        if sys.platform == "win32":
+            import msvcrt
+            p = subprocess.Popen([sys.executable, '-E', '-c',
+                                  cmd.format(w=msvcrt.get_osfhandle(w))],
+                                 stderr=subprocess.PIPE,
+                                 close_fds=True)
+
         else:
-            fd_kws = {'close_fds': False}
-        p = subprocess.Popen([sys.executable,
-                             '-E', '-c', cmd.format(r=r, w=w, rtype=rtype)],
-                             stderr=subprocess.PIPE,
-                             **fd_kws)
-        os.close(w)
-        with io.open(r, 'rb', closefd=True) as f:
+            p = subprocess.Popen([sys.executable, '-E', '-c', cmd.format(w=w)],
+                                 stderr=subprocess.PIPE, pass_fds=[w])
+            # handle is stolen by child in windows, no need to close it
+            os.close(w)
+        with open(r, 'rb') as f:
             name1 = f.readline().rstrip().decode('ascii')
             name2 = f.readline().rstrip().decode('ascii')
 
@@ -155,7 +162,8 @@ class TestResourceTracker:
         # lock1 is still registered, but was destroyed externally: the tracker
         # is expected to complain.
         expected = ("resource_tracker: %s: (OSError\\(%d|"
-                    "FileNotFoundError)" % (name1, errno.ENOENT))
+                    "FileNotFoundError)" % (re.escape(name1),
+                                            errno.ENOENT))
         assert re.search(expected, err) is not None
 
     def check_resource_tracker_death(self, signum, should_die):
