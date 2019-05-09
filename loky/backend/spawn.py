@@ -88,7 +88,7 @@ def get_preparation_data(name, init_main_module=True):
     d['tracker_args'] = {
         'pid': resource_tracker._resource_tracker._pid,
         'fd': resource_tracker.getfd(),
-        'fh': resource_tracker._resource_tracker._fh
+        'fh': getattr(resource_tracker._resource_tracker, "_fh", None)
     }
 
     # Figure out whether to initialise main in the subprocess as a module
