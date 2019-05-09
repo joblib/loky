@@ -24,6 +24,8 @@ def get_rtracker_pid():
     resource_tracker.ensure_running()
     return resource_tracker._resource_tracker._pid
 
+@pytest.mark.skipif(sys.version_info[0] < 3,
+                    reason="python2.7 not supported anymore")
 class TestResourceTracker:
     def test_child_retrieves_resource_tracker(self):
         parent_rtracker_pid = get_rtracker_pid()
