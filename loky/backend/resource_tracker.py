@@ -178,7 +178,7 @@ class ResourceTracker(object):
         self._send('UNREGISTER', name, rtype)
 
     def _send(self, cmd, name, rtype):
-        msg = '{0}:{1}:{2}\n'.format(cmd, name, rtype).encode('ascii')
+        msg = '{0}:{1}:{2}\n'.format(cmd, rtype, name).encode('ascii')
         if len(name) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
             # bytes are atomic, and that PIPE_BUF >= 512
@@ -227,7 +227,8 @@ def main(fd, verbose=0, parent_pid=None):
         with open(fd, 'rb') as f:
             for line in f:
                 try:
-                    cmd, name, rtype = line.strip().decode('ascii').split(':')
+                    cmd, rtype, name = line.strip().decode('ascii').split(
+                        ':', maxsplit=2)
                     cleanup_func = _CLEANUP_FUNCS.get(rtype, None)
                     if cleanup_func is None:
                         raise ValueError('Cannot register for automatic '
