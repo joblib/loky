@@ -131,8 +131,7 @@ class TestResourceTracker:
             import msvcrt
             p = subprocess.Popen([sys.executable, '-E', '-c',
                                   cmd.format(w=msvcrt.get_osfhandle(w))],
-                                 stderr=subprocess.PIPE,
-                                 close_fds=True)
+                                 stderr=subprocess.PIPE)
 
         else:
             p = subprocess.Popen([sys.executable, '-E', '-c', cmd.format(w=w)],
