@@ -85,11 +85,14 @@ def get_preparation_data(name, init_main_module=True):
     # Pass the resource_tracker pid to avoid re-spawning it in every child
     from . import resource_tracker
     resource_tracker.ensure_running()
-    d['tracker_args'] = {
-        'pid': resource_tracker._resource_tracker._pid,
-        'fd': resource_tracker.getfd(),
-        'fh': getattr(resource_tracker._resource_tracker, "_fh", None)
-    }
+    d['tracker_args'] = {'pid': resource_tracker._resource_tracker._pid}
+    if sys.platform == "win32":
+        from .reduction import duplicate
+        whandle = duplicate(resource_tracker._resource_tracker._fh,
+                            inheritable=True)
+        d['tracker_args']['fh'] = whandle
+    else:
+        d['tracker_args']['fd'] = resource_tracker.getfd()
 
     # Figure out whether to initialise main in the subprocess as a module
     # or through direct execution (or to leave it alone entirely)
@@ -158,7 +161,10 @@ def prepare(data):
         from .resource_tracker import _resource_tracker
         _resource_tracker._pid = data["tracker_args"]['pid']
         if sys.platform == 'win32':
+            import msvcrt
             _resource_tracker._fh = data["tracker_args"]['fh']
+            _resource_tracker._fd = msvcrt.open_osfhandle(
+                _resource_tracker._fh, 0)
         else:
             _resource_tracker._fd = data["tracker_args"]['fd']
 

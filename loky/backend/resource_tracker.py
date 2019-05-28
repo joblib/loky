@@ -34,6 +34,7 @@ from multiprocessing import util
 
 if sys.platform == "win32":
     from .compat_win32 import _winapi
+    from .reduction import duplicate
     import msvcrt
 
 try:
@@ -103,16 +104,12 @@ class ResourceTracker(object):
             except Exception:
                 pass
 
+            r, w = os.pipe()
+
             if sys.platform == "win32":
-                r, w = _winapi.CreatePipe(None, 0)
+                self._fh = msvcrt.get_osfhandle(w)
+                r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
 
-                # store the file handle
-                self._fh = w
-
-                # emulate the file descriptor
-                w = msvcrt.open_osfhandle(w, 0)
-            else:
-                r, w = os.pipe()
 
             cmd = 'from {} import main; main({}, {}, {})'.format(
                 main.__module__, r, VERBOSE, os.getpid())
@@ -203,11 +200,6 @@ def main(fd, verbose=0, parent_pid=None):
     if _HAVE_SIGMASK:
         signal.pthread_sigmask(signal.SIG_UNBLOCK, _IGNORED_SIGNALS)
 
-    if sys.platform == 'win32':
-        import msvcrt
-        from multiprocessing import reduction
-        fd = reduction.steal_handle(parent_pid, fd)
-
     for f in (sys.stdin, sys.stdout):
         try:
             f.close()
@@ -222,13 +214,12 @@ def main(fd, verbose=0, parent_pid=None):
     try:
         # keep track of registered/unregistered resources
         if sys.platform == "win32":
-            import msvcrt
-            fd = msvcrt.open_osfhandle(fd, 0)
-        with open(fd, 'rb') as f:
+            fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
+        with os.fdopen(fd, 'rb') as f:
             for line in f:
                 try:
                     cmd, rtype, name = line.strip().decode('ascii').split(
-                        ':', maxsplit=2)
+                        ':', 2)
                     cleanup_func = _CLEANUP_FUNCS.get(rtype, None)
                     if cleanup_func is None:
                         raise ValueError('Cannot register for automatic '

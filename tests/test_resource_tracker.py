@@ -24,8 +24,6 @@ def get_rtracker_pid():
     resource_tracker.ensure_running()
     return resource_tracker._resource_tracker._pid
 
-@pytest.mark.skipif(sys.version_info[0] < 3,
-                    reason="python2.7 not supported anymore")
 class TestResourceTracker:
     def test_child_retrieves_resource_tracker(self):
         parent_rtracker_pid = get_rtracker_pid()
@@ -110,39 +108,21 @@ class TestResourceTracker:
                     raise ValueError(
                         "Resource type %s not understood" % rtype)
 
-
-            if sys.platform == "win32":
-                import msvcrt
-                w = msvcrt.open_osfhandle(
-                        reduction.steal_handle({parent_pid}, {{w}}), 0)
-            else:
-                w = {{w}}
-
             for _ in range(2):
                 rname = create_resource("{rtype}")
                 resource_tracker.register(rname, "{rtype}")
                 # give the resource_tracker time to register the new resource
                 time.sleep(0.5)
-                os.write(w, rname.encode("ascii") + b"\\n")
+                sys.stdout.write(rname + "\\n")
+                sys.stdout.flush()
             time.sleep(10)
         '''
-        r, w = os.pipe()
-
-        cmd = cmd.format(r=r, rtype=rtype, parent_pid=os.getpid())
-        if sys.platform == "win32":
-            import msvcrt
-            p = subprocess.Popen([sys.executable, '-E', '-c',
-                                  cmd.format(w=msvcrt.get_osfhandle(w))],
-                                 stderr=subprocess.PIPE)
-
-        else:
-            p = subprocess.Popen([sys.executable, '-E', '-c', cmd.format(w=w)],
-                                 stderr=subprocess.PIPE, pass_fds=[w])
-            # handle is stolen by child in windows, no need to close it
-            os.close(w)
-        with open(r, 'rb') as f:
-            name1 = f.readline().rstrip().decode('ascii')
-            name2 = f.readline().rstrip().decode('ascii')
+        cmd = cmd.format(rtype=rtype, parent_pid=os.getpid())
+        p = subprocess.Popen([sys.executable, '-E', '-c', cmd],
+                             stderr=subprocess.PIPE,
+                             stdout=subprocess.PIPE)
+        name1 = p.stdout.readline().rstrip().decode('ascii')
+        name2 = p.stdout.readline().rstrip().decode('ascii')
 
         # subprocess holding a reference to lock1 is still alive, so this call
         # should succeed
@@ -156,15 +136,21 @@ class TestResourceTracker:
         assert ctx.value.errno in (errno.ENOENT, errno.EINVAL)
         err = p.stderr.read().decode('utf-8')
         p.stderr.close()
+        p.stdout.close()
+
         expected = ('resource_tracker: There appear to be 2 leaked {}'.format(
                     rtype))
         assert re.search(expected, err) is not None
 
-        # lock1 is still registered, but was destroyed externally: the tracker
-        # is expected to complain.
-        expected = ("resource_tracker: %s: (OSError\\(%d|"
-                    "FileNotFoundError)" % (re.escape(name1),
-                                            errno.ENOENT))
+        # resource 1 is still registered, but was destroyed externally: the
+        # tracker is expected to complain.
+        if sys.platform == "win32":
+            expected = ("resource_tracker: %s: (WindowsError\\((%d)|"
+                        "FileNotFoundError)" % (re.escape(name1), errno.ESRCH))
+        else:
+            expected = ("resource_tracker: %s: (OSError\\(%d|"
+                        "FileNotFoundError)" % (re.escape(name1),
+                                                errno.ENOENT))
         assert re.search(expected, err) is not None
 
     def check_resource_tracker_death(self, signum, should_die):
