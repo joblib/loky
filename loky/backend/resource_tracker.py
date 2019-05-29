@@ -107,12 +107,10 @@ class ResourceTracker(object):
             r, w = os.pipe()
 
             if sys.platform == "win32":
-                self._fh = msvcrt.get_osfhandle(w)
                 r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
 
-
-            cmd = 'from {} import main; main({}, {}, {})'.format(
-                main.__module__, r, VERBOSE, os.getpid())
+            cmd = 'from {} import main; main({}, {})'.format(
+                main.__module__, r, VERBOSE)
             try:
                 fds_to_pass.append(r)
                 # process will out live us, so no need to wait on pid
@@ -191,7 +189,7 @@ unregister = _resource_tracker.unregister
 getfd = _resource_tracker.getfd
 
 
-def main(fd, verbose=0, parent_pid=None):
+def main(fd, verbose=0):
     '''Run resource tracker.'''
     # protect the process from ^C and "killall python" etc
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -298,7 +296,6 @@ def spawnv_passfds(path, args, passfds):
             os.close(errpipe_read)
             os.close(errpipe_write)
     else:
-        # 3.3+ only
         cmd = ' '.join('"%s"' % x for x in args)
         try:
             hp, ht, pid, tid = _winapi.CreateProcess(

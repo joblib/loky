@@ -13,16 +13,17 @@ import weakref
 
 from loky import ProcessPoolExecutor
 import loky.backend.resource_tracker as resource_tracker
-from loky.backend.semlock import sem_unlink
 from loky.backend.context import get_context
 
 
 def _resource_unlink(name, rtype):
     resource_tracker._CLEANUP_FUNCS[rtype](name)
 
+
 def get_rtracker_pid():
     resource_tracker.ensure_running()
     return resource_tracker._resource_tracker._pid
+
 
 class TestResourceTracker:
     def test_child_retrieves_resource_tracker(self):

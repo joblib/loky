@@ -113,8 +113,7 @@ else:
         if getattr(sys, 'frozen', False):
             return ([sys.executable, '--multiprocessing-fork', pipe_handle])
         else:
-            prog = 'from loky.backend.popen_loky_win32 import main; main(%s)'
-            prog %= 'parent_pid=%d' % os.getpid()
+            prog = 'from loky.backend.popen_loky_win32 import main; main()'
             opts = util._args_from_interpreter_flags()
             return [spawn.get_executable()] + opts + [
                 '-c', prog, '--multiprocessing-fork', pipe_handle]
@@ -129,22 +128,22 @@ else:
         else:
             return False
 
-    def main(parent_pid=None):
+    def main():
         '''
         Run code specified by data received over pipe
         '''
         assert is_forking(sys.argv)
 
         handle = int(sys.argv[-1])
-        if sys.platform == "win32":
-            fd = msvcrt.open_osfhandle(handle, 0)
-            from_parent = os.fdopen(fd, 'rb')
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+        from_parent = os.fdopen(fd, 'rb')
 
         process.current_process()._inheriting = True
         preparation_data = load(from_parent)
         spawn.prepare(preparation_data)
         self = load(from_parent)
         process.current_process()._inheriting = False
+
         from_parent.close()
 
         exitcode = self._bootstrap()
