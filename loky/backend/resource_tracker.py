@@ -44,6 +44,7 @@ except ImportError:
 
 if sys.version_info < (3,):
     BrokenPipeError = OSError
+    from os import fdopen as open
 
 __all__ = ['ensure_running', 'register', 'unregister']
 
@@ -211,7 +212,7 @@ def main(fd, verbose=0):
         # keep track of registered/unregistered resources
         if sys.platform == "win32":
             fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
-        with os.fdopen(fd, 'rb') as f:
+        with open(fd, 'rb') as f:
             for line in f:
                 try:
                     cmd, rtype, name = line.strip().decode('ascii').split(
