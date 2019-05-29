@@ -54,7 +54,7 @@ _CLEANUP_FUNCS = {
     'folder': shutil.rmtree
 }
 
-if sys.platform != "win32":
+if os.name == "posix":
     _CLEANUP_FUNCS['semlock'] = sem_unlink
 
 VERBOSE = False
@@ -105,9 +105,10 @@ class ResourceTracker(object):
                 pass
 
             r, w = os.pipe()
-
             if sys.platform == "win32":
-                r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
+                _r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
+                os.close(r)
+                r = _r
 
             cmd = 'from {} import main; main({}, {})'.format(
                 main.__module__, r, VERBOSE)
@@ -141,8 +142,6 @@ class ResourceTracker(object):
                         signal.pthread_sigmask(signal.SIG_UNBLOCK,
                                                _IGNORED_SIGNALS)
             except BaseException as e:
-                print(e)
-                # also close the handle in for windows?
                 os.close(w)
                 raise
             else:
@@ -150,7 +149,6 @@ class ResourceTracker(object):
                 self._pid = pid
             finally:
                 if os.name == "posix":
-                    # handle is stolen on windows
                     os.close(r)
 
     def _check_alive(self):
