@@ -52,7 +52,8 @@ _HAVE_SIGMASK = hasattr(signal, 'pthread_sigmask')
 _IGNORED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
 _CLEANUP_FUNCS = {
-    'folder': shutil.rmtree
+    'folder': shutil.rmtree,
+    'noop': lambda: None
 }
 
 if os.name == "posix":
@@ -155,7 +156,7 @@ class ResourceTracker(object):
     def _check_alive(self):
         '''Check for the existence of the resource tracker process.'''
         try:
-            self._send('PROBE', '', 'folder')
+            self._send('PROBE', '', 'noop')
         except BrokenPipeError:
             return False
         else:
