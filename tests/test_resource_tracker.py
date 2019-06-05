@@ -169,7 +169,7 @@ class TestResourceTracker:
             warnings.simplefilter("ignore")
             _resource_tracker.ensure_running()
             # in python < 3.3 , the race condition described in bpo-33613 still
-            # exists, as this fixe requires signal.pthread_sigmask
+            # exists, as this fix requires signal.pthread_sigmask
             time.sleep(1.0)
         pid = _resource_tracker._pid
 
