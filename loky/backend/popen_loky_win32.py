@@ -96,7 +96,7 @@ class Popen(_Popen):
 
     def duplicate_for_child(self, handle):
         assert self is get_spawning_popen()
-        return reduction.duplicate(handle, self.sentinel)
+        return duplicate(handle, self.sentinel)
 
 
 def get_command_line(pipe_handle, **kwds):

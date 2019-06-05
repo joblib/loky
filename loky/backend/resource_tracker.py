@@ -143,14 +143,16 @@ class ResourceTracker(object):
                     if _HAVE_SIGMASK:
                         signal.pthread_sigmask(signal.SIG_UNBLOCK,
                                                _IGNORED_SIGNALS)
-            except BaseException as e:
+            except BaseException:
                 os.close(w)
                 raise
             else:
                 self._fd = w
                 self._pid = pid
             finally:
-                if os.name == "posix":
+                if sys.platform == "win32":
+                    _winapi.CloseHandle(r)
+                else:
                     os.close(r)
 
     def _check_alive(self):
@@ -173,7 +175,7 @@ class ResourceTracker(object):
         self._send('UNREGISTER', name, rtype)
 
     def _send(self, cmd, name, rtype):
-        msg = '{0}:{1}:{2}\n'.format(cmd, rtype, name).encode('ascii')
+        msg = '{0}:{1}:{2}\n'.format(cmd, name, rtype).encode('ascii')
         if len(name) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
             # bytes are atomic, and that PIPE_BUF >= 512
@@ -216,8 +218,11 @@ def main(fd, verbose=0):
         with open(fd, 'rb') as f:
             for line in f:
                 try:
-                    cmd, rtype, name = line.strip().decode('ascii').split(
-                        ':', 2)
+                    splitted = line.strip().decode('ascii').split(':')
+                    # name can potentially contain separator symbols (for
+                    # instance folders on Windows)
+                    cmd, name, rtype = (
+                        splitted[0], ':'.join(splitted[1:-1]), splitted[-1])
                     cleanup_func = _CLEANUP_FUNCS.get(rtype, None)
                     if cleanup_func is None:
                         raise ValueError('Cannot register for automatic '
@@ -252,7 +257,7 @@ def main(fd, verbose=0):
             if rtype_cache:
                 try:
                     warnings.warn('resource_tracker: There appear to be %d '
-                                  'leaked %ss to clean up at shutdown' %
+                                  'leaked %s objects to clean up at shutdown' %
                                   (len(rtype_cache), rtype))
                 except Exception:
                     pass
@@ -261,16 +266,13 @@ def main(fd, verbose=0):
                 # resource has failed to unregister it. Presumably it has
                 # died.  We therefore clean it up.
                 try:
-                    try:
-                        _CLEANUP_FUNCS[rtype](name)
-                        if verbose:  # pragma: no cover
-                            sys.stderr.write("[ResourceTracker] unlink {}\n"
-                                             .format(name))
-                            sys.stderr.flush()
-                    except Exception as e:
-                        warnings.warn('resource_tracker: %s: %r' % (name, e))
-                finally:
-                    pass
+                    _CLEANUP_FUNCS[rtype](name)
+                    if verbose:  # pragma: no cover
+                        sys.stderr.write("[ResourceTracker] unlink {}\n"
+                                         .format(name))
+                        sys.stderr.flush()
+                except Exception as e:
+                    warnings.warn('resource_tracker: %s: %r' % (name, e))
 
     if verbose:  # pragma: no cover
         sys.stderr.write("resource tracker shut down\n")

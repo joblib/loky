@@ -75,6 +75,7 @@ class TestResourceTracker:
             p.stderr.close()
 
             assert re.search("unregister %s" % folder_name, err) is not None
+            assert re.search("leaked", err) is None
             assert re.search("KeyError: '%s'" % folder_name, err) is None
 
         finally:
@@ -87,8 +88,7 @@ class TestResourceTracker:
         # Check that killing process does not leak named resources
         #
         if (sys.platform == "win32") and rtype == "semlock":
-            # no semlock on windows
-            return
+            pytest.skip("no semlock on windows")
 
         import subprocess
         cmd = '''if 1:
@@ -130,7 +130,10 @@ class TestResourceTracker:
         _resource_unlink(name1, rtype)
         p.terminate()
         p.wait()
+
+        # wait for the resource_tracker to cleanup the leaked resources
         time.sleep(2.0)
+
         with pytest.raises(OSError) as ctx:
             _resource_unlink(name2, rtype)
         # docs say it should be ENOENT, but OSX seems to give EINVAL
