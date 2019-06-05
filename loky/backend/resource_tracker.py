@@ -259,7 +259,7 @@ def main(fd, verbose=0):
             for name in rtype_cache:
                 # For some reason the process which created and registered this
                 # resource has failed to unregister it. Presumably it has
-                # died.  We therefore unlink it.
+                # died.  We therefore clean it up.
                 try:
                     try:
                         _CLEANUP_FUNCS[rtype](name)
