@@ -5,6 +5,7 @@ import psutil
 import pytest
 import signal
 import pickle
+import platform
 import socket
 import multiprocessing as mp
 from tempfile import mkstemp
@@ -514,6 +515,11 @@ class TestLokyBackend:
 
         return named_sem
 
+    @pytest.mark.skipif(
+        platform.python_implementation() == "PyPy" and
+        sys.version_info[:3] <= (3, 5, 3),
+        reason="early PyPy versions leak a file descriptor, see "
+               "https://bitbucket.org/pypy/pypy/issues/3021")
     def test_sync_object_handling(self):
         """Check the correct handling of semaphores and pipes with loky
 

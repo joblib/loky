@@ -34,12 +34,6 @@ matrix:
       env: TOXENV="py37" RUN_MEMORY="true"
     - python: "3.6"
       env: TOXENV="py36" JOBLIB_TESTS="true"
-  allow_failures:
-    # Running the pypy test suite is temporarily allowed to fail because of
-    # some regressions introduced in recent pytest releases (see
-    # https://github.com/pytest-dev/pytest/issues/5317)
-    - python: "pypy3.5"
-      env: TOXENV="pypy3" LOKY_MAX_CPU_COUNT="2"
 
 before_install:
   - |
