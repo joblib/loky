@@ -60,7 +60,7 @@ class Popen(_Popen):
                 # start process
                 try:
                     # This flag allows to pass inheritable handles from the
-                    # child to the parent process in a python2-3 compatible way
+                    # parent to the child process in a python2-3 compatible way
                     # (see
                     # https://github.com/tomMoral/loky/pull/204#discussion_r290719629
                     # for more detail). When support for Python 2 is dropped,
