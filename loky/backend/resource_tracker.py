@@ -52,8 +52,7 @@ _HAVE_SIGMASK = hasattr(signal, 'pthread_sigmask')
 _IGNORED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
 _CLEANUP_FUNCS = {
-    'folder': shutil.rmtree,
-    'noop': lambda: None
+    'folder': shutil.rmtree
 }
 
 if os.name == "posix":
@@ -158,7 +157,7 @@ class ResourceTracker(object):
     def _check_alive(self):
         '''Check for the existence of the resource tracker process.'''
         try:
-            self._send('PROBE', '', 'noop')
+            self._send('PROBE', '', '')
         except BrokenPipeError:
             return False
         else:
@@ -223,11 +222,16 @@ def main(fd, verbose=0):
                     # instance folders on Windows)
                     cmd, name, rtype = (
                         splitted[0], ':'.join(splitted[1:-1]), splitted[-1])
-                    cleanup_func = _CLEANUP_FUNCS.get(rtype, None)
-                    if cleanup_func is None:
-                        raise ValueError('Cannot register for automatic '
-                                         'cleanup: unknown resource type {}'
-                                         .format(name, rtype))
+
+                    if cmd == 'PROBE':
+                        continue
+
+                    if rtype not in _CLEANUP_FUNCS:
+                        raise ValueError(
+                            'Cannot register {} for automatic cleanup: '
+                            'unknown resource type ({}). Resource type should '
+                            'be one of the following: {}'.format(
+                                name, rtype, list(_CLEANUP_FUNCS.keys())))
 
                     if cmd == 'REGISTER':
                         cache[rtype].add(name)
@@ -242,8 +246,6 @@ def main(fd, verbose=0):
                                              " {}: cache({})\n"
                                              .format(name, rtype, len(cache)))
                             sys.stderr.flush()
-                    elif cmd == 'PROBE':
-                        pass
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except BaseException:
