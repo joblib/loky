@@ -59,9 +59,17 @@ class Popen(_Popen):
             with open(wfd, 'wb') as to_child:
                 # start process
                 try:
+                    # This flag allows to pass inheritable handles from the
+                    # child to the parent process in a python2-3 compatible way
+                    # (see
+                    # https://github.com/tomMoral/loky/pull/204#discussion_r290719629
+                    # for more detail). When support for Python 2 is dropped,
+                    # the cleaner multiprocessing.reduction.steal_handle should
+                    # be used instead.
+                    inherit = True
                     hp, ht, pid, tid = _winapi.CreateProcess(
                         spawn.get_executable(), cmd,
-                        None, None, True, 0,
+                        None, None, inherit, 0,
                         None, None, None)
                     _winapi.CloseHandle(ht)
                 except BaseException as e:
