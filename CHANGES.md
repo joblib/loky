@@ -1,6 +1,19 @@
 ### 2.5.0dev0 - In development
 
 
+### 2.5.0 - 2019-06-07
+
+- Backport ResourceTracker from Python 3.8 concurrent.futures and fix
+  tracker pid issue (#204 and #202).
+
+- Fix bug when pickling function with kw-only argument (#264).
+
+- Fix bug in `pickler.dispatch_table` handling that could cause a crash
+  with the new cloudpickle fast pickler under Python 3.8 (#203).
+
+- Fix a race condition that could cause a deadlock with PyPy (#191).
+
+
 ### 2.4.2 - 2018-11-06 - Bugfix release
 
 - Fixed loky pickler in workers. (#184)
