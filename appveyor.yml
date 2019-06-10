@@ -3,13 +3,13 @@ environment:
   # Python versions sequentially.
   # We run it once per architecture (32 bit vs 64 bit).
   matrix:
-    - PYTHON: "C:\\Python36"
-      PYTHON_VERSION: "3.6.x"
+    - PYTHON: "C:\\Python27"
+      PYTHON_VERSION: "2.7.x"
       PYTHON_ARCH: "32"
       PYTHON_ARCH_SUFFIX: ""
 
-    - PYTHON: "C:\\Python36-x64"
-      PYTHON_VERSION: "3.6.x"
+    - PYTHON: "C:\\Python37-x64"
+      PYTHON_VERSION: "3.7.x"
       PYTHON_ARCH: "64"
       PYTHON_ARCH_SUFFIX: "-x64"
 matrix:
