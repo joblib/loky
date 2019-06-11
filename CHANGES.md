@@ -1,4 +1,4 @@
-### 2.5.1dev0 - In development
+### 2.5.1 - 2019-06-11 - Bugfix release
 
 - Fix a bug of the ``resource_tracker``  that could create unlimited freeze on
   Windows (#212)
