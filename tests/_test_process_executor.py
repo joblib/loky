@@ -499,8 +499,6 @@ class AsCompletedTests:
 
 
 class ExecutorTest:
-    # Executor.shutdown() and context manager usage is tested by
-    # ExecutorShutdownTest.
     def test_submit(self):
         future = self.executor.submit(pow, 2, 8)
         assert 256 == future.result()
@@ -528,13 +526,6 @@ class ExecutorTest:
 
         assert [None, None] == results
 
-    def test_shutdown_race_issue12456(self):
-        # Issue #12456: race condition at shutdown where trying to post a
-        # sentinel in the call queue blocks (the queue is full while processes
-        # have exited).
-        self.executor.map(str, [2] * (self.worker_count + 1))
-        self.executor.shutdown()
-
     def test_no_stale_references(self):
         # Issue #16284: check that the executors don't unnecessarily hang onto
         # references.
@@ -553,6 +544,17 @@ class ExecutorTest:
             if collected:
                 return
         assert collected, "Stale reference not collected within timeout."
+
+
+class ProcessExecutorTest(ExecutorTest):
+    # Executor.shutdown() and context manager usage is tested by
+    # ExecutorShutdownTest.
+    def test_shutdown_race_issue12456(self):
+        # Issue #12456: race condition at shutdown where trying to post a
+        # sentinel in the call queue blocks (the queue is full while processes
+        # have exited).
+        self.executor.map(str, [2] * (self.worker_count + 1))
+        self.executor.shutdown()
 
     def test_max_workers_negative(self):
         for number in (0, -1):

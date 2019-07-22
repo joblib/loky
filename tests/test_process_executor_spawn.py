@@ -29,9 +29,10 @@ if (sys.version_info[:2] > (3, 3)
                                            AsCompletedTests):
         pass
 
-    from ._test_process_executor import ExecutorTest
+    from ._test_process_executor import ProcessExecutorTest
 
-    class TestsProcessPoolSpawnExecutor(ProcessPoolSpawnMixin, ExecutorTest):
+    class TestsProcessPoolSpawnExecutor(
+            ProcessPoolSpawnMixin, ProcessExecutorTest):
         pass
 
-    from ._test_process_executor import ExecutorTest
+    from ._test_process_executor import ProcessExecutorTest

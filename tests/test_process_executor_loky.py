@@ -3,7 +3,7 @@ from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
 
 from ._test_process_executor import WaitTests
-from ._test_process_executor import ExecutorTest
+from ._test_process_executor import ProcessExecutorTest
 from ._test_process_executor import AsCompletedTests
 from ._test_process_executor import ExecutorShutdownTest
 
@@ -31,5 +31,5 @@ class TestsProcessPoolLokyAsCompleted(ProcessPoolLokyMixin,
 
 
 class TestsProcessPoolLokyExecutor(ProcessPoolLokyMixin,
-                                   ExecutorTest):
+                                   ProcessExecutorTest):
     pass
