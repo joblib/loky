@@ -11,10 +11,10 @@ if (sys.version_info[:2] > (3, 3)
         executor_type = process_executor.ProcessPoolExecutor
         context = get_context('spawn')
 
-    from ._test_process_executor import ExecutorShutdownTest
+    from ._test_process_executor import ProcessExecutorShutdownTest
 
     class TestsProcessPoolSpawnShutdown(ProcessPoolSpawnMixin,
-                                        ExecutorShutdownTest):
+                                        ProcessExecutorShutdownTest):
         def _prime_executor(self):
             pass
 

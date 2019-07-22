@@ -5,7 +5,7 @@ from ._executor_mixin import ExecutorMixin
 from ._test_process_executor import WaitTests
 from ._test_process_executor import ProcessExecutorTest
 from ._test_process_executor import AsCompletedTests
-from ._test_process_executor import ExecutorShutdownTest
+from ._test_process_executor import ProcessExecutorShutdownTest
 
 
 class ProcessPoolLokyMixin(ExecutorMixin):
@@ -15,7 +15,7 @@ class ProcessPoolLokyMixin(ExecutorMixin):
 
 
 class TestsProcessPoolLokyShutdown(ProcessPoolLokyMixin,
-                                   ExecutorShutdownTest):
+                                   ProcessExecutorShutdownTest):
     def _prime_executor(self):
         pass
 

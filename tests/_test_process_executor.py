@@ -97,23 +97,17 @@ class MyObject(object):
     def my_method(self):
         pass
 
-
 class ExecutorShutdownTest:
-
     def test_run_after_shutdown(self):
         self.executor.shutdown()
         with pytest.raises(RuntimeError):
             self.executor.submit(pow, 2, 5)
 
-    def test_shutdown_with_pickle_error(self):
+    def test_hang_issue12364(self):
+        fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
         self.executor.shutdown()
-        with self.executor_type(max_workers=4) as e:
-            e.submit(id, ErrorAtPickle())
-
-    def test_shutdown_with_sys_exit_at_pickle(self):
-        self.executor.shutdown()
-        with self.executor_type(max_workers=4) as e:
-            e.submit(id, ExitAtPickle())
+        for f in fs:
+            f.result()
 
     def test_interpreter_shutdown(self):
         # Free resources to avoid random timeout in CI
@@ -175,23 +169,6 @@ class ExecutorShutdownTest:
         finally:
             shutil.rmtree(tempdir)
 
-    def test_hang_issue12364(self):
-        fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
-        self.executor.shutdown()
-        for f in fs:
-            f.result()
-
-    def test_processes_terminate(self):
-        self.executor.submit(mul, 21, 2)
-        self.executor.submit(mul, 6, 7)
-        self.executor.submit(mul, 3, 14)
-        assert len(self.executor._processes) == self.worker_count
-        processes = self.executor._processes
-        self.executor.shutdown()
-
-        for p in processes.values():
-            p.join()
-
     def test_processes_terminate_on_executor_gc(self):
 
         results = self.executor.map(sleep_and_return,
@@ -228,6 +205,47 @@ class ExecutorShutdownTest:
         self.check_no_running_workers(patience=2)
         assert executor_flags.shutdown, processes
         assert not executor_flags.broken, processes
+
+
+class ThreadExecutorShutdownTest:
+    def test_context_manager_shutdown(self):
+        pass
+
+    def test_del_shutdown(self):
+        pass
+
+    def test_thread_names_assigned(self):
+        pass
+
+    def test_thread_names_default(self):
+        pass
+
+    def test_thread_terminate(self):
+        pass
+
+
+class ProcessExecutorShutdownTest:
+
+    def test_shutdown_with_pickle_error(self):
+        self.executor.shutdown()
+        with self.executor_type(max_workers=4) as e:
+            e.submit(id, ErrorAtPickle())
+
+    def test_shutdown_with_sys_exit_at_pickle(self):
+        self.executor.shutdown()
+        with self.executor_type(max_workers=4) as e:
+            e.submit(id, ExitAtPickle())
+
+    def test_processes_terminate(self):
+        self.executor.submit(mul, 21, 2)
+        self.executor.submit(mul, 6, 7)
+        self.executor.submit(mul, 3, 14)
+        assert len(self.executor._processes) == self.worker_count
+        processes = self.executor._processes
+        self.executor.shutdown()
+
+        for p in processes.values():
+            p.join()
 
     @classmethod
     def _wait_and_crash(cls):

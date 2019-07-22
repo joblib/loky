@@ -14,10 +14,10 @@ if (sys.version_info[:2] > (3, 3)
         executor_type = process_executor.ProcessPoolExecutor
         context = get_context('forkserver')
 
-    from ._test_process_executor import ExecutorShutdownTest
+    from ._test_process_executor import ProcessExecutorShutdownTest
 
     class TestsProcessPoolForkserverShutdown(ProcessPoolForkserverMixin,
-                                             ExecutorShutdownTest):
+                                             ProcessExecutorShutdownTest):
         def _prime_executor(self):
             pass
 
