@@ -30,7 +30,7 @@ import threading
 import faulthandler
 from math import sqrt
 from threading import Thread
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from loky.process_executor import LokyRecursionError
 from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
@@ -915,3 +915,43 @@ class ProcessExecutorTest(ExecutorTest):
         # Submitting other jobs fails as well.
         with pytest.raises(TerminatedWorkerError, match=match):
             self.executor.submit(pow, 2, 8)
+
+
+class ThreadExecutorTest:
+    def test_map_submits_without_iteration(self):
+        """Tests verifying issue 11777."""
+        finished = []
+
+        def record_finished(n):
+            finished.append(n)
+
+        self.executor.map(record_finished, range(10))
+        self.executor.shutdown(wait=True)
+        assert Counter(list(finished)) == Counter(list(range(10)))
+
+    def test_default_workers(self):
+        executor = self.executor_type()
+        expected = min(32, (os.cpu_count() or 1) + 4)
+        assert executor._max_workers == expected
+
+    def test_saturation(self):
+        executor = self.executor_type(4)
+
+        def acquire_lock(lock):
+            lock.acquire()
+
+        sem = threading.Semaphore(0)
+        for i in range(15 * executor._max_workers):
+            executor.submit(acquire_lock, sem)
+        assert len(executor._threads) == executor._max_workers
+        for i in range(15 * executor._max_workers):
+            sem.release()
+        executor.shutdown(wait=True)
+
+    def test_idle_thread_reuse(self):
+        executor = self.executor_type()
+        executor.submit(mul, 21, 2).result()
+        executor.submit(mul, 6, 7).result()
+        executor.submit(mul, 3, 14).result()
+        assert len(executor._threads) == 1
+        executor.shutdown(wait=True)
