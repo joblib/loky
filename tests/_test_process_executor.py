@@ -480,6 +480,9 @@ class WaitTests:
         _executor_mixin._test_event.clear()
 
 
+class ThreadWaitTest:
+    def test_pending_calls_race(self):
+        pass
 class AsCompletedTests:
     # TODO(brian@sweetapp.com): Should have a test with a non-zero timeout.
     def test_no_timeout(self):
