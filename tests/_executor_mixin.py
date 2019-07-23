@@ -111,7 +111,10 @@ def _check_executor_started(executor):
     except TimeoutError:
         print('\n' * 3, res.done(), executor._call_queue.empty(),
               executor._result_queue.empty())
-        print(executor._processes)
+        if hasattr(executor, "_processes"):
+            print(executor._processes)
+        else:
+            print(executor._threads)
         print(threading.enumerate())
         from faulthandler import dump_traceback
         dump_traceback()
@@ -119,8 +122,53 @@ def _check_executor_started(executor):
         raise RuntimeError("Executor took too long to run basic task.")
 
 
-class ProcessExecutorMixin:
+class ExecutorMixin:
     worker_count = 5
+
+    def setup_method(self):
+        try:
+            if hasattr(self, "context"):
+                self.executor = self.executor_type(
+                    max_workers=self.worker_count, context=self.context,
+                    initializer=initializer_event, initargs=(_test_event,))
+            else:
+                self.executor = self.executor_type(
+                    max_workers=self.worker_count,
+                    initializer=initializer_event, initargs=(_test_event,))
+        except NotImplementedError as e:
+            self.skipTest(str(e))
+        _check_executor_started(self.executor)
+
+    def teardown_method(self, method):
+        executor = getattr(self, 'executor', None)
+        if executor is not None:
+            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
+            for mark in getattr(method, "pytestmark", []):
+                if mark.name == "broken_pool":
+                    expect_broken_pool = True
+            is_actually_broken = executor._flags.broken is not None
+            assert is_actually_broken == expect_broken_pool
+
+            t_start = time.time()
+            executor.shutdown(wait=True, kill_workers=True)
+            dt = time.time() - t_start
+            assert dt < 10, "Executor took too long to shutdown"
+
+    def _prime_executor(self):
+        # Make sure that the executor is ready to do work before running the
+        # tests. This should reduce the probability of timeouts in the tests.
+        futures = [self.executor.submit(time.sleep, 0.1)
+                   for _ in range(self.worker_count)]
+        for f in futures:
+            f.result()
+
+
+class ProcessExecutorMixin(ExecutorMixin):
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        global _test_event
+        assert _test_event is not None
+        super(ProcessExecutorMixin, self).setup_method()
 
     @classmethod
     def setup_class(cls):
@@ -136,43 +184,10 @@ class ProcessExecutorMixin:
         if _test_event is not None:
             _test_event = None
 
-    @pytest.fixture(autouse=True)
-    def setup_method(self):
-        global _test_event
-        assert _test_event is not None
-        try:
-            self.executor = self.executor_type(
-                max_workers=self.worker_count, context=self.context,
-                initializer=initializer_event, initargs=(_test_event,))
-        except NotImplementedError as e:
-            self.skipTest(str(e))
-        _check_executor_started(self.executor)
-        _check_subprocesses_number(self.executor, self.worker_count)
-
     def teardown_method(self, method):
         # Make sure executor is not broken if it should not be
-        executor = getattr(self, 'executor', None)
-        if executor is not None:
-            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
-            for mark in getattr(method, "pytestmark", []):
-                if mark.name == "broken_pool":
-                    expect_broken_pool = True
-            is_actually_broken = executor._flags.broken is not None
-            assert is_actually_broken == expect_broken_pool
-
-            t_start = time.time()
-            executor.shutdown(wait=True, kill_workers=True)
-            dt = time.time() - t_start
-            assert dt < 10, "Executor took too long to shutdown"
-        _check_subprocesses_number(executor, 0)
-
-    def _prime_executor(self):
-        # Make sure that the executor is ready to do work before running the
-        # tests. This should reduce the probability of timeouts in the tests.
-        futures = [self.executor.submit(time.sleep, 0.1)
-                   for _ in range(self.worker_count)]
-        for f in futures:
-            f.result()
+        super(ProcessExecutorMixin, self).teardown_method(method)
+        _check_subprocesses_number(self.executor, 0)
 
     @classmethod
     def check_no_running_workers(cls, patience=5, sleep_duration=0.01):
