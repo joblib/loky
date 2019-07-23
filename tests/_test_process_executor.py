@@ -112,18 +112,32 @@ class ExecutorShutdownTest:
 
     def test_interpreter_shutdown(self):
         # Free resources to avoid random timeout in CI
-        self.executor.shutdown(wait=True, kill_workers=True)
+        if hasattr(self.executor, "context"):
+            self.executor.shutdown(wait=True, kill_workers=True)
+        else:
+            self.executor.shutdown(wait=True)
+
 
         tempdir = tempfile.mkdtemp(prefix='loky_')
         try:
             n_jobs = 4
             code = """if True:
-                from loky.process_executor import {executor_type}
+                try:
+                    from loky.process_executor import {executor_type}
+                except ImportError:
+                    # ThreadPoolExecutor case -- quick and dirty, change it
+                    # later
+                    from loky.reusable_thread_executor import {executor_type}
                 from loky.backend import get_context
                 from tests._test_process_executor import sleep_and_write
 
-                context = get_context("{start_method}")
-                e = {executor_type}({n_jobs}, context=context)
+                start_method = "{start_method}"
+                if start_method != "":
+                    context = get_context(start_method)
+                    e = {executor_type}({n_jobs}, context=context)
+                else:
+                    e = {executor_type}({n_jobs})
+
                 e.submit(id, 42).result()
 
                 task_ids = list(range(2 * {n_jobs}))
@@ -136,10 +150,17 @@ class ExecutorShutdownTest:
                 # shutdown main Python interpreter while letting the worker
                 # processes finish in the background.
             """
-            code = code.format(executor_type=self.executor_type.__name__,
-                               start_method=self.context.get_start_method(),
-                               n_jobs=n_jobs,
-                               tempdir=tempdir.replace("\\", "/"))
+            if hasattr(self, "context"):
+                code = code.format(
+                    executor_type=self.executor_type.__name__,
+                    start_method=self.context.get_start_method(),
+                    n_jobs=n_jobs, tempdir=tempdir.replace("\\", "/"))
+            else:
+                code = code.format(
+                    executor_type=self.executor_type.__name__,
+                    start_method="",
+                    n_jobs=n_jobs, tempdir=tempdir.replace("\\", "/"))
+
             stdout, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
@@ -171,8 +192,11 @@ class ExecutorShutdownTest:
             shutil.rmtree(tempdir)
 
 
+class TestsThreadExecutorShutdown(ExecutorShutdownTest,
+                                  _executor_mixin.ThreadExecutorMixin):
+    def prime_executor(self):
+        pass
 
-class ThreadExecutorShutdownTest:
     def test_context_manager_shutdown(self):
         with futures.ThreadPoolExecutor(max_workers=5) as e:
             executor = e
@@ -217,17 +241,18 @@ class ThreadExecutorShutdownTest:
 
 
     def test_thread_terminate(self):
+        executor = futures.ThreadPoolExecutor(max_workers=5)
         def acquire_lock(lock):
             lock.acquire()
 
         sem = threading.Semaphore(0)
         for i in range(3):
-            self.executor.submit(acquire_lock, sem)
-        assert len(self.executor._threads) == 3
+            executor.submit(acquire_lock, sem)
+        assert len(executor._threads) == 3
         for i in range(3):
             sem.release()
-        self.executor.shutdown()
-        for t in self.executor._threads:
+        executor.shutdown()
+        for t in executor._threads:
             t.join()
 
 
