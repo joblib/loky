@@ -119,7 +119,7 @@ def _check_executor_started(executor):
         raise RuntimeError("Executor took too long to run basic task.")
 
 
-class ExecutorMixin:
+class ProcessExecutorMixin:
     worker_count = 5
 
     @classmethod
