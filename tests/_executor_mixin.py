@@ -215,6 +215,10 @@ class ProcessExecutorMixin(ExecutorMixin):
 class ThreadExecutorMixin(ExecutorMixin):
     executor_type = _ReusableThreadPoolExecutor
 
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        super(ThreadExecutorMixin, self).setup_method()
+
     def teardown_method(self, method):
         # Make sure executor is not broken if it should not be
         executor = getattr(self, 'executor', None)
