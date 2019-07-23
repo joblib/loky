@@ -199,7 +199,7 @@ class ThreadExecutorShutdownTest:
         del executor
 
         for t in threads:
-            assert re.match(t.name, r'^SpecialPool_[0-4]$') is not None
+            assert re.match(r'^SpecialPool_[0-4]$', t.name)
             t.join()
 
 
@@ -212,7 +212,7 @@ class ThreadExecutorShutdownTest:
         for t in threads:
             # Ensure that our default name is reasonably sane and unique when
             # no thread_name_prefix was supplied.
-            self.assertRegex(t.name, r'ThreadPoolExecutor-\d+_[0-4]$')
+            assert re.match(r'ThreadPoolExecutor-\d+_[0-4]$', t.name)
             t.join()
 
 
