@@ -198,7 +198,7 @@ class TestsThreadExecutorShutdown(ExecutorShutdownTest,
         pass
 
     def test_context_manager_shutdown(self):
-        with futures.ThreadPoolExecutor(max_workers=5) as e:
+        with self.executor as e:
             executor = e
             assert list(
                 e.map(abs, range(-5, 5))) == [5, 4, 3, 2, 1, 0, 1, 2, 3, 4]
@@ -207,16 +207,15 @@ class TestsThreadExecutorShutdown(ExecutorShutdownTest,
             t.join()
 
     def test_del_shutdown(self):
-        executor = futures.ThreadPoolExecutor(max_workers=5)
-        executor.map(abs, range(-5, 5))
-        threads = executor._threads
-        del executor
+        self.executor.map(abs, range(-5, 5))
+        threads = self.executor._threads
+        del self.executor
 
         for t in threads:
             t.join()
 
     def test_thread_names_assigned(self):
-        executor = futures.ThreadPoolExecutor(
+        executor = self.executor_type(
             max_workers=5, thread_name_prefix='SpecialPool')
         executor.map(abs, range(-5, 5))
         threads = executor._threads
@@ -228,7 +227,7 @@ class TestsThreadExecutorShutdown(ExecutorShutdownTest,
 
 
     def test_thread_names_default(self):
-        executor = futures.ThreadPoolExecutor(max_workers=5)
+        executor = self.executor_type(max_workers=5)
         executor.map(abs, range(-5, 5))
         threads = executor._threads
         del executor
@@ -241,7 +240,7 @@ class TestsThreadExecutorShutdown(ExecutorShutdownTest,
 
 
     def test_thread_terminate(self):
-        executor = futures.ThreadPoolExecutor(max_workers=5)
+        executor = self.executor_type(max_workers=5)
         def acquire_lock(lock):
             lock.acquire()
 
