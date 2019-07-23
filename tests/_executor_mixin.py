@@ -6,6 +6,8 @@ import math
 import psutil
 import pytest
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from loky.reusable_thread_executor import _ReusableThreadPoolExecutor
 
 from loky._base import TimeoutError
 from loky.backend import get_context
@@ -139,21 +141,6 @@ class ExecutorMixin:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
 
-    def teardown_method(self, method):
-        executor = getattr(self, 'executor', None)
-        if executor is not None:
-            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
-            for mark in getattr(method, "pytestmark", []):
-                if mark.name == "broken_pool":
-                    expect_broken_pool = True
-            is_actually_broken = executor._flags.broken is not None
-            assert is_actually_broken == expect_broken_pool
-
-            t_start = time.time()
-            executor.shutdown(wait=True, kill_workers=True)
-            dt = time.time() - t_start
-            assert dt < 10, "Executor took too long to shutdown"
-
     def _prime_executor(self):
         # Make sure that the executor is ready to do work before running the
         # tests. This should reduce the probability of timeouts in the tests.
@@ -186,7 +173,20 @@ class ProcessExecutorMixin(ExecutorMixin):
 
     def teardown_method(self, method):
         # Make sure executor is not broken if it should not be
-        super(ProcessExecutorMixin, self).teardown_method(method)
+        executor = getattr(self, 'executor', None)
+        if executor is not None:
+            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
+            for mark in getattr(method, "pytestmark", []):
+                if mark.name == "broken_pool":
+                    expect_broken_pool = True
+            is_actually_broken = executor._flags.broken is not None
+            assert is_actually_broken == expect_broken_pool
+
+            t_start = time.time()
+            executor.shutdown(wait=True, kill_workers=True)
+            dt = time.time() - t_start
+            assert dt < 10, "Executor took too long to shutdown"
+
         _check_subprocesses_number(self.executor, 0)
 
     @classmethod
@@ -210,6 +210,26 @@ class ProcessExecutorMixin(ExecutorMixin):
             'Expected no more running worker processes but got %d after'
             ' waiting %0.3fs.'
             % (len(workers), patience))
+
+
+class ThreadExecutorMixin(ExecutorMixin):
+    executor_type = _ReusableThreadPoolExecutor
+
+    def teardown_method(self, method):
+        # Make sure executor is not broken if it should not be
+        executor = getattr(self, 'executor', None)
+        if executor is not None:
+            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
+            for mark in getattr(method, "pytestmark", []):
+                if mark.name == "broken_pool":
+                    expect_broken_pool = True
+            is_actually_broken = executor._broken
+            assert is_actually_broken == expect_broken_pool
+
+            t_start = time.time()
+            executor.shutdown(wait=True)
+            dt = time.time() - t_start
+            assert dt < 10, "Executor took too long to shutdown"
 
 
 class ReusableExecutorMixin:
