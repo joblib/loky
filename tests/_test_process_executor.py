@@ -402,6 +402,7 @@ class WaitTests:
         return True
 
     def test_first_exception(self):
+        # XXX: this one slightly differs from the cpython analogous test
         future1 = self.executor.submit(mul, 2, 21)
         future2 = self.executor.submit(self.wait_and_raise, 1.5)
         future3 = self.executor.submit(time.sleep, 3)
@@ -456,6 +457,7 @@ class WaitTests:
         assert set() == pending
 
     def test_timeout(self):
+        # XXX: this one slightly differs from the cpython analogous test
         # Make sure the executor has already started to avoid timeout happening
         # before future1 returns
         assert self.executor.submit(id_sleep, 42).result() == 42
