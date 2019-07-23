@@ -70,7 +70,8 @@ class _ReusableThreadPoolExecutor(ThreadPoolExecutor):
         initargs=(),
     ):
         super(_ReusableThreadPoolExecutor, self).__init__(
-            max_workers=max_workers, initializer=initializer, initargs=initargs
+            max_workers=max_workers, initializer=initializer,
+            initargs=initargs, thread_name_prefix=thread_name_prefix
         )
         self.executor_id = executor_id
 
