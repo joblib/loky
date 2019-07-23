@@ -18,6 +18,7 @@ except ImportError:
 from loky import process_executor
 
 import os
+import re
 import gc
 import sys
 import time
@@ -173,19 +174,62 @@ class ExecutorShutdownTest:
 
 class ThreadExecutorShutdownTest:
     def test_context_manager_shutdown(self):
-        pass
+        with futures.ThreadPoolExecutor(max_workers=5) as e:
+            executor = e
+            assert list(
+                e.map(abs, range(-5, 5))) == [5, 4, 3, 2, 1, 0, 1, 2, 3, 4]
+
+        for t in executor._threads:
+            t.join()
 
     def test_del_shutdown(self):
-        pass
+        executor = futures.ThreadPoolExecutor(max_workers=5)
+        executor.map(abs, range(-5, 5))
+        threads = executor._threads
+        del executor
+
+        for t in threads:
+            t.join()
 
     def test_thread_names_assigned(self):
-        pass
+        executor = futures.ThreadPoolExecutor(
+            max_workers=5, thread_name_prefix='SpecialPool')
+        executor.map(abs, range(-5, 5))
+        threads = executor._threads
+        del executor
+
+        for t in threads:
+            assert re.match(t.name, r'^SpecialPool_[0-4]$') is not None
+            t.join()
+
 
     def test_thread_names_default(self):
-        pass
+        executor = futures.ThreadPoolExecutor(max_workers=5)
+        executor.map(abs, range(-5, 5))
+        threads = executor._threads
+        del executor
+
+        for t in threads:
+            # Ensure that our default name is reasonably sane and unique when
+            # no thread_name_prefix was supplied.
+            self.assertRegex(t.name, r'ThreadPoolExecutor-\d+_[0-4]$')
+            t.join()
+
 
     def test_thread_terminate(self):
-        pass
+        def acquire_lock(lock):
+            lock.acquire()
+
+        sem = threading.Semaphore(0)
+        for i in range(3):
+            self.executor.submit(acquire_lock, sem)
+        assert len(self.executor._threads) == 3
+        for i in range(3):
+            sem.release()
+        self.executor.shutdown()
+        for t in self.executor._threads:
+            t.join()
+
 
 
 class ProcessExecutorShutdownTest:
