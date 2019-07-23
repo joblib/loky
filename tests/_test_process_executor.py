@@ -169,42 +169,6 @@ class ExecutorShutdownTest:
         finally:
             shutil.rmtree(tempdir)
 
-    def test_processes_terminate_on_executor_gc(self):
-
-        results = self.executor.map(sleep_and_return,
-                                    [0.1] * 10, range(10))
-        assert len(self.executor._processes) == self.worker_count
-        processes = self.executor._processes
-        executor_flags = self.executor._flags
-
-        # The following should trigger GC and therefore shutdown of workers.
-        # However the shutdown wait for all the pending jobs to complete
-        # first.
-        executor_reference = weakref.ref(self.executor)
-        self.executor = None
-
-        # Make sure that there is not other reference to the executor object.
-        # We have to be patient as _thread_management_worker might have a
-        # reference when we deleted self.executor.
-        t_deadline = time.time() + 1
-        while executor_reference() is not None and time.time() < t_deadline:
-            if IS_PYPY:
-                # PyPy can delay __del__ calls and GC compared to CPython.
-                # To ensure that this test pass without waiting too long we
-                # need an explicit GC.
-                gc.collect()
-            time.sleep(0.001)
-        assert executor_reference() is None
-
-        # The remaining jobs should still be processed in the background
-        for result, expected in zip(results, range(10)):
-            assert result == expected
-
-        # Once all pending jobs have completed the executor and threads should
-        # terminate automatically.
-        self.check_no_running_workers(patience=2)
-        assert executor_flags.shutdown, processes
-        assert not executor_flags.broken, processes
 
 
 class ThreadExecutorShutdownTest:
@@ -366,6 +330,43 @@ class ProcessExecutorShutdownTest:
             f.result()
 
         _executor_mixin._check_subprocesses_number(self.executor, 0)
+
+    def test_processes_terminate_on_executor_gc(self):
+
+        results = self.executor.map(sleep_and_return,
+                                    [0.1] * 10, range(10))
+        assert len(self.executor._processes) == self.worker_count
+        processes = self.executor._processes
+        executor_flags = self.executor._flags
+
+        # The following should trigger GC and therefore shutdown of workers.
+        # However the shutdown wait for all the pending jobs to complete
+        # first.
+        executor_reference = weakref.ref(self.executor)
+        self.executor = None
+
+        # Make sure that there is not other reference to the executor object.
+        # We have to be patient as _thread_management_worker might have a
+        # reference when we deleted self.executor.
+        t_deadline = time.time() + 1
+        while executor_reference() is not None and time.time() < t_deadline:
+            if IS_PYPY:
+                # PyPy can delay __del__ calls and GC compared to CPython.
+                # To ensure that this test pass without waiting too long we
+                # need an explicit GC.
+                gc.collect()
+            time.sleep(0.001)
+        assert executor_reference() is None
+
+        # The remaining jobs should still be processed in the background
+        for result, expected in zip(results, range(10)):
+            assert result == expected
+
+        # Once all pending jobs have completed the executor and threads should
+        # terminate automatically.
+        self.check_no_running_workers(patience=2)
+        assert executor_flags.shutdown, processes
+        assert not executor_flags.broken, processes
 
 
 class WaitTests:
