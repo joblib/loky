@@ -551,9 +551,24 @@ class WaitTests:
         _executor_mixin._test_event.clear()
 
 
-class ThreadWaitTest:
+class TestsThreadWait(WaitTests, _executor_mixin.ThreadExecutorMixin):
     def test_pending_calls_race(self):
-        pass
+        # Issue #14406: multi-threaded race condition when waiting on all
+        # futures.
+        event = threading.Event()
+
+        def future_func():
+            event.wait()
+        oldswitchinterval = sys.getswitchinterval()
+        sys.setswitchinterval(1e-6)
+        try:
+            fs = {self.executor.submit(future_func) for i in range(100)}
+            event.set()
+            futures.wait(fs, return_when=futures.ALL_COMPLETED)
+        finally:
+            sys.setswitchinterval(oldswitchinterval)
+
+
 
 
 class AsCompletedTests:

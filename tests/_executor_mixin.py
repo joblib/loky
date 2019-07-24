@@ -217,6 +217,8 @@ class ThreadExecutorMixin(ExecutorMixin):
 
     @pytest.fixture(autouse=True)
     def setup_method(self):
+        global _test_event
+        assert _test_event is not None
         super(ThreadExecutorMixin, self).setup_method()
 
     def teardown_method(self, method):
@@ -235,6 +237,12 @@ class ThreadExecutorMixin(ExecutorMixin):
             dt = time.time() - t_start
             assert dt < 10, "Executor took too long to shutdown"
 
+    @classmethod
+    def setup_class(cls):
+        print("setup class with threading context")
+        global _test_event
+        if _test_event is None:
+            _test_event = threading.Event()
 
 class ReusableExecutorMixin:
 
