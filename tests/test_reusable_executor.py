@@ -6,6 +6,7 @@ import psutil
 import pytest
 import warnings
 import threading
+import time
 from time import sleep
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
@@ -38,6 +39,11 @@ try:
     import numpy as np
 except ImportError:
     np = None
+
+try:
+    from concurrent.futures.thread import BrokenThreadPool
+except ImportError:
+    BrokenThreadPool = None
 
 # Backward compat for python2 cPickle module
 PICKLING_ERRORS = (PicklingError,)
@@ -573,6 +579,29 @@ class TestResizeProcessExecutor(ReusableExecutorMixin, ResizeExecutorTest):
 class TestResizeThreadExecutor(ReusableExecutorMixin, ResizeExecutorTest):
     get_reusable_executor = staticmethod(get_reusable_executor)
 
+    def test_reusable_thread_executor_resize(self):
+        """Test reusable_executor resizing"""
+
+        original_executor = self.get_reusable_executor(max_workers=2)
+
+        # threads are created lazily (one by new task received until the number
+        # of threads reaches max_workers)
+        original_executor.map(id, range(2))
+
+        n_alive_threads = sum(t.is_alive() for t in original_executor._threads)
+        assert n_alive_threads == 2
+
+        reused_executor = get_reusable_thread_executor(max_workers=1)
+
+        # make sure this executor is the same as the previous one
+        assert reused_executor == original_executor
+
+        # wait for the thread to exit
+        time.sleep(0.1)
+
+        n_alive_threads = sum(t.is_alive() for t in reused_executor._threads)
+        assert n_alive_threads == 1
+
 
 class GetReusableExecutorTest:
     def test_invalid_process_number(self):
@@ -867,3 +896,15 @@ class TestsProcessExecutorInitializer(ExecutorInitializerTests,
 class TestsThreadExecutorInitializer(ExecutorInitializerTests,
                                      ReusableExecutorMixin):
     get_reusable_executor = staticmethod(get_reusable_thread_executor)
+
+    @staticmethod
+    def failing_initializer():
+        raise ValueError
+
+    def test_initializer_failed(self):
+        executor = self.get_reusable_executor(
+                max_workers=2, initializer=self.failing_initializer,
+                initargs=tuple())
+        with pytest.raises(BrokenThreadPool):
+            f = executor.submit(id, 2)
+            f.result()
