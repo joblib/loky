@@ -1009,7 +1009,7 @@ class ProcessExecutorTest(ExecutorTest):
             self.executor.submit(pow, 2, 8)
 
 
-class ThreadExecutorTest:
+class TestsThreadExecutor(ExecutorTest, _executor_mixin.ThreadExecutorMixin):
     def test_map_submits_without_iteration(self):
         """Tests verifying issue 11777."""
         finished = []
@@ -1023,7 +1023,10 @@ class ThreadExecutorTest:
 
     def test_default_workers(self):
         executor = self.executor_type()
-        expected = min(32, (os.cpu_count() or 1) + 4)
+        if sys.version_info[:2] > (3, 8):
+            expected = min(32, (os.cpu_count() or 1) + 4)
+        else:
+            expected = min(32, (os.cpu_count() or 1) * 5)
         assert executor._max_workers == expected
 
     def test_saturation(self):
@@ -1040,6 +1043,9 @@ class ThreadExecutorTest:
             sem.release()
         executor.shutdown(wait=True)
 
+    @pytest.mark.skipif(
+        sys.version_info[:2] < (3, 8),
+        reason="idle threads re-usage was introduced in Python3.8")
     def test_idle_thread_reuse(self):
         executor = self.executor_type()
         executor.submit(mul, 21, 2).result()
