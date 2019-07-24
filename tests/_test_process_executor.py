@@ -607,6 +607,10 @@ class AsCompletedTests:
         assert len(completed) == 1
 
 
+class TestsThreadAsCompleted(AsCompletedTests,
+                             _executor_mixin.ThreadExecutorMixin):
+    pass
+
 class ExecutorTest:
     def test_submit(self):
         future = self.executor.submit(pow, 2, 8)
