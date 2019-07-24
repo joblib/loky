@@ -411,8 +411,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         executor.shutdown(wait=True)
 
 
-class TestTerminateExecutor(ReusableExecutorMixin):
-
+class TestTerminateProcessExecutor(ReusableExecutorMixin):
+    get_reusable_executor = staticmethod(get_reusable_executor)
     def test_shutdown_kill(self):
         """Test reusable_executor termination handling"""
         from itertools import repeat
