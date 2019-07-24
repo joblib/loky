@@ -125,8 +125,6 @@ def _check_executor_started(executor):
 
 
 class ExecutorMixin:
-    worker_count = 5
-
     def setup_method(self):
         try:
             if hasattr(self, "context"):
@@ -151,6 +149,7 @@ class ExecutorMixin:
 
 
 class ProcessExecutorMixin(ExecutorMixin):
+    worker_count = 5
     @pytest.fixture(autouse=True)
     def setup_method(self):
         global _test_event
@@ -213,6 +212,7 @@ class ProcessExecutorMixin(ExecutorMixin):
 
 
 class ThreadExecutorMixin(ExecutorMixin):
+    worker_count = None
     executor_type = _ReusableThreadPoolExecutor
 
     @pytest.fixture(autouse=True)
