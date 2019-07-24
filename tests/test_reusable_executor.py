@@ -474,7 +474,26 @@ class TestTerminateExecutor(ReusableExecutorMixin):
                 pass
 
 
-class TestResizeExecutor(ReusableExecutorMixin):
+class ResizeExecutorTest:
+    def test_resize_after_timeout(self):
+        with warnings.catch_warnings(record=True) as recorded_warnings:
+            warnings.simplefilter("always")
+            executor = get_reusable_executor(max_workers=2, timeout=.001)
+            assert executor.submit(id_sleep, 42, 0.).result() == 42
+            sleep(.1)
+            executor = get_reusable_executor(max_workers=8, timeout=.001)
+            assert executor.submit(id_sleep, 42, 0.).result() == 42
+            sleep(.1)
+            executor = get_reusable_executor(max_workers=2, timeout=.001)
+            assert executor.submit(id_sleep, 42, 0.).result() == 42
+
+        if len(recorded_warnings) > 1:
+            expected_msg = 'A worker stopped'
+            assert expected_msg in recorded_warnings[0].message.args[0]
+
+
+class TestResizeProcessExecutor(ReusableExecutorMixin, ResizeExecutorTest):
+    get_reusable_executor = staticmethod(get_reusable_executor)
     def test_reusable_executor_resize(self):
         """Test reusable_executor resizing"""
 
@@ -550,21 +569,9 @@ class TestResizeExecutor(ReusableExecutorMixin):
         assert executor.submit(id_sleep, 42, 0.).result() == 42
         executor.shutdown()
 
-    def test_resize_after_timeout(self):
-        with warnings.catch_warnings(record=True) as recorded_warnings:
-            warnings.simplefilter("always")
-            executor = get_reusable_executor(max_workers=2, timeout=.001)
-            assert executor.submit(id_sleep, 42, 0.).result() == 42
-            sleep(.1)
-            executor = get_reusable_executor(max_workers=8, timeout=.001)
-            assert executor.submit(id_sleep, 42, 0.).result() == 42
-            sleep(.1)
-            executor = get_reusable_executor(max_workers=2, timeout=.001)
-            assert executor.submit(id_sleep, 42, 0.).result() == 42
 
-        if len(recorded_warnings) > 1:
-            expected_msg = 'A worker stopped'
-            assert expected_msg in recorded_warnings[0].message.args[0]
+class TestResizeThreadExecutor(ReusableExecutorMixin, ResizeExecutorTest):
+    get_reusable_executor = staticmethod(get_reusable_executor)
 
 
 class GetReusableExecutorTest:
