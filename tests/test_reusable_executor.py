@@ -567,8 +567,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
             assert expected_msg in recorded_warnings[0].message.args[0]
 
 
-class TestGetReusableExecutor(ReusableExecutorMixin):
-
+class GetReusableExecutorTest:
     def test_invalid_process_number(self):
         """Raise error on invalid process number"""
 
@@ -582,6 +581,49 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         with pytest.raises(ValueError):
             executor._resize(max_workers=None)
 
+    def test_compat_with_concurrent_futures_exception(self):
+        # It should be possible to use a loky process pool executor as a dropin
+        # replacement for a ProcessPoolExecutor, including when catching
+        # exceptions:
+        concurrent = pytest.importorskip('concurrent')
+        from concurrent.futures.process import BrokenProcessPool as BPPExc
+
+        with pytest.raises(BPPExc):
+            get_reusable_executor(max_workers=2).submit(crash).result()
+        e = get_reusable_executor(max_workers=2)
+        f = e.submit(id, 42)
+
+        # Ensure that loky.Future are compatible with concurrent.futures
+        # (see #155)
+        assert isinstance(f, concurrent.futures.Future)
+        (done, running) = concurrent.futures.wait([f], timeout=15)
+        assert len(running) == 0
+
+    def test_reusable_executor_reuse_true(self):
+        executor = get_reusable_executor(max_workers=3, timeout=42)
+        executor.submit(id, 42).result()
+        assert len(executor._processes) == 3
+        assert executor._timeout == 42
+
+        executor2 = get_reusable_executor(reuse=True)
+        executor2.submit(id, 42).result()
+        assert len(executor2._processes) == 3
+        assert executor2._timeout == 42
+        assert executor2 is executor
+
+        executor3 = get_reusable_executor()
+        executor3.submit(id, 42).result()
+        assert len(executor3._processes) == cpu_count()
+        assert executor3._timeout == 10
+        assert executor3 is not executor
+
+        executor4 = get_reusable_executor()
+        assert executor4 is executor3
+
+
+class TestGetReusableProcessExecutor(ReusableExecutorMixin,
+                                     GetReusableExecutorTest):
+    get_reusable_executor = staticmethod(get_reusable_executor)
     @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
     @pytest.mark.skipif(sys.version_info <= (3, 4),
                         reason="No context before 3.4")
@@ -682,23 +724,6 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         """
         check_python_subprocess_call(code, stdout_regex=r"ok")
 
-    def test_compat_with_concurrent_futures_exception(self):
-        # It should be possible to use a loky process pool executor as a dropin
-        # replacement for a ProcessPoolExecutor, including when catching
-        # exceptions:
-        concurrent = pytest.importorskip('concurrent')
-        from concurrent.futures.process import BrokenProcessPool as BPPExc
-
-        with pytest.raises(BPPExc):
-            get_reusable_executor(max_workers=2).submit(crash).result()
-        e = get_reusable_executor(max_workers=2)
-        f = e.submit(id, 42)
-
-        # Ensure that loky.Future are compatible with concurrent.futures
-        # (see #155)
-        assert isinstance(f, concurrent.futures.Future)
-        (done, running) = concurrent.futures.wait([f], timeout=15)
-        assert len(running) == 0
 
     thread_configurations = [
         ('constant', 'clean_start'),
@@ -751,27 +776,47 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 t.join()
         assert output_collector == ['ok'] * len(threads)
 
-    def test_reusable_executor_reuse_true(self):
-        executor = get_reusable_executor(max_workers=3, timeout=42)
-        executor.submit(id, 42).result()
-        assert len(executor._processes) == 3
-        assert executor._timeout == 42
 
-        executor2 = get_reusable_executor(reuse=True)
-        executor2.submit(id, 42).result()
-        assert len(executor2._processes) == 3
-        assert executor2._timeout == 42
-        assert executor2 is executor
+class TestGetReusableThreadExecutor(ReusableExecutorMixin,
+                                    GetReusableExecutorTest):
+    get_reusable_executor = staticmethod(get_reusable_thread_executor)
 
-        executor3 = get_reusable_executor()
-        executor3.submit(id, 42).result()
-        assert len(executor3._processes) == cpu_count()
-        assert executor3._timeout == 10
-        assert executor3 is not executor
+    @pytest.mark.parametrize("workers", ["constant", "varying"])
+    def test_reusable_executor_thread_safety(self, workers):
+        # Create a new shared executor and ensures that it's workers are
+        # ready:
+        get_reusable_executor(reuse=False).submit(id, 42).result()
 
-        executor4 = get_reusable_executor()
-        assert executor4 is executor3
+        def helper_func(output_collector, max_workers=2, n_outer_steps=5,
+                        n_inner_steps=10):
+            with warnings.catch_warnings():  # ignore resize warnings
+                warnings.simplefilter("always")
+                executor = get_reusable_executor(max_workers=max_workers)
+                for i in range(n_outer_steps):
+                    results = executor.map(
+                        lambda x: x ** 2, range(n_inner_steps))
+                    expected_result = [x ** 2 for x in range(n_inner_steps)]
+                    assert list(results) == expected_result
+                output_collector.append('ok')
 
+        if workers == 'constant':
+            max_workers = [2] * 10
+        else:
+            max_workers = [(i % 4) + 1 for i in range(10)]
+        # Use the same executor with the same number of workers concurrently
+        # in different threads:
+        output_collector = []
+        threads = [threading.Thread(
+            target=helper_func, args=(output_collector, w),
+            name='test_thread_%02d_max_workers_%d' % (i, w))
+            for i, w in enumerate(max_workers)]
+
+        with warnings.catch_warnings(record=True):
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        assert output_collector == ['ok'] * len(threads)
 
 class ExecutorInitializerTests:
     def _initializer(self, x):
