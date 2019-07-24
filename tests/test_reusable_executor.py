@@ -13,7 +13,7 @@ from distutils.version import LooseVersion
 
 import loky
 from loky import cpu_count
-from loky import get_reusable_executor
+from loky import get_reusable_executor, get_reusable_thread_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 import cloudpickle
@@ -773,7 +773,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         assert executor4 is executor3
 
 
-class TestExecutorInitializer(ReusableExecutorMixin):
+class ExecutorInitializerTests:
     def _initializer(self, x):
         loky._initialized_state = x
 
@@ -782,23 +782,36 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         return getattr(loky, "_initialized_state", "uninitialized")
 
     def test_reusable_initializer(self):
-        executor = get_reusable_executor(
+        executor = self.get_reusable_executor(
             max_workers=2, initializer=self._initializer, initargs=('done',))
 
         assert executor.submit(self._test_initializer).result() == 'done'
 
         # when the initializer change, the executor is re-spawned
-        executor = get_reusable_executor(
+        executor = self.get_reusable_executor(
             max_workers=2, initializer=self._initializer, initargs=(42,))
 
         assert executor.submit(self._test_initializer).result() == 42
 
         # With reuse=True, the executor use the same initializer
-        executor = get_reusable_executor(max_workers=4, reuse=True)
-        for x in executor.map(self._test_initializer, delay=.1):
-            assert x == 42
+        executor = self.get_reusable_executor(max_workers=4, reuse=True)
+        assert executor.submit(self._test_initializer).result() == 42
+
+        if not hasattr(executor, "context"):
+            # reset the variable changed during initialization
+            loky._initialized_state = "uninitialized"
 
         # With reuse='auto', the initializer is not used anymore
-        executor = get_reusable_executor(max_workers=4)
-        for x in executor.map(self._test_initializer, delay=.1):
-            assert x == 'uninitialized'
+        executor = self.get_reusable_executor(max_workers=4)
+        assert executor.submit(
+            self._test_initializer).result() == "uninitialized"
+
+
+class TestsProcessExecutorInitializer(ExecutorInitializerTests,
+                                      ReusableExecutorMixin):
+    get_reusable_executor = staticmethod(get_reusable_executor)
+
+
+class TestsThreadExecutorInitializer(ExecutorInitializerTests,
+                                     ReusableExecutorMixin):
+    get_reusable_executor = staticmethod(get_reusable_thread_executor)

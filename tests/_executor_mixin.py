@@ -249,19 +249,25 @@ class ReusableExecutorMixin:
     def setup_method(self, method):
         default_start_method = get_context().get_start_method()
         assert default_start_method == "loky", default_start_method
-        executor = get_reusable_executor(max_workers=2)
+        executor = self.get_reusable_executor(max_workers=2)
         _check_executor_started(executor)
-        # There can be less than 2 workers because of the worker timeout
-        _check_subprocesses_number(executor, expected_max_process_number=2)
+        if hasattr(executor, "context"):
+            # There can be less than 2 workers because of the worker timeout
+            _check_subprocesses_number(executor, expected_max_process_number=2)
+
+        # There is no such check for the ThreadPoolExecutor because threads are
+        # created one by one when needed.
+
 
     def teardown_method(self, method):
         """Make sure the executor can be recovered after the tests"""
-        executor = get_reusable_executor(max_workers=2)
+        executor = self.get_reusable_executor(max_workers=2)
         assert executor.submit(math.sqrt, 1).result() == 1
-        # There can be less than 2 workers because of the worker timeout
-        _check_subprocesses_number(executor, expected_max_process_number=2)
+        if hasattr(executor, "context"):
+            # There can be less than 2 workers because of the worker timeout
+            _check_subprocesses_number(executor, expected_max_process_number=2)
 
     @classmethod
     def teardown_class(cls):
-        executor = get_reusable_executor(max_workers=2)
+        executor = cls.get_reusable_executor(max_workers=2)
         executor.shutdown(wait=True)
