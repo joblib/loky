@@ -11,7 +11,7 @@ from loky.reusable_thread_executor import _ReusableThreadPoolExecutor
 
 from loky._base import TimeoutError
 from loky.backend import get_context
-from loky import get_reusable_executor, cpu_count
+from loky import get_reusable_executor, get_reusable_thread_executor, cpu_count
 
 
 # Compat Travis
@@ -271,3 +271,11 @@ class ReusableExecutorMixin:
     def teardown_class(cls):
         executor = cls.get_reusable_executor(max_workers=2)
         executor.shutdown(wait=True)
+
+
+class ReusableThreadExecutorMixin(ReusableExecutorMixin):
+    get_reusable_executor = staticmethod(get_reusable_thread_executor)
+
+
+class ReusableProcessExecutorMixin(ReusableExecutorMixin):
+    get_reusable_executor = staticmethod(get_reusable_executor)

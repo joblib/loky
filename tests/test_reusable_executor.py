@@ -19,7 +19,10 @@ from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 import cloudpickle
 
-from ._executor_mixin import ReusableExecutorMixin
+from ._executor_mixin import (
+    ReusableProcessExecutorMixin,
+    ReusableThreadExecutorMixin
+)
 from .utils import TimingWrapper, id_sleep, check_python_subprocess_call
 from .utils import filter_match
 
@@ -210,8 +213,7 @@ class CExitAtGCInWorker(object):
             c_exit()
 
 
-class TestExecutorDeadLock(ReusableExecutorMixin):
-    get_reusable_executor = staticmethod(get_reusable_executor)
+class TestExecutorDeadLock(ReusableProcessExecutorMixin):
     crash_cases = [
         # Check problem occuring while pickling a task in
         (id, (ExitAtPickle(),), PicklingError, None),
@@ -417,8 +419,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         executor.shutdown(wait=True)
 
 
-class TestTerminateProcessExecutor(ReusableExecutorMixin):
-    get_reusable_executor = staticmethod(get_reusable_executor)
+class TestTerminateProcessExecutor(ReusableProcessExecutorMixin):
     def test_shutdown_kill(self):
         """Test reusable_executor termination handling"""
         from itertools import repeat
@@ -498,8 +499,8 @@ class ResizeExecutorTest:
             assert expected_msg in recorded_warnings[0].message.args[0]
 
 
-class TestResizeProcessExecutor(ReusableExecutorMixin, ResizeExecutorTest):
-    get_reusable_executor = staticmethod(get_reusable_executor)
+class TestResizeProcessExecutor(ReusableProcessExecutorMixin,
+                                ResizeExecutorTest):
     def test_reusable_executor_resize(self):
         """Test reusable_executor resizing"""
 
@@ -576,9 +577,8 @@ class TestResizeProcessExecutor(ReusableExecutorMixin, ResizeExecutorTest):
         executor.shutdown()
 
 
-class TestResizeThreadExecutor(ReusableExecutorMixin, ResizeExecutorTest):
-    get_reusable_executor = staticmethod(get_reusable_thread_executor)
-
+class TestResizeThreadExecutor(ReusableThreadExecutorMixin,
+                               ResizeExecutorTest):
     def test_reusable_thread_executor_resize(self):
         """Test reusable_executor resizing"""
 
@@ -657,9 +657,8 @@ class GetReusableExecutorTest:
         assert executor4 is executor3
 
 
-class TestGetReusableProcessExecutor(ReusableExecutorMixin,
+class TestGetReusableProcessExecutor(ReusableProcessExecutorMixin,
                                      GetReusableExecutorTest):
-    get_reusable_executor = staticmethod(get_reusable_executor)
     @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
     @pytest.mark.skipif(sys.version_info <= (3, 4),
                         reason="No context before 3.4")
@@ -813,10 +812,8 @@ class TestGetReusableProcessExecutor(ReusableExecutorMixin,
         assert output_collector == ['ok'] * len(threads)
 
 
-class TestGetReusableThreadExecutor(ReusableExecutorMixin,
+class TestGetReusableThreadExecutor(ReusableThreadExecutorMixin,
                                     GetReusableExecutorTest):
-    get_reusable_executor = staticmethod(get_reusable_thread_executor)
-
     @pytest.mark.parametrize("workers", ["constant", "varying"])
     def test_reusable_executor_thread_safety(self, workers):
         # Create a new shared executor and ensures that it's workers are
@@ -889,14 +886,12 @@ class ExecutorInitializerTests:
 
 
 class TestsProcessExecutorInitializer(ExecutorInitializerTests,
-                                      ReusableExecutorMixin):
-    get_reusable_executor = staticmethod(get_reusable_executor)
+                                      ReusableProcessExecutorMixin):
+    pass
 
 
 class TestsThreadExecutorInitializer(ExecutorInitializerTests,
-                                     ReusableExecutorMixin):
-    get_reusable_executor = staticmethod(get_reusable_thread_executor)
-
+                                     ReusableThreadExecutorMixin):
     @staticmethod
     def failing_initializer():
         raise ValueError
