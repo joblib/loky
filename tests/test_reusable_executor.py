@@ -211,7 +211,7 @@ class CExitAtGCInWorker(object):
 
 
 class TestExecutorDeadLock(ReusableExecutorMixin):
-
+    get_reusable_executor = staticmethod(get_reusable_executor)
     crash_cases = [
         # Check problem occuring while pickling a task in
         (id, (ExitAtPickle(),), PicklingError, None),
@@ -577,7 +577,7 @@ class TestResizeProcessExecutor(ReusableExecutorMixin, ResizeExecutorTest):
 
 
 class TestResizeThreadExecutor(ReusableExecutorMixin, ResizeExecutorTest):
-    get_reusable_executor = staticmethod(get_reusable_executor)
+    get_reusable_executor = staticmethod(get_reusable_thread_executor)
 
     def test_reusable_thread_executor_resize(self):
         """Test reusable_executor resizing"""
