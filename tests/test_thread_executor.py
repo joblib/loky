@@ -120,6 +120,10 @@ class TestsThreadExecutorShutdown(
         for t in threads:
             t.join()
 
+    @pytest.mark.skipif(
+        sys.version_info[:2] < (3, 6),
+        reason="thread name prefixing introduced in cpython3.6"
+    )
     def test_thread_names_assigned(self):
         executor = self.executor_type(
             max_workers=5, thread_name_prefix="SpecialPool"
@@ -132,6 +136,10 @@ class TestsThreadExecutorShutdown(
             assert re.match(r"^SpecialPool_[0-4]$", t.name)
             t.join()
 
+    @pytest.mark.skipif(
+        sys.version_info[:2] < (3, 6),
+        reason="thread name prefixing introduced in cpython3.6"
+    )
     def test_thread_names_default(self):
         executor = self.executor_type(max_workers=5)
         executor.map(abs, range(-5, 5))

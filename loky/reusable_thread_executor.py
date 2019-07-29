@@ -21,8 +21,9 @@ def _get_next_thread_executor_id():
     return thread_executor_id
 
 
-def _worker(executor_reference, work_queue, initializer, initargs):
-    if initializer is not None:
+def _worker(executor_reference, work_queue, *args):
+    if args:
+        initializer, initargs = args
         try:
             initializer(*initargs)
         except BaseException:
@@ -65,13 +66,12 @@ class _ReusableThreadPoolExecutor(ThreadPoolExecutor):
         self,
         max_workers=None,
         executor_id=0,
-        thread_name_prefix="",
-        initializer=None,
-        initargs=(),
+        **executor_kwargs
     ):
+        # executor_kwargs can contain initializer arguments as well as
+        # thread_name_prefix
         super(_ReusableThreadPoolExecutor, self).__init__(
-            max_workers=max_workers, initializer=initializer,
-            initargs=initargs, thread_name_prefix=thread_name_prefix
+            max_workers=max_workers, **executor_kwargs
         )
         self.executor_id = executor_id
 
@@ -101,22 +101,27 @@ class _ReusableThreadPoolExecutor(ThreadPoolExecutor):
         # TODO(bquinlan): Should avoid creating new threads if there are more
         # idle threads than items in the work queue.
         num_threads = len(self._threads)
+        if hasattr(self, "_initializer"):
+            thread_args = (
+                weakref.ref(self, weakref_cb),
+                self._work_queue,
+                self._initializer,
+                self._initargs,
+            )
+        else:
+            thread_args = (weakref.ref(self, weakref_cb), self._work_queue)
+
         if num_threads < self._max_workers:
             thread_name = "%s_%d" % (
-                self._thread_name_prefix or self,
-                num_threads,
+                getattr(self, "_thread_name_prefix", None) or self,
+                num_threads
             )
             # use our custom _worker function as a target, that can kill
             # where workers can die without shutting down the executor
             t = threading.Thread(
                 name=thread_name,
                 target=_worker,
-                args=(
-                    weakref.ref(self, weakref_cb),
-                    self._work_queue,
-                    self._initializer,
-                    self._initargs,
-                ),
+                args=thread_args
             )
             t.daemon = True
             t.start()
@@ -125,7 +130,7 @@ class _ReusableThreadPoolExecutor(ThreadPoolExecutor):
 
 
 def get_reusable_thread_executor(
-    max_workers=None, reuse="auto", initializer=None, initargs=()
+    max_workers=None, reuse="auto", **executor_kwargs
 ):
     """Return the current _ReusableThreadPoolExectutor instance.
 
@@ -159,21 +164,24 @@ def get_reusable_thread_executor(
             "max_workers must be greater than 0, got {}.".format(max_workers)
         )
 
-    kwargs = dict(initializer=initializer, initargs=initargs)
+    this_executor_kwargs = executor_kwargs
     if thread_executor is None:
         mp.util.debug(
             "Create a thread_executor with max_workers={}.".format(max_workers)
         )
         executor_id = _get_next_thread_executor_id()
-        _thread_executor_kwargs = kwargs
+        _thread_executor_kwargs = this_executor_kwargs
         _thread_executor = thread_executor = _ReusableThreadPoolExecutor(
-            max_workers=max_workers, executor_id=executor_id, **kwargs
+            max_workers=max_workers, executor_id=executor_id,
+            **this_executor_kwargs
         )
     else:
         if reuse == "auto":
-            reuse = kwargs == _thread_executor_kwargs
-        if thread_executor._broken or thread_executor._shutdown or not reuse:
-            if thread_executor._broken:
+            reuse = this_executor_kwargs == _thread_executor_kwargs
+        # _broken exists only for python >= 3.7
+        broken = getattr(thread_executor, "_broken", False)
+        if broken or thread_executor._shutdown or not reuse:
+            if broken:
                 reason = "broken"
             elif thread_executor._shutdown:
                 reason = "shutdown"
@@ -189,7 +197,7 @@ def get_reusable_thread_executor(
             _thread_executor = thread_executor = _thread_executor_kwargs = None
             # Recursive call to build a new instance
             return get_reusable_thread_executor(
-                max_workers=max_workers, **kwargs
+                max_workers=max_workers, **this_executor_kwargs
             )
         else:
             mp.util.debug(

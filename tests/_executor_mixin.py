@@ -133,8 +133,7 @@ class ExecutorMixin:
                     initializer=initializer_event, initargs=(_test_event,))
             else:
                 self.executor = self.executor_type(
-                    max_workers=self.worker_count,
-                    initializer=initializer_event, initargs=(_test_event,))
+                    max_workers=self.worker_count)
         except NotImplementedError as e:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
@@ -225,13 +224,8 @@ class ThreadExecutorMixin(ExecutorMixin):
         # Make sure executor is not broken if it should not be
         executor = getattr(self, 'executor', None)
         if executor is not None:
-            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
-            for mark in getattr(method, "pytestmark", []):
-                if mark.name == "broken_pool":
-                    expect_broken_pool = True
-            is_actually_broken = executor._broken
-            assert is_actually_broken == expect_broken_pool
-
+            # no test leading to a broken threadpool for now. Maybe do one with
+            # initargs?
             t_start = time.time()
             executor.shutdown(wait=True)
             dt = time.time() - t_start

@@ -890,6 +890,10 @@ class TestsProcessExecutorInitializer(ExecutorInitializerTests,
     pass
 
 
+@pytest.mark.skipif(
+    sys.version_info[:2] < (3, 7),
+    reason="initializer feature were introduced in CPython 3.7"
+)
 class TestsThreadExecutorInitializer(ExecutorInitializerTests,
                                      ReusableThreadExecutorMixin):
     @staticmethod
