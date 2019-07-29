@@ -6,10 +6,12 @@ import math
 import psutil
 import pytest
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from loky.reusable_thread_executor import _ReusableThreadPoolExecutor
 
 from loky._base import TimeoutError
 from loky.backend import get_context
-from loky import get_reusable_executor, cpu_count
+from loky import get_reusable_executor, get_reusable_thread_executor, cpu_count
 
 
 # Compat Travis
@@ -111,7 +113,10 @@ def _check_executor_started(executor):
     except TimeoutError:
         print('\n' * 3, res.done(), executor._call_queue.empty(),
               executor._result_queue.empty())
-        print(executor._processes)
+        if hasattr(executor, "_processes"):
+            print(executor._processes)
+        else:
+            print(executor._threads)
         print(threading.enumerate())
         from faulthandler import dump_traceback
         dump_traceback()
@@ -120,7 +125,35 @@ def _check_executor_started(executor):
 
 
 class ExecutorMixin:
+    def setup_method(self):
+        try:
+            if hasattr(self, "context"):
+                self.executor = self.executor_type(
+                    max_workers=self.worker_count, context=self.context,
+                    initializer=initializer_event, initargs=(_test_event,))
+            else:
+                self.executor = self.executor_type(
+                    max_workers=self.worker_count)
+        except NotImplementedError as e:
+            self.skipTest(str(e))
+        _check_executor_started(self.executor)
+
+    def _prime_executor(self):
+        # Make sure that the executor is ready to do work before running the
+        # tests. This should reduce the probability of timeouts in the tests.
+        futures = [self.executor.submit(time.sleep, 0.1)
+                   for _ in range(self.worker_count)]
+        for f in futures:
+            f.result()
+
+
+class ProcessExecutorMixin(ExecutorMixin):
     worker_count = 5
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        global _test_event
+        assert _test_event is not None
+        super(ProcessExecutorMixin, self).setup_method()
 
     @classmethod
     def setup_class(cls):
@@ -135,19 +168,6 @@ class ExecutorMixin:
         global _test_event
         if _test_event is not None:
             _test_event = None
-
-    @pytest.fixture(autouse=True)
-    def setup_method(self):
-        global _test_event
-        assert _test_event is not None
-        try:
-            self.executor = self.executor_type(
-                max_workers=self.worker_count, context=self.context,
-                initializer=initializer_event, initargs=(_test_event,))
-        except NotImplementedError as e:
-            self.skipTest(str(e))
-        _check_executor_started(self.executor)
-        _check_subprocesses_number(self.executor, self.worker_count)
 
     def teardown_method(self, method):
         # Make sure executor is not broken if it should not be
@@ -164,15 +184,8 @@ class ExecutorMixin:
             executor.shutdown(wait=True, kill_workers=True)
             dt = time.time() - t_start
             assert dt < 10, "Executor took too long to shutdown"
-        _check_subprocesses_number(executor, 0)
 
-    def _prime_executor(self):
-        # Make sure that the executor is ready to do work before running the
-        # tests. This should reduce the probability of timeouts in the tests.
-        futures = [self.executor.submit(time.sleep, 0.1)
-                   for _ in range(self.worker_count)]
-        for f in futures:
-            f.result()
+        _check_subprocesses_number(self.executor, 0)
 
     @classmethod
     def check_no_running_workers(cls, patience=5, sleep_duration=0.01):
@@ -197,24 +210,66 @@ class ExecutorMixin:
             % (len(workers), patience))
 
 
+class ThreadExecutorMixin(ExecutorMixin):
+    worker_count = None
+    executor_type = _ReusableThreadPoolExecutor
+
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
+        global _test_event
+        assert _test_event is not None
+        super(ThreadExecutorMixin, self).setup_method()
+
+    def teardown_method(self, method):
+        # Make sure executor is not broken if it should not be
+        executor = getattr(self, 'executor', None)
+        if executor is not None:
+            # no test leading to a broken threadpool for now. Maybe do one with
+            # initargs?
+            t_start = time.time()
+            executor.shutdown(wait=True)
+            dt = time.time() - t_start
+            assert dt < 10, "Executor took too long to shutdown"
+
+    @classmethod
+    def setup_class(cls):
+        print("setup class with threading context")
+        global _test_event
+        if _test_event is None:
+            _test_event = threading.Event()
+
 class ReusableExecutorMixin:
 
     def setup_method(self, method):
         default_start_method = get_context().get_start_method()
         assert default_start_method == "loky", default_start_method
-        executor = get_reusable_executor(max_workers=2)
+        executor = self.get_reusable_executor(max_workers=2)
         _check_executor_started(executor)
-        # There can be less than 2 workers because of the worker timeout
-        _check_subprocesses_number(executor, expected_max_process_number=2)
+        if hasattr(executor, "context"):
+            # There can be less than 2 workers because of the worker timeout
+            _check_subprocesses_number(executor, expected_max_process_number=2)
+
+        # There is no such check for the ThreadPoolExecutor because threads are
+        # created one by one when needed.
+
 
     def teardown_method(self, method):
         """Make sure the executor can be recovered after the tests"""
-        executor = get_reusable_executor(max_workers=2)
+        executor = self.get_reusable_executor(max_workers=2)
         assert executor.submit(math.sqrt, 1).result() == 1
-        # There can be less than 2 workers because of the worker timeout
-        _check_subprocesses_number(executor, expected_max_process_number=2)
+        if hasattr(executor, "context"):
+            # There can be less than 2 workers because of the worker timeout
+            _check_subprocesses_number(executor, expected_max_process_number=2)
 
     @classmethod
     def teardown_class(cls):
-        executor = get_reusable_executor(max_workers=2)
+        executor = cls.get_reusable_executor(max_workers=2)
         executor.shutdown(wait=True)
+
+
+class ReusableThreadExecutorMixin(ReusableExecutorMixin):
+    get_reusable_executor = staticmethod(get_reusable_thread_executor)
+
+
+class ReusableProcessExecutorMixin(ReusableExecutorMixin):
+    get_reusable_executor = staticmethod(get_reusable_executor)

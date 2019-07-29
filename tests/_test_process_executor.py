@@ -18,6 +18,7 @@ except ImportError:
 from loky import process_executor
 
 import os
+import re
 import gc
 import sys
 import time
@@ -30,7 +31,7 @@ import threading
 import faulthandler
 from math import sqrt
 from threading import Thread
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from loky.process_executor import LokyRecursionError
 from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
@@ -97,38 +98,46 @@ class MyObject(object):
     def my_method(self):
         pass
 
-
 class ExecutorShutdownTest:
-
     def test_run_after_shutdown(self):
         self.executor.shutdown()
         with pytest.raises(RuntimeError):
             self.executor.submit(pow, 2, 5)
 
-    def test_shutdown_with_pickle_error(self):
+    def test_hang_issue12364(self):
+        fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
         self.executor.shutdown()
-        with self.executor_type(max_workers=4) as e:
-            e.submit(id, ErrorAtPickle())
-
-    def test_shutdown_with_sys_exit_at_pickle(self):
-        self.executor.shutdown()
-        with self.executor_type(max_workers=4) as e:
-            e.submit(id, ExitAtPickle())
+        for f in fs:
+            f.result()
 
     def test_interpreter_shutdown(self):
         # Free resources to avoid random timeout in CI
-        self.executor.shutdown(wait=True, kill_workers=True)
+        if hasattr(self.executor, "context"):
+            self.executor.shutdown(wait=True, kill_workers=True)
+        else:
+            self.executor.shutdown(wait=True)
+
 
         tempdir = tempfile.mkdtemp(prefix='loky_')
         try:
             n_jobs = 4
             code = """if True:
-                from loky.process_executor import {executor_type}
+                try:
+                    from loky.process_executor import {executor_type}
+                except ImportError:
+                    # ThreadPoolExecutor case -- quick and dirty, change it
+                    # later
+                    from loky.reusable_thread_executor import {executor_type}
                 from loky.backend import get_context
                 from tests._test_process_executor import sleep_and_write
 
-                context = get_context("{start_method}")
-                e = {executor_type}({n_jobs}, context=context)
+                start_method = "{start_method}"
+                if start_method != "":
+                    context = get_context(start_method)
+                    e = {executor_type}({n_jobs}, context=context)
+                else:
+                    e = {executor_type}({n_jobs})
+
                 e.submit(id, 42).result()
 
                 task_ids = list(range(2 * {n_jobs}))
@@ -141,10 +150,17 @@ class ExecutorShutdownTest:
                 # shutdown main Python interpreter while letting the worker
                 # processes finish in the background.
             """
-            code = code.format(executor_type=self.executor_type.__name__,
-                               start_method=self.context.get_start_method(),
-                               n_jobs=n_jobs,
-                               tempdir=tempdir.replace("\\", "/"))
+            if hasattr(self, "context"):
+                code = code.format(
+                    executor_type=self.executor_type.__name__,
+                    start_method=self.context.get_start_method(),
+                    n_jobs=n_jobs, tempdir=tempdir.replace("\\", "/"))
+            else:
+                code = code.format(
+                    executor_type=self.executor_type.__name__,
+                    start_method="",
+                    n_jobs=n_jobs, tempdir=tempdir.replace("\\", "/"))
+
             stdout, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
@@ -175,11 +191,18 @@ class ExecutorShutdownTest:
         finally:
             shutil.rmtree(tempdir)
 
-    def test_hang_issue12364(self):
-        fs = [self.executor.submit(time.sleep, 0.01) for _ in range(50)]
+
+class ProcessExecutorShutdownTest:
+
+    def test_shutdown_with_pickle_error(self):
         self.executor.shutdown()
-        for f in fs:
-            f.result()
+        with self.executor_type(max_workers=4) as e:
+            e.submit(id, ErrorAtPickle())
+
+    def test_shutdown_with_sys_exit_at_pickle(self):
+        self.executor.shutdown()
+        with self.executor_type(max_workers=4) as e:
+            e.submit(id, ExitAtPickle())
 
     def test_processes_terminate(self):
         self.executor.submit(mul, 21, 2)
@@ -191,43 +214,6 @@ class ExecutorShutdownTest:
 
         for p in processes.values():
             p.join()
-
-    def test_processes_terminate_on_executor_gc(self):
-
-        results = self.executor.map(sleep_and_return,
-                                    [0.1] * 10, range(10))
-        assert len(self.executor._processes) == self.worker_count
-        processes = self.executor._processes
-        executor_flags = self.executor._flags
-
-        # The following should trigger GC and therefore shutdown of workers.
-        # However the shutdown wait for all the pending jobs to complete
-        # first.
-        executor_reference = weakref.ref(self.executor)
-        self.executor = None
-
-        # Make sure that there is not other reference to the executor object.
-        # We have to be patient as _thread_management_worker might have a
-        # reference when we deleted self.executor.
-        t_deadline = time.time() + 1
-        while executor_reference() is not None and time.time() < t_deadline:
-            if IS_PYPY:
-                # PyPy can delay __del__ calls and GC compared to CPython.
-                # To ensure that this test pass without waiting too long we
-                # need an explicit GC.
-                gc.collect()
-            time.sleep(0.001)
-        assert executor_reference() is None
-
-        # The remaining jobs should still be processed in the background
-        for result, expected in zip(results, range(10)):
-            assert result == expected
-
-        # Once all pending jobs have completed the executor and threads should
-        # terminate automatically.
-        self.check_no_running_workers(patience=2)
-        assert executor_flags.shutdown, processes
-        assert not executor_flags.broken, processes
 
     @classmethod
     def _wait_and_crash(cls):
@@ -349,6 +335,43 @@ class ExecutorShutdownTest:
 
         _executor_mixin._check_subprocesses_number(self.executor, 0)
 
+    def test_processes_terminate_on_executor_gc(self):
+
+        results = self.executor.map(sleep_and_return,
+                                    [0.1] * 10, range(10))
+        assert len(self.executor._processes) == self.worker_count
+        processes = self.executor._processes
+        executor_flags = self.executor._flags
+
+        # The following should trigger GC and therefore shutdown of workers.
+        # However the shutdown wait for all the pending jobs to complete
+        # first.
+        executor_reference = weakref.ref(self.executor)
+        self.executor = None
+
+        # Make sure that there is not other reference to the executor object.
+        # We have to be patient as _thread_management_worker might have a
+        # reference when we deleted self.executor.
+        t_deadline = time.time() + 1
+        while executor_reference() is not None and time.time() < t_deadline:
+            if IS_PYPY:
+                # PyPy can delay __del__ calls and GC compared to CPython.
+                # To ensure that this test pass without waiting too long we
+                # need an explicit GC.
+                gc.collect()
+            time.sleep(0.001)
+        assert executor_reference() is None
+
+        # The remaining jobs should still be processed in the background
+        for result, expected in zip(results, range(10)):
+            assert result == expected
+
+        # Once all pending jobs have completed the executor and threads should
+        # terminate automatically.
+        self.check_no_running_workers(patience=2)
+        assert executor_flags.shutdown, processes
+        assert not executor_flags.broken, processes
+
 
 class WaitTests:
 
@@ -384,6 +407,7 @@ class WaitTests:
         return True
 
     def test_first_exception(self):
+        # XXX: this one slightly differs from the cpython analogous test
         future1 = self.executor.submit(mul, 2, 21)
         future2 = self.executor.submit(self.wait_and_raise, 1.5)
         future3 = self.executor.submit(time.sleep, 3)
@@ -438,6 +462,7 @@ class WaitTests:
         assert set() == pending
 
     def test_timeout(self):
+        # XXX: this one slightly differs from the cpython analogous test
         # Make sure the executor has already started to avoid timeout happening
         # before future1 returns
         assert self.executor.submit(id_sleep, 42).result() == 42
@@ -499,8 +524,6 @@ class AsCompletedTests:
 
 
 class ExecutorTest:
-    # Executor.shutdown() and context manager usage is tested by
-    # ExecutorShutdownTest.
     def test_submit(self):
         future = self.executor.submit(pow, 2, 8)
         assert 256 == future.result()
@@ -528,13 +551,6 @@ class ExecutorTest:
 
         assert [None, None] == results
 
-    def test_shutdown_race_issue12456(self):
-        # Issue #12456: race condition at shutdown where trying to post a
-        # sentinel in the call queue blocks (the queue is full while processes
-        # have exited).
-        self.executor.map(str, [2] * (self.worker_count + 1))
-        self.executor.shutdown()
-
     def test_no_stale_references(self):
         # Issue #16284: check that the executors don't unnecessarily hang onto
         # references.
@@ -553,6 +569,17 @@ class ExecutorTest:
             if collected:
                 return
         assert collected, "Stale reference not collected within timeout."
+
+
+class ProcessExecutorTest(ExecutorTest):
+    # Executor.shutdown() and context manager usage is tested by
+    # ExecutorShutdownTest.
+    def test_shutdown_race_issue12456(self):
+        # Issue #12456: race condition at shutdown where trying to post a
+        # sentinel in the call queue blocks (the queue is full while processes
+        # have exited).
+        self.executor.map(str, [2] * (self.worker_count + 1))
+        self.executor.shutdown()
 
     def test_max_workers_negative(self):
         for number in (0, -1):
@@ -892,3 +919,5 @@ class ExecutorTest:
         # Submitting other jobs fails as well.
         with pytest.raises(TerminatedWorkerError, match=match):
             self.executor.submit(pow, 2, 8)
+
+

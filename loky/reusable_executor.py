@@ -103,7 +103,7 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
                           .format(max_workers))
             executor_id = _get_next_executor_id()
             _executor_kwargs = kwargs
-            _executor = executor = _ReusablePoolExecutor(
+            _executor = executor = _ReusableProcessPoolExecutor(
                 _executor_lock, max_workers=max_workers,
                 executor_id=executor_id, **kwargs)
         else:
@@ -134,11 +134,11 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     return executor
 
 
-class _ReusablePoolExecutor(ProcessPoolExecutor):
+class _ReusableProcessPoolExecutor(ProcessPoolExecutor):
     def __init__(self, submit_resize_lock, max_workers=None, context=None,
                  timeout=None, executor_id=0, job_reducers=None,
                  result_reducers=None, initializer=None, initargs=()):
-        super(_ReusablePoolExecutor, self).__init__(
+        super(_ReusableProcessPoolExecutor, self).__init__(
             max_workers=max_workers, context=context, timeout=timeout,
             job_reducers=job_reducers, result_reducers=result_reducers,
             initializer=initializer, initargs=initargs)
@@ -147,7 +147,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
 
     def submit(self, fn, *args, **kwargs):
         with self._submit_resize_lock:
-            return super(_ReusablePoolExecutor, self).submit(
+            return super(_ReusableProcessPoolExecutor, self).submit(
                 fn, *args, **kwargs)
 
     def _resize(self, max_workers):
@@ -201,5 +201,5 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         # As this executor can be resized, use a large queue size to avoid
         # underestimating capacity and introducing overhead
         queue_size = 2 * cpu_count() + EXTRA_QUEUED_CALLS
-        super(_ReusablePoolExecutor, self)._setup_queues(
+        super(_ReusableProcessPoolExecutor, self)._setup_queues(
             job_reducers, result_reducers, queue_size=queue_size)
