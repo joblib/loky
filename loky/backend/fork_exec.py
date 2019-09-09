@@ -33,11 +33,14 @@ def close_fds(keep_fds):  # pragma: no cover
             pass
 
 
-def fork_exec(cmd, keep_fds):
+def fork_exec(cmd, keep_fds, env={}):
+
+    new_env = os.environ.copy()
+    new_env.update(env)
 
     pid = os.fork()
     if pid == 0:  # pragma: no cover
         close_fds(keep_fds)
-        os.execv(sys.executable, cmd)
+        os.execve(sys.executable, cmd, new_env)
     else:
         return pid
