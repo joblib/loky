@@ -3,8 +3,13 @@ environment:
   # Python versions sequentially.
   # We run it once per architecture (32 bit vs 64 bit).
   matrix:
-    - PYTHON: "C:\\Python37-x64"
-      PYTHON_VERSION: "3.7.x"
+    - PYTHON: "C:\\Python36"
+      PYTHON_VERSION: "3.6.x"
+      PYTHON_ARCH: "32"
+      PYTHON_ARCH_SUFFIX: ""
+
+    - PYTHON: "C:\\Python36-x64"
+      PYTHON_VERSION: "3.6.x"
       PYTHON_ARCH: "64"
       PYTHON_ARCH_SUFFIX: "-x64"
 matrix:
@@ -19,8 +24,6 @@ install:
   - ps: ./continuous_integration/appveyor/install.ps1
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
   - "SET LOKY_MAX_DEPTH=3"
-  - python -m venv ../python_venv
-  - ../python_venv/Scripts/activate.bat
   - "pip install tox tox-venv"
 
 # Not a .NET project, we build in the install step instead
