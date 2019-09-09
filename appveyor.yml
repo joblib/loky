@@ -20,7 +20,9 @@ matrix:
 
 install:
   # Install Python (from the official .msi of http://python.org) and pip when
-  # not already installed.
+  # not already installed. We use tox-venv and not tox because of a previous
+  # bug affecting loky inside a venv-created virtual environment for
+  # Python3.7+, reported initially in joblib/joblib#901.
   - ps: ./continuous_integration/appveyor/install.ps1
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
   - "SET LOKY_MAX_DEPTH=3"
