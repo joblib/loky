@@ -3,7 +3,7 @@
 # Authors: Thomas Moreau
 # License: 3-clause BSD
 
-$VERSION=(36, 27)
+$VERSION=(37, 36, 27)
 $TOX_CMD = "python ./continuous_integration/appveyor/tox"
 
 function TestPythonVersions () {
