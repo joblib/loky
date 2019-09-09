@@ -35,7 +35,8 @@ def _path_eq(p1, p2):
     return p1 == p2 or os.path.normcase(p1) == os.path.normcase(p2)
 
 
-WINENV = not _path_eq(sys.executable, sys._base_executable)
+WINENV = (hasattr(sys, "_base_executable")
+          and not _path_eq(sys.executable, sys._base_executable))
 
 #
 # We define a Popen class similar to the one from subprocess, but
