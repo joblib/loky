@@ -44,12 +44,12 @@ if sys.platform != "win32":
         method = 'loky'
         DupFd = _DupFd
 
-        def __init__(self, process_obj, env={}):
+        def __init__(self, process_obj):
             sys.stdout.flush()
             sys.stderr.flush()
             self.returncode = None
             self._fds = []
-            self._launch(process_obj, env)
+            self._launch(process_obj)
 
         if sys.version_info < (3, 4):
             @classmethod
@@ -119,7 +119,7 @@ if sys.platform != "win32":
                     if self.wait(timeout=0.1) is None:
                         raise
 
-        def _launch(self, process_obj, env):
+        def _launch(self, process_obj):
 
             tracker_fd = resource_tracker._resource_tracker.getfd()
 
@@ -150,7 +150,7 @@ if sys.platform != "win32":
                 reduction._mk_inheritable(tracker_fd)
                 self._fds.extend([child_r, child_w, tracker_fd])
                 from .fork_exec import fork_exec
-                pid = fork_exec(cmd_python, self._fds, env=env)
+                pid = fork_exec(cmd_python, self._fds)
                 util.debug("launched python with pid {} and cmd:\n{}"
                            .format(pid, cmd_python))
                 self.sentinel = parent_r
@@ -197,7 +197,7 @@ if __name__ == '__main__':
                 del process.current_process()._inheriting
 
         exitcode = process_obj._bootstrap()
-    except Exception as e:
+    except Exception:
         print('\n\n' + '-' * 80)
         print('{} failed with traceback: '.format(args.process_name))
         print('-' * 80)

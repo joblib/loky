@@ -43,6 +43,7 @@ WINENV = (hasattr(sys, "_base_executable")
 # whose constructor takes a process object as its argument.
 #
 
+
 class Popen(_Popen):
     '''
     Start a subprocess to run the code of a process object
@@ -64,14 +65,14 @@ class Popen(_Popen):
 
         python_exe = spawn.get_executable()
 
+        # copy the environment variables to set in the child process
+        child_env = os.environ.copy()
+
         # bpo-35797: When running in a venv, we bypass the redirect
         # executor and launch our base Python.
         if WINENV and _path_eq(python_exe, sys.executable):
             python_exe = sys._base_executable
-            env = os.environ.copy()
-            env["__PYVENV_LAUNCHER__"] = sys.executable
-        else:
-            env = None
+            child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
         try:
             with open(wfd, 'wb') as to_child:
@@ -88,9 +89,9 @@ class Popen(_Popen):
                     hp, ht, pid, tid = _winapi.CreateProcess(
                         python_exe, cmd,
                         None, None, inherit, 0,
-                        env, None, None)
+                        child_env, None, None)
                     _winapi.CloseHandle(ht)
-                except BaseException as e:
+                except BaseException:
                     _winapi.CloseHandle(rhandle)
                     raise
 
