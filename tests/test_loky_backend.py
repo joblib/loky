@@ -279,6 +279,29 @@ class TestLokyBackend:
         parent_connection.close()
         child_connection.close()
 
+    @staticmethod
+    def _test_child_env_vars(key, queue):
+        import os
+
+        queue.put(os.environ.get(key, 'not set'))
+
+    def test_child_env_vars(self):
+        import os
+
+        key = 'loky_child_env_test'
+        value = 'loky works'
+        out_queue = self.SimpleQueue()
+
+        os.environ[key] = value
+        p = self.Process(target=self._test_child_env_vars,
+                         args=(key, out_queue))
+        p.start()
+        child_var = out_queue.get()
+        p.join()
+
+        assert child_var == value, ("Expected var={} but got {}"
+                                    .format(value, child_var))
+
     @classmethod
     def _test_terminate(cls, event):
         # Notify the main process that child process started
