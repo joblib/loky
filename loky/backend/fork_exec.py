@@ -35,7 +35,7 @@ def close_fds(keep_fds):  # pragma: no cover
 
 def fork_exec(cmd, keep_fds):
 
-    # copy and set the environment variables in the child process
+    # copy the environment variables to set in the child process
     child_env = os.environ.copy()
 
     pid = os.fork()
