@@ -890,6 +890,7 @@ class ProcessPoolExecutor(_base.Executor):
         if context is None:
             context = get_context()
         self._context = context
+        self._env = env
 
         if initializer is not None and not callable(initializer):
             raise TypeError("initializer must be a callable")
@@ -1003,7 +1004,7 @@ class ProcessPoolExecutor(_base.Executor):
                 # Try to spawn the process with some environment variable to
                 # overwrite but it only works with the loky context for now.
                 p = self._context.Process(target=_process_worker, args=args,
-                                          env=self.env)
+                                          env=self._env)
             except TypeError:
                 p = self._context.Process(target=_process_worker, args=args)
             p._worker_exit_lock = worker_exit_lock

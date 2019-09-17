@@ -27,6 +27,10 @@ def pytest_configure(config):
 
     warnings.simplefilter('always')
 
+    config.addinivalue_line("markers", "timeout")
+    config.addinivalue_line("markers", "broken_pool")
+    config.addinivalue_line("markers", "high_memory")
+
 
 def pytest_collection_modifyitems(config, items):
     if not config.getoption("--skip-high-memory"):
