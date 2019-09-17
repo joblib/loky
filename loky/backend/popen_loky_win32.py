@@ -67,6 +67,7 @@ class Popen(_Popen):
 
         # copy the environment variables to set in the child process
         child_env = os.environ.copy()
+        child_env.update(process_obj.env)
 
         # bpo-35797: When running in a venv, we bypass the redirect
         # executor and launch our base Python.
