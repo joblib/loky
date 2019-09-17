@@ -280,23 +280,22 @@ class TestLokyBackend:
         child_connection.close()
 
     @staticmethod
-    def _test_child_env_vars(key, queue):
+    def _test_child_env(key, queue):
         import os
 
         queue.put(os.environ.get(key, 'not set'))
 
-    def test_child_env_vars(self):
+    def test_child_env_process(self):
         import os
 
-        key = 'loky_child_env_test'
+        key = 'loky_child_env_process'
         value = 'loky works'
         out_queue = self.SimpleQueue()
 
         # Test that the environment variable is correctly copied in the child
         # process.
         os.environ[key] = value
-        p = self.Process(target=self._test_child_env_vars,
-                         args=(key, out_queue))
+        p = self.Process(target=self._test_child_env, args=(key, out_queue))
         p.start()
         child_var = out_queue.get()
         p.join()
@@ -307,8 +306,8 @@ class TestLokyBackend:
         # Test that the environment variable is correctly overwritted by using
         # the `env` variable in Process.
         new_value = 'loky rocks'
-        p = self.Process(target=self._test_child_env_vars,
-                         args=(key, out_queue), env={key: new_value})
+        p = self.Process(target=self._test_child_env, args=(key, out_queue),
+                         env={key: new_value})
         p.start()
         child_var = out_queue.get()
         p.join()

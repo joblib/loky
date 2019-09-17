@@ -892,3 +892,26 @@ class ExecutorTest:
         # Submitting other jobs fails as well.
         with pytest.raises(TerminatedWorkerError, match=match):
             self.executor.submit(pow, 2, 8)
+
+    @staticmethod
+    def _test_child_env(var_name):
+        import os
+        return os.environ.get(var_name, "unset")
+
+    def test_child_env_executor(self):
+        # Test that for loky context, setting argument env correctly overwrite
+        # the environment of the child process.
+        if self.context.get_start_method() != 'loky':
+            pytest.skip(msg="Only work with loky context")
+
+        var_name = "loky_child_env_executor"
+        var_value = "variable set"
+        executor = self.executor_type(1, env={var_name: var_value})
+
+        var_child = executor.submit(self._test_child_env, var_name).result()
+
+        msg = "Expected env variable {}={}, got {}".format(var_name, var_value,
+                                                           var_child)
+        assert var_child == var_value, msg
+
+        executor.shutdown(wait=True)
