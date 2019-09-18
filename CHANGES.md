@@ -3,6 +3,12 @@
 - Fix a bug making all loky workers crash on Windows for Python>3.7 when using
   a virtual environment (#216).
 
+- Copy the environment variables in the child process for ``LokyProcess``. Also
+  add a ``env`` argument in ``LokyProcess``, ``ProcessPoolExecutor`` and
+  ``get_reusable_executor`` to over-write consistently some environment variable
+  in the child process. This allows setting env variables before loading any
+  module. This feature is unreliable on Windows with Python 2.7. (#217)
+
 
 ### 2.5.1 - 2019-06-11 - Bugfix release
 

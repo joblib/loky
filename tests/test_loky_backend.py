@@ -279,6 +279,46 @@ class TestLokyBackend:
         parent_connection.close()
         child_connection.close()
 
+    @staticmethod
+    def _test_child_env(key, queue):
+        import os
+
+        queue.put(os.environ.get(key, 'not set'))
+
+    @pytest.mark.xfail(sys.version_info[0] == 2 and
+                       sys.platform == "win32",
+                       reason="Can randomly fail on python2.7 and windows.")
+    def test_child_env_process(self):
+        import os
+
+        key = 'loky_child_env_process'
+        value = 'loky works'
+        out_queue = self.SimpleQueue()
+        try:
+            # Test that the environment variable is correctly copied in the
+            # child process.
+            os.environ[key] = value
+            p = self.Process(target=self._test_child_env,
+                             args=(key, out_queue))
+            p.start()
+            child_var = out_queue.get()
+            p.join()
+
+            assert child_var == value
+
+            # Test that the environment variable is correctly overwritted by
+            # using the `env` argument in Process.
+            new_value = 'loky rocks'
+            p = self.Process(target=self._test_child_env,
+                             args=(key, out_queue), env={key: new_value})
+            p.start()
+            child_var = out_queue.get()
+            p.join()
+
+            assert child_var == new_value, p.env
+        finally:
+            del os.environ[key]
+
     @classmethod
     def _test_terminate(cls, event):
         # Notify the main process that child process started

@@ -12,7 +12,7 @@ function TestPythonVersions () {
         $env:TOXPYTHON = "C:\Python$ver$env:PYTHON_ARCH_SUFFIX\python.exe"
         Write-Host $env:TOXPYTHON
         # Skip memory test as the appveyor environment is too small for those.
-        $PYTEST_ARGS = "-vl --timeout=60 --maxfail=5 --skip-high-memory"
+        $PYTEST_ARGS = "-vl --timeout=60 --maxfail=5 --skip-high-memory -rx"
 
         # Launch the tox command for the correct python version. We use `iex`
         # to correctly pass PYTEST_ARGS, which are parsed as files otherwise.
