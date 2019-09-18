@@ -400,7 +400,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             else:
                 mp.util.info("Could not acquire processes_management_lock")
                 continue
-        except BaseException as e:
+        except BaseException:
             previous_tb = traceback.format_exc()
             try:
                 result_queue.put(_RemoteTraceback(previous_tb))
@@ -853,7 +853,7 @@ class ProcessPoolExecutor(_base.Executor):
 
     def __init__(self, max_workers=None, job_reducers=None,
                  result_reducers=None, timeout=None, context=None,
-                 initializer=None, initargs=(), env={}):
+                 initializer=None, initargs=(), env=None):
         """Initializes a new ProcessPoolExecutor instance.
 
         Args:
@@ -875,8 +875,9 @@ class ProcessPoolExecutor(_base.Executor):
             initializer: An callable used to initialize worker processes.
             initargs: A tuple of arguments to pass to the initializer.
             env: A dict of environment variable to overwrite in the child
-                process. This only works with the loky context. The environment
-                variables are set before any module load.
+                process. The environment variables are set before any module is
+                loaded. Note that this only works with the loky context and it
+                is unreliable under windows and Python2.7.
         """
         _check_system_limits()
 

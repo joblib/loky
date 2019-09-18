@@ -909,9 +909,6 @@ class ExecutorTest:
         executor = self.executor_type(1, env={var_name: var_value})
 
         var_child = executor.submit(self._test_child_env, var_name).result()
-
-        msg = "Expected env variable {}={}, got {}".format(var_name, var_value,
-                                                           var_child)
-        assert var_child == var_value, msg
+        assert var_child == var_value
 
         executor.shutdown(wait=True)

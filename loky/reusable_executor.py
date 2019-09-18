@@ -40,7 +40,7 @@ def _get_next_executor_id():
 def get_reusable_executor(max_workers=None, context=None, timeout=10,
                           kill_workers=False, reuse="auto",
                           job_reducers=None, result_reducers=None,
-                          initializer=None, initargs=(), env={}):
+                          initializer=None, initargs=(), env=None):
     """Return the current ReusableExectutor instance.
 
     Start a new instance if it has not been started already or if the previous
@@ -79,7 +79,7 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     ``VAR`` are string literals to overwrite the environment variable ``ENV``
     in the child processes to value ``VAL``. The environment variables are set
     in the children before any module is loaded. This only works with with the
-    ``loky`` context.
+    ``loky`` context and it is unstable on windows with Python2.7.
     """
     with _executor_lock:
         global _executor, _executor_kwargs
@@ -146,7 +146,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
     def __init__(self, submit_resize_lock, max_workers=None, context=None,
                  timeout=None, executor_id=0, job_reducers=None,
                  result_reducers=None, initializer=None, initargs=(),
-                 env={}):
+                 env=None):
         super(_ReusablePoolExecutor, self).__init__(
             max_workers=max_workers, context=context, timeout=timeout,
             job_reducers=job_reducers, result_reducers=result_reducers,

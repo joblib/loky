@@ -315,7 +315,7 @@ class TestLokyBackend:
             child_var = out_queue.get()
             p.join()
 
-            assert child_var == new_value
+            assert child_var == new_value, p.env
         finally:
             del os.environ[key]
 
