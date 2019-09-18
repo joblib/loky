@@ -1,3 +1,6 @@
+### 2.6.1 - XXXX-YY-ZZ - Bugfix release
+
+
 ### 2.6.0 - 2019-09-18
 
 - Copy the environment variables in the child process for ``LokyProcess``. Also
