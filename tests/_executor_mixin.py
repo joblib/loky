@@ -57,6 +57,7 @@ def _running_children_with_cmdline(p):
     all_children = _direct_children_with_cmdline(p)
     workers = [(c, cmdline) for c, cmdline in all_children
                if (u'semaphore_tracker' not in cmdline and
+                   u'resource_tracker' not in cmdline and
                    u'multiprocessing.forkserver' not in cmdline)]
 
     forkservers = [c for c, cmdline in all_children

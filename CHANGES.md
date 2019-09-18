@@ -1,4 +1,32 @@
-### 2.5.0dev0 - In development
+### 2.5.2 - 2019-09-09 - Bugfix release
+
+- Fix a bug making all loky workers crash on Windows for Python>3.7 when using
+  a virtual environment (#216).
+
+- Copy the environment variables in the child process for ``LokyProcess``. Also
+  add a ``env`` argument in ``LokyProcess``, ``ProcessPoolExecutor`` and
+  ``get_reusable_executor`` to over-write consistently some environment variable
+  in the child process. This allows setting env variables before loading any
+  module. This feature is unreliable on Windows with Python 2.7. (#217)
+
+
+### 2.5.1 - 2019-06-11 - Bugfix release
+
+- Fix a bug of the ``resource_tracker``  that could create unlimited freeze on
+  Windows (#212)
+
+
+### 2.5.0 - 2019-06-07
+
+- Backport ResourceTracker from Python 3.8 concurrent.futures and fix
+  tracker pid issue (#204 and #202).
+
+- Fix bug when pickling function with kw-only argument (#264).
+
+- Fix bug in `pickler.dispatch_table` handling that could cause a crash
+  with the new cloudpickle fast pickler under Python 3.8 (#203).
+
+- Fix a race condition that could cause a deadlock with PyPy (#191).
 
 
 ### 2.4.2 - 2018-11-06 - Bugfix release
