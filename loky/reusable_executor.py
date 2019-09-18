@@ -79,7 +79,7 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     ``VAR`` are string literals to overwrite the environment variable ``ENV``
     in the child processes to value ``VAL``. The environment variables are set
     in the children before any module is loaded. This only works with with the
-    ``loky`` context and it is unstable on windows with Python2.7.
+    ``loky`` context and it is unreliable on Windows with Python 2.7.
     """
     with _executor_lock:
         global _executor, _executor_kwargs
