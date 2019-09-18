@@ -285,6 +285,9 @@ class TestLokyBackend:
 
         queue.put(os.environ.get(key, 'not set'))
 
+    @pytest.mark.xfail(sys.version_info[0] == 2 and
+                       sys.platform == "win32",
+                       reason="Can randomly fail on python2.7 and windows.")
     def test_child_env_process(self):
         import os
 
