@@ -1,7 +1,4 @@
-### 2.5.2 - 2019-09-18 - Bugfix release
-
-- Fix a bug making all loky workers crash on Windows for Python>3.7 when using
-  a virtual environment (#216).
+### 2.6.0 - 2019-09-18
 
 - Copy the environment variables in the child process for ``LokyProcess``. Also
   add a ``env`` argument in ``LokyProcess``, ``ProcessPoolExecutor`` and
@@ -10,6 +7,8 @@
   module.
   Note: this feature is unreliable on Windows with Python < 3.6. (#217)
 
+- Fix a bug making all loky workers crash on Windows for Python>3.7 when using
+  a virtual environment (#216).
 
 ### 2.5.1 - 2019-06-11 - Bugfix release
 
