@@ -312,8 +312,8 @@ class TestLokyBackend:
         child_var = out_queue.get()
         p.join()
 
-        assert child_var == new_value, ("Expected var={} but got {}"
-                                        .format(new_value, child_var))
+        assert child_var == new_value, ("Expected var={} but got {}\nEnv={}"
+                                        .format(new_value, child_var, p.env))
 
     @classmethod
     def _test_terminate(cls, event):

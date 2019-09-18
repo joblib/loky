@@ -26,8 +26,8 @@ class LokyProcess(BaseProcess):
             super(LokyProcess, self).__init__(
                 group=group, target=target, name=name, args=args,
                 kwargs=kwargs, daemon=daemon)
-        self.authkey = self.authkey
         self.env = env
+        self.authkey = self.authkey
         self.init_main_module = init_main_module
 
     @staticmethod
