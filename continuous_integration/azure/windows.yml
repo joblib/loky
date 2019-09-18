@@ -1,0 +1,38 @@
+
+parameters:
+  name: ''
+  vmImage: ''
+  matrix: []
+
+jobs:
+- job: ${{ parameters.name }}
+  pool:
+    vmImage: ${{ parameters.vmImage }}
+  variables:
+    VIRTUALENV: 'testvenv'
+    JUNITXML: 'test-data.xml'
+    LOKY_MAX_DEPTH: 5
+    COVERAGE_PROCESS_START: '.coveragerc'
+  strategy:
+    matrix:
+      ${{ insert }}: ${{ parameters.matrix }}
+
+  steps:
+    - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
+      displayName: Add conda to PATH
+    - script: |
+        continuous_integration\\azure\\install.cmd
+      displayName: 'Install'
+    - script: |
+        continuous_integration\\azure\\test_script.cmd
+      displayName: 'Test loky'
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFiles: '$(JUNITXML)'
+        testRunTitle: ${{ format('{0}-$(Agent.JobName)', parameters.name) }}
+      displayName: 'Publish Test Results'
+      condition: succeededOrFailed()
+    - script: |
+        bash continuous_integration\\azure\\upload_codecov.sh
+      displayName: 'Upload to codecov'
+      condition: succeeded()

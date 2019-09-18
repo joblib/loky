@@ -46,6 +46,9 @@ def test_cpu_count_affinity():
 
 
 def test_cpu_count_cfs_limit():
+    if sys.platform == "win32":
+        pytest.skip()
+
     if not hasattr(shutil, 'which'):
         pytest.skip()
 

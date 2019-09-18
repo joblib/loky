@@ -1,0 +1,7 @@
+numpy
+psutil
+cython
+faulthandler ; python_version < '3.3'
+pytest
+pytest-timeout
+coverage
