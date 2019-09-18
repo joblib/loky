@@ -12,9 +12,13 @@ jobs:
       py36_conda:
         VERSION_PYTHON: '3.6'
         PACKAGER: 'conda'
-      py37_pip:
+      py35_pip:
         VERSION_PYTHON: '3.5'
         PACKAGER: 'pip'
+      py27_pip:
+        VERSION_PYTHON: '2.7'
+        PACKAGER: 'pip'
+
 
 
 # - template: build_tools/azure/posix.yml
