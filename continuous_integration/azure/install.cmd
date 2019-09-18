@@ -19,7 +19,7 @@ pip --version
 
 @rem Install dependencies with either conda or pip.
 if "%PACKAGER%" == "conda" (%CONDA_INSTALL% numpy=1.15 psutil pytest cython)
-if "%PACKAGER%" == "pip" (%PIP_INSTALL% numpy psutil pytest cython)
+if "%PACKAGER%" == "pip" (%PIP_INSTALL% -r dev-requirements.txt)
 
 @rem Install extra dependency
 pip install -q pytest-timeout coverage
