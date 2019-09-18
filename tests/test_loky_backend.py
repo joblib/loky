@@ -291,29 +291,30 @@ class TestLokyBackend:
         key = 'loky_child_env_process'
         value = 'loky works'
         out_queue = self.SimpleQueue()
+        try:
+            # Test that the environment variable is correctly copied in the
+            # child process.
+            os.environ[key] = value
+            p = self.Process(target=self._test_child_env,
+                             args=(key, out_queue))
+            p.start()
+            child_var = out_queue.get()
+            p.join()
 
-        # Test that the environment variable is correctly copied in the child
-        # process.
-        os.environ[key] = value
-        p = self.Process(target=self._test_child_env, args=(key, out_queue))
-        p.start()
-        child_var = out_queue.get()
-        p.join()
+            assert child_var == value
 
-        assert child_var == value, ("Expected var={} but got {}"
-                                    .format(value, child_var))
+            # Test that the environment variable is correctly overwritted by
+            # using the `env` argument in Process.
+            new_value = 'loky rocks'
+            p = self.Process(target=self._test_child_env,
+                             args=(key, out_queue), env={key: new_value})
+            p.start()
+            child_var = out_queue.get()
+            p.join()
 
-        # Test that the environment variable is correctly overwritted by using
-        # the `env` variable in Process.
-        new_value = 'loky rocks'
-        p = self.Process(target=self._test_child_env, args=(key, out_queue),
-                         env={key: new_value})
-        p.start()
-        child_var = out_queue.get()
-        p.join()
-
-        assert child_var == new_value, ("Expected var={} but got {}\nEnv={}"
-                                        .format(new_value, child_var, p.env))
+            assert child_var == new_value
+        finally:
+            del os.environ[key]
 
     @classmethod
     def _test_terminate(cls, event):
