@@ -9,12 +9,12 @@ jobs:
       py37_conda:
         VERSION_PYTHON: '3.7'
         PACKAGER: 'conda'
-      py36_conda:
+      py36_pip:
         VERSION_PYTHON: '3.6'
-        PACKAGER: 'conda'
-      py35_pip:
-        VERSION_PYTHON: '3.5'
         PACKAGER: 'pip'
+      py35_conda:
+        VERSION_PYTHON: '3.5'
+        PACKAGER: 'conda'
       py27_pip:
         VERSION_PYTHON: '2.7'
         PACKAGER: 'pip'
