@@ -52,7 +52,8 @@ _HAVE_SIGMASK = hasattr(signal, 'pthread_sigmask')
 _IGNORED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
 _CLEANUP_FUNCS = {
-    'folder': shutil.rmtree
+    'folder': shutil.rmtree,
+    'file': os.unlink
 }
 
 if os.name == "posix":
@@ -212,7 +213,7 @@ def main(fd, verbose=0):
         sys.stderr.write("Main resource tracker is running\n")
         sys.stderr.flush()
 
-    cache = {rtype: set() for rtype in _CLEANUP_FUNCS.keys()}
+    cache = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
     try:
         # keep track of registered/unregistered resources
         if sys.platform == "win32":
@@ -237,18 +238,39 @@ def main(fd, verbose=0):
                                 name, rtype, list(_CLEANUP_FUNCS.keys())))
 
                     if cmd == 'REGISTER':
-                        cache[rtype].add(name)
+                        if name not in cache[rtype]:
+                            cache[rtype][name] = 1
+                        else:
+                            cache[rtype][name] += 1
+
                         if verbose:  # pragma: no cover
-                            sys.stderr.write("[ResourceTracker] register {}"
-                                             " {}\n" .format(rtype, name))
+                            sys.stderr.write(
+                                "[ResourceTracker] incremented refcount of {} "
+                                "{} (current {})\n".format(
+                                    rtype, name, cache[rtype][name]))
                             sys.stderr.flush()
                     elif cmd == 'UNREGISTER':
-                        cache[rtype].remove(name)
+                        cache[rtype][name] -= 1
                         if verbose:  # pragma: no cover
-                            sys.stderr.write("[ResourceTracker] unregister {}"
-                                             " {}: cache({})\n"
-                                             .format(name, rtype, len(cache)))
+                            sys.stderr.write(
+                                "[ResourceTracker] decremented refcount of {} "
+                                "{} (current {})\n".format(
+                                    rtype, name, cache[rtype][name]))
                             sys.stderr.flush()
+
+                        if cache[rtype][name] == 0:
+                            del cache[rtype][name]
+                            try:
+                                _CLEANUP_FUNCS[rtype](name)
+                                if verbose:  # pragma: no cover
+                                    sys.stderr.write(
+                                            "[ResourceTracker] unlink {}\n"
+                                            .format(name))
+                                    sys.stderr.flush()
+                            except Exception as e:
+                                warnings.warn(
+                                    'resource_tracker: %s: %r' % (name, e))
+
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except BaseException:
