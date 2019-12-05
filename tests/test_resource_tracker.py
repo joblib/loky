@@ -7,6 +7,7 @@ import pytest
 import re
 import signal
 import sys
+import tempfile
 import time
 import warnings
 import weakref
@@ -38,45 +39,52 @@ class TestResourceTracker:
         # child process. If the two processes do not share the same
         # resource_tracker, a cache KeyError should be printed in stderr.
         import subprocess
-        folder_name = 'loky_tempfolder'
         cmd = '''if 1:
         import os, sys
 
         from loky import ProcessPoolExecutor
         from loky.backend import resource_tracker
         from loky.backend.semlock import SemLock
+        from tempfile import NamedTemporaryFile
+        import sys
 
+
+        tmpfile = NamedTemporaryFile(delete=False)
+        filename = tmpfile.name
         resource_tracker.VERBOSE=True
-        folder_name = "{}"
 
-        # We don't need to create the semaphore as registering / unregistering
-        # operations simply add / remove entries from a cache, but do not
-        # manipulate the actual semaphores.
-        resource_tracker.register(folder_name, "folder")
+        resource_tracker.register(filename, "file")
 
         def unregister(name, rtype):
             # resource_tracker.unregister is actually a bound method of the
             # ResourceTracker. We need a custom wrapper to avoid object
             # serialization.
             from loky.backend import resource_tracker
-            resource_tracker.unregister(folder_name, rtype)
+            resource_tracker.unregister(name, rtype)
 
+        sys.stdout.write(filename + "\\n")
+        sys.stdout.flush()
         e = ProcessPoolExecutor(1)
-        e.submit(unregister, folder_name, "folder").result()
+        e.submit(unregister, filename, "file").result()
         e.shutdown()
         '''
         try:
             p = subprocess.Popen(
-                [sys.executable, '-E', '-c', cmd.format(folder_name)],
-                stderr=subprocess.PIPE)
+                [sys.executable, '-E', '-c', cmd],
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE)
             p.wait()
 
+            filename = p.stdout.readline().decode('utf-8').strip()
             err = p.stderr.read().decode('utf-8')
             p.stderr.close()
 
-            assert re.search("unregister %s" % folder_name, err) is not None
+            assert (
+                re.search("decremented refcount of file %s" % filename, err)
+                is not None
+            )
             assert re.search("leaked", err) is None
-            assert re.search("KeyError: '%s'" % folder_name, err) is None
+            assert re.search("KeyError: '%s'" % filename, err) is None
 
         finally:
             executor.shutdown()
@@ -156,6 +164,27 @@ class TestResourceTracker:
                         "FileNotFoundError)" % (re.escape(name1),
                                                 errno.ENOENT))
         assert re.search(expected, err) is not None
+
+    def test_resource_tracker_refcounting(self):
+        tmpfile = tempfile.NamedTemporaryFile(delete=False)
+        filename = tmpfile.name
+        tmpfile.close()
+        assert os.path.exists(filename)
+
+        from loky.backend.resource_tracker import _resource_tracker
+        _resource_tracker.register(filename, "file")
+        _resource_tracker.register(filename, "file")
+
+        _resource_tracker.unregister(filename, "file")
+        time.sleep(1)
+        # at this point, tmpfile was registered twice and unregistered
+        # once, so tmpfile should still exist
+        assert os.path.exists(filename)
+
+        _resource_tracker.unregister(filename, "file")
+        time.sleep(1)
+        assert not os.path.exists(filename)
+
 
     def check_resource_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
