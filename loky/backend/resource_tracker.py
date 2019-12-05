@@ -13,14 +13,31 @@
 #
 # On Unix we run a server process which keeps track of unlinked
 # resources. The server ignores SIGINT and SIGTERM and reads from a
-# pipe.  Every other process of the program has a copy of the writable
-# end of the pipe, so we get EOF when all other processes have exited.
-# Then the server process unlinks any remaining resources.
-#
+# pipe. The resource_tracker implements a reference counting scheme: each time
+# a Python process anticipates the shared usage of a Python object by another
+# process, it signals the resource_tracker of this shared usage, and in return,
+# the resource_tracker increment the object's reference count by 1. Similarly,
+# when access to a resource is closed by a Python process, the process notifies
+# the resource_tracker by asking it to decrement the object's reference count
+# by 1.  When an object's reference count drops to 0, the resource_tracker
+# attempts to clean up the underlying resource.
+
+# Finally, every other process connected to the resource tracker has a copy of
+# the writable end of the pipe used to communicate with it, so the resource
+# tracker gets EOF when all other processes have exited. Then the
+# resource_tracker process unlinks any remaining leaked resources (with
+# reference count above 0)
+
 # For semaphores, this is important because the system only supports a limited
 # number of named semaphores, and they will not be automatically removed till
 # the next reboot.  Without this resource tracker process, "killall python"
 # would probably leave unlinked semaphores.
+
+# Note that this behavior differs from CPython's resource_tracker, which only
+# implements list of shared resources, and not a proper refcounting scheme.
+# Also, CPython's resource tracker will only attempt to cleanup those shared
+# resources once all procsses connected to the resouce tracker have exited.
+
 
 import os
 import shutil
