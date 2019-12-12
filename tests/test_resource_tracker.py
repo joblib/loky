@@ -6,6 +6,7 @@ import os
 import pytest
 import re
 import signal
+import subprocess
 import sys
 import tempfile
 import time
@@ -60,17 +61,17 @@ class TestResourceTracker:
 
         resource_tracker.register(filename, "file")
 
-        def unregister(name, rtype):
-            # resource_tracker.unregister is actually a bound method of the
+        def maybe_unlink(name, rtype):
+            # resource_tracker.maybe_unlink is actually a bound method of the
             # ResourceTracker. We need a custom wrapper to avoid object
             # serialization.
             from loky.backend import resource_tracker
-            resource_tracker.unregister(name, rtype)
+            resource_tracker.maybe_unlink(name, rtype)
 
         sys.stdout.write(filename + "\\n")
         sys.stdout.flush()
         e = ProcessPoolExecutor(1)
-        e.submit(unregister, filename, "file").result()
+        e.submit(maybe_unlink, filename, "file").result()
         e.shutdown()
         '''
         try:
@@ -172,6 +173,14 @@ class TestResourceTracker:
         assert re.search(expected, err) is not None
 
     def test_resource_tracker_refcounting(self):
+        cmd = '''if 1:
+        import os
+        import tempfile
+        import time
+        from loky.backend import resource_tracker
+
+        resource_tracker.VERBOSE=True
+
         tmpfile = tempfile.NamedTemporaryFile(delete=False)
         filename = tmpfile.name
         tmpfile.close()
@@ -181,16 +190,26 @@ class TestResourceTracker:
         _resource_tracker.register(filename, "file")
         _resource_tracker.register(filename, "file")
 
+        # forget all information about the resource, but do not try to remove
+        # it
         _resource_tracker.unregister(filename, "file")
         time.sleep(1)
-        # at this point, tmpfile was registered twice and unregistered
-        # once, so tmpfile should still exist
         assert os.path.exists(filename)
 
-        _resource_tracker.unregister(filename, "file")
+        _resource_tracker.register(filename, "file")
+        _resource_tracker.register(filename, "file")
+        _resource_tracker.maybe_unlink(filename, "file")
+        time.sleep(1)
+        assert os.path.exists(filename)
+
+        _resource_tracker.maybe_unlink(filename, "file")
         time.sleep(1)
         assert not os.path.exists(filename)
 
+        '''
+        p = subprocess.Popen([sys.executable, '-E', '-c', cmd])
+        p.wait()
+        assert p.returncode == 0
 
     def check_resource_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
