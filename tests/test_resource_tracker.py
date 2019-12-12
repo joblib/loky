@@ -54,6 +54,7 @@ class TestResourceTracker:
 
 
         tmpfile = NamedTemporaryFile(delete=False)
+        tmpfile.close()
         filename = tmpfile.name
         resource_tracker.VERBOSE=True
 
@@ -82,6 +83,7 @@ class TestResourceTracker:
             filename = p.stdout.readline().decode('utf-8').strip()
             err = p.stderr.read().decode('utf-8')
             p.stderr.close()
+            p.stdout.close()
 
 
             pattern = r"decremented refcount of file %s" % filename
