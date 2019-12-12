@@ -17,6 +17,10 @@ import loky.backend.resource_tracker as resource_tracker
 from loky.backend.context import get_context
 
 
+def _escape(s):
+    return s.replace('\\', '\\\\')
+
+
 def _resource_unlink(name, rtype):
     resource_tracker._CLEANUP_FUNCS[rtype](name)
 
@@ -79,12 +83,12 @@ class TestResourceTracker:
             err = p.stderr.read().decode('utf-8')
             p.stderr.close()
 
-            assert (
-                re.search("decremented refcount of file %s" % filename, err)
-                is not None
-            )
+
+            pattern = r"decremented refcount of file %s" % filename
+            assert re.search(_escape(pattern), err) is not None
             assert re.search("leaked", err) is None
-            assert re.search("KeyError: '%s'" % filename, err) is None
+            assert re.search(
+                    r"KeyError: '%s'" % _escape(filename), err) is None
 
         finally:
             executor.shutdown()
