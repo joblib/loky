@@ -185,7 +185,7 @@ class ResourceTracker(object):
             return True
 
     def register(self, name, rtype):
-        '''Register a named resource with resource tracker.'''
+        '''Register a named resource, and increment its refcount.'''
         self.ensure_running()
         self._send('REGISTER', name, rtype)
 
@@ -193,6 +193,12 @@ class ResourceTracker(object):
         '''Unregister a named resource with resource tracker.'''
         self.ensure_running()
         self._send('UNREGISTER', name, rtype)
+
+    def maybe_unlink(self, name, rtype):
+        '''Decrement the refcount of a resource, and delete it if it hits 0'''
+        self.ensure_running()
+        self._send("MAYBE_UNLINK", name, rtype)
+
 
     def _send(self, cmd, name, rtype):
         msg = '{0}:{1}:{2}\n'.format(cmd, name, rtype).encode('ascii')
@@ -207,6 +213,7 @@ class ResourceTracker(object):
 _resource_tracker = ResourceTracker()
 ensure_running = _resource_tracker.ensure_running
 register = _resource_tracker.register
+maybe_unlink = _resource_tracker.maybe_unlink
 unregister = _resource_tracker.unregister
 getfd = _resource_tracker.getfd
 
@@ -270,6 +277,14 @@ def main(fd, verbose=0):
                                     rtype, name, cache[rtype][name]))
                             sys.stderr.flush()
                     elif cmd == 'UNREGISTER':
+                        del cache[rtype][name]
+                        if verbose:  # pragma: no cover
+                            sys.stderr.write(
+                                "[ResourceTracker] unregister {} {}: "
+                                "cache({})\n".format(
+                                    name, rtype, len(cache)))
+                            sys.stderr.flush()
+                    elif cmd == 'MAYBE_UNLINK':
                         cache[rtype][name] -= 1
                         if verbose:  # pragma: no cover
                             sys.stderr.write(
