@@ -236,7 +236,10 @@ def main(fd, verbose=0):
         if sys.platform == "win32":
             fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
         with open(fd, 'rb') as f:
-            for line in f:
+            while True:
+                line = f.readline()
+                if line == b'':  # EOF
+                    break
                 try:
                     splitted = line.strip().decode('ascii').split(':')
                     # name can potentially contain separator symbols (for
