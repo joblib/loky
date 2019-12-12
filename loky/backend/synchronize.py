@@ -88,8 +88,13 @@ class SemLock(object):
         # When the object is garbage collected or the
         # process shuts down we unlink the semaphore name
         resource_tracker.register(self._semlock.name, "semlock")
-        util.Finalize(self, resource_tracker.unregister,
-                      (self._semlock.name, "semlock"), exitpriority=0)
+        util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
+                      exitpriority=0)
+
+    @staticmethod
+    def _cleanup(name):
+        sem_unlink(name)
+        resource_tracker.unregister(name, "semlock")
 
     def _make_methods(self):
         self.acquire = self._semlock.acquire
