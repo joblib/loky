@@ -233,7 +233,7 @@ def main(fd, verbose=0):
         except Exception:
             pass
 
-    if verbose:  # pragma: no cover
+    if verbose:
         sys.stderr.write("Main resource tracker is running\n")
         sys.stderr.flush()
 
@@ -270,7 +270,7 @@ def main(fd, verbose=0):
                         else:
                             cache[rtype][name] += 1
 
-                        if verbose:  # pragma: no cover
+                        if verbose:
                             sys.stderr.write(
                                 "[ResourceTracker] incremented refcount of {} "
                                 "{} (current {})\n".format(
@@ -278,14 +278,14 @@ def main(fd, verbose=0):
                             sys.stderr.flush()
                     elif cmd == 'UNREGISTER':
                         del cache[rtype][name]
-                        if verbose:  # pragma: no cover
+                        if verbose:
                             sys.stderr.write(
                                 "[ResourceTracker] unregister {} {}: "
                                 "cache({})\n".format(name, rtype, len(cache)))
                             sys.stderr.flush()
                     elif cmd == 'MAYBE_UNLINK':
                         cache[rtype][name] -= 1
-                        if verbose:  # pragma: no cover
+                        if verbose:
                             sys.stderr.write(
                                 "[ResourceTracker] decremented refcount of {} "
                                 "{} (current {})\n".format(
@@ -295,7 +295,7 @@ def main(fd, verbose=0):
                         if cache[rtype][name] == 0:
                             del cache[rtype][name]
                             try:
-                                if verbose:  # pragma: no cover
+                                if verbose:
                                     sys.stderr.write(
                                             "[ResourceTracker] unlink {}\n"
                                             .format(name))
@@ -328,14 +328,14 @@ def main(fd, verbose=0):
                 # died.  We therefore clean it up.
                 try:
                     _CLEANUP_FUNCS[rtype](name)
-                    if verbose:  # pragma: no cover
+                    if verbose:
                         sys.stderr.write("[ResourceTracker] unlink {}\n"
                                          .format(name))
                         sys.stderr.flush()
                 except Exception as e:
                     warnings.warn('resource_tracker: %s: %r' % (name, e))
 
-    if verbose:  # pragma: no cover
+    if verbose:
         sys.stderr.write("resource tracker shut down\n")
         sys.stderr.flush()
 
