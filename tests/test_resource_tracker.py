@@ -203,9 +203,12 @@ class TestResourceTracker:
         assert os.path.exists(filename)
 
         _resource_tracker.maybe_unlink(filename, "file")
-        time.sleep(1)
-        assert not os.path.exists(filename)
-
+        for _ in range(100):
+            if not os.path.exists(filename):
+                break
+            time.sleep(.1)
+        else:
+            raise AssertionError("%s was not unlinked in time"  % filename)
         '''
         p = subprocess.Popen([sys.executable, '-E', '-c', cmd])
         p.wait()

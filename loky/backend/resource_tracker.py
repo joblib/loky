@@ -281,8 +281,7 @@ def main(fd, verbose=0):
                         if verbose:  # pragma: no cover
                             sys.stderr.write(
                                 "[ResourceTracker] unregister {} {}: "
-                                "cache({})\n".format(
-                                    name, rtype, len(cache)))
+                                "cache({})\n".format(name, rtype, len(cache)))
                             sys.stderr.flush()
                     elif cmd == 'MAYBE_UNLINK':
                         cache[rtype][name] -= 1
@@ -296,12 +295,12 @@ def main(fd, verbose=0):
                         if cache[rtype][name] == 0:
                             del cache[rtype][name]
                             try:
-                                _CLEANUP_FUNCS[rtype](name)
                                 if verbose:  # pragma: no cover
                                     sys.stderr.write(
                                             "[ResourceTracker] unlink {}\n"
                                             .format(name))
                                     sys.stderr.flush()
+                                _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
                                 warnings.warn(
                                     'resource_tracker: %s: %r' % (name, e))
