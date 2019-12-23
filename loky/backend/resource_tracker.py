@@ -314,7 +314,7 @@ def main(fd, verbose=0):
                         pass
     finally:
         # all processes have terminated; cleanup any remaining resources
-        for rtype, rtype_cache in cache.items():
+        def _delete_resources(rtype_cache, rtype):
             if rtype_cache:
                 try:
                     warnings.warn('resource_tracker: There appear to be %d '
@@ -334,6 +334,21 @@ def main(fd, verbose=0):
                         sys.stderr.flush()
                 except Exception as e:
                     warnings.warn('resource_tracker: %s: %r' % (name, e))
+
+        for rtype, rtype_cache in cache.items():
+            if rtype == "folder":
+                continue
+            else:
+                _delete_resources(rtype_cache, rtype)
+
+        # the default cleanup routine for folders deletes everything inside
+        # those folders recursively, which can including other resources
+        # tracked by the resource tracker). To limit the risk of the resource
+        # tracker attempting to delete twice a resource (once as part of a
+        # tracked folder, and once as a resource), we delete the folders after
+        # every other resource types.
+        if "folder" in cache:
+            _delete_resources(cache["folder"], "folder")
 
     if verbose:
         sys.stderr.write("resource tracker shut down\n")
