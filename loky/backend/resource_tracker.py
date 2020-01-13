@@ -237,7 +237,7 @@ def main(fd, verbose=0):
         sys.stderr.write("Main resource tracker is running\n")
         sys.stderr.flush()
 
-    cache = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
+    registry = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
     try:
         # keep track of registered/unregistered resources
         if sys.platform == "win32":
@@ -265,35 +265,35 @@ def main(fd, verbose=0):
                                 name, rtype, list(_CLEANUP_FUNCS.keys())))
 
                     if cmd == 'REGISTER':
-                        if name not in cache[rtype]:
-                            cache[rtype][name] = 1
+                        if name not in registry[rtype]:
+                            registry[rtype][name] = 1
                         else:
-                            cache[rtype][name] += 1
+                            registry[rtype][name] += 1
 
                         if verbose:
                             sys.stderr.write(
                                 "[ResourceTracker] incremented refcount of {} "
                                 "{} (current {})\n".format(
-                                    rtype, name, cache[rtype][name]))
+                                    rtype, name, registry[rtype][name]))
                             sys.stderr.flush()
                     elif cmd == 'UNREGISTER':
-                        del cache[rtype][name]
+                        del registry[rtype][name]
                         if verbose:
                             sys.stderr.write(
                                 "[ResourceTracker] unregister {} {}: "
-                                "cache({})\n".format(name, rtype, len(cache)))
+                                "registry({})\n".format(name, rtype, len(registry)))
                             sys.stderr.flush()
                     elif cmd == 'MAYBE_UNLINK':
-                        cache[rtype][name] -= 1
+                        registry[rtype][name] -= 1
                         if verbose:
                             sys.stderr.write(
                                 "[ResourceTracker] decremented refcount of {} "
                                 "{} (current {})\n".format(
-                                    rtype, name, cache[rtype][name]))
+                                    rtype, name, registry[rtype][name]))
                             sys.stderr.flush()
 
-                        if cache[rtype][name] == 0:
-                            del cache[rtype][name]
+                        if registry[rtype][name] == 0:
+                            del registry[rtype][name]
                             try:
                                 if verbose:
                                     sys.stderr.write(
@@ -314,15 +314,15 @@ def main(fd, verbose=0):
                         pass
     finally:
         # all processes have terminated; cleanup any remaining resources
-        def _delete_resources(rtype_cache, rtype):
-            if rtype_cache:
+        def _unlink_resources(rtype_registry, rtype):
+            if rtype_registry:
                 try:
                     warnings.warn('resource_tracker: There appear to be %d '
                                   'leaked %s objects to clean up at shutdown' %
-                                  (len(rtype_cache), rtype))
+                                  (len(rtype_registry), rtype))
                 except Exception:
                     pass
-            for name in rtype_cache:
+            for name in rtype_registry:
                 # For some reason the process which created and registered this
                 # resource has failed to unregister it. Presumably it has
                 # died.  We therefore clean it up.
@@ -335,11 +335,11 @@ def main(fd, verbose=0):
                 except Exception as e:
                     warnings.warn('resource_tracker: %s: %r' % (name, e))
 
-        for rtype, rtype_cache in cache.items():
+        for rtype, rtype_registry in registry.items():
             if rtype == "folder":
                 continue
             else:
-                _delete_resources(rtype_cache, rtype)
+                _unlink_resources(rtype_registry, rtype)
 
         # the default cleanup routine for folders deletes everything inside
         # those folders recursively, which can including other resources
@@ -347,8 +347,8 @@ def main(fd, verbose=0):
         # tracker attempting to delete twice a resource (once as part of a
         # tracked folder, and once as a resource), we delete the folders after
         # every other resource types.
-        if "folder" in cache:
-            _delete_resources(cache["folder"], "folder")
+        if "folder" in registry:
+            _unlink_resources(registry["folder"], "folder")
 
     if verbose:
         sys.stderr.write("resource tracker shut down\n")
