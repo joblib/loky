@@ -3,7 +3,7 @@ psutil
 cython
 faulthandler ; python_version < '3.3'
 # Newer versions of coverage trigger a DLL error involving sqlite3 on Windows
-coverage < 5
+coverage
 pytest
 pytest-coverage
 pytest-timeout
