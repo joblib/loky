@@ -18,6 +18,9 @@ jobs:
       ${{ insert }}: ${{ parameters.matrix }}
 
   steps:
+    - script: |
+        bash continuous_integration\\azure\\install.sh
+      displayName: 'Test windows bash commandline'
     - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
       displayName: Add conda to PATH
     - script: |
