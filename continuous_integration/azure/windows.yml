@@ -24,6 +24,9 @@ jobs:
     - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
       displayName: Add conda to PATH
     - script: |
+        bash continuous_integration\\azure\\install.sh
+      displayName: 'Test windows bash commandline'
+    - script: |
         continuous_integration\\azure\\install.cmd
       displayName: 'Install'
     - script: |
