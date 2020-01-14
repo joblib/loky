@@ -2,6 +2,7 @@
 
 set -e
 
+conda init bash
 conda activate $VIRTUALENV
 
 pip install coverage
