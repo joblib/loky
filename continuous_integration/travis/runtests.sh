@@ -24,8 +24,8 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     cd src_joblib
     pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
-    cp $AGENT_BUILDDIRECTORY/continuous_integration/travis/copy_loky.sh $JOBLIB/externals
-    (cd $JOBLIB/externals && bash copy_loky.sh $AGENT_BUILDDIRECTORY)
+    cp $AGENT_BUILDDIRECTORY/loky/continuous_integration/travis/copy_loky.sh $JOBLIB/externals
+    (cd $JOBLIB/externals && bash copy_loky.sh $AGENT_BUILDDIRECTORY/loky)
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 else
     # Run the tests and collect trace coverage data both in the subprocesses
