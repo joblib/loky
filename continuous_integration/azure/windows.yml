@@ -13,6 +13,8 @@ jobs:
     JUNITXML: 'test-data.xml'
     LOKY_MAX_DEPTH: 5
     COVERAGE_PROCESS_START: '.coveragerc'
+    OMP_NUM_THREADS: 4
+    LOKY_MAX_DEPTH: 3
   strategy:
     matrix:
       ${{ insert }}: ${{ parameters.matrix }}
