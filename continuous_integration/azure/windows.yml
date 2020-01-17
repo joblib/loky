@@ -36,6 +36,7 @@ jobs:
       displayName: 'Publish Test Results'
       condition: succeededOrFailed()
     - script: |
-        bash <(curl -s https://codecov.io/bash)
+        curl -s https://codecov.io/bash | bash
+      shell: bash
       displayName: 'Upload to codecov'
       condition: succeeded()
