@@ -36,6 +36,6 @@ jobs:
       displayName: 'Publish Test Results'
       condition: succeededOrFailed()
     - script: |
-        continuous_integration\\azure\\upload_codecov.cmd
+        bash <(curl -s https://codecov.io/bash)
       displayName: 'Upload to codecov'
       condition: succeeded()
