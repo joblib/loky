@@ -3,19 +3,21 @@ jobs:
 
 - template: continuous_integration/azure/windows.yml
   parameters:
-    name: Windows
-    vmImage: vs2017-win2016
     matrix:
-      py37:
+      windows-py37:
+        vmImage: vs2017-win2016
         python.version: '3.7'
         tox.env: py37
-      py36:
+      windows-py36:
+        vmImage: vs2017-win2016
         python.version: '3.6'
         tox.env: py36
-      py35:
+      windows-py35:
+        vmImage: vs2017-win2016
         python.version: '3.5'
         tox.env: py35
-      py27:
+      windows-py27:
+        vmImage: vs2017-win2016
         python.version: '2.7'
         tox.env: py27
 
