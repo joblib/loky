@@ -18,17 +18,25 @@ jobs:
       ${{ insert }}: ${{ parameters.matrix }}
 
   steps:
-    - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
-      displayName: Add conda to PATH
-    - script: |
-        bash continuous_integration\\azure\\install.sh
-      displayName: 'Test windows bash commandline'
-    - script: |
-        continuous_integration\\azure\\install.cmd
-      displayName: 'Install'
-    - script: |
-        continuous_integration\\azure\\test_script.cmd
-      displayName: 'Test loky'
+    - task: UsePythonVersion@0
+      displayName: Get Python for Python tools.
+      inputs:
+        versionSpec: '3.7'
+        addToPath: false
+      name: pyTools
+
+    - script: $(pyTools.pythonLocation)/bin/pip install --upgrade tox
+      displayName: Install Python-based tools.
+
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(python.version)'
+        architecture: 'x64'
+      displayName: Use cached Python $(python.version) for tests.
+
+    - bash: $(pyTools.pythonLocation)/bin/tox -e $(tox.env)
+      displayName: 'run tox -e $(tox.env)'
+
     - task: PublishTestResults@2
       inputs:
         testResultsFiles: '$(JUNITXML)'
