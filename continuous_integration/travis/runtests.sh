@@ -22,6 +22,7 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     # and run the joblib tests with pytest.
     git clone https://github.com/joblib/joblib.git src_joblib
     cd src_joblib
+    pip install pytest
     pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
     cp $BUILD_SOURCESDIRECTORY/continuous_integration/travis/copy_loky.sh $JOBLIB/externals
