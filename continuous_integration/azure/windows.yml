@@ -36,7 +36,6 @@ jobs:
       displayName: 'Publish Test Results'
       condition: succeededOrFailed()
     - bash: |
-        pip install coverage
         curl -s https://codecov.io/bash | bash
       displayName: 'Upload to codecov'
       condition: succeeded()
