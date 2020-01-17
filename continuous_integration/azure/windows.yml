@@ -26,7 +26,7 @@ jobs:
     - script: python -m pip install --upgrade tox
       displayName: Install Python-based tools.
 
-    - script: tox -e py
+    - script: tox -e $(tox.env)
       displayName: 'Run Tox'
 
     - task: PublishTestResults@2
