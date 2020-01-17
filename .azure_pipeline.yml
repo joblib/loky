@@ -24,17 +24,19 @@ jobs:
         imageName: "ubuntu-16.04"
         python.version: '3.7'
         tox.env: py37
-      linux-py37-high-memory: "3.7"
-        tox.env: "py37"
+      linux-py37-high-memory:
+        imageName: "ubuntu-16.04"
         python.version: '3.7'
+        tox.env: py37
         RUN_MEMORY: "true"
       linux-py36:
         imageName: "ubuntu-16.04"
         python.version: '3.6'
         tox.env: py36
-      linux-py36-joblib-tests: "3.6"
-        tox.env: "py36"
+      linux-py36-joblib-tests:
+        imageName: "ubuntu-16.04"
         python.version: '3.6'
+        tox.env: "py36"
         JOBLIB_TESTS: "true"
       linux-py35:
         imageName: "ubuntu-16.04"
