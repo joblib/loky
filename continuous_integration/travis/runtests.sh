@@ -33,5 +33,5 @@ else
     if [ "$RUN_MEMORY" != "true" ]; then
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
-    COVERAGE_PROCESS_START="$TRAVIS_BUILD_DIR/.coveragerc" $PYTHON -m tox -- $PYTEST_ARGS
+    tox -e $(tox.env)
 fi

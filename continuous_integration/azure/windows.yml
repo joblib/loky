@@ -27,7 +27,8 @@ jobs:
     - script: python -m pip install --upgrade tox
       displayName: Install Python-based tools.
 
-    - script: tox -e $(tox.env)
+    - script: |
+        bash continuous_integration/travis/runtests.sh
       displayName: 'Run Tox'
 
     - task: PublishTestResults@2
