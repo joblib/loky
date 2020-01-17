@@ -4,6 +4,7 @@
 
 # License: 3-clause BSD
 
+export
 set -e
 which python
 python --version
