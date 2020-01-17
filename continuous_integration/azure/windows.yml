@@ -19,23 +19,15 @@ jobs:
 
   steps:
     - task: UsePythonVersion@0
-      displayName: Get Python for Python tools.
-      inputs:
-        versionSpec: '3.7'
-        addToPath: false
-      name: pyTools
-
-    - bash: $(pyTools.pythonLocation)/bin/pip install --upgrade tox
-      displayName: Install Python-based tools.
-
-    - task: UsePythonVersion@0
       inputs:
         versionSpec: '$(python.version)'
-        architecture: 'x64'
       displayName: Use cached Python $(python.version) for tests.
 
-    - bash: $(pyTools.pythonLocation)/bin/tox -e $(tox.env)
-      displayName: 'run tox -e $(tox.env)'
+    - script: python -m pip install --upgrade tox
+      displayName: Install Python-based tools.
+
+    - script: tox -e py
+      displayName: 'Run Tox'
 
     - task: PublishTestResults@2
       inputs:
