@@ -22,8 +22,9 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     # and run the joblib tests with pytest.
     git clone https://github.com/joblib/joblib.git src_joblib
     cd src_joblib
-    pip install threadpoolctl
     pip install pytest
+    pip install threadpoolctl  # required by some joblib tests
+
     pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
     cp $BUILD_SOURCESDIRECTORY/continuous_integration/travis/copy_loky.sh $JOBLIB/externals
