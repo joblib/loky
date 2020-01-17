@@ -12,7 +12,7 @@ echo ${TOX_ENV}
 # Make sure that we have the python docker image cached locally to avoid
 # a timeout in a test that needs it.
 
-if [ "$(which docker)" != "" ]; then
+if [ "$(which docker)" != "" ] && [ "$(uname)" = "Linux" ]; then
     docker pull python:3.6
 fi
 
