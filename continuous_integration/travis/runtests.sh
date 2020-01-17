@@ -4,11 +4,10 @@
 
 # License: 3-clause BSD
 
-export
 set -e
 which python
 python --version
-echo $(tox.env)
+echo ${TOX_ENV}
 
 # Make sure that we have the python docker image cached locally to avoid
 # a timeout in a test that needs it.
@@ -34,5 +33,5 @@ else
     if [ "$RUN_MEMORY" != "true" ]; then
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
-    tox -v -e $(tox.env)
+    tox -v -e ${TOX_ENV}
 fi
