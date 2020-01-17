@@ -7,7 +7,7 @@ parameters:
 jobs:
 - job: ${{ parameters.name }}
   pool:
-    vmImage: ${{ parameters.vmImage }}
+    vmImage: $(imageName)
   variables:
     VIRTUALENV: 'testvenv'
     JUNITXML: 'test-data.xml'
