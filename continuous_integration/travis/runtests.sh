@@ -16,7 +16,7 @@ if [ "$(which docker)" != "" ] && [ "$(uname)" = "Linux" ]; then
     docker pull python:3.6
 fi
 
-if [ "$joblibTests" = "true" ]; then
+if [ "$JOBLIB_TESTS" = "true" ]; then
     # Install joblib from pip, patch it to use this version of loky
     # and run the joblib tests with pytest.
     git clone https://github.com/joblib/joblib.git src_joblib
@@ -30,7 +30,7 @@ else
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
     PYTEST_ARGS="-vl --timeout=60 --maxfail=5"
-    if [ "$runMemory" != "true" ]; then
+    if [ "$RUN_MEMORY" != "true" ]; then
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
     tox -v -e ${TOX_ENV}
