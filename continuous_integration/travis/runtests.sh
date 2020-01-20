@@ -17,6 +17,9 @@ fi
 if [ "$JOBLIB_TESTS" = "true" ]; then
     # Install joblib from pip, patch it to use this version of loky
     # and run the joblib tests with pytest.
+    python -m venv venv/
+    source ./venv/bin/activate
+    which python
     git clone https://github.com/joblib/joblib.git src_joblib
     cd src_joblib
     pip install pytest
