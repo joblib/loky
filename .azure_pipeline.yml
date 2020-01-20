@@ -67,6 +67,29 @@ jobs:
     COVERAGE_PROCESS_START: '.coveragerc'
     OMP_NUM_THREADS: 4
     PYTEST_ARGS: '-vl --timeout=60 --maxfail=5'
+  steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(python.version)'
+      displayName: 'Use Python $(python.version)'
+
+    - script: python -m pip install --upgrade tox
+      displayName: 'Install tox'
+
+    - script: |
+        bash continuous_integration/travis/runtests.sh
+      displayName: 'Test loky'
+
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFiles: '$(JUNITXML)'
+      displayName: 'Publish Test Results'
+      condition: succeededOrFailed()
+
+    - bash: |
+        curl -s https://codecov.io/bash | bash
+      displayName: 'Upload to codecov'
+      condition: succeeded()
 # - template: build_tools/azure/posix.yml
 #   parameters:
 #     name: Linux
