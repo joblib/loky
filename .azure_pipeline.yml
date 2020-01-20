@@ -1,8 +1,8 @@
-# Adapted from https://github.com/pandas-dev/pandas/blob/master/azure-pipelines.yml
 jobs:
-
-- template: continuous_integration/azure/windows.yml
+- job: 'Test loky'
   parameters:
+    name: ''
+    vmImage: ''
     matrix:
       windows-py37:
         imageName: "vs2017-win2016"
@@ -61,9 +61,17 @@ jobs:
         python.version: "2.7"
         tox.env: py27
         RUN_MEMORY: "true"
-
-
-
+  strategy:
+    matrix:
+      ${{ insert }}: ${{ parameters.matrix }}
+  pool:
+    vmImage: $(imageName)
+  variables:
+    JUNITXML: 'test-data.xml'
+    LOKY_MAX_DEPTH: 5
+    COVERAGE_PROCESS_START: '.coveragerc'
+    OMP_NUM_THREADS: 4
+    PYTEST_ARGS: '-vl --timeout=60 --maxfail=5'
 # - template: build_tools/azure/posix.yml
 #   parameters:
 #     name: Linux
