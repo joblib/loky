@@ -1,8 +1,5 @@
 jobs:
 - job: 'Test loky'
-  parameters:
-    name: ''
-    vmImage: ''
   strategy:
     matrix:
       windows-py37:
