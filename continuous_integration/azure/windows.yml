@@ -14,6 +14,7 @@ jobs:
     LOKY_MAX_DEPTH: 5
     COVERAGE_PROCESS_START: '.coveragerc'
     OMP_NUM_THREADS: 4
+    PYTEST_ARGS: '-vl --timeout=60 --maxfail=5'
   strategy:
     matrix:
       ${{ insert }}: ${{ parameters.matrix }}

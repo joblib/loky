@@ -33,9 +33,8 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
 else
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
-    PYTEST_ARGS="-vl --timeout=60 --maxfail=5 --junitxml=test-data.xml"
     if [ "$RUN_MEMORY" != "true" ]; then
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
-    tox -v -e ${TOX_ENV}  -- ${PYTEST_ARGS}
+    tox -v -e ${TOX_ENV}  -- ${PYTEST_ARGS} --junitxml=${JUNITXML}
 fi
