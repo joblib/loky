@@ -1,5 +1,5 @@
 jobs:
-- job: 'Test loky'
+- job: 'test_loky'
   strategy:
     matrix:
       windows-py37:
