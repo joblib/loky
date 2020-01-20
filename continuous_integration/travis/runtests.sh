@@ -1,10 +1,7 @@
 #!/usr/bin/env sh
-# This script is meant to be called by the "script" step defined in
-# .travis.yml. See http://docs.travis-ci.com/ for more details.
 
 # License: 3-clause BSD
 
-export
 set -e
 which python
 python --version
@@ -27,8 +24,8 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
 
     pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
-    cp $BUILD_SOURCESDIRECTORY/continuous_integration/travis/copy_loky.sh $JOBLIB/externals
-    (cd $JOBLIB/externals && bash copy_loky.sh $BUILD_SOURCESDIRECTORY)
+    cp "$BUILD_SOURCESDIRECTORY"/continuous_integration/travis/copy_loky.sh $JOBLIB/externals
+    (cd $JOBLIB/externals && bash copy_loky.sh "$BUILD_SOURCESDIRECTORY")
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 else
     # Run the tests and collect trace coverage data both in the subprocesses
@@ -36,5 +33,5 @@ else
     if [ "$RUN_MEMORY" != "true" ]; then
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
-    tox -v -e ${TOX_ENV}  -- ${PYTEST_ARGS} --junitxml=${JUNITXML}
+    tox -v -e "${TOX_ENV}"  -- "${PYTEST_ARGS}" --junitxml="${JUNITXML}"
 fi

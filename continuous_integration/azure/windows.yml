@@ -9,7 +9,6 @@ jobs:
   pool:
     vmImage: $(imageName)
   variables:
-    VIRTUALENV: 'testvenv'
     JUNITXML: 'test-data.xml'
     LOKY_MAX_DEPTH: 5
     COVERAGE_PROCESS_START: '.coveragerc'
@@ -23,14 +22,14 @@ jobs:
     - task: UsePythonVersion@0
       inputs:
         versionSpec: '$(python.version)'
-      displayName: Use cached Python $(python.version) for tests.
+      displayName: 'Use Python $(python.version)'
 
     - script: python -m pip install --upgrade tox
-      displayName: Install Python-based tools.
+      displayName: 'Install tox'
 
     - script: |
         bash continuous_integration/travis/runtests.sh
-      displayName: 'Run Tox'
+      displayName: 'Test loky'
 
     - task: PublishTestResults@2
       inputs:
