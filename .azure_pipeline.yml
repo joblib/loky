@@ -3,68 +3,65 @@ jobs:
   parameters:
     name: ''
     vmImage: ''
-    strategy:
-      matrix:
-        windows-py37:
-          imageName: "vs2017-win2016"
-          python.version: "3.7"
-          tox.env: py37
-        windows-py36:
-          imageName: "vs2017-win2016"
-          python.version: "3.6"
-          tox.env: py36
-        windows-py35:
-          imageName: "vs2017-win2016"
-          python.version: "3.5"
-          tox.env: py35
-        windows-py27:
-          imageName: "vs2017-win2016"
-          python.version: "2.7"
-          tox.env: py27
-        linux-py37:
-          imageName: "ubuntu-16.04"
-          python.version: "3.7"
-          tox.env: py37
-        linux-py37-high-memory:
-          imageName: "ubuntu-16.04"
-          python.version: "3.7"
-          tox.env: py37
-          RUN_MEMORY: "true"
-        linux-py36:
-          imageName: "ubuntu-16.04"
-          python.version: "3.6"
-          tox.env: py36
-        linux-py36-joblib-tests:
-          imageName: "ubuntu-16.04"
-          python.version: "3.6"
-          tox.env: "py36"
-          JOBLIB_TESTS: "true"
-        linux-py35:
-          imageName: "ubuntu-16.04"
-          python.version: "3.5"
-          tox.env: py35
-        linux-py27:
-          imageName: "ubuntu-16.04"
-          python.version: "2.7"
-          tox.env: py27
-        linux-pypy3:
-          imageName: "ubuntu-16.04"
-          python.version: "pypy3"
-          tox.env: pypy3
-          LOKY_MAX_CPU_COUNT: "2"
-  
-        macos-py37:
-          imageName: "macos-10.13"
-          python.version: "3.7"
-          tox.env: py37
-        macos-py27:
-          imageName: "macos-10.13"
-          python.version: "2.7"
-          tox.env: py27
-          RUN_MEMORY: "true"
   strategy:
     matrix:
-      ${{ insert }}: ${{ parameters.matrix }}
+      windows-py37:
+        imageName: "vs2017-win2016"
+        python.version: "3.7"
+        tox.env: py37
+      windows-py36:
+        imageName: "vs2017-win2016"
+        python.version: "3.6"
+        tox.env: py36
+      windows-py35:
+        imageName: "vs2017-win2016"
+        python.version: "3.5"
+        tox.env: py35
+      windows-py27:
+        imageName: "vs2017-win2016"
+        python.version: "2.7"
+        tox.env: py27
+      linux-py37:
+        imageName: "ubuntu-16.04"
+        python.version: "3.7"
+        tox.env: py37
+      linux-py37-high-memory:
+        imageName: "ubuntu-16.04"
+        python.version: "3.7"
+        tox.env: py37
+        RUN_MEMORY: "true"
+      linux-py36:
+        imageName: "ubuntu-16.04"
+        python.version: "3.6"
+        tox.env: py36
+      linux-py36-joblib-tests:
+        imageName: "ubuntu-16.04"
+        python.version: "3.6"
+        tox.env: "py36"
+        JOBLIB_TESTS: "true"
+      linux-py35:
+        imageName: "ubuntu-16.04"
+        python.version: "3.5"
+        tox.env: py35
+      linux-py27:
+        imageName: "ubuntu-16.04"
+        python.version: "2.7"
+        tox.env: py27
+      linux-pypy3:
+        imageName: "ubuntu-16.04"
+        python.version: "pypy3"
+        tox.env: pypy3
+        LOKY_MAX_CPU_COUNT: "2"
+
+      macos-py37:
+        imageName: "macos-10.13"
+        python.version: "3.7"
+        tox.env: py37
+      macos-py27:
+        imageName: "macos-10.13"
+        python.version: "2.7"
+        tox.env: py27
+        RUN_MEMORY: "true"
   pool:
     vmImage: $(imageName)
   variables:
