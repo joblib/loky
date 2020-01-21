@@ -80,7 +80,7 @@ jobs:
     - script: |
         echo "##vso[task.prependpath]C:\Program Files\Git\bin"
       displayName: 'Override Git bash shell for Windows'
-      condition: eq($(AGENT_OS), 'Windows_NT')
+      condition: eq(variables['Agent.OS'], 'Windows_NT')
 
     - script: python -m pip install --upgrade tox
       displayName: 'Install tox'
