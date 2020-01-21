@@ -77,8 +77,7 @@ jobs:
     # Git\usr\bin\bash when running a bash script inside Windows environments.
     # The latter may use wrong bash commands, resulting in errors when codecov
     # tries to upload the coverage results.
-    - script: |
-        echo "##vso[task.prependpath]C:\Program Files\Git\bin"
+    - bash: echo "##vso[task.prependpath]C:/Program Files/Git/bin"
       displayName: 'Override Git bash shell for Windows'
       condition: eq(variables['Agent.OS'], 'Windows_NT')
 
