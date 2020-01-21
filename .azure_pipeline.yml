@@ -1,81 +1,100 @@
-# Adapted from https://github.com/pandas-dev/pandas/blob/master/azure-pipelines.yml
 jobs:
-
-- template: continuous_integration/azure/windows.yml
-  parameters:
-    name: Windows
-    vmImage: vs2017-win2016
+- job: 'test_loky'
+  strategy:
     matrix:
-      py37_conda:
-        VERSION_PYTHON: '3.7'
-        PACKAGER: 'conda'
-      py36_pip:
-        VERSION_PYTHON: '3.6'
-        PACKAGER: 'pip'
-      py35_conda:
-        VERSION_PYTHON: '3.5'
-        PACKAGER: 'conda'
-      py27_pip:
-        VERSION_PYTHON: '2.7'
-        PACKAGER: 'pip'
 
+      # windows-py38:
+      #   imageName: "vs2017-win2016"
+      #   python.version: "3.8"
+      #   tox.env: py38
+      windows-py35:
+        imageName: "vs2017-win2016"
+        python.version: "3.5"
+        tox.env: py35
+      windows-py27:
+        imageName: "vs2017-win2016"
+        python.version: "2.7"
+        tox.env: py27
 
+      # macos-py38:
+      #   imageName: "macos-10.13"
+      #   python.version: "3.8"
+      #   tox.env: py38
+      macos-py35:
+        imageName: "macos-10.13"
+        python.version: "3.5"
+        tox.env: py35
+      macos-py27-high-memory:
+        imageName: "macos-10.13"
+        python.version: "2.7"
+        tox.env: py27
+        RUN_MEMORY: "true"
 
-# - template: build_tools/azure/posix.yml
-#   parameters:
-#     name: Linux
-#     vmImage: ubuntu-16.04
-#     matrix:
-#       # Linux environment to test that scikit-learn can be built against
-#       # versions of numpy, scipy with ATLAS that comes with Ubuntu Xenial 16.04
-#       # i.e. numpy 1.11 and scipy 0.17
-#       py35_np_atlas:
-#         DISTRIB: 'ubuntu'
-#         PYTHON_VERSION: '3.5'
-#         SKLEARN_SITE_JOBLIB: '1'
-#         JOBLIB_VERSION: '0.11'
-#       # Linux + Python 3.5 build with OpenBLAS and without SITE_JOBLIB
-#       py35_conda_openblas:
-#         DISTRIB: 'conda'
-#         PYTHON_VERSION: '3.5'
-#         INSTALL_MKL: 'false'
-#         NUMPY_VERSION: '1.11.0'
-#         SCIPY_VERSION: '0.17.0'
-#         CYTHON_VERSION: '*'
-#         PILLOW_VERSION: '4.0.0'
-#         COVERAGE: 'true'
-#       # Linux environment to test the latest available dependencies and MKL.
-#       # It runs tests requiring pandas and PyAMG.
-#       # It also runs with the site joblib instead of the vendored copy of joblib.
-#       pylatest_conda:
-#         DISTRIB: 'conda'
-#         PYTHON_VERSION: '*'
-#         INSTALL_MKL: 'true'
-#         NUMPY_VERSION: '*'
-#         SCIPY_VERSION: '*'
-#         PANDAS_VERSION: '*'
-#         CYTHON_VERSION: '*'
-#         PYAMG_VERSION: '*'
-#         PILLOW_VERSION: '*'
-#         JOBLIB_VERSION: '*'
-#         COVERAGE: 'true'
-#         CHECK_PYTEST_SOFT_DEPENDENCY: 'true'
-#         TEST_DOCSTRINGS: 'true'
-#         SKLEARN_SITE_JOBLIB: '1'
-#         CHECK_WARNINGS: 'true'
+      linux-pypy3:
+        imageName: "ubuntu-16.04"
+        python.version: "pypy3"
+        tox.env: pypy3
+        LOKY_MAX_CPU_COUNT: "2"
 
-# - template: build_tools/azure/posix.yml
-#   parameters:
-#     name: macOS
-#     vmImage: xcode9-macos10.13
-#     matrix:
-#       pylatest_conda:
-#         DISTRIB: 'conda'
-#         PYTHON_VERSION: '*'
-#         INSTALL_MKL: 'true'
-#         NUMPY_VERSION: '*'
-#         SCIPY_VERSION: '*'
-#         CYTHON_VERSION: '*'
-#         PILLOW_VERSION: '*'
-#         JOBLIB_VERSION: '*'
-#         COVERAGE: 'true'
+      linux-py38-joblib-tests:
+        imageName: "ubuntu-16.04"
+        python.version: "3.8"
+        tox.env: "py38"
+        JOBLIB_TESTS: "true"
+      # linux-py38-high-memory:
+      #   imageName: "ubuntu-16.04"
+      #   python.version: "3.8"
+      #   tox.env: py38
+      #   RUN_MEMORY: "true"
+      linux-py37:
+        imageName: "ubuntu-16.04"
+        python.version: "3.7"
+        tox.env: py37
+      linux-py36:
+        imageName: "ubuntu-16.04"
+        python.version: "3.6"
+        tox.env: py36
+      linux-py35:
+        imageName: "ubuntu-16.04"
+        python.version: "3.5"
+        tox.env: py35
+      linux-py27:
+        imageName: "ubuntu-16.04"
+        python.version: "2.7"
+        tox.env: py27
+
+  pool:
+    vmImage: $(imageName)
+  variables:
+    JUNITXML: 'test-data.xml'
+    PYTEST_ARGS: '-vl --timeout=60 --maxfail=5'
+  steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(python.version)'
+      displayName: 'Use Python $(python.version)'
+    # azure-pipelines unpredictably switches between Git\bin\bash and
+    # Git\usr\bin\bash when running a bash script inside Windows environments.
+    # The latter may use wrong bash commands, resulting in errors when codecov
+    # tries to upload the coverage results.
+    - bash: echo "##vso[task.prependpath]C:/Program Files/Git/bin"
+      displayName: 'Override Git bash shell for Windows'
+      condition: eq(variables['Agent.OS'], 'Windows_NT')
+
+    - script: python -m pip install --upgrade tox
+      displayName: 'Install tox'
+
+    - script: |
+        bash continuous_integration/runtests.sh
+      displayName: 'Test loky'
+
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFiles: '$(JUNITXML)'
+      displayName: 'Publish Test Results'
+      condition: succeededOrFailed()
+
+    - bash: |
+        curl -s https://codecov.io/bash | bash
+      displayName: 'Upload to codecov'
+      condition: succeeded()

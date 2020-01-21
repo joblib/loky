@@ -81,10 +81,8 @@ This work is supported by the Center for Data Science, funded by the
 IDEX Paris-Saclay, ANR-11-IDEX-0003-02
 
 
-.. |Build Status| image:: https://travis-ci.org/tomMoral/loky.svg?branch=master
-   :target: https://travis-ci.org/tomMoral/loky
-.. |Build status| image:: https://ci.appveyor.com/api/projects/status/oifqilb5sb0p7fdp/branch/master?svg=true
-   :target: https://ci.appveyor.com/project/tomMoral/loky/branch/master
+.. |azurepipelines| image:: https://dev.azure.com/joblib/loky/_apis/build/status/joblib.loky?branchName=master
+   :target: https://dev.azure.com/joblib/loky/_build?definitionId=2&_a=summary&repositoryFilter=2&branchFilter=38
 .. |codecov| image:: https://codecov.io/gh/tomMoral/loky/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/tomMoral/loky
 
