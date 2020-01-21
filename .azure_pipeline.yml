@@ -67,9 +67,6 @@ jobs:
     vmImage: $(imageName)
   variables:
     JUNITXML: 'test-data.xml'
-    LOKY_MAX_DEPTH: 5
-    COVERAGE_PROCESS_START: '.coveragerc'
-    OMP_NUM_THREADS: 4
     PYTEST_ARGS: '-vl --timeout=60 --maxfail=5'
   steps:
     - task: UsePythonVersion@0
