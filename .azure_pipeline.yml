@@ -88,6 +88,6 @@ jobs:
       condition: succeededOrFailed()
 
     - bash: |
-        curl -s https://codecov.io/bash | bash
+        curl -s https://codecov.io/bash | bash -s -- -f coverage.xml
       displayName: 'Upload to codecov'
       condition: succeeded()
