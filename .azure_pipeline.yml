@@ -73,6 +73,14 @@ jobs:
       inputs:
         versionSpec: '$(python.version)'
       displayName: 'Use Python $(python.version)'
+    # azure-pipelines unpredictably switches between Git\bin\bash and
+    # Git\usr\bin\bash when running a bash script inside Windows environments.
+    # The latter may use wrong bash commands, resulting in errors when codecov
+    # tries to upload the coverage results.
+    - script: |
+        echo "##vso[task.prependpath]C:\Program Files\Git\bin"
+      displayName: 'Override Git bash shell for Windows'
+      condition: eq($(AGENT_OS), 'Windows_NT')
 
     - script: python -m pip install --upgrade tox
       displayName: 'Install tox'
@@ -88,6 +96,6 @@ jobs:
       condition: succeededOrFailed()
 
     - bash: |
-        curl -s https://codecov.io/bash | bash -s -- -f coverage.xml
+        curl -s https://codecov.io/bash | bash
       displayName: 'Upload to codecov'
       condition: succeeded()
