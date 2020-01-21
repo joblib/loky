@@ -7,13 +7,6 @@ which python
 python --version
 echo ${TOX_ENV}
 
-# Make sure that we have the python docker image cached locally to avoid
-# a timeout in a test that needs it.
-
-if [ "$(which docker)" != "" ] && [ "$(uname)" = "Linux" ]; then
-    docker pull python:3.6
-fi
-
 if [ "$JOBLIB_TESTS" = "true" ]; then
     # Install joblib from pip, patch it to use this version of loky
     # and run the joblib tests with pytest.
@@ -31,6 +24,12 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     (cd $JOBLIB/externals && bash copy_loky.sh "$BUILD_SOURCESDIRECTORY")
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 else
+    # Make sure that we have the python docker image cached locally to avoid
+    # a timeout in a test that needs it.
+    if [ "$(which docker)" != "" ] && [ "$(uname)" = "Linux" ]; then
+        docker pull python:3.6
+    fi
+
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
     if [ "$RUN_MEMORY" != "true" ]; then
