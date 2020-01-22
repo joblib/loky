@@ -40,7 +40,7 @@ jobs:
         imageName: "ubuntu-16.04"
         python.version: "3.8"
         tox.env: "py38"
-        JOBLIB_TESTS: "true"
+        joblib.tests: "true"
       # linux-py38-high-memory:
       #   imageName: "ubuntu-16.04"
       #   python.version: "3.8"
@@ -97,4 +97,4 @@ jobs:
     - bash: |
         curl -s https://codecov.io/bash | bash
       displayName: 'Upload to codecov'
-      condition: succeeded()
+      condition: and(succeeded(), ne(variables['joblib.tests'], 'true'))
