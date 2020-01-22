@@ -16,4 +16,3 @@ exclude_lines =
     except Exception
     def __repr__
 ignore_errors = True
-
