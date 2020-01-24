@@ -1,4 +1,4 @@
-# Reusable Process Pool Executor  [![Build Status](https://travis-ci.org/tomMoral/loky.svg?branch=master)](https://travis-ci.org/tomMoral/loky) [![Build Status](https://dev.azure.com/karementmoi/loky/_apis/build/status/tomMoral.loky?branchName=master)](https://dev.azure.com/karementmoi/loky/_build/latest?definitionId=1&branchName=master) [![codecov](https://codecov.io/gh/tomMoral/loky/branch/master/graph/badge.svg)](https://codecov.io/gh/tomMoral/loky)
+# Reusable Process Pool Executor  [![Build Status](https://dev.azure.com/joblib/loky/_apis/build/status/joblib.loky?branchName=master)](https://dev.azure.com/joblib/loky/_build/latest?definitionId=2&branchName=master) [![codecov](https://codecov.io/gh/joblib/loky/branch/master/graph/badge.svg)](https://codecov.io/gh/joblib/loky)
 
 
 ### Goal
