@@ -22,6 +22,7 @@ import gc
 import sys
 import time
 import shutil
+import platform
 import pytest
 import weakref
 import tempfile
@@ -535,9 +536,20 @@ class ExecutorTest:
         self.executor.map(str, [2] * (self.worker_count + 1))
         self.executor.shutdown()
 
+
+    @pytest.mark.skipif(
+            platform.python_implementation() != "CPython" or
+            (sys.version_info >= (3, 8, 0) and sys.version_info < (3, 8, 2)),
+            reason="Underlying bug fixed upstream starting Python 3.8.2")
     def test_no_stale_references(self):
         # Issue #16284: check that the executors don't unnecessarily hang onto
         # references.
+
+        # This test has to be skipped on early Python 3.8 versions because of a
+        # low-level reference cycle inside the pickle module for early versions
+        # of Python 3.8 preventing stale references from being collected. See
+        # cloudpipe/cloudpickle#327 as well as
+        # https://bugs.python.org/issue39492
         my_object = MyObject()
         collect = threading.Event()
         _ = weakref.ref(my_object, lambda obj: collect.set())  # noqa
