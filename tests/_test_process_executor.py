@@ -806,7 +806,7 @@ class ExecutorTest:
 
     @pytest.mark.high_memory
     @pytest.mark.skipif(
-            sys.version_info[0] >= 3 and sys.version_info[:2] < (3, 8),
+            sys.version_info[:2] < (3, 8),
             reason="These Pythons cannot pickle objects of size > 2 ** 31GB")
     def test_no_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
@@ -814,7 +814,7 @@ class ExecutorTest:
 
     @pytest.mark.high_memory
     @pytest.mark.skipif(
-            sys.version_info[0] < 3 or sys.version_info[:2] >= (3, 8),
+            sys.version_info[:2] >= (3, 8),
             reason="These Pythons can pickle objects of size > 2 ** 31GB")
     def test_expected_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
