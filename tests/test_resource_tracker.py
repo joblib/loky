@@ -210,7 +210,7 @@ class TestResourceTracker:
             raise AssertionError("%s was not unlinked in time"  % filename)
         '''
         subprocess.check_call(
-            [sys.executable, '-E', '-c', cmd], stderr=subprocess.PIPE
+            [sys.executable, '-E', '-c', cmd], # stderr=subprocess.PIPE
         )
 
     def check_resource_tracker_death(self, signum, should_die):

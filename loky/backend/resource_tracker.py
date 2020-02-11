@@ -199,7 +199,6 @@ class ResourceTracker(object):
         self.ensure_running()
         self._send("MAYBE_UNLINK", name, rtype)
 
-
     def _send(self, cmd, name, rtype):
         msg = '{0}:{1}:{2}\n'.format(cmd, name, rtype).encode('ascii')
         if len(name) > 512:
@@ -237,7 +236,7 @@ def main(fd, verbose=0):
             pass
 
     if verbose:
-        util.debug("Main resource tracker is running\n")
+        util.debug("Main resource tracker is running")
 
     registry = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
     try:
@@ -275,20 +274,20 @@ def main(fd, verbose=0):
                         if verbose:
                             util.debug(
                                 "[ResourceTracker] incremented refcount of {} "
-                                "{} (current {})\n".format(
+                                "{} (current {})".format(
                                     rtype, name, registry[rtype][name]))
                     elif cmd == 'UNREGISTER':
                         del registry[rtype][name]
                         if verbose:
                             util.debug(
                                 "[ResourceTracker] unregister {} {}: "
-                                "registry({})\n".format(name, rtype, len(registry)))
+                                "registry({})".format(name, rtype, len(registry)))
                     elif cmd == 'MAYBE_UNLINK':
                         registry[rtype][name] -= 1
                         if verbose:
                             util.debug(
                                 "[ResourceTracker] decremented refcount of {} "
-                                "{} (current {})\n".format(
+                                "{} (current {})".format(
                                     rtype, name, registry[rtype][name]))
 
                         if registry[rtype][name] == 0:
@@ -296,7 +295,7 @@ def main(fd, verbose=0):
                             try:
                                 if verbose:
                                     util.debug(
-                                            "[ResourceTracker] unlink {}\n"
+                                            "[ResourceTracker] unlink {}"
                                             .format(name))
                                 _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
@@ -327,7 +326,7 @@ def main(fd, verbose=0):
                 try:
                     _CLEANUP_FUNCS[rtype](name)
                     if verbose:
-                        util.debug("[ResourceTracker] unlink {}\n"
+                        util.debug("[ResourceTracker] unlink {}"
                                          .format(name))
                 except Exception as e:
                     warnings.warn('resource_tracker: %s: %r' % (name, e))
@@ -348,7 +347,7 @@ def main(fd, verbose=0):
             _unlink_resources(registry["folder"], "folder")
 
     if verbose:
-        util.debug("resource tracker shut down\n")
+        util.debug("resource tracker shut down")
 
 
 #
