@@ -18,10 +18,6 @@ import loky.backend.resource_tracker as resource_tracker
 from loky.backend.context import get_context
 
 
-def _escape(s):
-    return s.replace('\\', '\\\\')
-
-
 def _resource_unlink(name, rtype):
     resource_tracker._CLEANUP_FUNCS[rtype](name)
 
@@ -210,7 +206,7 @@ class TestResourceTracker:
             raise AssertionError("%s was not unlinked in time"  % filename)
         '''
         subprocess.check_call(
-            [sys.executable, '-E', '-c', cmd], # stderr=subprocess.PIPE
+            [sys.executable, '-E', '-c', cmd], stderr=subprocess.PIPE
         )
 
     def check_resource_tracker_death(self, signum, should_die):
