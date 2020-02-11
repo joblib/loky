@@ -209,7 +209,9 @@ class TestResourceTracker:
         else:
             raise AssertionError("%s was not unlinked in time"  % filename)
         '''
-        subprocess.check_call([sys.executable, '-E', '-c', cmd])
+        subprocess.check_call(
+            [sys.executable, '-E', '-c', cmd], stderr=subprocess.PIPE
+        )
 
     def check_resource_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should

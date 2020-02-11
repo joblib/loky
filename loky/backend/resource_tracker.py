@@ -221,6 +221,9 @@ getfd = _resource_tracker.getfd
 def main(fd, verbose=0):
     '''Run resource tracker.'''
     # protect the process from ^C and "killall python" etc
+    if verbose:
+        util.log_to_stderr(level=util.DEBUG)
+
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
@@ -234,8 +237,7 @@ def main(fd, verbose=0):
             pass
 
     if verbose:
-        sys.stderr.write("Main resource tracker is running\n")
-        sys.stderr.flush()
+        util.debug("Main resource tracker is running\n")
 
     registry = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
     try:
@@ -271,35 +273,31 @@ def main(fd, verbose=0):
                             registry[rtype][name] += 1
 
                         if verbose:
-                            sys.stderr.write(
+                            util.debug(
                                 "[ResourceTracker] incremented refcount of {} "
                                 "{} (current {})\n".format(
                                     rtype, name, registry[rtype][name]))
-                            sys.stderr.flush()
                     elif cmd == 'UNREGISTER':
                         del registry[rtype][name]
                         if verbose:
-                            sys.stderr.write(
+                            util.debug(
                                 "[ResourceTracker] unregister {} {}: "
                                 "registry({})\n".format(name, rtype, len(registry)))
-                            sys.stderr.flush()
                     elif cmd == 'MAYBE_UNLINK':
                         registry[rtype][name] -= 1
                         if verbose:
-                            sys.stderr.write(
+                            util.debug(
                                 "[ResourceTracker] decremented refcount of {} "
                                 "{} (current {})\n".format(
                                     rtype, name, registry[rtype][name]))
-                            sys.stderr.flush()
 
                         if registry[rtype][name] == 0:
                             del registry[rtype][name]
                             try:
                                 if verbose:
-                                    sys.stderr.write(
+                                    util.debug(
                                             "[ResourceTracker] unlink {}\n"
                                             .format(name))
-                                    sys.stderr.flush()
                                 _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
                                 warnings.warn(
@@ -329,9 +327,8 @@ def main(fd, verbose=0):
                 try:
                     _CLEANUP_FUNCS[rtype](name)
                     if verbose:
-                        sys.stderr.write("[ResourceTracker] unlink {}\n"
+                        util.debug("[ResourceTracker] unlink {}\n"
                                          .format(name))
-                        sys.stderr.flush()
                 except Exception as e:
                     warnings.warn('resource_tracker: %s: %r' % (name, e))
 
@@ -351,8 +348,7 @@ def main(fd, verbose=0):
             _unlink_resources(registry["folder"], "folder")
 
     if verbose:
-        sys.stderr.write("resource tracker shut down\n")
-        sys.stderr.flush()
+        util.debug("resource tracker shut down\n")
 
 
 #
