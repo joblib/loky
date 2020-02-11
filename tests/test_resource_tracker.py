@@ -57,7 +57,7 @@ class TestResourceTracker:
         tmpfile = NamedTemporaryFile(delete=False)
         tmpfile.close()
         filename = tmpfile.name
-        resource_tracker.VERBOSE=True
+        resource_tracker.VERBOSE = True
 
         resource_tracker.register(filename, "file")
 
@@ -68,8 +68,7 @@ class TestResourceTracker:
             from loky.backend import resource_tracker
             resource_tracker.maybe_unlink(name, rtype)
 
-        sys.stdout.write(filename + "\\n")
-        sys.stdout.flush()
+        print(filename)
         e = ProcessPoolExecutor(1)
         e.submit(maybe_unlink, filename, "file").result()
         e.shutdown()
@@ -210,9 +209,7 @@ class TestResourceTracker:
         else:
             raise AssertionError("%s was not unlinked in time"  % filename)
         '''
-        p = subprocess.Popen([sys.executable, '-E', '-c', cmd])
-        p.wait()
-        assert p.returncode == 0
+        subprocess.check_call([sys.executable, '-E', '-c', cmd])
 
     def check_resource_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
