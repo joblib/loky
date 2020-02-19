@@ -13,7 +13,7 @@ from loky.backend.semlock import SemLock, _sem_open
 
 try:
     FileNotFoundError = FileNotFoundError
-except NameError:
+except NameError:  # FileNotFoundError is Python 3-only
     from loky.backend.semlock import FileNotFoundError
 
 

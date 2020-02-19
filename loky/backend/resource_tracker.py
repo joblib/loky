@@ -337,12 +337,12 @@ def main(fd, verbose=0):
             else:
                 _unlink_resources(rtype_registry, rtype)
 
-        # the default cleanup routine for folders deletes everything inside
-        # those folders recursively, which can including other resources
-        # tracked by the resource tracker). To limit the risk of the resource
-        # tracker attempting to delete twice a resource (once as part of a
-        # tracked folder, and once as a resource), we delete the folders after
-        # every other resource types.
+        # The default cleanup routine for folders deletes everything inside
+        # those folders recursively, which can include other resources tracked
+        # by the resource tracker). To limit the risk of the resource tracker
+        # attempting to delete twice a resource (once as part of a tracked
+        # folder, and once as a resource), we delete the folders after every
+        # other resource types.
         if "folder" in registry:
             _unlink_resources(registry["folder"], "folder")
 
