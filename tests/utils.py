@@ -53,7 +53,10 @@ def resource_exists(name, rtype):
         except FileNotFoundError:
             return False
         else:
-            os.close(h)
+            if sys.platform == "darwin":
+                # OSX sem_open returns a file descriptor, linux sem_open
+                # returns a pointer
+                os.close(h)
             return True
     else:
         raise ValueError("Resource type %s not understood" % rtype)
