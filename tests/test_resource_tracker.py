@@ -174,7 +174,7 @@ class TestResourceTracker:
         from loky.backend import resource_tracker
         from utils import resource_unlink, create_resource, resource_exists
 
-        resource_tracker.VERBOSE=True
+        resource_tracker.VERBOSE = True
 
         try:
             name = create_resource("{rtype}")

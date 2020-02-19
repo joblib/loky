@@ -341,7 +341,7 @@ def main(fd, verbose=0):
         # those folders recursively, which can include other resources tracked
         # by the resource tracker). To limit the risk of the resource tracker
         # attempting to delete twice a resource (once as part of a tracked
-        # folder, and once as a resource), we delete the folders after every
+        # folder, and once as a resource), we delete the folders after all
         # other resource types.
         if "folder" in registry:
             _unlink_resources(registry["folder"], "folder")
