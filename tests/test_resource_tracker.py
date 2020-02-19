@@ -47,7 +47,6 @@ class TestResourceTracker:
         from loky.backend import resource_tracker
         from loky.backend.semlock import SemLock
         from tempfile import NamedTemporaryFile
-        import sys
 
 
         tmpfile = NamedTemporaryFile(delete=False)
