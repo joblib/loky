@@ -7,11 +7,56 @@ import warnings
 import threading
 import subprocess
 import contextlib
-from tempfile import mkstemp
+from tempfile import mkstemp, mkdtemp, NamedTemporaryFile
+from loky.backend import resource_tracker
+from loky.backend.semlock import SemLock, _sem_open
+
+try:
+    FileNotFoundError = FileNotFoundError
+except NameError:  # FileNotFoundError is Python 3-only
+    from loky.backend.semlock import FileNotFoundError
+
 
 if sys.version_info[0] == 2:
     class TimeoutError(OSError):
         pass
+
+
+def resource_unlink(name, rtype):
+    resource_tracker._CLEANUP_FUNCS[rtype](name)
+
+
+def create_resource(rtype):
+    if rtype == "folder":
+        return mkdtemp(dir=os.getcwd())
+
+    elif rtype == "semlock":
+        name = "loky-%i-%s" % (os.getpid(), next(SemLock._rand))
+        _ = SemLock(1, 1, 1, name)
+        return name
+    elif rtype == "file":
+        tmpfile = NamedTemporaryFile(delete=False)
+        tmpfile.close()
+        return tmpfile.name
+    else:
+        raise ValueError("Resource type %s not understood" % rtype)
+
+
+def resource_exists(name, rtype):
+    if rtype in ["folder", "file"]:
+        return os.path.exists(name)
+    elif rtype == "semlock":
+        # On OSX, semaphore are not visible in the file system, we must
+        # try to open the semaphore to check if it exists.
+        from loky.backend.semlock import pthread
+        try:
+            h = _sem_open(name.encode('ascii'))
+            pthread.sem_close(h)
+            return True
+        except FileNotFoundError:
+            return False
+    else:
+        raise ValueError("Resource type %s not understood" % rtype)
 
 
 @contextlib.contextmanager
@@ -156,7 +201,7 @@ except ImportError:
 
 # A decorator to run tests only when numpy is available
 try:
-    from ._openmp_test_helper.parallel_sum import parallel_sum  # noqa F401
+    from _openmp_test_helper.parallel_sum import parallel_sum  # noqa F401
 
     def with_parallel_sum(func):
         """A decorator to skip tests if parallel_sum is not compiled."""
