@@ -92,7 +92,7 @@ class TestResourceTracker:
             executor.shutdown()
 
     # The following four tests are inspired from cpython _test_multiprocessing
-    @pytest.mark.parametrize("rtype", ["folder", "semlock"])
+    @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
     def test_resource_tracker(self, rtype):
         #
         # Check that killing process does not leak named resources
@@ -106,18 +106,7 @@ class TestResourceTracker:
 
             from loky.backend.semlock import SemLock
             from loky.backend import resource_tracker, reduction
-
-            def create_resource(rtype):
-                if rtype == "folder":
-                    return tempfile.mkdtemp(dir=os.getcwd())
-
-                elif rtype == "semlock":
-                    name = "/loky-%i-%s" % (os.getpid(), next(SemLock._rand))
-                    lock = SemLock(1, 1, 1, name)
-                    return name
-                else:
-                    raise ValueError(
-                        "Resource type %s not understood" % rtype)
+            from utils import create_resource
 
             for _ in range(2):
                 rname = create_resource("{rtype}")
@@ -129,9 +118,12 @@ class TestResourceTracker:
             time.sleep(10)
         '''
         cmd = cmd.format(rtype=rtype, parent_pid=os.getpid())
-        p = subprocess.Popen([sys.executable, '-E', '-c', cmd],
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.path.dirname(__file__)
+        p = subprocess.Popen([sys.executable, '-c', cmd],
                              stderr=subprocess.PIPE,
-                             stdout=subprocess.PIPE)
+                             stdout=subprocess.PIPE,
+                             env=env)
         name1 = p.stdout.readline().rstrip().decode('ascii')
         name2 = p.stdout.readline().rstrip().decode('ascii')
 
@@ -167,47 +159,64 @@ class TestResourceTracker:
                                                 errno.ENOENT))
         assert re.search(expected, err) is not None
 
-    def test_resource_tracker_refcounting(self):
+    @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
+    def test_resource_tracker_refcounting(self, rtype):
+        if (sys.platform == "win32") and rtype == "semlock":
+            pytest.skip("no semlock on windows")
+
         cmd = '''if 1:
         import os
         import tempfile
         import time
+        from loky.backend.semlock import SemLock, _sem_open
         from loky.backend import resource_tracker
+        from utils import resource_unlink, create_resource, resource_exists
 
         resource_tracker.VERBOSE=True
 
-        tmpfile = tempfile.NamedTemporaryFile(delete=False)
-        filename = tmpfile.name
-        tmpfile.close()
-        assert os.path.exists(filename)
+        try:
+            name = create_resource("{rtype}")
+            assert resource_exists(name, "{rtype}")
 
-        from loky.backend.resource_tracker import _resource_tracker
-        _resource_tracker.register(filename, "file")
-        _resource_tracker.register(filename, "file")
+            from loky.backend.resource_tracker import _resource_tracker
+            _resource_tracker.register(name, "{rtype}")
+            _resource_tracker.register(name, "{rtype}")
 
-        # forget all information about the resource, but do not try to remove
-        # it
-        _resource_tracker.unregister(filename, "file")
-        time.sleep(1)
-        assert os.path.exists(filename)
+            # Forget all information about the resource, but do not try to
+            # remove it
+            _resource_tracker.unregister(name, "{rtype}")
+            time.sleep(1)
+            assert resource_exists(name, "{rtype}")
 
-        _resource_tracker.register(filename, "file")
-        _resource_tracker.register(filename, "file")
-        _resource_tracker.maybe_unlink(filename, "file")
-        time.sleep(1)
-        assert os.path.exists(filename)
+            _resource_tracker.register(name, "{rtype}")
+            _resource_tracker.register(name, "{rtype}")
+            _resource_tracker.maybe_unlink(name, "{rtype}")
+            time.sleep(1)
+            assert resource_exists(name, "{rtype}")
 
-        _resource_tracker.maybe_unlink(filename, "file")
-        for _ in range(100):
-            if not os.path.exists(filename):
-                break
-            time.sleep(.1)
-        else:
-            raise AssertionError("%s was not unlinked in time"  % filename)
+            _resource_tracker.maybe_unlink(name, "{rtype}")
+            for _ in range(100):
+                if not resource_exists(name, "{rtype}"):
+                    break
+                time.sleep(.1)
+            else:
+                raise AssertionError("%s was not unlinked in time"  % name)
+        finally:
+            if resource_exists(name, "{rtype}"):
+                resource_unlink(name, "{rtype}")
         '''
-        subprocess.check_call(
-            [sys.executable, '-E', '-c', cmd], stderr=subprocess.PIPE
+
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.path.dirname(__file__)
+        p = subprocess.Popen(
+            [sys.executable, '-c', cmd.format(rtype=rtype)],
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            env=env
         )
+        p.wait()
+        out, err = p.communicate()
+        assert p.returncode == 0, err
 
     def check_resource_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
