@@ -9,7 +9,7 @@ import subprocess
 import contextlib
 from tempfile import mkstemp, mkdtemp, NamedTemporaryFile
 from loky.backend import resource_tracker
-from loky.backend.semlock import SemLock, _sem_open, pthread
+from loky.backend.semlock import SemLock, _sem_open
 
 try:
     FileNotFoundError = FileNotFoundError
@@ -53,6 +53,7 @@ def resource_exists(name, rtype):
         except FileNotFoundError:
             return False
         else:
+            from loky.backend.semlock import pthread
             pthread.sem_close(h)
             return True
     else:
