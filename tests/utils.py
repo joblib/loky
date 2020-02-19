@@ -48,14 +48,13 @@ def resource_exists(name, rtype):
     elif rtype == "semlock":
         # On OSX, semaphore are not visible in the file system, we must
         # try to open the semaphore to check if it exists.
+        from loky.backend.semlock import pthread
         try:
             h = _sem_open(name.encode('ascii'))
-        except FileNotFoundError:
-            return False
-        else:
-            from loky.backend.semlock import pthread
             pthread.sem_close(h)
             return True
+        except FileNotFoundError:
+            return False
     else:
         raise ValueError("Resource type %s not understood" % rtype)
 
