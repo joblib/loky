@@ -16,11 +16,11 @@
 # pipe. The resource_tracker implements a reference counting scheme: each time
 # a Python process anticipates the shared usage of a resource by another
 # process, it signals the resource_tracker of this shared usage, and in return,
-# the resource_tracker increment the object's reference count by 1. Similarly,
-# when access to a resource is closed by a Python process, the process notifies
-# the resource_tracker by asking it to decrement the resource's reference count
-# by 1.  When the reference count drops to 0, the resource_tracker
-# attempts to clean up the underlying resource.
+# the resource_tracker increments the resource's reference count by 1.
+# Similarly, when access to a resource is closed by a Python process, the
+# process notifies the resource_tracker by asking it to decrement the
+# resource's reference count by 1.  When the reference count drops to 0, the
+# resource_tracker attempts to clean up the underlying resource.
 
 # Finally, every other process connected to the resource tracker has a copy of
 # the writable end of the pipe used to communicate with it, so the resource
