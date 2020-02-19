@@ -8,29 +8,29 @@ arguments stay the same.
 """
 from time import sleep
 import multiprocessing as mp
+import loky
 from loky import get_reusable_executor
 
-INITIALIZER_STATUS = "uninitialized"
+# Store the initialization status in a global variable of a module.
+loky._INITIALIZER_STATUS = "uninitialized"
 
 
 def initializer(x):
-    global INITIALIZER_STATUS
     print("[{}] init".format(mp.current_process().name))
-    INITIALIZER_STATUS = x
+    loky._INITIALIZER_STATUS = x
 
 
 def return_initializer_status(delay=0):
     sleep(delay)
 
-    global INITIALIZER_STATUS
-    return INITIALIZER_STATUS
+    return getattr(loky, '_INITIALIZER_STATUS', 'uninitialized')
 
 
 executor = get_reusable_executor(
     max_workers=2, initializer=initializer, initargs=('initialized',),
     context="loky", timeout=1000)
 
-assert INITIALIZER_STATUS == "uninitialized"
+assert loky._INITIALIZER_STATUS == "uninitialized"
 executor.submit(return_initializer_status).result()
 assert executor.submit(return_initializer_status).result() == 'initialized'
 
