@@ -163,7 +163,7 @@ class TestResourceTracker:
 
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
     def test_resource_tracker_refcounting(self, rtype):
-        if (sys.platform == "win32") and rtype == "semlock":
+        if sys.platform == "win32" and rtype == "semlock":
             pytest.skip("no semlock on windows")
 
         cmd = '''if 1:
