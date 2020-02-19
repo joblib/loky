@@ -150,8 +150,11 @@ class TestResourceTracker:
         # resource 1 is still registered, but was destroyed externally: the
         # tracker is expected to complain.
         if sys.platform == "win32":
-            expected = ("resource_tracker: %s: (WindowsError\\((%d)|"
-                        "FileNotFoundError)" % (re.escape(name1), errno.ESRCH))
+            errno_map = {'file': 2, 'folder': 3}
+            expected = (
+                "resource_tracker: %s: (WindowsError\\((%d)|"
+                "FileNotFoundError)" % (re.escape(name1), errno_map[rtype])
+            )
         else:
             expected = ("resource_tracker: %s: (OSError\\(%d|"
                         "FileNotFoundError)" % (re.escape(name1),
