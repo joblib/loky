@@ -9,7 +9,7 @@ import subprocess
 import contextlib
 from tempfile import mkstemp, mkdtemp, NamedTemporaryFile
 from loky.backend import resource_tracker
-from loky.backend.semlock import SemLock, _sem_open
+from loky.backend.semlock import SemLock, _sem_open, pthread
 
 try:
     FileNotFoundError = FileNotFoundError
@@ -53,10 +53,7 @@ def resource_exists(name, rtype):
         except FileNotFoundError:
             return False
         else:
-            if sys.platform == "darwin":
-                # OSX sem_open returns a file descriptor, linux sem_open
-                # returns a pointer
-                os.close(h)
+            pthread.sem_close(h)
             return True
     else:
         raise ValueError("Resource type %s not understood" % rtype)
