@@ -1,5 +1,13 @@
-### 2.6.1 - XXXX-YY-ZZ - Bugfix release
+### 2.7.0 - XXXX-YY-ZZ
 
+- The ``resource_tracker`` now comes with built-in support for tracking files
+  in all OSes.  In addition, Python processes can now signal they do not need a
+  shared resource anymore by using the
+  ``resource_tracker.maybe_unlink(resource_name, resource_type)`` method.  After
+  all processes having access to the said resource have called this method, the
+  ``resource_tracker`` will proceed to unlink the resource. Previously, resource
+  unlinking by the ``resource_tracker`` was only done for leaked resources at
+  interpreter exit (#228).
 
 ### 2.6.0 - 2019-09-18
 
