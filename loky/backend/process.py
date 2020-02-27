@@ -8,7 +8,7 @@
 #
 import os
 import sys
-from .compat import BaseProcess
+from multiprocessing.process import BaseProcess
 
 
 class LokyProcess(BaseProcess):

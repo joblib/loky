@@ -10,8 +10,9 @@ import socket
 import multiprocessing as mp
 from tempfile import mkstemp
 
+from multiprocessing.connection import wait
+
 from loky.backend import get_context
-from loky.backend.compat import wait
 from loky.backend.context import START_METHODS
 from loky.backend.utils import recursive_terminate
 
@@ -717,7 +718,7 @@ class TestLokyBackend:
 
 
 def wait_for_handle(handle, timeout):
-    from loky.backend.compat import wait
+    from multiprocessing.connection import wait
     if timeout is not None and timeout < 0.0:
         timeout = None
     return wait([handle], timeout)
