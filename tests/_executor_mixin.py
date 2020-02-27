@@ -1,5 +1,4 @@
 from __future__ import print_function
-import os
 import sys
 import time
 import math
@@ -14,11 +13,6 @@ from loky import get_reusable_executor, cpu_count
 
 # Compat Travis
 CPU_COUNT = cpu_count()
-if os.environ.get("TRAVIS_OS_NAME") is not None and sys.version_info < (3, 4):
-    # Hard code number of cpu in travis as cpu_count return 32 whereas we
-    # only access 2 cores.
-    # This is done automatically by cpu_count for Python >= 3.4
-    CPU_COUNT = 2
 
 # Set a large timeout as it should only be reached in case of deadlocks
 TIMEOUT = 40

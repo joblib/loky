@@ -19,9 +19,6 @@ from loky.backend.utils import recursive_terminate
 from .utils import TimingWrapper, check_subprocess_call
 from .utils import with_parallel_sum, _run_openmp_parallel_sum
 
-if sys.version_info < (3, 3):
-    FileNotFoundError = NameError
-
 
 if not hasattr(socket, "socketpair"):
     def socketpair():
@@ -84,18 +81,6 @@ class TestLokyBackend:
         assert current.ident == os.getpid()
         assert current.exitcode is None
 
-    @pytest.mark.skipif(sys.version_info < (3, 3),
-                        reason="requires python3.3")
-    def test_daemon_argument(self):
-
-        # By default uses the current process's daemon flag.
-        proc0 = self.Process(target=self._test_process)
-        assert proc0.daemon == self.current_process().daemon
-        proc1 = self.Process(target=self._test_process, daemon=True)
-        assert proc1.daemon
-        proc2 = self.Process(target=self._test_process, daemon=False)
-        assert not proc2.daemon
-
     @classmethod
     def _test_process(cls, q, sq, *args, **kwds):
         current = cls.current_process()
@@ -117,18 +102,7 @@ class TestLokyBackend:
         def no_mgr():
             yield None
 
-        with capsys.disabled() if sys.version_info[:2] == (3, 3) else no_mgr():
-            if sys.version_info[:2] == (3, 3):
-                import logging
-                logger = mp.util.get_logger()
-                logger.setLevel(5)
-                formatter = logging.Formatter(
-                    mp.util.DEFAULT_LOGGING_FORMAT)
-                handler = logging.StreamHandler()
-                handler.setFormatter(formatter)
-                old_handler = logger.handlers[0]
-                logger.handlers[0] = handler
-
+        with no_mgr():
             q = self.Queue()
             sq = self.SimpleQueue()
             args = (q, sq, 1, 2)
@@ -176,9 +150,6 @@ class TestLokyBackend:
             assert not p.is_alive()
             assert p not in self.active_children()
 
-            if sys.version_info[:2] == (3, 3):
-                logger.handlers[0] = old_handler
-
     @classmethod
     def _test_connection(cls, conn):
         """Make sure a connection object is functional"""
@@ -192,10 +163,6 @@ class TestLokyBackend:
             conn.send_bytes(msg)
         conn.close()
 
-    @pytest.mark.skipif(
-        sys.platform == "win32" and sys.version_info[:2] < (3, 3),
-        reason="socket are not picklable with python2.7 and vanilla"
-        " ForkingPickler on windows")
     def test_socket(self):
         """sockets can be pickled at spawn and are able to send/recv"""
         server, client = socket.socketpair()
@@ -516,11 +483,6 @@ class TestLokyBackend:
             # to /dev/null during `Process._boostrap`. For other version, stdin
             # should be closed.
             is_std = (fd in ["f1", "f2"])
-            if sys.version_info[:2] < (3, 3):
-                if sys.platform != "darwin":
-                    is_std |= (fd == "f0" and name == "n/dev/null")
-                else:
-                    is_std |= (name == "n/dev/null")
 
             # Check if fd is a pipe
             is_pipe = (t in ["tPIPE", "tFIFO"])
@@ -758,12 +720,7 @@ def test_recursive_terminate(use_psutil):
 
 
 def _test_default_subcontext(queue):
-    if sys.version_info >= (3, 3):
-        start_method = mp.get_start_method()
-    else:
-        from loky.backend.context import _DEFAULT_START_METHOD
-        start_method = _DEFAULT_START_METHOD
-
+    start_method = mp.get_start_method()
     queue.put(start_method)
 
 

@@ -14,10 +14,6 @@ DELTA = 0.1
 TIMEOUT1 = .1
 TIMEOUT2 = .3
 
-if sys.version_info < (3, 3):
-    FileExistsError = OSError
-    FileNotFoundError = OSError
-
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UNIX test")
 def test_semlock_failure():
@@ -192,9 +188,6 @@ class TestCondition():
         self.check_invariant(cond)
         p.join()
 
-    @pytest.mark.xfail(sys.platform != "win32" and
-                       sys.version_info[:2] <= (3, 3),
-                       reason="The test if not robust enough. See issue#74")
     def test_notify_all(self):
         cond = loky_context.Condition()
         sleeping = loky_context.Semaphore(0)
@@ -281,10 +274,6 @@ class TestCondition():
             if not result or state.get_value() != 5:
                 sys.exit(1)
 
-    @pytest.mark.skipif(sys.platform == "win32" and
-                        sys.version_info[:2] < (3, 3),
-                        reason="Condition.wait_for was introduced in 3.3 and "
-                        "we do not overload win32 Condition")
     def test_waitfor(self):
         # based on test in test/lock_tests.py
         cond = loky_context.Condition()
@@ -322,10 +311,6 @@ class TestCondition():
         if pid is not None:
             os.kill(pid, signal.SIGINT)
 
-    @pytest.mark.skipif(sys.platform == "win32" and
-                        sys.version_info[:2] < (3, 3),
-                        reason="Condition.wait always returned None before 3.3"
-                        " and we do not overload win32 Condition")
     def test_wait_result(self):
         if sys.platform != 'win32':
             pid = os.getpid()

@@ -33,6 +33,7 @@ import faulthandler
 from math import sqrt
 from threading import Thread
 from collections import defaultdict
+from concurrent import futures
 
 from loky.process_executor import LokyRecursionError
 from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
@@ -42,11 +43,6 @@ from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
 from . import _executor_mixin
 from .utils import id_sleep, check_subprocess_call, filter_match
 from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
-
-if sys.version_info[:2] < (3, 3):
-    import loky._base as futures
-else:
-    from concurrent import futures
 
 
 RAM_SIZE = psutil.virtual_memory().total
@@ -539,7 +535,6 @@ class ExecutorTest:
         self.executor.map(str, [2] * (self.worker_count + 1))
         self.executor.shutdown()
 
-
     @pytest.mark.skipif(
             platform.python_implementation() != "CPython" or
             (sys.version_info >= (3, 8, 0) and sys.version_info < (3, 8, 2)),
@@ -617,13 +612,7 @@ class ExecutorTest:
 
         exc = cm.value
         assert type(exc) is RuntimeError
-        if sys.version_info > (3,):
-            assert exc.args == (123,)
-        else:
-            assert exc.args[0].startswith("123")
-            # Makes sure that the cause of the RuntimeError is properly
-            # reported in the error message.
-            assert "raise RuntimeError(123)  # some comment" in exc.args[0]
+        assert exc.args == (123,)
 
         cause = exc.__cause__
         assert type(cause) is process_executor._RemoteTraceback

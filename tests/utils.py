@@ -17,11 +17,6 @@ except NameError:  # FileNotFoundError is Python 3-only
     from loky.backend.semlock import FileNotFoundError
 
 
-if sys.version_info[0] == 2:
-    class TimeoutError(OSError):
-        pass
-
-
 def resource_unlink(name, rtype):
     resource_tracker._CLEANUP_FUNCS[rtype](name)
 
@@ -66,13 +61,6 @@ def captured_output(stream_name):
     import io
     orig_stdout = getattr(sys, stream_name)
     s = io.StringIO()
-    if sys.version_info[:2] < (3, 3):
-        import types
-        s.wrt = s.write
-
-        def write(self, msg):
-            self.wrt(unicode(msg))
-        s.write = types.MethodType(write, s)
 
     setattr(sys, stream_name, s)
     try:
@@ -147,9 +135,8 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
     try:
         timer.start()
         stdout, stderr = proc.communicate()
+        stdout, stderr = stdout.decode(), stderr.decode()
 
-        if sys.version_info[0] >= 3:
-            stdout, stderr = stdout.decode(), stderr.decode()
         if proc.returncode == -9:
             message = (
                 'Subprocess timeout after {}s.\nStdout:\n{}\n'

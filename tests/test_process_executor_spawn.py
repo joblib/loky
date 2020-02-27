@@ -5,8 +5,7 @@ from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
 
 
-if (sys.version_info[:2] > (3, 3)
-        and not hasattr(sys, "pypy_version_info")):
+if not hasattr(sys, "pypy_version_info"):
     class ProcessPoolSpawnMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
         context = get_context('spawn')

@@ -1,4 +1,3 @@
-import sys
 import pytest
 import logging
 import warnings
@@ -19,8 +18,7 @@ def log_lvl(request):
 
 def pytest_configure(config):
     """Setup multiprocessing logging for loky testing"""
-    if sys.version_info >= (3, 4):
-        logging._levelToName[5] = "SUBDEBUG"
+    logging._levelToName[5] = "SUBDEBUG"
     log = log_to_stderr(config.getoption("--loky-verbosity"))
     log.handlers[0].setFormatter(logging.Formatter(
         '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
