@@ -50,7 +50,7 @@ from . import spawn
 from multiprocessing import util
 
 if sys.platform == "win32":
-    from .compat_win32 import _winapi
+    import _winapi
     from .reduction import duplicate
     import msvcrt
 

@@ -4,25 +4,13 @@
 #
 # author: Thomas Moreau and Olivier grisel
 #
-import sys
+import queue
 
-PY3 = sys.version_info[:2] >= (3, 3)
+from multiprocessing.process import BaseProcess
+from multiprocessing.connection import wait
 
-if PY3:
-    import queue
-else:
-    import Queue as queue
 
-if sys.version_info >= (3, 4):
-    from multiprocessing.process import BaseProcess
-else:
-    from multiprocessing.process import Process as BaseProcess
-
-# Platform specific compat
-if sys.platform == "win32":
-    from .compat_win32 import wait
-else:
-    from .compat_posix import wait
+PY3 = True
 
 
 def set_cause(exc, cause):

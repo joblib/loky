@@ -23,6 +23,7 @@ import sys
 import time
 import shutil
 import platform
+import psutil
 import pytest
 import weakref
 import tempfile
@@ -47,6 +48,8 @@ if sys.version_info[:2] < (3, 3):
 else:
     from concurrent import futures
 
+
+RAM_SIZE = psutil.virtual_memory().total
 
 IS_PYPY = hasattr(sys, "pypy_version_info")
 
@@ -814,7 +817,7 @@ class ExecutorTest:
 
     @pytest.mark.high_memory
     @pytest.mark.skipif(
-            sys.version_info[:2] >= (3, 8),
+            sys.version_info[:2] >= (3, 8) or RAM_SIZE < 4e9,
             reason="These Pythons can pickle objects of size > 2 ** 31GB")
     def test_expected_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
