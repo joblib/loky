@@ -11,10 +11,6 @@ jobs:
         imageName: "vs2017-win2016"
         python.version: "3.5"
         tox.env: py35
-      windows-py27:
-        imageName: "vs2017-win2016"
-        python.version: "2.7"
-        tox.env: py27
 
       macos-py38:
         imageName: "macos-10.13"
@@ -24,11 +20,6 @@ jobs:
         imageName: "macos-10.13"
         python.version: "3.5"
         tox.env: py35
-      macos-py27-high-memory:
-        imageName: "macos-10.13"
-        python.version: "2.7"
-        tox.env: py27
-        RUN_MEMORY: "true"
 
       linux-pypy3:
         imageName: "ubuntu-16.04"
@@ -58,10 +49,6 @@ jobs:
         imageName: "ubuntu-16.04"
         python.version: "3.5"
         tox.env: py35
-      linux-py27:
-        imageName: "ubuntu-16.04"
-        python.version: "2.7"
-        tox.env: py27
 
   pool:
     vmImage: $(imageName)
