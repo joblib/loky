@@ -17,37 +17,35 @@ import sys
 import warnings
 import multiprocessing as mp
 
+from multiprocessing import get_context as mp_get_context
+from multiprocessing.context import BaseContext
 
 from .process import LokyProcess, LokyInitMainProcess
 
 START_METHODS = ['loky', 'loky_init_main']
 _DEFAULT_START_METHOD = None
 
-if sys.version_info[:2] >= (3, 4):
-    from multiprocessing import get_context as mp_get_context
-    from multiprocessing.context import assert_spawning, set_spawning_popen
-    from multiprocessing.context import get_spawning_popen, BaseContext
+START_METHODS += ['spawn']
+if sys.platform != 'win32':
+    START_METHODS += ['fork', 'forkserver']
 
-    START_METHODS += ['spawn']
-    if sys.platform != 'win32':
-        START_METHODS += ['fork', 'forkserver']
 
-    def get_context(method=None):
-        # Try to overload the default context
-        method = method or _DEFAULT_START_METHOD or "loky"
-        if method == "fork":
-            # If 'fork' is explicitly requested, warn user about potential
-            # issues.
-            warnings.warn("`fork` start method should not be used with "
-                          "`loky` as it does not respect POSIX. Try using "
-                          "`spawn` or `loky` instead.", UserWarning)
-        try:
-            context = mp_get_context(method)
-        except ValueError:
-            raise ValueError("Unknown context '{}'. Value should be in {}."
-                             .format(method, START_METHODS))
+def get_context(method=None):
+    # Try to overload the default context
+    method = method or _DEFAULT_START_METHOD or "loky"
+    if method == "fork":
+        # If 'fork' is explicitly requested, warn user about potential
+        # issues.
+        warnings.warn("`fork` start method should not be used with "
+                      "`loky` as it does not respect POSIX. Try using "
+                      "`spawn` or `loky` instead.", UserWarning)
+    try:
+        context = mp_get_context(method)
+    except ValueError:
+        raise ValueError("Unknown context '{}'. Value should be in {}."
+                         .format(method, START_METHODS))
 
-        return context
+    return context
 
 
 def set_start_method(method, force=False):

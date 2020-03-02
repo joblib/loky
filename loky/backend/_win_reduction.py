@@ -9,7 +9,7 @@
 import os
 import sys
 import socket
-from .reduction import register
+from .reduction import dispatch_table
 
 
 if sys.platform == 'win32':
@@ -54,7 +54,7 @@ if sys.platform == 'win32':
         from multiprocessing.connection import PipeConnection
         handle = dh.detach()
         return PipeConnection(handle, readable, writable)
-    register(PipeConnection, reduce_pipe_connection)
+    dispatch_table[PipeConnection] = reduce_pipe_connection
 
     from multiprocessing.reduction import _reduce_socket
-    register(socket.socket, _reduce_socket)
+    dispatch_table[socket.socket] = _reduce_socket

@@ -16,13 +16,12 @@ import weakref
 import threading
 
 from multiprocessing import util
-from multiprocessing import connection
 from multiprocessing.queues import Full
 from multiprocessing.queues import _sentinel, Queue as mp_Queue
 from multiprocessing.queues import SimpleQueue as mp_SimpleQueue
+from multiprocessing.context import assert_spawning
 
-from .reduction import loads, dumps
-from .context import assert_spawning, get_context
+from .reduction import dumps
 
 
 __all__ = ['Queue', 'SimpleQueue', 'Full']

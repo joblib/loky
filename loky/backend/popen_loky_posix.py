@@ -10,8 +10,8 @@ import pickle
 from io import BytesIO
 
 from . import reduction, spawn
-from .context import set_spawning_popen
 from multiprocessing import util, process
+from multiprocessing.context import set_spawning_popen
 
 if sys.platform != "win32":
     from . import resource_tracker

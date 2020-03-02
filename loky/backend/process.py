@@ -45,7 +45,7 @@ class LokyInitMainProcess(LokyProcess):
 
 class AuthenticationKey(bytes):
     def __reduce__(self):
-        from .context import assert_spawning
+        from multiprocessing.context import assert_spawning
         try:
             assert_spawning(self)
         except RuntimeError:

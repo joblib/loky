@@ -2,10 +2,10 @@ import os
 import sys
 from pickle import load
 from multiprocessing import process, util
+from multiprocessing.context import get_spawning_popen
 
 from . import spawn
 from . import reduction
-from .context import get_spawning_popen, set_spawning_popen
 
 if sys.platform == "win32":
     # Avoid import error by code introspection tools such as test runners

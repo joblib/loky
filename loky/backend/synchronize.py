@@ -17,10 +17,10 @@ import threading
 import _multiprocessing
 from time import time as _time
 
-from .context import assert_spawning
 from . import resource_tracker
 from multiprocessing import process
 from multiprocessing import util
+from multiprocessing.context import assert_spawning
 
 __all__ = [
     'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event'

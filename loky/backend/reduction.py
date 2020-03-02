@@ -23,42 +23,10 @@ if sys.platform == "win32":
 
 
 ###############################################################################
-# Enable custom pickling in Loky.
-# To allow instance customization of the pickling process, we use 2 classes.
-# _ReducerRegistry gives module level customization and CustomizablePickler
-# permits to use instance base custom reducers. Only CustomizablePickler
-# should be used.
-
-class _ReducerRegistry(object):
-    """Registry for custom reducers.
-
-    HIGHEST_PROTOCOL is selected by default as this pickler is used
-    to pickle ephemeral datastructures for interprocess communication
-    hence no backward compatibility is required.
-
-    """
-
-    # We override the pure Python pickler as its the only way to be able to
-    # customize the dispatch table without side effects in Python 2.6
-    # to 3.2. For Python 3.3+ leverage the new dispatch_table
-    # feature from http://bugs.python.org/issue14166 that makes it possible
-    # to use the C implementation of the Pickler which is faster.
-
-    # TODO: this should be possible to completely delete this class now
-    # that loky is python3 only.
-
-    dispatch_table = {}
-
-    @classmethod
-    def register(cls, type, reduce_func):
-        """Attach a reducer function to a given type in the dispatch table."""
-        cls.dispatch_table[type] = reduce_func
-
-
-###############################################################################
 # Registers extra pickling routines to improve picklization  for loky
 
-register = _ReducerRegistry.register
+# loky's dispatch table with extra reducers for unpickleable types
+dispatch_table = copyreg.dispatch_table.copy()
 
 
 # make methods picklable
@@ -78,8 +46,8 @@ class _C:
         pass
 
 
-register(type(_C().f), _reduce_method)
-register(type(_C.h), _reduce_method)
+dispatch_table[type(_C().f)] =  _reduce_method
+dispatch_table[type(_C.h)] = _reduce_method
 
 
 if not hasattr(sys, "pypy_version_info"):
@@ -87,8 +55,8 @@ if not hasattr(sys, "pypy_version_info"):
     def _reduce_method_descriptor(m):
         return getattr, (m.__objclass__, m.__name__)
 
-    register(type(list.append), _reduce_method_descriptor)
-    register(type(int.__add__), _reduce_method_descriptor)
+    dispatch_table[type(list.append)] = _reduce_method_descriptor
+    dispatch_table[type(int.__add__)] = _reduce_method_descriptor
 
 
 # Make partial func pickable
@@ -100,7 +68,7 @@ def _rebuild_partial(func, args, keywords):
     return functools.partial(func, *args, **keywords)
 
 
-register(functools.partial, _reduce_partial)
+dispatch_table[functools.partial] = _reduce_partial
 
 if sys.platform != "win32":
     from ._posix_reduction import _mk_inheritable  # noqa: F401
@@ -158,7 +126,7 @@ def set_loky_pickler(loky_pickler=None):
         _loky_pickler_cls = loky_pickler_cls
 
         _dispatch_table = copyreg.dispatch_table.copy()
-        _dispatch_table.update(_ReducerRegistry.dispatch_table)
+        _dispatch_table.update(dispatch_table)
 
         def __init__(self, writer, reducers=None, protocol=HIGHEST_PROTOCOL):
             loky_pickler_cls.__init__(self, writer, protocol=protocol)
