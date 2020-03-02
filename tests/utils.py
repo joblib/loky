@@ -7,14 +7,16 @@ import warnings
 import threading
 import subprocess
 import contextlib
-from tempfile import mkstemp, mkdtemp, NamedTemporaryFile
-from loky.backend import resource_tracker
-from loky.backend.semlock import SemLock, _sem_open
 
-try:
-    FileNotFoundError = FileNotFoundError
-except NameError:  # FileNotFoundError is Python 3-only
-    from loky.backend.semlock import FileNotFoundError
+from tempfile import mkstemp, mkdtemp, NamedTemporaryFile
+from tempfile import _RandomNameSequence
+from _multiprocessing import SemLock, sem_unlink
+
+from loky.backend import resource_tracker
+
+
+FileNotFoundError = FileNotFoundError
+_rand = _RandomNameSequence()
 
 
 def resource_unlink(name, rtype):
@@ -26,8 +28,8 @@ def create_resource(rtype):
         return mkdtemp(dir=os.getcwd())
 
     elif rtype == "semlock":
-        name = "loky-%i-%s" % (os.getpid(), next(SemLock._rand))
-        _ = SemLock(1, 1, 1, name)
+        name = "loky-%i-%s" % (os.getpid(), next(_rand))
+        _ = SemLock(1, 1, 1, name, False)
         return name
     elif rtype == "file":
         tmpfile = NamedTemporaryFile(delete=False)
@@ -43,13 +45,12 @@ def resource_exists(name, rtype):
     elif rtype == "semlock":
         # On OSX, semaphore are not visible in the file system, we must
         # try to open the semaphore to check if it exists.
-        from loky.backend.semlock import pthread
         try:
-            h = _sem_open(name.encode('ascii'))
-            pthread.sem_close(h)
-            return True
-        except FileNotFoundError:
+            h = SemLock(1, 1, 1, name, False)
+            sem_unlink(h.name)
             return False
+        except FileExistsError:
+            return True
     else:
         raise ValueError("Resource type %s not understood" % rtype)
 

@@ -45,7 +45,7 @@ class TestResourceTracker:
 
         from loky import ProcessPoolExecutor
         from loky.backend import resource_tracker
-        from loky.backend.semlock import SemLock
+        from loky.backend.synchronize import SemLock
         from tempfile import NamedTemporaryFile
 
 
@@ -103,7 +103,7 @@ class TestResourceTracker:
         cmd = '''if 1:
             import time, os, tempfile, sys
 
-            from loky.backend.semlock import SemLock
+            from loky.backend.synchronize import SemLock
             from loky.backend import resource_tracker, reduction
             from utils import create_resource
 
@@ -170,7 +170,6 @@ class TestResourceTracker:
         import os
         import tempfile
         import time
-        from loky.backend.semlock import SemLock, _sem_open
         from loky.backend import resource_tracker
         from utils import resource_unlink, create_resource, resource_exists
 
