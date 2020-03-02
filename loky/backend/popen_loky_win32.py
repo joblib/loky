@@ -2,7 +2,7 @@ import os
 import sys
 from pickle import load
 from multiprocessing import process, util
-from multiprocessing.context import get_spawning_popen
+from multiprocessing.context import get_spawning_popen, set_spawning_popen
 
 from . import spawn
 from . import reduction
