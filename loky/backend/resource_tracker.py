@@ -48,20 +48,13 @@ import threading
 
 from . import spawn
 from multiprocessing import util
+from _multiprocessing import sem_unlink
 
 if sys.platform == "win32":
     import _winapi
     from .reduction import duplicate
     import msvcrt
 
-try:
-    from _multiprocessing import sem_unlink
-except ImportError:
-    from .semlock import sem_unlink
-
-if sys.version_info < (3,):
-    BrokenPipeError = OSError
-    from os import fdopen as open
 
 __all__ = ['ensure_running', 'register', 'unregister']
 
@@ -139,13 +132,6 @@ class ResourceTracker(object):
                 # process will out live us, so no need to wait on pid
                 exe = spawn.get_executable()
                 args = [exe] + util._args_from_interpreter_flags()
-                # In python 3.3, there is a bug which put `-RRRRR..` instead of
-                # `-R` in args. Replace it to get the correct flags.
-                # See https://github.com/python/cpython/blob/3.3/Lib/subprocess.py#L488
-                if sys.version_info[:2] <= (3, 3):
-                    import re
-                    for i in range(1, len(args)):
-                        args[i] = re.sub("-R+", "-R", args[i])
                 args += ['-c', cmd]
                 util.debug("launching resource tracker: {}".format(args))
                 # bpo-33613: Register a signal mask that will block the

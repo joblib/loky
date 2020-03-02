@@ -17,8 +17,6 @@ if sys.platform == "win32":
 else:
     _Popen = object
 
-if sys.version_info[:2] < (3, 3):
-    from os import fdopen as open
 
 __all__ = ['Popen']
 
@@ -105,15 +103,11 @@ class Popen(_Popen):
 
                 # send information to child
                 set_spawning_popen(self)
-                if sys.version_info[:2] < (3, 4):
-                    Popen._tls.process_handle = int(hp)
                 try:
                     reduction.dump(prep_data, to_child)
                     reduction.dump(process_obj, to_child)
                 finally:
                     set_spawning_popen(None)
-                    if sys.version_info[:2] < (3, 4):
-                        del Popen._tls.process_handle
         except IOError as exc:
             # IOError 22 happens when the launched subprocess terminated before
             # wfd.close is called. Thus we can safely ignore it.

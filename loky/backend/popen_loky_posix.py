@@ -10,11 +10,8 @@ import pickle
 from io import BytesIO
 
 from . import reduction, spawn
-from .context import get_spawning_popen, set_spawning_popen
+from .context import set_spawning_popen
 from multiprocessing import util, process
-
-if sys.version_info[:2] < (3, 3):
-    ProcessLookupError = OSError
 
 if sys.platform != "win32":
     from . import resource_tracker
@@ -51,17 +48,9 @@ if sys.platform != "win32":
             self._fds = []
             self._launch(process_obj)
 
-        if sys.version_info < (3, 4):
-            @classmethod
-            def duplicate_for_child(cls, fd):
-                popen = get_spawning_popen()
-                popen._fds.append(fd)
-                return reduction._mk_inheritable(fd)
-
-        else:
-            def duplicate_for_child(self, fd):
-                self._fds.append(fd)
-                return reduction._mk_inheritable(fd)
+        def duplicate_for_child(self, fd):
+            self._fds.append(fd)
+            return reduction._mk_inheritable(fd)
 
         def poll(self, flag=os.WNOHANG):
             if self.returncode is None:
@@ -83,23 +72,6 @@ if sys.platform != "win32":
             return self.returncode
 
         def wait(self, timeout=None):
-            if sys.version_info < (3, 3):
-                import time
-                if timeout is None:
-                    return self.poll(0)
-                deadline = time.time() + timeout
-                delay = 0.0005
-                while 1:
-                    res = self.poll()
-                    if res is not None:
-                        break
-                    remaining = deadline - time.time()
-                    if remaining <= 0:
-                        break
-                    delay = min(delay * 2, remaining, 0.05)
-                    time.sleep(delay)
-                return res
-
             if self.returncode is None:
                 if timeout is not None:
                     from multiprocessing.connection import wait

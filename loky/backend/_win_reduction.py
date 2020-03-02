@@ -13,14 +13,9 @@ from .reduction import register
 
 
 if sys.platform == 'win32':
-    if sys.version_info[:2] < (3, 3):
-        from _multiprocessing import PipeConnection
-    else:
-        import _winapi
-        from multiprocessing.connection import PipeConnection
+    import _winapi
+    from multiprocessing.connection import PipeConnection
 
-
-if sys.version_info[:2] >= (3, 4) and sys.platform == 'win32':
     class DupHandle(object):
         def __init__(self, handle, access, pid=None):
             # duplicate handle for process with given pid
@@ -61,39 +56,5 @@ if sys.version_info[:2] >= (3, 4) and sys.platform == 'win32':
         return PipeConnection(handle, readable, writable)
     register(PipeConnection, reduce_pipe_connection)
 
-elif sys.platform == 'win32':
-    # Older Python versions
-    from multiprocessing.reduction import reduce_pipe_connection
-    register(PipeConnection, reduce_pipe_connection)
-
-
-if sys.version_info[:2] < (3, 3) and sys.platform == 'win32':
-    from _multiprocessing import win32
-    from multiprocessing.reduction import reduce_handle, rebuild_handle
-    close = win32.CloseHandle
-
-    def fromfd(handle, family, type_, proto=0):
-        s = socket.socket(family, type_, proto, fileno=handle)
-        if s.__class__ is not socket.socket:
-            s = socket.socket(_sock=s)
-        return s
-
-    def reduce_socket(s):
-        if not hasattr(socket, "fromfd"):
-            raise TypeError("sockets cannot be pickled on this system.")
-        reduced_handle = reduce_handle(s.fileno())
-        return _rebuild_socket, (reduced_handle, s.family, s.type, s.proto)
-
-    def _rebuild_socket(reduced_handle, family, type_, proto):
-        handle = rebuild_handle(reduced_handle)
-        s = fromfd(handle, family, type_, proto)
-        close(handle)
-        return s
-
-    register(socket.socket, reduce_socket)
-elif sys.version_info[:2] < (3, 4):
-    from multiprocessing.reduction import reduce_socket
-    register(socket.socket, reduce_socket)
-else:
     from multiprocessing.reduction import _reduce_socket
     register(socket.socket, _reduce_socket)

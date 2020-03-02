@@ -49,42 +49,6 @@ if sys.version_info[:2] >= (3, 4):
 
         return context
 
-else:
-    if sys.platform != 'win32':
-        import threading
-        # Mechanism to check that the current thread is spawning a process
-        _tls = threading.local()
-        popen_attr = 'spawning_popen'
-    else:
-        from multiprocessing.forking import Popen
-        _tls = Popen._tls
-        popen_attr = 'process_handle'
-
-    BaseContext = object
-
-    def get_spawning_popen():
-        return getattr(_tls, popen_attr, None)
-
-    def set_spawning_popen(popen):
-        setattr(_tls, popen_attr, popen)
-
-    def assert_spawning(obj):
-        if get_spawning_popen() is None:
-            raise RuntimeError(
-                '%s objects should only be shared between processes'
-                ' through inheritance' % type(obj).__name__
-            )
-
-    def get_context(method=None):
-        method = method or _DEFAULT_START_METHOD or 'loky'
-        if method == "loky":
-            return LokyContext()
-        elif method == "loky_init_main":
-            return LokyInitMainContext()
-        else:
-            raise ValueError("Unknown context '{}'. Value should be in {}."
-                             .format(method, START_METHODS))
-
 
 def set_start_method(method, force=False):
     global _DEFAULT_START_METHOD

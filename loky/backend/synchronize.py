@@ -29,12 +29,8 @@ __all__ = [
 # raise ImportError for platforms lacking a working sem_open implementation.
 # See issue 3770
 try:
-    if sys.version_info < (3, 4):
-        from .semlock import SemLock as _SemLock
-        from .semlock import sem_unlink
-    else:
-        from _multiprocessing import SemLock as _SemLock
-        from _multiprocessing import sem_unlink
+    from _multiprocessing import SemLock as _SemLock
+    from _multiprocessing import sem_unlink
 except (ImportError):
     raise ImportError("This platform lacks a functioning sem_open" +
                       " implementation, therefore, the required" +
