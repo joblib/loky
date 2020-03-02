@@ -5,8 +5,8 @@ import math
 import psutil
 import pytest
 import threading
+from concurrent.futures._base import TimeoutError
 
-from loky._base import TimeoutError
 from loky.backend import get_context
 from loky import get_reusable_executor, cpu_count
 

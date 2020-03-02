@@ -4,7 +4,6 @@
 # author: Thomas Moreau and Olivier Grisel
 #
 # adapted from concurrent/futures/process_pool_executor.py (17/02/2017)
-#  * Backport for python2.7/3.3,
 #  * Add an extra management thread to detect queue_management_thread failures,
 #  * Improve the shutdown process to avoid deadlocks,
 #  * Add timeout for workers,
@@ -74,8 +73,9 @@ import multiprocessing as mp
 from functools import partial
 from pickle import PicklingError
 from multiprocessing.connection import wait
+from concurrent.futures import _base
 
-from . import _base
+from ._base import Future
 from .backend import get_context
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue, Full
@@ -86,11 +86,6 @@ try:
     from concurrent.futures.process import BrokenProcessPool as _BPPException
 except ImportError:
     _BPPException = RuntimeError
-
-
-# Compatibility for python2.7
-if sys.version_info[0] == 2:
-    ProcessLookupError = OSError
 
 
 # Workers are created as daemon threads and processes. This is done to allow
@@ -1036,7 +1031,7 @@ class ProcessPoolExecutor(_base.Executor):
                 raise RuntimeError('cannot schedule new futures after '
                                    'interpreter shutdown')
 
-            f = _base.Future()
+            f = Future()
             w = _WorkItem(f, fn, args, kwargs)
 
             self._pending_work_items[self._queue_count] = w
