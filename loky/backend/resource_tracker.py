@@ -75,6 +75,10 @@ _CLEANUP_FUNCS = {
 
 if os.name == "posix":
     _CLEANUP_FUNCS['semlock'] = sem_unlink
+    if sys.version_info >= (3, 8):
+        import _posixshmem
+        _CLEANUP_FUNCS['shared_memory'] = _posixshmem.shm_unlink
+
 
 VERBOSE = False
 
