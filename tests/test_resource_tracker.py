@@ -285,8 +285,8 @@ class TestResourceTracker:
         # Uncatchable signal.
         self.check_resource_tracker_death(signal.SIGKILL, True)
 
-    @pytest.mark.skipIf(sys.version_info < (3, 8),
-                        "SharedMemory introduced in Python 3.8")
+    @pytest.mark.skipif(sys.version_info < (3, 8),
+                        reason="SharedMemory introduced in Python 3.8")
     def test_loky_process_inherit_multiprocessing_resource_tracker(self):
         cmd = '''if 1:
         from loky import get_reusable_executor
