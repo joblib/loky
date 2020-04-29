@@ -284,3 +284,45 @@ class TestResourceTracker:
     def test_resource_tracker_sigkill(self):
         # Uncatchable signal.
         self.check_resource_tracker_death(signal.SIGKILL, True)
+
+    @pytest.mark.skipif(sys.version_info < (3, 8),
+                        reason="SharedMemory introduced in Python 3.8")
+    def test_loky_process_inherit_multiprocessing_resource_tracker(self):
+        cmd = '''if 1:
+        from loky import get_reusable_executor
+        from multiprocessing.shared_memory import SharedMemory
+        from multiprocessing.resource_tracker import (
+            _resource_tracker as mp_resource_tracker
+        )
+
+        def mp_rtracker_getattrs():
+            from multiprocessing.resource_tracker import (
+                _resource_tracker as mp_resource_tracker
+            )
+            return mp_resource_tracker._fd, mp_resource_tracker._pid
+
+
+        if __name__ == '__main__':
+            executor = get_reusable_executor(max_workers=1)
+            # warm up
+            f = executor.submit(id, 1).result()
+
+            # loky forces the creation of the resource tracker at process
+            # creation so that loky processes can inherit its file descriptor.
+            fd, pid = executor.submit(mp_rtracker_getattrs).result()
+            assert fd == mp_resource_tracker._fd
+            assert pid == mp_resource_tracker._pid
+
+            # non-regression test for #242: unlinking in a loky process a
+            # shared_memory segment tracked by multiprocessing and created its
+            # parent should not generate warnings.
+            shm = SharedMemory(create=True, size=10)
+            f = executor.submit(shm.unlink).result()
+
+        '''
+        p = subprocess.Popen([sys.executable, '-c', cmd],
+                             stderr=subprocess.PIPE,
+                             stdout=subprocess.PIPE)
+        out, err = p.communicate()
+        assert out.decode() == ""
+        assert err.decode() == ""
