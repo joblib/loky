@@ -295,7 +295,7 @@ class TestResourceTracker:
             _resource_tracker as mp_resource_tracker
         )
 
-        def rtracker_getattrs():
+        def mp_rtracker_getattrs():
             from multiprocessing.resource_tracker import (
                 _resource_tracker as mp_resource_tracker
             )
@@ -309,7 +309,7 @@ class TestResourceTracker:
 
             # loky forces the creation of the resource tracker at process
             # creation so that loky processes can inherit its file descriptor.
-            fd, pid = executor.submit(rtracker_getattrs).result()
+            fd, pid = executor.submit(mp_rtracker_getattrs).result()
             assert fd == mp_resource_tracker._fd
             assert pid == mp_resource_tracker._pid
 
@@ -324,3 +324,5 @@ class TestResourceTracker:
                              stderr=subprocess.PIPE,
                              stdout=subprocess.PIPE)
         out, err = p.communicate()
+        assert out.decode() == ""
+        assert err.decode() == ""
