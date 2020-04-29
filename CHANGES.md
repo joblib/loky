@@ -2,7 +2,10 @@
 - In Python 3.8, loky processes now inherit multiprocessing's
   ``resource_tracker`` created from their parent. As a consequence, no spurious
   ``resource_tracker`` warnings are emitted when loky workers manipulate
-  ``shared_memory`` objects (#242)
+  ``shared_memory`` objects (#242).
+  Note that loky still needs to use its own resource tracker instance to manage
+  resources that require the reference counting logic such as joblib temporary
+  memory mapped files for now.
 
 - The ``resource_tracker`` now comes with built-in support for tracking files
   in all OSes.  In addition, Python processes can now signal they do not need a
@@ -214,4 +217,3 @@
 - Add support for calling dynamically defined function when cloudpickle is available (#47)
 - Fix resizing of the executor (#51)
 - Various rare race condition fixes
-
