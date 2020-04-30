@@ -628,7 +628,8 @@ class _ExecutorManagerThread(threading.Thread):
                     "the objects returned by the function are always "
                     "picklable."
                 )
-                tb = traceback.format_exception(type(e), e, e.__traceback__)
+                tb = traceback.format_exception(
+                    type(e), e, getattr(e, "__traceback__", None))
                 set_cause(bpe,  _RemoteTraceback(''.join(tb)))
 
         elif wakeup_reader in ready:
