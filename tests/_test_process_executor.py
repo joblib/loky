@@ -311,17 +311,36 @@ class ExecutorShutdownTest:
         for p in processes.values():
             p.join()
 
+    @classmethod
+    def _wait_and_return(cls, x):
+        # This _test_event is passed globally through an initializer to
+        # the executor.
+        _executor_mixin._test_event.wait()
+        return x
+
     def test_shutdown_no_wait(self):
         # Ensure that the executor cleans up the processes when calling
         # shutdown with wait=False
-        res = self.executor.map(abs, range(-5, 5))
+
+        # Stores executor internals to be able to check that the executor
+        # shutdown correctly
         processes = self.executor._processes
         call_queue = self.executor._call_queue
         executor_manager_thread = self.executor._executor_manager_thread
+
+        # submit tasks that will finish after the shutdown and make sure they
+        # were started
+        res = [self.executor.submit(self._wait_and_return, x)
+               for x in range(-5, 5)]
+
         self.executor.shutdown(wait=False)
 
-        # Make sure that all the executor resources were properly cleaned by
-        # the shutdown process
+        # Check that even after shutdown, all futures are running
+        assert all(f._state in (PENDING, RUNNING) for f in res)
+
+        # Let the futures finish and make sure that all the executor resources
+        # were properly cleaned by the shutdown process
+        _executor_mixin._test_event.set()
         executor_manager_thread.join()
         for p in processes.values():
             p.join()
@@ -329,7 +348,7 @@ class ExecutorShutdownTest:
 
         # Make sure the results were all computed before the executor got
         # shutdown.
-        assert all([r == abs(v) for r, v in zip(res, range(-5, 5))])
+        assert all([f.result() == v for f, v in zip(res, range(-5, 5))])
 
     def test_shutdown_deadlock_pickle(self):
         # Test that the pool calling shutdown with wait=False does not cause
