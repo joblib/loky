@@ -503,10 +503,19 @@ class TestLokyBackend:
             # no other files should be opened at this stage in the process
             assert (is_pipe or is_std or is_rng or is_mem)
 
-        # there should be one pipe for communication with main process
-        # and the semaphore tracker pipe and the Connection pipe
-        assert n_pipe == 3, ("Some pipes were not properly closed during the "
-                             "child process setup.")
+        # there should be:
+        # - one pipe for communication with main process
+        # - loky's resource_tracker pipe
+        # - the Connection pipe
+        # - additionally, on posix + Python 3.8: multiprocessing's
+        #   resource_tracker pipe
+        if sys.version_info >= (3, 8) and os.name == 'posix':
+            n_expected_pipes = 4
+        else:
+            n_expected_pipes = 3
+        msg = ("Some pipes were not properly closed during the child process "
+               "setup.")
+        assert n_pipe == n_expected_pipes, msg
 
         # assert that the writable part of the Pipe (not passed to child),
         # have been properly closed.
