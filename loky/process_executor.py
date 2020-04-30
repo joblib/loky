@@ -174,7 +174,7 @@ class _ExecutorFlags(object):
 
 
 # Prior to 3.9, executor_manager_thread is created as daemon thread. This means
-# that is not joined automatically when the interpreter is shutting down.
+# that it is not joined automatically when the interpreter is shutting down.
 # To work around this problem, an exit handler is installed to tell the
 # thread to exit when the interpreter is shutting down and then waits until
 # it finishes. The thread needs to be daemonized because the atexit hooks are
@@ -707,7 +707,7 @@ class _ExecutorManagerThread(threading.Thread):
         executor = self.executor_reference()
         # No more work items can be added if:
         #   - The interpreter is shutting down OR
-        #   - The executor that own this thread is not broken AND
+        #   - The executor that owns this thread is not broken AND
         #        * The executor that owns this worker has been collected OR
         #        * The executor that owns this worker has been shutdown.
         # If the executor is broken, it should be detected in the next loop.
