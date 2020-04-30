@@ -224,7 +224,7 @@ class _RemoteTraceback(Exception):
     """Embed stringification of remote traceback in local traceback
     """
     def __init__(self, tb=None):
-        self.tb = tb
+        self.tb = '\n"""\n{}"""'.format(tb)
 
     def __str__(self):
         return self.tb
@@ -239,7 +239,7 @@ class _ExceptionWithTraceback(BaseException):
         tb = traceback.format_exception(type(exc), exc, tb)
         tb = ''.join(tb)
         self.exc = exc
-        self.tb = '\n"""\n%s"""' % tb
+        self.tb = tb
 
     def __reduce__(self):
         return _rebuild_exc, (self.exc, self.tb)
@@ -310,8 +310,8 @@ class _SafeQueue(Queue):
                     "Could not pickle the task to send it to the workers.")
             tb = traceback.format_exception(
                 type(e), e, getattr(e, "__traceback__", None))
-            raised_error = set_cause(raised_error, _RemoteTraceback(
-                                     '\n"""\n{}"""'.format(''.join(tb))))
+            raised_error = set_cause(raised_error,
+                                     _RemoteTraceback(''.join(tb)))
             work_item = self.pending_work_items.pop(obj.work_id, None)
             self.running_work_items.remove(obj.work_id)
             # work_item can be None if another process terminated. In this
@@ -629,7 +629,7 @@ class _ExecutorManagerThread(threading.Thread):
                     "picklable."
                 )
                 tb = traceback.format_exception(type(e), e, e.__traceback__)
-                set_cause(bpe,  _RemoteTraceback(f"\n'''\n{''.join(tb)}'''"))
+                set_cause(bpe,  _RemoteTraceback(''.join(tb)))
 
         elif wakeup_reader in ready:
             # This is simply a wake-up event that might either trigger putting
@@ -650,7 +650,7 @@ class _ExecutorManagerThread(threading.Thread):
                 "terminated. This could be caused by a segmentation fault "
                 "while calling the function or by an excessive memory usage "
                 "causing the Operating System to kill the worker.\n"
-                f"{exit_codes}"
+                "{}".format(exit_codes)
             )
 
         self.thread_wakeup.clear()
