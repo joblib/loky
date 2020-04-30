@@ -121,7 +121,7 @@ _CURRENT_DEPTH = 0
 _MEMORY_LEAK_CHECK_DELAY = 1.
 
 # Number of bytes of memory usage allowed over the reference process size.
-_MAX_MEMORY_LEAK_SIZE = int(1e8)
+_MAX_MEMORY_LEAK_SIZE = int(3e8)
 
 
 try:
