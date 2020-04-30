@@ -335,7 +335,12 @@ class ExecutorShutdownTest:
 
         self.executor.shutdown(wait=False)
 
-        # Check that even after shutdown, all futures are running
+        with pytest.raises(ShutdownExecutorError):
+            # It's no longer possible to submit any new tasks to this
+            # executor after shutdown.
+            self.executor.submit(lambda x: x, 42)
+
+        # Check that even after shutdown, all futures are still running
         assert all(f._state in (PENDING, RUNNING) for f in res)
 
         # Let the futures finish and make sure that all the executor resources
@@ -346,8 +351,8 @@ class ExecutorShutdownTest:
             p.join()
         call_queue.join_thread()
 
-        # Make sure the results were all computed before the executor got
-        # shutdown.
+        # Make sure the results were all computed before the executor
+        # resources were freed.
         assert all([f.result() == v for f, v in zip(res, range(-5, 5))])
 
     def test_shutdown_deadlock_pickle(self):
