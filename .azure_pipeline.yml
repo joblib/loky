@@ -13,11 +13,11 @@ jobs:
         tox.env: py35
 
       macos-py38:
-        imageName: "macos-10.13"
+        imageName: "macos-10.14"
         python.version: "3.8"
         tox.env: py38
       macos-py35:
-        imageName: "macos-10.13"
+        imageName: "macos-10.14"
         python.version: "3.5"
         tox.env: py35
 
