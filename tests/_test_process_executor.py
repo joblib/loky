@@ -826,7 +826,7 @@ class ExecutorTest:
 
         executor = self.executor_type(1, context=self.context)
 
-        def _leak_some_memory(size=int(1e6), delay=0.001):
+        def _leak_some_memory(size=int(3e6), delay=0.001):
             """function that leaks some memory """
             from loky import process_executor
             process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
@@ -861,7 +861,7 @@ class ExecutorTest:
             # default process size + what has leaked since the last
             # memory check.
             for _, leak_size in results:
-                assert leak_size / 1e6 < 250
+                assert leak_size / 1e6 < 650
 
     def test_reference_cycle_collection(self):
         # make the parallel call create a reference cycle and make
