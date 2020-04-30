@@ -1,4 +1,9 @@
 ### 2.7.0 - XXXX-YY-ZZ
+
+- Increase the residual memory increase threshold  (100MB -> 300MB) used by
+  loky for memory leak detection (causing loky to be shutdown/restarted), in
+  order to reduce the amount of false positives (#238).
+
 - In Python 3.8, loky processes now inherit multiprocessing's
   ``resource_tracker`` created from their parent. As a consequence, no spurious
   ``resource_tracker`` warnings are emitted when loky workers manipulate
