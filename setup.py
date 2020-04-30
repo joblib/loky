@@ -57,7 +57,7 @@ setup(
                  "concurrent.futures.ProcessPoolExecutor"),
     long_description=open('README.md', 'rb').read().decode('utf-8'),
     long_description_content_type='text/markdown',
-    url='https://github.com/tommoral/loky/',
+    url='https://github.com/joblib/loky/',
     author='Thomas Moreau',
     author_email='thomas.moreau.2010@gmail.com',
     packages=packages,
