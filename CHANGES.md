@@ -1,4 +1,7 @@
-### 2.7.0 - XXXX-YY-ZZ
+### 3.0.0 - XXXX-YY-ZZ
+
+
+### 2.7.0 - 2020-04-30
 
 - Increase the residual memory increase threshold  (100MB -> 300MB) used by
   loky for memory leak detection (causing loky workers to be
