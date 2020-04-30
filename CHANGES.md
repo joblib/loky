@@ -8,6 +8,10 @@
   ``resource_tracker`` will proceed to unlink the resource. Previously, resource
   unlinking by the ``resource_tracker`` was only done for leaked resources at
   interpreter exit (#228).
+- Fix `shutdown(wait=False)` that was potentially leading to deadlocks and freezed
+  interpreters (#246).
+- Backport `ExecutorManagerThread` from cpython to refactor
+  `_queue_management_thread` and ease maintenance (#246).
 
 ### 2.6.0 - 2019-09-18
 
