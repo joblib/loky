@@ -83,7 +83,7 @@ jobs:
         sudo apt update
         sudo apt install python3.9 python3.9-venv python3.9-dev
       displayName: Install Python 3.9 from ppa:deadsnakes/nightly
-      condition: eq(variables['python.version'], '3.9'))
+      condition: eq(variables['python.version'], '3.9')
     # azure-pipelines unpredictably switches between Git\bin\bash and
     # Git\usr\bin\bash when running a bash script inside Windows environments.
     # The latter may use wrong bash commands, resulting in errors when codecov
