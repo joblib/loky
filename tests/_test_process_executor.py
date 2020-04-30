@@ -40,7 +40,8 @@ from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
 
 from . import _executor_mixin
 from .utils import id_sleep, check_subprocess_call, filter_match
-from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
+from .test_reusable_executor import ErrorAtPickle, ExitAtPickle
+from .test_reusable_executor import PICKLING_ERRORS, c_exit
 
 if sys.version_info[:2] < (3, 3):
     import loky._base as futures
@@ -298,7 +299,7 @@ class ExecutorShutdownTest:
     def test_del_shutdown(self):
         executor = self.executor_type(max_workers=5, context=self.context)
         list(executor.map(abs, range(-5, 5)))
-        queue_management_thread = executor._queue_management_thread
+        executor_manager_thread = executor._executor_manager_thread
         processes = executor._processes
         del executor
         if IS_PYPY:
@@ -306,9 +307,107 @@ class ExecutorShutdownTest:
             time.sleep(1.)
             gc.collect()
 
-        queue_management_thread.join()
+        executor_manager_thread.join()
         for p in processes.values():
             p.join()
+
+    @classmethod
+    def _wait_and_return(cls, x):
+        # This _test_event is passed globally through an initializer to
+        # the executor.
+        _executor_mixin._test_event.wait()
+        return x
+
+    def test_shutdown_no_wait(self):
+        # Ensure that the executor cleans up the processes when calling
+        # shutdown with wait=False
+
+        # Stores executor internals to be able to check that the executor
+        # shutdown correctly
+        processes = self.executor._processes
+        call_queue = self.executor._call_queue
+        executor_manager_thread = self.executor._executor_manager_thread
+
+        # submit tasks that will finish after the shutdown and make sure they
+        # were started
+        res = [self.executor.submit(self._wait_and_return, x)
+               for x in range(-5, 5)]
+
+        self.executor.shutdown(wait=False)
+
+        with pytest.raises(ShutdownExecutorError):
+            # It's no longer possible to submit any new tasks to this
+            # executor after shutdown.
+            self.executor.submit(lambda x: x, 42)
+
+        # Check that even after shutdown, all futures are still running
+        assert all(f._state in (PENDING, RUNNING) for f in res)
+
+        # Let the futures finish and make sure that all the executor resources
+        # were properly cleaned by the shutdown process
+        _executor_mixin._test_event.set()
+        executor_manager_thread.join()
+        for p in processes.values():
+            p.join()
+        call_queue.join_thread()
+
+        # Make sure the results were all computed before the executor
+        # resources were freed.
+        assert all([f.result() == v for f, v in zip(res, range(-5, 5))])
+
+    def test_shutdown_deadlock_pickle(self):
+        # Test that the pool calling shutdown with wait=False does not cause
+        # a deadlock if a task fails at pickle after the shutdown call.
+        # Reported in bpo-39104.
+        self.executor.shutdown(wait=True)
+        with self.executor_type(max_workers=2,
+                                context=self.context) as executor:
+            self.executor = executor  # Allow clean up in fail_on_deadlock
+
+            # Start the executor and get the executor_manager_thread to collect
+            # the threads and avoid dangling thread that should be cleaned up
+            # asynchronously.
+            executor.submit(id, 42).result()
+            executor_manager = executor._executor_manager_thread
+
+            # Submit a task that fails at pickle and shutdown the executor
+            # without waiting
+            f = executor.submit(id, ErrorAtPickle())
+            executor.shutdown(wait=False)
+            with pytest.raises(PICKLING_ERRORS):
+                f.result()
+
+        # Make sure the executor is eventually shutdown and do not leave
+        # dangling threads
+        executor_manager.join()
+
+    def test_hang_issue39205(self):
+        """shutdown(wait=False) doesn't hang at exit with running futures.
+
+        See https://bugs.python.org/issue39205.
+        """
+        code = """if True:
+            from loky.process_executor import {executor_type}
+            from loky.backend import get_context
+            from tests._test_process_executor import sleep_and_print
+
+            context = get_context("{start_method}")
+            e = {executor_type}(3, context=context)
+
+            e.submit(sleep_and_print, 1.0, "apple")
+            e.shutdown(wait=False)
+        """
+        code = code.format(executor_type=self.executor_type.__name__,
+                           start_method=self.context.get_start_method())
+        stdout, stderr = check_subprocess_call(
+                [sys.executable, "-c", code], timeout=55)
+
+        # On OSX, remove UserWarning for broken semaphores
+        if sys.platform == "darwin":
+            stderr = [e for e in stderr.strip().split("\n")
+                      if "increase its maximal value" not in e]
+        assert len(stderr) == 0 or stderr[0] == ''
+        assert stdout.strip() == "apple"
 
     @classmethod
     def _test_recursive_kill(cls, depth):
@@ -535,7 +634,6 @@ class ExecutorTest:
         # have exited).
         self.executor.map(str, [2] * (self.worker_count + 1))
         self.executor.shutdown()
-
 
     @pytest.mark.skipif(
             platform.python_implementation() != "CPython" or
