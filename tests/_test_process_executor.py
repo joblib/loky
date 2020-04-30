@@ -298,7 +298,7 @@ class ExecutorShutdownTest:
     def test_del_shutdown(self):
         executor = self.executor_type(max_workers=5, context=self.context)
         list(executor.map(abs, range(-5, 5)))
-        queue_management_thread = executor._queue_management_thread
+        executor_manager_thread = executor._executor_manager_thread
         processes = executor._processes
         del executor
         if IS_PYPY:
@@ -306,7 +306,7 @@ class ExecutorShutdownTest:
             time.sleep(1.)
             gc.collect()
 
-        queue_management_thread.join()
+        executor_manager_thread.join()
         for p in processes.values():
             p.join()
 
@@ -535,7 +535,6 @@ class ExecutorTest:
         # have exited).
         self.executor.map(str, [2] * (self.worker_count + 1))
         self.executor.shutdown()
-
 
     @pytest.mark.skipif(
             platform.python_implementation() != "CPython" or
