@@ -38,7 +38,7 @@ jobs:
 
       linux-python-nightly:
         imageName: "ubuntu-16.04"
-        python.version: "3.9"
+        pythonVersion: "3.9"
         tox.env: py39
       linux-py38-joblib-tests:
         imageName: "ubuntu-16.04"
@@ -77,13 +77,13 @@ jobs:
       inputs:
         versionSpec: '$(python.version)'
       displayName: 'Use Python $(python.version)'
-      condition: ne(variables['python.version'], '3.9'))
+      condition: ne(variables['pythonVersion'], '3.9'))
     - bash: |
         sudo add-apt-repository ppa:deadsnakes/nightly
         sudo apt update
         sudo apt install python3.9 python3.9-venv python3.9-dev
       displayName: Install Python 3.9 from ppa:deadsnakes/nightly
-      condition: eq(variables['python.version'], '3.9'))
+      condition: eq(variables['pythonVersion'], '3.9'))
     # azure-pipelines unpredictably switches between Git\bin\bash and
     # Git\usr\bin\bash when running a bash script inside Windows environments.
     # The latter may use wrong bash commands, resulting in errors when codecov
