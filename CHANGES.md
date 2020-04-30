@@ -8,7 +8,7 @@
   ``resource_tracker`` will proceed to unlink the resource. Previously, resource
   unlinking by the ``resource_tracker`` was only done for leaked resources at
   interpreter exit (#228).
-- Fix `shutdown(wait=False)` that was potentially leading to deadlocks and freezed
+- Fix `shutdown(wait=False)` that was potentially leading to deadlocks and froze
   interpreters (#246).
 - Backport `ExecutorManagerThread` from cpython to refactor
   `_queue_management_thread` and ease maintenance (#246).
@@ -214,4 +214,3 @@
 - Add support for calling dynamically defined function when cloudpickle is available (#47)
 - Fix resizing of the executor (#51)
 - Various rare race condition fixes
-
