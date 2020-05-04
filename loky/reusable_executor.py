@@ -123,8 +123,9 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
             if isinstance(context, STRING_TYPE):
                 context = get_context(context)
             if context is not None and context.get_start_method() == "fork":
-                raise ValueError("Cannot use reusable executor with the 'fork' "
-                                 "context")
+                raise ValueError(
+                    "Cannot use reusable executor with the 'fork' context"
+                )
 
             kwargs = dict(context=context, timeout=timeout,
                           job_reducers=job_reducers,
