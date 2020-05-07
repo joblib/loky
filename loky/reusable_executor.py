@@ -81,12 +81,13 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
     in the children before any module is loaded. This only works with with the
     ``loky`` context and it is unreliable on Windows with Python < 3.6.
     """
-    return _ReusablePoolExecutor.get_reusable_executor(
+    _executor, _ = _ReusablePoolExecutor.get_reusable_executor(
         max_workers=max_workers, context=context, timeout=timeout,
         kill_workers=kill_workers, reuse=reuse, job_reducers=job_reducers,
         result_reducers=result_reducers, initializer=initializer,
         initargs=initargs, env=env
     )
+    return _executor
 
 
 class _ReusablePoolExecutor(ProcessPoolExecutor):
@@ -133,6 +134,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                           initializer=initializer, initargs=initargs,
                           env=env)
             if executor is None:
+                is_reused = False
                 mp.util.debug("Create a executor with max_workers={}."
                               .format(max_workers))
                 executor_id = _get_next_executor_id()
@@ -165,9 +167,10 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                         "Reusing existing executor with max_workers={}."
                         .format(executor._max_workers)
                     )
+                    is_reused = True
                     executor._resize(max_workers)
 
-        return executor
+        return executor, is_reused
 
     def submit(self, fn, *args, **kwargs):
         with self._submit_resize_lock:
