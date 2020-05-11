@@ -1,8 +1,7 @@
 ### 3.0.0 - XXXX-YY-ZZ
 
-- Users can now subclass the `_ReusablePoolExecutor` class, and call
-  the classmethod `subclass.get_reusable_executor` to get a reusable instance
-  of this subclass (#253).
+- Internal refactoring: add private factory class method to
+  ``_ReusablePoolExecutor`` to ease extensibility in joblib (#253).
 
 
 ### 2.7.0 - 2020-04-30
