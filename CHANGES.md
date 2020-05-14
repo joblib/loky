@@ -1,4 +1,7 @@
-### 3.0.0 - XXXX-YY-ZZ
+### 2.8.0 - 2020-05-14
+
+- Internal refactoring: add private factory class method to
+  ``_ReusablePoolExecutor`` to ease extensibility in joblib (#253).
 
 
 ### 2.7.0 - 2020-04-30
