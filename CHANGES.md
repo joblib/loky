@@ -1,3 +1,5 @@
+### 3.0.0 - XXXX-YY-ZZ
+
 ### 2.8.0 - 2020-05-14
 
 - Internal refactoring: add private factory class method to
