@@ -3,7 +3,6 @@
 - Internal refactoring: add private factory class method to
   ``_ReusablePoolExecutor`` to ease extensibility in joblib (#253).
 
-
 ### 2.7.0 - 2020-04-30
 
 - Increase the residual memory increase threshold  (100MB -> 300MB) used by
