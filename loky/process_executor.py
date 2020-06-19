@@ -92,6 +92,12 @@ except ImportError:
 # Compatibility for python2.7
 if sys.version_info[0] == 2:
     ProcessLookupError = OSError
+    _ExceptionWithTracebackParent = BaseException
+else:
+    # In Python 3's concurrent.futures module, _ExceptionWithTraceback
+    # does not subclass BaseException anymore. Let's do the same in
+    # in loky.
+    _ExceptionWithTracebackParent = object
 
 
 # Mechanism to prevent infinite process spawning. When a worker of a
@@ -230,7 +236,7 @@ class _RemoteTraceback(Exception):
         return self.tb
 
 
-class _ExceptionWithTraceback(BaseException):
+class _ExceptionWithTraceback(_ExceptionWithTracebackParent):
 
     def __init__(self, exc):
         tb = getattr(exc, "__traceback__", None)
