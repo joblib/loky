@@ -16,7 +16,7 @@ To avoid this limitation, :mod:`loky` relies on |cloudpickle| when it is present
 There are three ways to temper with the serialization in :mod:`loky`:
 
 - Using the arguments :code:`job_reducers` and :code:`result_reducers`, it is possible to register custom reducers for the serialization process.
-- Setting the variable :code:`LOKY_PICKLER` to an available and valid serialization module. This module must present a valid :code:`Pickler` object. Setting the environment variable :code:`LOKY_PICKER=cloudpickle` will force :mod:`loky` to serialize everything with |cloudpickle| instead of just serializing the object detected to be in the :code:`__main__` module.
+- Setting the variable :code:`LOKY_PICKLER` to an available and valid serialization module. This module must present a valid :code:`Pickler` object. Setting the environment variable :code:`LOKY_PICKLER=cloudpickle` will force :mod:`loky` to serialize everything with |cloudpickle| instead of just serializing the object detected to be in the :code:`__main__` module.
 - Finally, it is possible to wrap an unpicklable object using the :code:`loky.wrap_non_picklable_objects` decorator. In this case, all other objects are serialized as in the default behavior and the wrapped object is pickled through |cloudpickle|.
 
 The benefits and drawbacks of each method are highlighted in this example_.
