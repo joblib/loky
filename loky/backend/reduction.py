@@ -189,6 +189,10 @@ def set_loky_pickler(loky_pickler=None):
                 self.dispatch = self._dispatch.copy()
             else:
                 if getattr(self, "dispatch_table", None) is not None:
+                    # Make sure dispatch table is an instance level field
+                    # as it is not the case for isntance for cloudpickle1.5+
+                    # see joblib/loky#259
+                    self.dispatch_table = self.dispatch_table.copy()
                     self.dispatch_table.update(self._dispatch_table.copy())
                 else:
                     self.dispatch_table = self._dispatch_table.copy()
@@ -202,10 +206,10 @@ def set_loky_pickler(loky_pickler=None):
             if sys.version_info < (3,):
                 # Python 2 pickler dispatching is not explicitly customizable.
                 # Let us use a closure to workaround this limitation.
-                    def dispatcher(self, obj):
-                        reduced = reduce_func(obj)
-                        self.save_reduce(obj=obj, *reduced)
-                    self.dispatch[type] = dispatcher
+                def dispatcher(self, obj):
+                    reduced = reduce_func(obj)
+                    self.save_reduce(obj=obj, *reduced)
+                self.dispatch[type] = dispatcher
             else:
                 self.dispatch_table[type] = reduce_func
 
