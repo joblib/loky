@@ -1099,11 +1099,9 @@ class ProcessPoolExecutor(_base.Executor):
                 # Try to spawn the process with some environment variable to
                 # overwrite but it only works with the loky context for now.
                 env = self._env
-                print("env:", env)
                 if _CURRENT_DEPTH == 0 and self._env is not None:
                     env = self._env.copy()
                     env['LOKY_WORKER_ID'] = str(worker_id)
-                    print("!!", env['LOKY_WORKER_ID'])
                 p = self._context.Process(target=_process_worker, args=args,
                                           env=env)
             except TypeError:
