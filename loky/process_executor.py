@@ -764,7 +764,7 @@ class _ExecutorManagerThread(threading.Thread):
         # terminates descendant workers of the children in case there is some
         # nested parallelism.
         while self.processes:
-            pid = next(self.processes.keys())
+            pid = list(self.processes.keys())[0]
             p = self.processes.pop(pid, None)
             self.process_worker_ids.pop(pid, None)
 
