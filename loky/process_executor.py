@@ -362,7 +362,7 @@ def _sendback_result(result_queue, work_id, result=None, exception=None):
 
 def _process_worker(call_queue, result_queue, initializer, initargs,
                     processes_management_lock, timeout, worker_exit_lock,
-                    current_depth):
+                    current_depth, worker_id):
     """Evaluates calls from call_queue and places the results in result_queue.
 
     This worker is run in a separate process.
@@ -397,6 +397,9 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     _process_reference_size = None
     _last_memory_leak_check = None
     pid = os.getpid()
+
+    # set the worker_id environment variable
+    os.environ["LOKY_WORKER_ID"] = str(worker_id)
 
     mp.util.debug('Worker started with timeout=%s' % timeout)
     while True:
@@ -969,8 +972,6 @@ class ProcessPoolExecutor(_base.Executor):
         if context is None:
             context = get_context()
         self._context = context
-        if env is None:
-            env = {}
         self._env = env
 
         if initializer is not None and not callable(initializer):
@@ -1080,30 +1081,32 @@ class ProcessPoolExecutor(_base.Executor):
                     process_pool_executor_at_exit = threading._register_atexit(
                         _python_exit)
 
+    def _get_available_worker_id(self):
+        if _CURRENT_DEPTH > 0:
+            return -1
+
+        used_ids = set(self._process_worker_ids.values())
+        available_ids = set(range(self._max_workers)) - used_ids
+        if len(available_ids):
+            return available_ids.pop()
+        else:
+            return -1
+
     def _adjust_process_count(self):
         for _ in range(len(self._processes), self._max_workers):
             worker_exit_lock = self._context.BoundedSemaphore(1)
+            worker_id = self._get_available_worker_id()
             args = (self._call_queue, self._result_queue, self._initializer,
                     self._initargs, self._processes_management_lock,
-                    self._timeout, worker_exit_lock, _CURRENT_DEPTH + 1)
+                    self._timeout, worker_exit_lock, _CURRENT_DEPTH + 1,
+                    worker_id)
             worker_exit_lock.acquire()
-
-            worker_id = -1
-            if _CURRENT_DEPTH == 0:
-                used_ids = set(self._process_worker_ids.values())
-                available_ids = set(range(self._max_workers)) - used_ids
-                if len(available_ids):
-                    worker_id = available_ids.pop()
 
             try:
                 # Try to spawn the process with some environment variable to
                 # overwrite but it only works with the loky context for now.
-                env = self._env
-                if _CURRENT_DEPTH == 0 and self._env is not None:
-                    env = self._env.copy()
-                    env['LOKY_WORKER_ID'] = str(worker_id)
                 p = self._context.Process(target=_process_worker, args=args,
-                                          env=env)
+                                          env=self._env)
             except TypeError:
                 p = self._context.Process(target=_process_worker, args=args)
             p._worker_exit_lock = worker_exit_lock
