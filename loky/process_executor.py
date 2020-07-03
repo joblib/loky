@@ -521,7 +521,7 @@ class _ExecutorManagerThread(threading.Thread):
         # A list of the ctx.Process instances used as workers.
         self.processes = executor._processes
 
-        # A list of worker IDs for each process
+        # A dict mapping worker pids to worker IDs
         self.process_worker_ids = executor._process_worker_ids
 
         # A ctx.Queue that will be filled with _CallItems derived from
