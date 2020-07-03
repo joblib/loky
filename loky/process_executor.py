@@ -765,7 +765,7 @@ class _ExecutorManagerThread(threading.Thread):
         # nested parallelism.
         while self.processes:
             pid = list(self.processes.keys())[0]
-            p = self.processes.pop(pid, None)
+            pid, p = self.processes.popitem()
             self.process_worker_ids.pop(pid, None)
 
             mp.util.debug('terminate process {}'.format(p.name))
