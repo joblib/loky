@@ -13,13 +13,14 @@ from .backend.reduction import set_loky_pickler
 from .reusable_executor import get_reusable_executor
 from .cloudpickle_wrapper import wrap_non_picklable_objects
 from .process_executor import BrokenProcessPool, ProcessPoolExecutor
+from .worker_id import get_worker_id
 
 
 __all__ = ["get_reusable_executor", "cpu_count", "wait", "as_completed",
            "Future", "Executor", "ProcessPoolExecutor",
            "BrokenProcessPool", "CancelledError", "TimeoutError",
            "FIRST_COMPLETED", "FIRST_EXCEPTION", "ALL_COMPLETED",
-           "wrap_non_picklable_objects", "set_loky_pickler"]
+           "wrap_non_picklable_objects", "set_loky_pickler", "get_worker_id"]
 
 
 __version__ = '3.0.0.dev0'
