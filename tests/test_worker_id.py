@@ -18,11 +18,13 @@ def random_sleep(k):
 
 def test_worker_ids():
     """Test that worker IDs are always unique, with re-use over time"""
-    executor = get_reusable_executor(max_workers=4, timeout=2)
+    num_workers = 4
+    executor = get_reusable_executor(max_workers=num_workers, timeout=2)
     results = executor.map(random_sleep, range(100))
 
     all_intervals = defaultdict(list)
     for wid, t0, t1 in results:
+        assert wid in set(range(num_workers))
         all_intervals[wid].append((t0, t1))
 
     for intervals in all_intervals.values():
