@@ -21,7 +21,7 @@ def random_sleep(args):
 def test_worker_ids(max_duration, timeout, kmax):
     """Test that worker IDs are always unique, with re-use over time"""
     num_workers = 4
-    executor = get_reusable_executor(max_workers=num_workers, timeout=2)
+    executor = get_reusable_executor(max_workers=num_workers, timeout=timeout)
     results = executor.map(random_sleep, [(k, max_duration)
                                           for k in range(kmax)])
 
