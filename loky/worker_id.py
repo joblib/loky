@@ -12,7 +12,4 @@ def get_worker_id():
     
     Returns -1 when the process is not a worker.
     """
-    wid = os.environ.get('LOKY_WORKER_ID', None)
-    if wid is None:
-        return -1
-    return int(wid)
+    return int(os.environ.get('LOKY_WORKER_ID', -1))
