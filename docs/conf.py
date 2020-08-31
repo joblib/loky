@@ -101,7 +101,7 @@ html_theme_options = {
     'navbar_links': [
         ("Examples", "auto_examples/index"),
         ("API", "API"),
-        ("GitHub", "https://github.com/tommoral/loky", True)
+        ("GitHub", "https://github.com/joblib/loky", True)
     ],
     'bootswatch_theme': "united"
 }
