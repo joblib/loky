@@ -190,7 +190,7 @@ def set_loky_pickler(loky_pickler=None):
             else:
                 if getattr(self, "dispatch_table", None) is not None:
                     # Make sure dispatch table is an instance level field
-                    # as it is not the case for isntance for cloudpickle1.5+
+                    # as it is not the case for cloudpickle1.5+
                     # see joblib/loky#259
                     self.dispatch_table = self.dispatch_table.copy()
                     self.dispatch_table.update(self._dispatch_table.copy())
