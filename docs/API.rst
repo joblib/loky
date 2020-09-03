@@ -29,7 +29,7 @@ Processes start methods in :mod:`loky`
 --------------------------------------
 
 The API in :mod:`loky` provides a :func:`set_start_method` function to set the default  :code:`start_method`, which controls the way :class:`Process` are started. The available methods are {:code:`'loky'`, :code:`'loky_int_main'`, :code:`'spawn'`}. On unix, the start methods {:code:`'fork'`, :code:`'forkserver'`} are also available.
-Note that :mod:`loky` isnot compatible with :func:`multiprocessing.set_start_method` function. The default start method needs to be set with the provided function to ensure a proper behavior.
+Note that :mod:`loky` is not compatible with :func:`multiprocessing.set_start_method` function. The default start method needs to be set with the provided function to ensure a proper behavior.
 
 
 Protection against memory leaks
