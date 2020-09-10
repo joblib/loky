@@ -34,7 +34,7 @@ The recommended way to install :mod:`loky` is with :mod:`pip`,
 
 .. code:: bash
 
-    git clone https://github.com/tommoral/loky
+    git clone https://github.com/joblib/loky
     cd loky
     python setup.py install
 
