@@ -192,8 +192,7 @@ def count_physical():
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
-                "lscpu --parse=core".split(" "),
-                capture_output=True)
+                "lscpu --parse=core".split(" "), capture_output=True)
             cpu_info = cpu_info.stdout.decode("utf-8").splitlines()
             cpu_info = {line for line in cpu_info if not line.startswith("#")}
             cpu_count_physical = len(cpu_info)
@@ -206,8 +205,8 @@ def count_physical():
                         if (l and l != "Node,NumberOfCores")]
             cpu_count_physical = sum(map(int, cpu_info))
         elif sys.platform == "darwin":
-            cpu_info = subprocess.run("sysctl -n hw.physicalcpu".split(" "),
-                                      capture_output=True)
+            cpu_info = subprocess.run(
+                "sysctl -n hw.physicalcpu".split(" "), capture_output=True)
             cpu_info = cpu_info.stdout.decode('utf-8')
             cpu_count_physical = int(cpu_info)
         else:
