@@ -14,6 +14,7 @@ from __future__ import division
 
 import os
 import sys
+import subprocess
 import warnings
 import multiprocessing as mp
 
@@ -22,6 +23,10 @@ from .process import LokyProcess, LokyInitMainProcess
 
 START_METHODS = ['loky', 'loky_init_main']
 _DEFAULT_START_METHOD = None
+
+# Cache for the number of physical cores to avoid repeating subprocess calls.
+# It should not change during the lifetime of the program.
+cpu_count_physical_cache = {}
 
 if sys.version_info[:2] >= (3, 4):
     from multiprocessing import get_context as mp_get_context
@@ -101,7 +106,7 @@ def get_start_method():
     return _DEFAULT_START_METHOD
 
 
-def cpu_count():
+def cpu_count(maybe_physical_only=False):
     """Return the number of CPUs the current process can use.
 
     The returned number of CPUs accounts for:
@@ -113,6 +118,11 @@ def cpu_count():
        set by docker and similar container orchestration systems);
      * the value of the LOKY_MAX_CPU_COUNT environment variable if defined.
     and is given as the minimum of these constraints.
+
+    If ``maybe_physical_only`` is True, return the number of physical cores
+    unless it can't be found or the number of processors available for the
+    current process has been set by one of the above.
+ 
     It is also always larger or equal to 1.
     """
     import math
@@ -146,11 +156,67 @@ def cpu_count():
             # float in python2.7. (See issue #165)
             cpu_count_cfs = int(math.ceil(cfs_quota_us / cfs_period_us))
 
-    # User defined soft-limit passed as an loky specific environment variable.
+    # User defined soft-limit passed as a loky specific environment variable.
     cpu_count_loky = int(os.environ.get('LOKY_MAX_CPU_COUNT', cpu_count_mp))
-    aggregate_cpu_count = min(cpu_count_mp, cpu_count_affinity, cpu_count_cfs,
-                              cpu_count_loky)
-    return max(aggregate_cpu_count, 1)
+
+    cpu_count_user = min(cpu_count_affinity, cpu_count_cfs, cpu_count_loky)
+    aggregate_cpu_count = min(cpu_count_mp, cpu_count_user)
+
+    if maybe_physical_only:
+        cpu_count_physical = count_physical()
+        if cpu_count_user < cpu_count_mp:
+            # Respect user setting
+            cpu_count = max(cpu_count_affinity, 1)
+        elif cpu_count_physical is None:
+            # Fallback to default behavior
+            cpu_count = max(aggregate_cpu_count, 1)
+        else:
+            return max(cpu_count_physical, 1)
+    else:
+        cpu_count = max(aggregate_cpu_count, 1)
+
+    return cpu_count
+
+
+def count_physical():
+    """Return the number of physical cores
+
+    Return None if not found.
+    The value is cached to avoid repeating subprocess calls.
+    """
+    # First check if the value is cached
+    if cpu_count_physical_cache:
+        return cpu_count_physical_cache.get("cpu_count_physical")
+
+    # Not cached, retrieve the value and cahce it
+    try:
+        if sys.platform == "linux":
+            cpu_info = subprocess.run(
+                "lscpu --parse=core".split(" "),
+                capture_output=True)
+            cpu_info = cpu_info.stdout.decode("utf-8").splitlines()
+            cpu_info = {line for line in cpu_info if not line.startswith("#")}
+            cpu_count_physical = len(cpu_info)
+        elif sys.platform == "win32":
+            cpu_info = subprocess.run(
+                "wmic CPU Get NumberOfCores /Format:csv".split(" "),
+                capture_output=True)
+            cpu_info = cpu_info.stdout.decode('utf-8').splitlines()
+            cpu_info = [l.split(",")[1] for l in cpu_info
+                        if (l and l != "Node,NumberOfCores")]
+            cpu_count_physical = sum(map(int, cpu_info))
+        elif sys.platform == "darwin":
+            cpu_info = subprocess.run("sysctl -n hw.physicalcpu".split(" "),
+                                      capture_output=True)
+            cpu_info = cpu_info.stdout.decode('utf-8')
+            cpu_count_physical = int(cpu_info)
+        else:
+            cpu_count_physical = None
+    except:
+        cpu_count_physical = None
+    cpu_count_physical_cache["cpu_count_physical"] = cpu_count_physical
+    
+    return cpu_count_physical
 
 
 class LokyContext(BaseContext):
