@@ -106,7 +106,7 @@ def get_start_method():
     return _DEFAULT_START_METHOD
 
 
-def cpu_count(maybe_physical_only=False):
+def cpu_count(only_physical_cores=False):
     """Return the number of CPUs the current process can use.
 
     The returned number of CPUs accounts for:
@@ -119,9 +119,12 @@ def cpu_count(maybe_physical_only=False):
      * the value of the LOKY_MAX_CPU_COUNT environment variable if defined.
     and is given as the minimum of these constraints.
 
-    If ``maybe_physical_only`` is True, return the number of physical cores
-    unless it can't be found or the number of processors available for the
-    current process has been set by one of the above.
+    If ``only_physical_cores`` is True, return the number of physical cores
+    instead of the number of logical cores (hyperthreading / SMT). Note that
+    this option is not enforced if the number of usable cores is controlled in
+    any other way such as: process affinity, restricting CFS scheduler policy
+    or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
+    cores is not found, return the number of logical cores.
  
     It is also always larger or equal to 1.
     """
@@ -162,13 +165,15 @@ def cpu_count(maybe_physical_only=False):
     cpu_count_user = min(cpu_count_affinity, cpu_count_cfs, cpu_count_loky)
     aggregate_cpu_count = min(cpu_count_mp, cpu_count_user)
 
-    if maybe_physical_only:
-        cpu_count_physical = count_physical()
+    if only_physical_cores:
+        cpu_count_physical = count_physical_cores()
         if cpu_count_user < cpu_count_mp:
             # Respect user setting
-            cpu_count = max(cpu_count_affinity, 1)
+            cpu_count = max(cpu_count_user, 1)
         elif cpu_count_physical is None:
             # Fallback to default behavior
+            warnings.warn("Could not find the number of physical cores. "
+                          "Returning the number of logical cores instead.")
             cpu_count = max(aggregate_cpu_count, 1)
         else:
             return max(cpu_count_physical, 1)
@@ -178,7 +183,7 @@ def cpu_count(maybe_physical_only=False):
     return cpu_count
 
 
-def count_physical():
+def count_physical_cores():
     """Return the number of physical cores
 
     Return None if not found.
@@ -188,7 +193,7 @@ def count_physical():
     if cpu_count_physical_cache:
         return cpu_count_physical_cache.get("cpu_count_physical")
 
-    # Not cached, retrieve the value and cahce it
+    # Not cached, retrieve the value and cache it
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
