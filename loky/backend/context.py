@@ -130,6 +130,7 @@ def cpu_count(only_physical_cores=False):
     """
     import math
 
+    # TODO: us os.cpu_count when dropping python 2 support
     try:
         cpu_count_mp = mp.cpu_count()
     except NotImplementedError:
