@@ -26,7 +26,7 @@ _DEFAULT_START_METHOD = None
 
 # Cache for the number of physical cores to avoid repeating subprocess calls.
 # It should not change during the lifetime of the program.
-cpu_count_physical_cache = {}
+physical_cores_cache = None
 
 if sys.version_info[:2] >= (3, 4):
     from multiprocessing import get_context as mp_get_context
@@ -130,7 +130,7 @@ def cpu_count(only_physical_cores=False):
     """
     import math
 
-    # TODO: us os.cpu_count when dropping python 2 support
+    # TODO: use os.cpu_count when dropping python 2 support
     try:
         cpu_count_mp = mp.cpu_count()
     except NotImplementedError:
@@ -171,13 +171,11 @@ def cpu_count(only_physical_cores=False):
         if cpu_count_user < cpu_count_mp:
             # Respect user setting
             cpu_count = max(cpu_count_user, 1)
-        elif cpu_count_physical is None:
+        elif cpu_count_physical == "not found":
             # Fallback to default behavior
-            warnings.warn("Could not find the number of physical cores. "
-                          "Returning the number of logical cores instead.")
             cpu_count = max(aggregate_cpu_count, 1)
         else:
-            return max(cpu_count_physical, 1)
+            return cpu_count_physical
     else:
         cpu_count = max(aggregate_cpu_count, 1)
 
@@ -191,10 +189,11 @@ def count_physical_cores():
     The value is cached to avoid repeating subprocess calls.
     """
     # First check if the value is cached
-    if cpu_count_physical_cache:
-        return cpu_count_physical_cache.get("cpu_count_physical")
+    global physical_cores_cache
+    if physical_cores_cache is not None:
+        return physical_cores_cache
 
-    # Not cached, retrieve the value and cache it
+    # Not cached yet
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
@@ -216,10 +215,20 @@ def count_physical_cores():
             cpu_info = cpu_info.stdout.decode('utf-8')
             cpu_count_physical = int(cpu_info)
         else:
-            cpu_count_physical = None
-    except:
-        cpu_count_physical = None
-    cpu_count_physical_cache["cpu_count_physical"] = cpu_count_physical
+            cpu_count_physical = "not found"
+
+        # if cpu_count_physical < 1, we did not find a valid value
+        if cpu_count_physical != "not found" and cpu_count_physical < 1:
+            cpu_count_physical = "not found"
+        
+    except Exception as e:
+        warnings.warn("Could not find the number of physical cores. "
+                      "Returning the number of logical cores instead.\n"
+                      + str(e))
+        cpu_count_physical = "not found"
+
+    # Put the result in cache
+    physical_cores_cache = cpu_count_physical
     
     return cpu_count_physical
 
