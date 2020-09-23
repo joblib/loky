@@ -167,12 +167,15 @@ def cpu_count(only_physical_cores=False):
     aggregate_cpu_count = min(cpu_count_mp, cpu_count_user)
 
     if only_physical_cores:
-        cpu_count_physical = count_physical_cores()
+        cpu_count_physical, error_message = _count_physical_cores()
         if cpu_count_user < cpu_count_mp:
             # Respect user setting
             cpu_count = max(cpu_count_user, 1)
         elif cpu_count_physical == "not found":
             # Fallback to default behavior
+            warnings.warn("Could not find the number of physical cores. "
+                          "Returning the number of logical cores instead.\n"
+                          + error_message)
             cpu_count = max(aggregate_cpu_count, 1)
         else:
             return cpu_count_physical
@@ -182,16 +185,18 @@ def cpu_count(only_physical_cores=False):
     return cpu_count
 
 
-def count_physical_cores():
+def _count_physical_cores():
     """Return the number of physical cores
 
     Return None if not found.
     The value is cached to avoid repeating subprocess calls.
     """
+    error_message = ""
+
     # First check if the value is cached
     global physical_cores_cache
     if physical_cores_cache is not None:
-        return physical_cores_cache
+        return physical_cores_cache, error_message
 
     # Not cached yet
     try:
@@ -222,15 +227,13 @@ def count_physical_cores():
             cpu_count_physical = "not found"
         
     except Exception as e:
-        warnings.warn("Could not find the number of physical cores. "
-                      "Returning the number of logical cores instead.\n"
-                      + str(e))
+        error_message = str(e)
         cpu_count_physical = "not found"
 
     # Put the result in cache
     physical_cores_cache = cpu_count_physical
     
-    return cpu_count_physical
+    return cpu_count_physical, error_message
 
 
 class LokyContext(BaseContext):
