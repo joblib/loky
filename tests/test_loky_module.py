@@ -19,7 +19,7 @@ def test_cpu_count():
     assert type(cpus) is int
     assert cpus >= 1
 
-    cpus_physical = cpu_count(maybe_physical_only=True)
+    cpus_physical = cpu_count(only_physical_cores=True)
     assert type(cpus_physical) is int
     assert 1 <= cpus_physical <= cpus
 
@@ -48,7 +48,7 @@ def test_cpu_count_affinity():
     
     res_physical = check_output([
         taskset_bin, '-c', '0', python_bin, '-c',
-        cpu_count_cmd.format('maybe_physical_only=True')])
+        cpu_count_cmd.format('only_physical_cores=True')])
 
     assert res.strip().decode('utf-8') == '1'
     assert res_physical.strip().decode('utf-8') == '1'
