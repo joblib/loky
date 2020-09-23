@@ -26,7 +26,7 @@ _DEFAULT_START_METHOD = None
 
 # Cache for the number of physical cores to avoid repeating subprocess calls.
 # It should not change during the lifetime of the program.
-physical_cores_cache = None
+physical_cores_cache = [None, '']
 
 if sys.version_info[:2] >= (3, 4):
     from multiprocessing import get_context as mp_get_context
@@ -194,9 +194,9 @@ def _count_physical_cores():
     error_message = ""
 
     # First check if the value is cached
-    global physical_cores_cache
-    if physical_cores_cache is not None:
-        return physical_cores_cache, error_message
+    cpu_count_physical, error_message = physical_cores_cache
+    if cpu_count_physical is not None:
+        return cpu_count_physical, error_message
 
     # Not cached yet
     try:
@@ -231,7 +231,8 @@ def _count_physical_cores():
         cpu_count_physical = "not found"
 
     # Put the result in cache
-    physical_cores_cache = cpu_count_physical
+    physical_cores_cache[0] = cpu_count_physical
+    physical_cores_cache[1] = error_message
     
     return cpu_count_physical, error_message
 

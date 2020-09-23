@@ -25,7 +25,7 @@ def test_cpu_count():
 
 
 cpu_count_cmd = ("from loky.backend.context import cpu_count;"
-                 "print(cpu_count({}))")
+                 "print(cpu_count({args}))")
 
 
 def test_cpu_count_affinity():
@@ -44,11 +44,11 @@ def test_cpu_count_affinity():
         pytest.skip()
 
     res = check_output([taskset_bin, '-c', '0',
-                        python_bin, '-c', cpu_count_cmd.format('')])
+                        python_bin, '-c', cpu_count_cmd.format(args='')])
     
     res_physical = check_output([
         taskset_bin, '-c', '0', python_bin, '-c',
-        cpu_count_cmd.format('only_physical_cores=True')])
+        cpu_count_cmd.format(args='only_physical_cores=True')])
 
     assert res.strip().decode('utf-8') == '1'
     assert res_physical.strip().decode('utf-8') == '1'
@@ -73,6 +73,6 @@ def test_cpu_count_cfs_limit():
     res = check_output([docker_bin, 'run', '--rm', '--cpus', '0.5',
                         '-v', '%s:/loky' % loky_path,
                         'python:3.6',
-                        'python', '-c', cpu_count_cmd.format('')])
+                        'python', '-c', cpu_count_cmd.format(args='')])
 
     assert res.strip().decode('utf-8') == '1'
