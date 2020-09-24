@@ -2,6 +2,7 @@ jobs:
 - job: 'test_loky'
   strategy:
     matrix:
+
       windows-py38:
         imageName: "vs2017-win2016"
         python.version: "3.8"
