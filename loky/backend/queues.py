@@ -54,10 +54,7 @@ class Queue(mp_Queue):
             # For use by concurrent.futures
             self._ignore_epipe = False
 
-            if sys.version_info >= (3, 9):
-                self._reset()
-            else:
-                self._after_fork()
+            self._after_fork()
 
             if sys.platform != 'win32':
                 util.register_after_fork(self, Queue._after_fork)
