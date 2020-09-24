@@ -10,7 +10,6 @@
 #
 import io
 import os
-from os import POSIX_FADV_NOREUSE
 import sys
 import functools
 from multiprocessing import util
