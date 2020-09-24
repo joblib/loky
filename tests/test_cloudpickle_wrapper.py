@@ -13,6 +13,7 @@ from .utils import check_subprocess_call
 
 class TestCloudpickleWrapper:
 
+    @pytest.mark.skipif(sys.version_info[0] == 2, reason="Python 3 or later")
     def test_isolated_pickler_dispatch_tables(self):
         class A:
             pass
