@@ -195,7 +195,7 @@ def set_loky_pickler(loky_pickler=None):
                 reducers = {}
             if sys.version_info < (3,):
                 self.dispatch = loky_pickler_cls.dispatch.copy()
-                self._loky_dispatch.update(_ReducerRegistry.dispatch_table)
+                self.dispatch.update(_ReducerRegistry.dispatch_table)
             else:
                 if hasattr(self, "dispatch_table"):
                     # Force a copy that we will update without mutating the
