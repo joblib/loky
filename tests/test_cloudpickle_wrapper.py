@@ -1,14 +1,36 @@
 import os
 import sys
 import pytest
+import io
 from tempfile import mkstemp
 from loky import set_loky_pickler
+from loky.backend.reduction import get_loky_pickler
 
 
 from .utils import check_subprocess_call
 
 
 class TestCloudpickleWrapper:
+
+    def test_isolated_pickler_dispatch_tables(self):
+        class A:
+            pass
+
+        class B:
+            pass
+
+        p1 = get_loky_pickler()(io.BytesIO(),
+                                reducers={A: lambda obj: (int, (42,))})
+        p2 = get_loky_pickler()(io.BytesIO(),
+                                reducers={B: lambda obj: (int, (42,))})
+
+        assert p1.dispatch_table is not p2.dispatch_table
+
+        assert A in p1.dispatch_table
+        assert A not in p2.dispatch_table
+
+        assert B in p2.dispatch_table
+        assert B not in p1.dispatch_table
 
     def test_serialization_function_from_main(self):
         # check that the init_main_module parameter works properly
