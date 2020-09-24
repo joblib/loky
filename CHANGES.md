@@ -8,6 +8,9 @@
 - Fix a side-effect bug in the registration of custom reducers the loky
   subclass of `cloudpickle.CloudPickler` with cloudpickle 1.6.0. (#272)
 
+- Fix support for Python 3.9 and test against python-nightly from now on
+  (#250).
+
 ### 2.7.0 - 2020-04-30
 
 - Increase the residual memory increase threshold  (100MB -> 300MB) used by
