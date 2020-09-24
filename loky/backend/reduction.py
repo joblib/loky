@@ -179,7 +179,9 @@ def set_loky_pickler(loky_pickler=None):
                     # it to set the dispatch_table as a member instead of a
                     # dynamic attribute in the __dict__ of the instance,
                     # otherwise it will not be taken into account by the C
-                    # implementation of the dump method:
+                    # implementation of the dump method if a subclass defines a
+                    # class-level dispatch_table attribute as was done in
+                    # cloudpickle 1.6.0:
                     # https://github.com/joblib/loky/pull/260
                     dt_attribute.__set__(self, dispatch_table)
                     break
