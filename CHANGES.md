@@ -1,4 +1,19 @@
-### 2.7.0 - XXXX-YY-ZZ
+### 3.0.0 - XXXX-YY-ZZ
+
+### 2.8.0 - 2020-05-14
+
+- Internal refactoring: add private factory class method to
+  ``_ReusablePoolExecutor`` to ease extensibility in joblib (#253).
+
+- Fix a side-effect bug in the registration of custom reducers the loky
+  subclass of `cloudpickle.CloudPickler` with cloudpickle 1.6.0. (#272)
+
+### 2.7.0 - 2020-04-30
+
+- Increase the residual memory increase threshold  (100MB -> 300MB) used by
+  loky for memory leak detection (causing loky workers to be
+  shutdown/restarted), in order to reduce the amount of false positives (#238).
+
 - In Python 3.8, loky processes now inherit multiprocessing's
   ``resource_tracker`` created from their parent. As a consequence, no spurious
   ``resource_tracker`` warnings are emitted when loky workers manipulate
@@ -15,6 +30,10 @@
   ``resource_tracker`` will proceed to unlink the resource. Previously, resource
   unlinking by the ``resource_tracker`` was only done for leaked resources at
   interpreter exit (#228).
+- Fix `shutdown(wait=False)` that was potentially leading to deadlocks and froze
+  interpreters (#246).
+- Backport `ExecutorManagerThread` from cpython to refactor
+  `_queue_management_thread` and ease maintenance (#246).
 
 ### 2.6.0 - 2019-09-18
 

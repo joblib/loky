@@ -34,7 +34,7 @@ The recommended way to install :mod:`loky` is with :mod:`pip`,
 
 .. code:: bash
 
-    git clone https://github.com/tommoral/loky
+    git clone https://github.com/joblib/loky
     cd loky
     python setup.py install
 
@@ -83,8 +83,8 @@ IDEX Paris-Saclay, ANR-11-IDEX-0003-02
 
 .. |azurepipelines| image:: https://dev.azure.com/joblib/loky/_apis/build/status/joblib.loky?branchName=master
    :target: https://dev.azure.com/joblib/loky/_build?definitionId=2&_a=summary&repositoryFilter=2&branchFilter=38
-.. |codecov| image:: https://codecov.io/gh/tomMoral/loky/branch/master/graph/badge.svg
-   :target: https://codecov.io/gh/tomMoral/loky
+.. |codecov| image:: https://codecov.io/gh/joblib/loky/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/joblib/loky
 
 
 

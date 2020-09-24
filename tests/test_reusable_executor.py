@@ -16,6 +16,7 @@ from loky import cpu_count
 from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
+from loky.reusable_executor import _ReusablePoolExecutor
 import cloudpickle
 
 from ._executor_mixin import ReusableExecutorMixin
@@ -612,6 +613,20 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             print("ok")
         """
         check_python_subprocess_call(code, stdout_regex=r"ok")
+
+    def test_reused_flag(self):
+        executor, _ = _ReusablePoolExecutor.get_reusable_executor(
+            max_workers=2
+        )
+        executor, reused = _ReusablePoolExecutor.get_reusable_executor(
+            max_workers=2
+        )
+        assert reused
+        executor.shutdown(kill_workers=True)
+        executor, reused = _ReusablePoolExecutor.get_reusable_executor(
+            max_workers=2
+        )
+        assert not reused
 
     @pytest.mark.xfail(cloudpickle_version >= LooseVersion("0.5.4") and
                        cloudpickle_version <= LooseVersion("0.7.0"),
