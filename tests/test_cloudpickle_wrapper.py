@@ -2,6 +2,7 @@ import os
 import sys
 import pytest
 import io
+from pickle import loads
 from tempfile import mkstemp
 from loky import set_loky_pickler
 from loky.backend.reduction import get_loky_pickler
@@ -19,9 +20,11 @@ class TestCloudpickleWrapper:
         class B:
             pass
 
-        p1 = get_loky_pickler()(io.BytesIO(),
+        iob1 = io.BytesIO()
+        p1 = get_loky_pickler()(iob1,
                                 reducers={A: lambda obj: (int, (42,))})
-        p2 = get_loky_pickler()(io.BytesIO(),
+        iob2 = io.BytesIO()
+        p2 = get_loky_pickler()(iob2,
                                 reducers={B: lambda obj: (int, (42,))})
 
         assert p1.dispatch_table is not p2.dispatch_table
@@ -31,6 +34,16 @@ class TestCloudpickleWrapper:
 
         assert B in p2.dispatch_table
         assert B not in p1.dispatch_table
+
+        p1.dump((A(), B()))
+        a, b = loads(iob1.getvalue())
+        assert a == 42
+        assert isinstance(b, B)
+
+        p2.dump((A(), B()))
+        a, b = loads(iob2.getvalue())
+        assert isinstance(a, A)
+        assert b == 42
 
     def test_serialization_function_from_main(self):
         # check that the init_main_module parameter works properly

@@ -183,10 +183,11 @@ def set_loky_pickler(loky_pickler=None):
                     # implementation of the dump method:
                     # https://github.com/joblib/loky/pull/260
                     dt_attribute.__set__(self, dispatch_table)
-                    return
+                    break
 
-            # Fallback to regular setattr when inheriting from an alternative
-            # Pickler base class.
+            # On top of member descriptor set, also use setattr such that code
+            # that directly access self.dispatch_table gets a consistent view
+            # of the same table.
             self.dispatch_table = dispatch_table
 
         def __init__(self, writer, reducers=None, protocol=HIGHEST_PROTOCOL):
