@@ -2,14 +2,69 @@ jobs:
 - job: 'test_loky'
   strategy:
     matrix:
+      windows-py38:
+        imageName: "vs2017-win2016"
+        python.version: "3.8"
+        tox.env: py38
+      windows-py35:
+        imageName: "vs2017-win2016"
+        python.version: "3.5"
+        tox.env: py35
+      windows-py27:
+        imageName: "vs2017-win2016"
+        python.version: "2.7"
+        tox.env: py27
+
+      macos-py38:
+        imageName: "macos-10.14"
+        python.version: "3.8"
+        tox.env: py38
+      macos-py35:
+        imageName: "macos-10.14"
+        python.version: "3.5"
+        tox.env: py35
+      macos-py27-high-memory:
+        imageName: "macos-10.14"
+        python.version: "2.7"
+        tox.env: py27
+        RUN_MEMORY: "true"
+
+      linux-pypy3:
+        imageName: "ubuntu-16.04"
+        python.version: "pypy3"
+        tox.env: pypy3
+        LOKY_MAX_CPU_COUNT: "2"
+
       linux-python-nightly:
         imageName: "ubuntu-16.04"
         python.version: "3.9"
         tox.env: py39
+      linux-py38-joblib-tests:
+        imageName: "ubuntu-16.04"
+        python.version: "3.8"
+        tox.env: "py38"
+        joblib.tests: "true"
+      linux-py38-high-memory:
+        imageName: "ubuntu-16.04"
+        python.version: "3.8"
+        tox.env: py38
+        RUN_MEMORY: "true"
       linux-py37:
         imageName: "ubuntu-16.04"
         python.version: "3.7"
         tox.env: py37
+      linux-py36:
+        imageName: "ubuntu-16.04"
+        python.version: "3.6"
+        tox.env: py36
+      linux-py35:
+        imageName: "ubuntu-16.04"
+        python.version: "3.5"
+        tox.env: py35
+      linux-py27:
+        imageName: "ubuntu-16.04"
+        python.version: "2.7"
+        tox.env: py27
 
   pool:
     vmImage: $(imageName)
