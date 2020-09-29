@@ -122,7 +122,7 @@ def test_only_physical_cores_error():
                                                  " physical cores"):
                 cpu_count(only_physical_cores=True)
 
-            # Should only warn the first time
+            # Should not warn the second time
             with pytest.warns(None) as record:
                 cpu_count(only_physical_cores=True)
                 assert not record
