@@ -15,6 +15,7 @@ from __future__ import division
 import os
 import sys
 import subprocess
+import traceback
 import warnings
 import multiprocessing as mp
 
@@ -136,6 +137,39 @@ def cpu_count(only_physical_cores=False):
     except NotImplementedError:
         cpu_count_mp = 1
 
+    cpu_count_user = _cpu_count_user(cpu_count_mp)
+    aggregate_cpu_count = min(cpu_count_mp, cpu_count_user)
+
+    if only_physical_cores:
+        cpu_count_physical, error = _count_physical_cores()
+        if cpu_count_user < cpu_count_mp:
+            # Respect user setting
+            cpu_count = max(cpu_count_user, 1)
+        elif cpu_count_physical == "not found":
+            # Fallback to default behavior
+            if error is not None:
+                # warns only the first time
+                warnings.warn(
+                    "Could not find the number of physical cores. Returning "
+                    "the number of logical cores instead. You can silence "
+                    "this warning by setting LOKY_MAX_CPU_COUNT to the number "
+                    "of cores you want to use.\n")
+                if isinstance(error, str):
+                    print(error)
+                else:
+                    traceback.print_tb(error.__traceback__)
+
+            cpu_count = max(aggregate_cpu_count, 1)
+        else:
+            return cpu_count_physical
+    else:
+        cpu_count = max(aggregate_cpu_count, 1)
+
+    return cpu_count
+
+
+def _cpu_count_user(cpu_count_mp):
+    """Number of user defined available CPUs"""
     # Number of available CPUs given affinity settings
     cpu_count_affinity = cpu_count_mp
     if hasattr(os, 'sched_getaffinity'):
@@ -163,31 +197,7 @@ def cpu_count(only_physical_cores=False):
     # User defined soft-limit passed as a loky specific environment variable.
     cpu_count_loky = int(os.environ.get('LOKY_MAX_CPU_COUNT', cpu_count_mp))
 
-    cpu_count_user = min(cpu_count_affinity, cpu_count_cfs, cpu_count_loky)
-    aggregate_cpu_count = min(cpu_count_mp, cpu_count_user)
-
-    if only_physical_cores:
-        cpu_count_physical, error_message = _count_physical_cores()
-        if cpu_count_user < cpu_count_mp:
-            # Respect user setting
-            cpu_count = max(cpu_count_user, 1)
-        elif cpu_count_physical == "not found":
-            # Fallback to default behavior
-            if error_message:
-                # warns only the first time
-                warnings.warn(
-                    "Could not find the number of physical cores. "
-                    "Returning the number of logical cores instead.\n"
-                    "You can silence this warning by setting LOKY_CPU_COUNT"
-                    "to the number of cores you want to use.\n"
-                    + error_message)
-            cpu_count = max(aggregate_cpu_count, 1)
-        else:
-            return cpu_count_physical
-    else:
-        cpu_count = max(aggregate_cpu_count, 1)
-
-    return cpu_count
+    return min(cpu_count_affinity, cpu_count_cfs, cpu_count_loky)
 
 
 def _count_physical_cores():
@@ -196,14 +206,14 @@ def _count_physical_cores():
     Return None if not found.
     The value is cached to avoid repeating subprocess calls.
     """
-    error_message = ""
+    error = None
 
     # First check if the value is cached
     global physical_cores_cache
     if physical_cores_cache is not None:
-        return physical_cores_cache, error_message
+        return physical_cores_cache, error
 
-    # Not cached yet
+    # Not cached yet, find it
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
@@ -211,6 +221,7 @@ def _count_physical_cores():
             cpu_info = cpu_info.stdout.decode("utf-8").splitlines()
             cpu_info = {line for line in cpu_info if not line.startswith("#")}
             cpu_count_physical = len(cpu_info)
+            assert False
         elif sys.platform == "win32":
             cpu_info = subprocess.run(
                 "wmic CPU Get NumberOfCores /Format:csv".split(" "),
@@ -226,7 +237,7 @@ def _count_physical_cores():
             cpu_count_physical = int(cpu_info)
         else:
             cpu_count_physical = "not found"
-            error_message = "unsupported platform"
+            error = "unsupported platform"
 
         # if cpu_count_physical < 1, we did not find a valid value
         if cpu_count_physical != "not found" and cpu_count_physical < 1:
@@ -234,13 +245,13 @@ def _count_physical_cores():
             error_message = "found a number of physical cores < 1"
         
     except Exception as e:
-        error_message = str(e)
+        error = e
         cpu_count_physical = "not found"
 
     # Put the result in cache
     physical_cores_cache = cpu_count_physical
     
-    return cpu_count_physical, error_message
+    return cpu_count_physical, error
 
 
 class LokyContext(BaseContext):
