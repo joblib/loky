@@ -154,7 +154,8 @@ def cpu_count(only_physical_cores=False):
                     "of cores you want to use.\n")
                 if isinstance(error, str):
                     print(error)
-                else:
+                elif sys.version_info >= (3, 5):
+                    # TODO remove the version check when dropping py2 support
                     traceback.print_tb(error.__traceback__)
 
             cpu_count = max(aggregate_cpu_count, 1)
