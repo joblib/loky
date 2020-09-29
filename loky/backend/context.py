@@ -129,8 +129,6 @@ def cpu_count(only_physical_cores=False):
  
     It is also always larger or equal to 1.
     """
-    import math
-
     # TODO: use os.cpu_count when dropping python 2 support
     try:
         cpu_count_mp = mp.cpu_count()
@@ -170,6 +168,8 @@ def cpu_count(only_physical_cores=False):
 
 def _cpu_count_user(cpu_count_mp):
     """Number of user defined available CPUs"""
+    import math
+
     # Number of available CPUs given affinity settings
     cpu_count_affinity = cpu_count_mp
     if hasattr(os, 'sched_getaffinity'):
