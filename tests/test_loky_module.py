@@ -114,6 +114,10 @@ def test_only_physical_cores_error():
             old_path = os.environ['PATH']
             os.environ['PATH'] = tmp_dir + ":" + old_path
 
+            # clear the cache otherwise the warning is not triggered
+            import loky.backend.context
+            loky.backend.context.physical_cores_cache = None
+
             with pytest.warns(UserWarning, match="Could not find the number of"
                                                  " physical cores"):
                 cpu_count(only_physical_cores=True)
