@@ -243,7 +243,7 @@ def _count_physical_cores():
         # if cpu_count_physical < 1, we did not find a valid value
         if cpu_count_physical != "not found" and cpu_count_physical < 1:
             cpu_count_physical = "not found"
-            error_message = "found a number of physical cores < 1"
+            error = "found a number of physical cores < 1"
         
     except Exception as e:
         error = e
