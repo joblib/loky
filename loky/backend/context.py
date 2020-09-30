@@ -139,24 +139,23 @@ def cpu_count(only_physical_cores=False):
     aggregate_cpu_count = min(cpu_count_mp, cpu_count_user)
 
     if only_physical_cores:
-        cpu_count_physical, error = _count_physical_cores()
+        cpu_count_physical, exception = _count_physical_cores()
         if cpu_count_user < cpu_count_mp:
             # Respect user setting
             cpu_count = max(cpu_count_user, 1)
         elif cpu_count_physical == "not found":
             # Fallback to default behavior
-            if error is not None:
+            if exception is not None:
                 # warns only the first time
                 warnings.warn(
-                    "Could not find the number of physical cores. Returning "
-                    "the number of logical cores instead. You can silence "
-                    "this warning by setting LOKY_MAX_CPU_COUNT to the number "
-                    "of cores you want to use.\n")
-                if isinstance(error, str):
-                    print(error)
-                elif sys.version_info >= (3, 5):
+                    "Could not find the number of physical cores for the "
+                    "following reason:\n" + str(exception) + "\n"
+                    "Returning the number of logical cores instead. You can "
+                    "silence this warning by setting LOKY_MAX_CPU_COUNT to "
+                    "the number of cores you want to use.")
+                if sys.version_info >= (3, 5):
                     # TODO remove the version check when dropping py2 support
-                    traceback.print_tb(error.__traceback__)
+                    traceback.print_tb(exception.__traceback__)
 
             cpu_count = max(aggregate_cpu_count, 1)
         else:
@@ -202,17 +201,19 @@ def _cpu_count_user(cpu_count_mp):
 
 
 def _count_physical_cores():
-    """Return the number of physical cores
+    """Return a tuple (number of physical cores, exception)
 
-    Return None if not found.
-    The value is cached to avoid repeating subprocess calls.
+    If the number of physical cores is found, exception is set to None.
+    If it has not been found, return ("not found", exception).
+
+    The number of physical cores is cached to avoid repeating subprocess calls.
     """
-    error = None
+    exception = None
 
     # First check if the value is cached
     global physical_cores_cache
     if physical_cores_cache is not None:
-        return physical_cores_cache, error
+        return physical_cores_cache, exception
 
     # Not cached yet, find it
     try:
@@ -222,7 +223,6 @@ def _count_physical_cores():
             cpu_info = cpu_info.stdout.decode("utf-8").splitlines()
             cpu_info = {line for line in cpu_info if not line.startswith("#")}
             cpu_count_physical = len(cpu_info)
-            assert False
         elif sys.platform == "win32":
             cpu_info = subprocess.run(
                 "wmic CPU Get NumberOfCores /Format:csv".split(" "),
@@ -237,22 +237,22 @@ def _count_physical_cores():
             cpu_info = cpu_info.stdout.decode('utf-8')
             cpu_count_physical = int(cpu_info)
         else:
-            cpu_count_physical = "not found"
-            error = "unsupported platform"
+            raise NotImplementedError(
+                "unsupported platform: {}".format(sys.platform))
 
         # if cpu_count_physical < 1, we did not find a valid value
-        if cpu_count_physical != "not found" and cpu_count_physical < 1:
-            cpu_count_physical = "not found"
-            error = "found a number of physical cores < 1"
+        if cpu_count_physical < 1:
+            raise ValueError(
+                "found {} physical cores < 1".format(cpu_count_physical))
         
     except Exception as e:
-        error = e
+        exception = e
         cpu_count_physical = "not found"
 
     # Put the result in cache
     physical_cores_cache = cpu_count_physical
     
-    return cpu_count_physical, error
+    return cpu_count_physical, exception
 
 
 class LokyContext(BaseContext):
