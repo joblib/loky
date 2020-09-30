@@ -11,6 +11,9 @@
 - Fix support for Python 3.9 and test against python-nightly from now on
   (#250).
 
+- Add a parameter to ``cpu_count``, ``only_physical_cores``, to return the
+  number of physical cores instead of the number of logical cores (#271).
+
 ### 2.7.0 - 2020-04-30
 
 - Increase the residual memory increase threshold  (100MB -> 300MB) used by
