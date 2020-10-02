@@ -1,18 +1,23 @@
 ### 3.0.0 - XXXX-YY-ZZ
 
-### 2.8.0 - 2020-05-14
-
-- Internal refactoring: add private factory class method to
-  ``_ReusablePoolExecutor`` to ease extensibility in joblib (#253).
+### 2.9.0 - XXXX-YY-ZZ
 
 - Fix a side-effect bug in the registration of custom reducers the loky
-  subclass of `cloudpickle.CloudPickler` with cloudpickle 1.6.0. (#272)
+  subclass of `cloudpickle.CloudPickler` with cloudpickle 1.6.0. (#272).
 
 - Fix support for Python 3.9 and test against python-nightly from now on
   (#250).
 
 - Add a parameter to ``cpu_count``, ``only_physical_cores``, to return the
   number of physical cores instead of the number of logical cores (#271).
+
+- Fix thread-safety issues when iterating over the list of processes
+  (Dictionary changed sized during iteration) (#263).
+
+### 2.8.0 - 2020-05-14
+
+- Internal refactoring: add private factory class method to
+  ``_ReusablePoolExecutor`` to ease extensibility in joblib (#253).
 
 ### 2.7.0 - 2020-04-30
 
