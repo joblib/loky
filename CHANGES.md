@@ -1,6 +1,6 @@
 ### 3.0.0 - XXXX-YY-ZZ
 
-### 2.9.0 - XXXX-YY-ZZ
+### 2.9.0 - 2020-10-02
 
 - Fix a side-effect bug in the registration of custom reducers the loky
   subclass of `cloudpickle.CloudPickler` with cloudpickle 1.6.0. (#272).
