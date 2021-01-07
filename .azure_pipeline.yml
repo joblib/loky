@@ -3,6 +3,10 @@ jobs:
   strategy:
     matrix:
 
+      windows-py39:
+        imageName: "vs2017-win2016"
+        python.version: "3.9"
+        tox.env: py39
       windows-py38:
         imageName: "vs2017-win2016"
         python.version: "3.8"
