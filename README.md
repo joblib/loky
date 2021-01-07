@@ -105,6 +105,19 @@ modules. Run the test suite using:
 
 from the root of the project.
 
+### Why was the project named `loky`?
+
+While developping `loky`, we had some bad experiences trying to debug deadlocks
+when using `multiprocessing.Pool` and `concurrent.ProcessPoolExecutor`, especially
+when calling functions with non-picklable arguments or returned values at the
+beginning of the project. When we had to chose a name, we had dealt with so many
+deadlocks that we wanted some kind of invocation to repel them! Hence `loky`:
+a mix of a god, locks and the `y` that make it somehow cooler and nicer :) (and
+also less likely to result in name conflict in google results ^^).
+
+Fixes to avoid those deadlocks in `concurrent.futures` were also contributed upstream
+in Python 3.7+, as a less mystical way to repel the deadlocks :D
+
 ### Acknowledgement
 
 This work is supported by the Center for Data Science, funded by the IDEX
