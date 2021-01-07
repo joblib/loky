@@ -420,7 +420,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 mp.util.info("Could not acquire processes_management_lock")
                 continue
         except BaseException:
-            mp.util.debug(f'Exception getting a task')
+            mp.util.debug('Exception getting a task')
             previous_tb = traceback.format_exc()
             mp.util.debug(f'Exception getting a task:\n{previous_tb}')
             try:
@@ -429,7 +429,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 # If we cannot format correctly the exception, at least print
                 # the traceback.
                 print(previous_tb)
-            mp.util.debug(f'Exiting with code 1')
+            mp.util.debug('Exiting with code 1')
             sys.exit(1)
         if call_item is None:
             # Notify queue management thread about clean worker shutdown
@@ -663,7 +663,7 @@ class _ExecutorManagerThread(threading.Thread):
                 "{}".format(exit_codes)
             )
             mp.util.debug("exit code: " +
-                          str([p.exitcode
+                          str([(p.name, p.exitcode)
                                for p in list(self.processes.values())
                                if p is not None]))
 
