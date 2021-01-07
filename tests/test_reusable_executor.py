@@ -1,7 +1,6 @@
 import os
 import sys
 import gc
-import ctypes
 import psutil
 import pytest
 import warnings
@@ -25,15 +24,11 @@ from .utils import filter_match
 
 cloudpickle_version = LooseVersion(cloudpickle.__version__)
 
-# Compat windows
+# Windows compat
 if sys.platform == "win32":
     from signal import SIGTERM as SIGKILL
-    libc = ctypes.cdll.msvcrt
 else:
     from signal import SIGKILL
-    from ctypes.util import find_library
-    libc = ctypes.CDLL(find_library("libc"))
-
 
 try:
     import numpy as np
@@ -47,6 +42,21 @@ try:
     PICKLING_ERRORS += (cPickle.PicklingError,)
 except ImportError:
     pass
+
+_LIBC = None
+
+
+def _get_libc():
+    # Lazy look-up and cache of libc
+    global _LIBC
+    if _LIBC is None:
+        import ctypes
+        if sys.platform == "win32":
+            _LIBC = ctypes.cdll.msvcrt
+        else:
+            from ctypes.util import find_library
+        _LIBC = ctypes.CDLL(find_library("libc"))
+    return _LIBC
 
 
 def clean_warning_registry():
@@ -81,7 +91,7 @@ def exit():
 
 def c_exit(exitcode=0):
     """Induces a libc exit with exitcode 0"""
-    libc.exit(exitcode)
+    _get_libc().exit(exitcode)
 
 
 def check_pids_exist_then_sleep(arg):

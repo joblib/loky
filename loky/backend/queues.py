@@ -105,20 +105,17 @@ class Queue(mp_Queue):
                 util.debug('releasing lock')
                 self._rlock.release()
 
-        util.debug("importing tests.test_reusable_executor")
-        from tests.test_reusable_executor import sleep_then_check_pids_exist
-        util.debug("imported tests.test_reusable_executor")
+        # util.debug("importing tests.test_reusable_executor")
+        # from tests.test_reusable_executor import sleep_then_check_pids_exist
+        # util.debug("imported tests.test_reusable_executor")
 
         # unserialize the data after having released the lock
-        import pickletools, io
-        buffer = io.StringIO()
-        pickletools.dis(res, out=buffer)
-        util.debug("payload:\n" + buffer.getvalue())
+        # import pickletools, io
+        # buffer = io.StringIO()
+        # pickletools.dis(res, out=buffer)
+        # util.debug("payload:\n" + buffer.getvalue())
         util.debug('unpickling task')
-        # obj = _ForkingPickler.loads(res)
-        obj = pickle._loads(res)
-        util.debug('unpickled task')
-        return obj
+        return _ForkingPickler.loads(res)
 
     # Use custom queue set/get state to be able to reduce the custom reducers
     def __getstate__(self):
