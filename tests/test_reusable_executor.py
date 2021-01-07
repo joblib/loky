@@ -84,9 +84,8 @@ def c_exit(exitcode=0):
     libc.exit(exitcode)
 
 
-def check_pids_exist_then_sleep(arg):
-    """Sleep for some time before returning
-    and check if all the passed pid exist"""
+def sleep_then_check_pids_exist(arg):
+    """Sleep for some time and the check if all the passed pids exist"""
     time, pids = arg
     sleep(time)
     res = True
@@ -352,7 +351,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         pids = list(executor._processes.keys())
         assert len(pids) == n_proc
         assert None not in pids
-        res = executor.map(check_pids_exist_then_sleep,
+        res = executor.map(sleep_then_check_pids_exist,
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
         assert all(list(res))
@@ -486,7 +485,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
         # the old one as it is still in a good shape. The resize should not
         # occur while there are on going works.
         pids = list(executor._processes.keys())
-        res1 = executor.submit(check_pids_exist_then_sleep, (.3, pids))
+        res1 = executor.submit(sleep_then_check_pids_exist, (.3, pids))
         clean_warning_registry()
         with warnings.catch_warnings(record=True) as w:
             # Cause all warnings to always be triggered.
