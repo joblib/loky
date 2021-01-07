@@ -90,8 +90,10 @@ def check_pids_exist_then_sleep(arg):
     time, pids = arg
     sleep(time)
     res = True
+    util.debug("sleep is over")
     for p in pids:
         res &= psutil.pid_exists(p)
+    util.debug("checked all pids")
     return res
 
 
@@ -225,7 +227,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # on workers
         (return_instance, (CrashAtPickle,), TerminatedWorkerError, r"SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), TerminatedWorkerError, r"EXIT\(0\)"),
+        (return_instance, (CExitAtPickle,), TerminatedWorkerError,
+         r"EXIT\(0\)"),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
