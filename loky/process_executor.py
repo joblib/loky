@@ -661,7 +661,8 @@ class _ExecutorManagerThread(threading.Thread):
                 # unstable, therefore they are not appended in the exception
                 # message.
                 exit_codes = "\nThe exit codes of the workers are {}".format(
-                    get_exitcodes_terminated_worker(self.processes))
+                    get_exitcodes_terminated_worker(self.processes)
+                )
             bpe = TerminatedWorkerError(
                 "A worker process managed by the executor was unexpectedly "
                 "terminated. This could be caused by a segmentation fault "
@@ -669,10 +670,11 @@ class _ExecutorManagerThread(threading.Thread):
                 "causing the Operating System to kill the worker.\n"
                 "{}".format(exit_codes)
             )
-            mp.util.debug("exit code: " +
-                          str([(p.name, p.exitcode)
-                               for p in list(self.processes.values())
-                               if p is not None]))
+            mp.util.debug('A worker unexpectedly terminated. Workers that '
+                          'might have caused the breakage:\n'
+                          + str([(p.name, p.exitcode)
+                                 for p in list(self.processes.values())
+                                 if p is not None and p.sentinel in ready]))
 
         self.thread_wakeup.clear()
 
