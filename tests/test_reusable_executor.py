@@ -55,7 +55,7 @@ def _get_libc():
             _LIBC = ctypes.cdll.msvcrt
         else:
             from ctypes.util import find_library
-        _LIBC = ctypes.CDLL(find_library("libc"))
+            _LIBC = ctypes.CDLL(find_library("libc"))
     return _LIBC
 
 
