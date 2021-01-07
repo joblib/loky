@@ -660,6 +660,9 @@ class _ExecutorManagerThread(threading.Thread):
                 "causing the Operating System to kill the worker.\n"
                 "{}".format(exit_codes)
             )
+            mp.util.debug("exit code: " +
+                          ', '.join([f"'{p.exit_code}'"
+                                     for p in self.processes.values()]))
 
         self.thread_wakeup.clear()
 
