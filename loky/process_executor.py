@@ -432,18 +432,24 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             mp.util.debug('Exiting with code 1')
             sys.exit(1)
         if call_item is None:
+            mp.util.debug('Received a sentinel - exiting')
             # Notify queue management thread about clean worker shutdown
             result_queue.put(pid)
             with worker_exit_lock:
+                mp.util.debug('Exited cleanly')
                 return
         try:
             r = call_item()
         except BaseException as e:
+            mp.util.debug('Exception calling a task')
             exc = _ExceptionWithTraceback(e)
             result_queue.put(_ResultItem(call_item.work_id, exception=exc))
+            mp.util.debug('Exception sent back to main process')
         else:
+            mp.util.debug('Sending back result.')
             _sendback_result(result_queue, call_item.work_id, result=r)
             del r
+            mp.util.debug('Result has been sent back.')
 
         # Free the resource as soon as possible, to avoid holding onto
         # open files or shared memory that is not needed anymore
@@ -476,6 +482,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 mp.util.info("Memory leak detected: shutting down worker")
                 result_queue.put(pid)
                 with worker_exit_lock:
+                    mp.util.debug('Exited due to memory leak')
                     return
         else:
             # if psutil is not installed, trigger gc.collect events
