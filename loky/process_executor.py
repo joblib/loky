@@ -108,8 +108,9 @@ _MAX_MEMORY_LEAK_SIZE = int(3e8)
 
 
 try:
-    from psutil import Process
-    _USE_PSUTIL = True
+    # from psutil import Process
+    # _USE_PSUTIL = True
+    _USE_PSUTIL = False
 
     def _get_memory_usage(pid, force_gc=False):
         mp.util.debug(f'psutil used to check memory size (force_gc={force_gc}')
