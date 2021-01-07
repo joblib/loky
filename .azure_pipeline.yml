@@ -5,7 +5,7 @@ jobs:
 
       windows-py38:
         imageName: "vs2017-win2016"
-        python.version: "3.8.5"
+        python.version: "3.8"
         tox.env: py38
       # windows-py35:
       #   imageName: "vs2017-win2016"
