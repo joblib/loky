@@ -405,7 +405,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     mp.util.debug('Worker started with timeout=%s' % timeout)
     while True:
         try:
-            mp.util.debug('Worker getting a task')
+            mp.util.debug('Worker waiting for a task')
             call_item = call_queue.get(block=True, timeout=timeout)
             mp.util.debug('Worker got a task')
             if call_item is None:
@@ -420,6 +420,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 mp.util.info("Could not acquire processes_management_lock")
                 continue
         except BaseException:
+            mp.util.debug(f'Exception getting a task')
             previous_tb = traceback.format_exc()
             mp.util.debug(f'Exception getting a task:\n{previous_tb}')
             try:
@@ -428,6 +429,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 # If we cannot format correctly the exception, at least print
                 # the traceback.
                 print(previous_tb)
+            mp.util.debug(f'Exiting with code 1')
             sys.exit(1)
         if call_item is None:
             # Notify queue management thread about clean worker shutdown
