@@ -441,6 +441,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         del call_item
 
         if _USE_PSUTIL:
+            mp.util.debug('psutil used to check memory size')
             if _process_reference_size is None:
                 # Make reference measurement after the first call
                 _process_reference_size = _get_memory_usage(pid, force_gc=True)
@@ -451,6 +452,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 _last_memory_leak_check = time()
                 if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
                     # Memory usage stays within bounds: everything is fine.
+                    mp.util.debug('No memory leak detected')
                     continue
 
                 # Check again memory usage; this time take the measurement
