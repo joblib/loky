@@ -746,7 +746,7 @@ class _ExecutorManagerThread(threading.Thread):
 
         # Terminate remaining workers forcibly: the queues or their
         # locks may be in a dirty state and block forever.
-        self.kill_workers()
+        self.kill_workers(reason="broken executor")
 
         # clean up resources
         self.join_executor_internals()
@@ -766,15 +766,16 @@ class _ExecutorManagerThread(threading.Thread):
                 del work_item
 
             # Kill the remaining worker forcibly to no waste time joining them
-            self.kill_workers()
+            self.kill_workers(reason="executor shutting down")
 
-    def kill_workers(self):
+    def kill_workers(self, reason=""):
         # Terminate the remaining workers using SIGKILL. This function also
         # terminates descendant workers of the children in case there is some
         # nested parallelism.
         while self.processes:
             _, p = self.processes.popitem()
-            mp.util.debug('terminate process {}'.format(p.name))
+            mp.util.debug('terminate process {}, reason: {}'
+                          .format(p.name, reason))
             try:
                 recursive_terminate(p)
             except ProcessLookupError:  # pragma: no cover
