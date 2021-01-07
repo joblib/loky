@@ -69,9 +69,13 @@ class Queue(mp_Queue):
         if self._closed:
             raise ValueError(f"Queue {self!r} is closed")
         if block and timeout is None:
+            util.debug('acquiring lock (no timeout)')
             with self._rlock:
+                util.debug('lock acquired')
                 res = self._recv_bytes()
+                util.debug('receiving bytes')
             self._sem.release()
+            util.debug('releasing sem')
         else:
             if block:
                 deadline = time.monotonic() + timeout
