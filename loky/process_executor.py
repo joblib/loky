@@ -663,8 +663,9 @@ class _ExecutorManagerThread(threading.Thread):
                 "{}".format(exit_codes)
             )
             mp.util.debug("exit code: " +
-                          ', '.join([f"'{p.exit_code}'"
-                                     for p in self.processes.values()]))
+                          str([p.exitcode
+                               for p in list(self.processes.values())
+                               if p is not None]))
 
         self.thread_wakeup.clear()
 
