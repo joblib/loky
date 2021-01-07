@@ -35,5 +35,10 @@ else
     if [ "$RUN_MEMORY" != "true" ]; then
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
-    tox -v -e "${TOX_ENV}"  -- ${PYTEST_ARGS} --junitxml="${JUNITXML}"
+    for i in {1..100}; do
+        echo -e "\n\nRunning $i\n\n"
+        tox -v -e "${TOX_ENV}"  -- ${PYTEST_ARGS} --junitxml="${JUNITXML}"
+        res=$?
+        test $res -ne 0 && exit $res
+    done
 fi
