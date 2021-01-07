@@ -1175,7 +1175,8 @@ class ProcessPoolExecutor(_base.Executor):
 
         results = super(ProcessPoolExecutor, self).map(
             partial(_process_chunk, fn), _get_chunks(chunksize, *iterables),
-            timeout=timeout)
+            timeout=timeout
+        )
         return _chain_from_iterable_of_lists(results)
 
     def shutdown(self, wait=True, kill_workers=False):
