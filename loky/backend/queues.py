@@ -104,6 +104,11 @@ class Queue(mp_Queue):
             finally:
                 util.debug('releasing lock')
                 self._rlock.release()
+
+        util.debug("importing tests.test_reusable_executor")
+        from tests.test_reusable_executor import sleep_then_check_pids_exist
+        util.debug("imported tests.test_reusable_executor")
+
         # unserialize the data after having released the lock
         import pickletools, io
         buffer = io.StringIO()
