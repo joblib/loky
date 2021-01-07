@@ -104,8 +104,10 @@ class Queue(mp_Queue):
                 util.debug('releasing lock')
                 self._rlock.release()
         # unserialize the data after having released the lock
-        util.debug('unpickling task sem')
-        return _ForkingPickler.loads(res)
+        util.debug('unpickling task')
+        obj = _ForkingPickler.loads(res)
+        util.debug('unpickled task')
+        return obj
 
     # Use custom queue set/get state to be able to reduce the custom reducers
     def __getstate__(self):
