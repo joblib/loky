@@ -110,7 +110,9 @@ class Queue(mp_Queue):
         pickletools.dis(res, out=buffer)
         util.debug("payload:\n" + buffer.getvalue())
         util.debug('unpickling task')
-        obj = _ForkingPickler.loads(res)
+        import pickle
+        # obj = _ForkingPickler.loads(res)
+        obj = pickle._loads(res)
         util.debug('unpickled task')
         return obj
 
