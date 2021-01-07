@@ -71,7 +71,7 @@ jobs:
     vmImage: $(imageName)
   variables:
     JUNITXML: 'test-data.xml'
-    PYTEST_ARGS: '-vl --timeout=60 --maxfail=5'
+    PYTEST_ARGS: '-vl --timeout=60 --maxfail=5 -k test_crash_races'
   steps:
     - task: UsePythonVersion@0
       inputs:
