@@ -421,6 +421,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
                 continue
         except BaseException:
             previous_tb = traceback.format_exc()
+            mp.util.debug(f'Exception getting a task:\n{previous_tb}')
             try:
                 result_queue.put(_RemoteTraceback(previous_tb))
             except BaseException:
