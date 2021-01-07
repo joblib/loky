@@ -401,7 +401,9 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     mp.util.debug('Worker started with timeout=%s' % timeout)
     while True:
         try:
+            mp.util.debug('Worker getting a task')
             call_item = call_queue.get(block=True, timeout=timeout)
+            mp.util.debug('Worker got a task')
             if call_item is None:
                 mp.util.info("Shutting down worker on sentinel")
         except queue.Empty:
