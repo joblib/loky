@@ -105,8 +105,10 @@ class Queue(mp_Queue):
                 util.debug('releasing lock')
                 self._rlock.release()
         # unserialize the data after having released the lock
-        import pickletools
-        util.debug("payload:\n" + pickletools.dis(res))
+        import pickletools, io
+        buffer = io.StringIO()
+        pickletools.dis(res, out=buffer)
+        util.debug("payload:\n" + buffer.getvalue())
         util.debug('unpickling task')
         obj = _ForkingPickler.loads(res)
         util.debug('unpickled task')
