@@ -671,7 +671,7 @@ class _ExecutorManagerThread(threading.Thread):
                 "{}".format(exit_codes)
             )
             mp.util.debug('A worker unexpectedly terminated. Workers that '
-                          'might have caused the breakage:\n'
+                          'might have caused the breakage:'
                           + str([(p.name, p.exitcode)
                                  for p in list(self.processes.values())
                                  if p is not None and p.sentinel in ready]))

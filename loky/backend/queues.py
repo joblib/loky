@@ -11,19 +11,23 @@
 #
 import os
 import sys
+import time
 import errno
 import weakref
 import threading
 
 from multiprocessing import util
 from multiprocessing import connection
+from multiprocessing.queues import Full, Empty
 from multiprocessing.synchronize import SEM_VALUE_MAX
-from multiprocessing.queues import Full
 from multiprocessing.queues import _sentinel, Queue as mp_Queue
 from multiprocessing.queues import SimpleQueue as mp_SimpleQueue
+from multiprocessing import context
 
 from .reduction import loads, dumps
 from .context import assert_spawning, get_context
+
+_ForkingPickler = context.reduction.ForkingPickler
 
 
 __all__ = ['Queue', 'SimpleQueue', 'Full']
@@ -60,6 +64,43 @@ class Queue(mp_Queue):
                 util.register_after_fork(self, Queue._after_fork)
 
         self._reducers = reducers
+
+    def get(self, block=True, timeout=None):
+        if self._closed:
+            raise ValueError(f"Queue {self!r} is closed")
+        if block and timeout is None:
+            with self._rlock:
+                res = self._recv_bytes()
+            self._sem.release()
+        else:
+            if block:
+                deadline = time.monotonic() + timeout
+            util.debug('acquiring lock')
+            if not self._rlock.acquire(block, timeout):
+                util.debug('timeout in get!')
+                raise Empty
+            util.debug('lock acquired')
+            try:
+                util.debug('calling poll')
+                if block:
+                    timeout = deadline - time.monotonic()
+                    if not self._poll(timeout):
+                        util.debug('empty poll')
+                        raise Empty
+                elif not self._poll():
+                    util.debug('empty poll')
+                    raise Empty
+
+                util.debug('receiving bytes')
+                res = self._recv_bytes()
+                util.debug('releasing sem')
+                self._sem.release()
+                util.debug('get done')
+            finally:
+                util.debug('releasing lock')
+                self._rlock.release()
+        # unserialize the data after having released the lock
+        return _ForkingPickler.loads(res)
 
     # Use custom queue set/get state to be able to reduce the custom reducers
     def __getstate__(self):
