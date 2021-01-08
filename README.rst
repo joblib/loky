@@ -1,6 +1,11 @@
+.. image:: _static/loky_logo.svg
+   :target: https://loky.readthedocs.io/
+   :width: 128px
+   :align: right
+
 Reusable Process Pool Executor
 ==============================
-|Build Status| |Build status| |codecov|
+|azurepipelines| |codecov|
 
 
 Goal
@@ -83,9 +88,9 @@ IDEX Paris-Saclay, ANR-11-IDEX-0003-02
 
 .. |azurepipelines| image:: https://dev.azure.com/joblib/loky/_apis/build/status/joblib.loky?branchName=master
    :target: https://dev.azure.com/joblib/loky/_build?definitionId=2&_a=summary&repositoryFilter=2&branchFilter=38
+
 .. |codecov| image:: https://codecov.io/gh/joblib/loky/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/joblib/loky
-
 
 
 .. |cloudpickle| raw:: html
