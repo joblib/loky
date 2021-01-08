@@ -1,6 +1,7 @@
-.. image:: _static/loky_logo.svg
-   :width: 128px
-   :align: right
+.. raw:: html
+
+    <img alt="Logo loky" src="_static/loky_logo.svg" width="128px"
+     style="float: right;">
 
 Reusable Process Pool Executor
 ==============================
