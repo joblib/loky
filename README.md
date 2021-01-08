@@ -1,6 +1,7 @@
 
+<a href="https://loky.readthedocs.io">
 <img src="docs/_static/loky_logo.svg"
-alt="LiquidFun logo" width=96/>
+alt="Loky logo" width=96/></a>
 
 
 # Reusable Process Pool Executor  [![Build Status](https://dev.azure.com/joblib/loky/_apis/build/status/joblib.loky?branchName=master)](https://dev.azure.com/joblib/loky/_build/latest?definitionId=2&branchName=master) [![codecov](https://codecov.io/gh/joblib/loky/branch/master/graph/badge.svg)](https://codecov.io/gh/joblib/loky)
