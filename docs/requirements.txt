@@ -1,3 +1,4 @@
 -e git+http://github.com/sphinx-gallery/sphinx-gallery#egg=sphinx-gallery
 sphinx_bootstrap_theme
+matplotlib
 

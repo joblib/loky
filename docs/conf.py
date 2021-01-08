@@ -199,7 +199,7 @@ sphinx_gallery_conf = {
     'reference_url': {
         'loky': None
     },
-    # 'default_thumb_file': '_static/lock-2.png',
+    'default_thumb_file': '_static/loky_logo.png',
 
     # directory where function granular galleries are stored
     'backreferences_dir': 'gen_modules/backreferences',

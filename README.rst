@@ -1,6 +1,11 @@
+.. raw:: html
+
+    <img alt="Logo loky" src="_static/loky_logo.svg" width="128px"
+     style="float: right;">
+
 Reusable Process Pool Executor
 ==============================
-|Build Status| |Build status| |codecov|
+|azurepipelines| |codecov|
 
 
 Goal
@@ -74,6 +79,30 @@ The basic usage of :mod:`loky` relies on the :func:`~loky.get_reusable_executor`
 For more advance usage, see our documentation_.
 
 
+Workflow to contribute
+~~~~~~~~~~~~~~~~~~~~~~
+
+To contribute to :mod:`loky`, first create an account on github_. Once this is done, fork the `loky repository`_ to have your own repository, clone it using 'git clone' on the computers where you want to work. Make your changes in your clone, push them to your github account, test them on several computers, and when you are happy with them, send a pull request to the main repository.
+
+Running the test suite
+~~~~~~~~~~~~~~~~~~~~~~
+
+To run the test suite, you need the |pytest| (version >= 3) and |psutil|
+modules. From the root of the project, run the test suite using:
+
+.. code:: bash
+
+    pip install -e .
+    pytest .
+
+
+Why was the project named `loky`?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+While developping :mod:`loky`, we had some bad experiences trying to debug  deadlocks when using :class:`multiprocessing.pool.Pool` and :class:`concurrent.futures.ProcessPoolExecutor`, especially when calling functions with non-picklable arguments or returned values at the beginning of the project. When we had to chose a name, we had dealt with so many deadlocks that we wanted some kind of invocation to repel them! Hence :mod:`loky`: a mix of a god, locks and the `y` that make it somehow cooler and nicer :) (and also less likely to result in name conflict in google results ^^).
+
+Fixes to avoid those deadlocks in :mod:`concurrent.futures` were also contributed upstream in Python 3.7+, as a less mystical way to repel the deadlocks :D
+
 Acknowledgement
 ~~~~~~~~~~~~~~~
 
@@ -83,9 +112,9 @@ IDEX Paris-Saclay, ANR-11-IDEX-0003-02
 
 .. |azurepipelines| image:: https://dev.azure.com/joblib/loky/_apis/build/status/joblib.loky?branchName=master
    :target: https://dev.azure.com/joblib/loky/_build?definitionId=2&_a=summary&repositoryFilter=2&branchFilter=38
+
 .. |codecov| image:: https://codecov.io/gh/joblib/loky/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/joblib/loky
-
 
 
 .. |cloudpickle| raw:: html
@@ -99,5 +128,15 @@ IDEX Paris-Saclay, ANR-11-IDEX-0003-02
     <a href="https://github.com/giampaolo/psutil">
         <code>psutil</code>
     </a>
+
+.. |pytest| raw:: html
+
+    <a href="https://pytest.org">
+        <code>pytest</code>
+    </a>
+
+.. _github: http://github.com/
+
+.. _`loky repository`: http://github.com/joblib/loky
 
 .. _documentation:  http://loky.readthedocs.io/en/stable
