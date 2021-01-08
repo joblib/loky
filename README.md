@@ -60,11 +60,14 @@ cd loky
 python setup.py install
 ```
 
-Note that `loky` has an optional dependency on [`psutil`][1] to allow early memory leak detections.
+Note that `loky` has an optional dependency on [`psutil`][1] to allow early
+memory leak detections.
 
 ### Usage
 
-The basic usage of `loky` relies on the `get_reusable_executor`, which internally manages a custom `ProcessPoolExecutor` object, which is reused or re-spawned depending on the context.
+The basic usage of `loky` relies on the `get_reusable_executor`, which
+internally manages a custom `ProcessPoolExecutor` object, which is reused or
+re-spawned depending on the context.
 
 ```python
 import os
@@ -92,16 +95,18 @@ print("Number of used processes:", n_workers)
 assert n_workers == 4
 ```
 
-For more advance usage, see our [documentation](https://loky.readthedocs.io/en/stable/)
+For more advance usage, see our
+[documentation](https://loky.readthedocs.io/en/stable/)
 
 ### Workflow to contribute
 
-To contribute to **loky**, first create an account on [github](http://github.com/).
-Once this is done, fork the [loky repository](http://github.com/loky/loky) to
-have your own repository, clone it using 'git clone' on the computers where you
-want to work. Make your changes in your clone, push them to your github account,
-test them on several computers, and when you are happy with them, send a pull
-request to the main repository.
+To contribute to **loky**, first create an account on
+[github](http://github.com/). Once this is done, fork the
+[loky repository](http://github.com/loky/loky) to have your own repository,
+clone it using 'git clone' on the computers where you want to work. Make your
+changes in your clone, push them to your github account, test them on several
+computers, and when you are happy with them, send a pull request to the main
+repository.
 
 ### Running the test suite
 
@@ -121,11 +126,11 @@ especially when calling functions with non-picklable arguments or returned
 values at the beginning of the project. When we had to chose a name, we had
 dealt with so many deadlocks that we wanted some kind of invocation to repel
 them! Hence `loky`: a mix of a god, locks and the `y` that make it somehow
-cooler and nicer :) (and also less likely to result in name conflict in google
+cooler and nicer : (and also less likely to result in name conflict in google
 results ^^).
 
-Fixes to avoid those deadlocks in `concurrent.futures` were also contributed upstream
-in Python 3.7+, as a less mystical way to repel the deadlocks :D
+Fixes to avoid those deadlocks in `concurrent.futures` were also contributed
+upstream in Python 3.7+, as a less mystical way to repel the deadlocks :D
 
 ### Acknowledgement
 
