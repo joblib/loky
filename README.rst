@@ -1,5 +1,4 @@
 .. image:: _static/loky_logo.svg
-   :target: https://loky.readthedocs.io/
    :width: 128px
    :align: right
 
