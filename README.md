@@ -55,12 +55,16 @@ pip install loky
 
 `loky` can also be installed from sources using
 ```bash
+git clone https://github.com/joblib/loky
+cd loky
 python setup.py install
 ```
 
 Note that `loky` has an optional dependency on [`psutil`][1] to allow early memory leak detections.
 
 ### Usage
+
+The basic usage of `loky` relies on the `get_reusable_executor`, which internally manages a custom `ProcessPoolExecutor` object, which is reused or re-spawned depending on the context.
 
 ```python
 import os
@@ -102,24 +106,23 @@ request to the main repository.
 ### Running the test suite
 
 To run the test suite, you need the `pytest` (version >= 3) and `psutil`
-modules. Run the test suite using:
+modules. From the root of the project, run the test suite using:
 
 ```sh
     pip install -e .
     pytest .
 ```
 
-from the root of the project.
-
 ### Why was the project named `loky`?
 
 While developping `loky`, we had some bad experiences trying to debug deadlocks
-when using `multiprocessing.Pool` and `concurrent.ProcessPoolExecutor`, especially
-when calling functions with non-picklable arguments or returned values at the
-beginning of the project. When we had to chose a name, we had dealt with so many
-deadlocks that we wanted some kind of invocation to repel them! Hence `loky`:
-a mix of a god, locks and the `y` that make it somehow cooler and nicer :) (and
-also less likely to result in name conflict in google results ^^).
+when using `multiprocessing.Pool` and `concurrent.futures.ProcessPoolExecutor`,
+especially when calling functions with non-picklable arguments or returned
+values at the beginning of the project. When we had to chose a name, we had
+dealt with so many deadlocks that we wanted some kind of invocation to repel
+them! Hence `loky`: a mix of a god, locks and the `y` that make it somehow
+cooler and nicer :) (and also less likely to result in name conflict in google
+results ^^).
 
 Fixes to avoid those deadlocks in `concurrent.futures` were also contributed upstream
 in Python 3.7+, as a less mystical way to repel the deadlocks :D
