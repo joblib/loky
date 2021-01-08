@@ -224,7 +224,8 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # on workers
         (return_instance, (CrashAtPickle,), TerminatedWorkerError, r"SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), TerminatedWorkerError, r"EXIT\(0\)"),
+        (return_instance, (CExitAtPickle,), TerminatedWorkerError,
+         r"EXIT\(0\)"),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
@@ -344,6 +345,16 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, n_proc):
         """Test the race conditions in reusable_executor crash handling"""
+
+        if (sys.platform == 'win32' and sys.version_info >= (3, 8)
+                and n_proc > 5):
+            pytest.skip(
+                "On win32, the paging size can be too small to import numpy "
+                "multiple times in the sub-processes (imported when loading "
+                "this file). Skipping while no better solution is found. See "
+                "https://github.com/joblib/loky/issues/279 for more details."
+            )
+
         # Test for external crash signal comming from neighbor
         # with various race setup
         executor = get_reusable_executor(max_workers=n_proc, timeout=None)
