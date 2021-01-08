@@ -116,7 +116,7 @@ try:
             gc.collect()
 
         mem_size = Process(pid).memory_info().rss
-        mp.util.debug(f'psutil return memory size: {mem_size}')
+        mp.util.debug('psutil return memory size: {}'.format(mem_size))
         return mem_size
 
 except ImportError:
