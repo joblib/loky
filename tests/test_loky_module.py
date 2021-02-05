@@ -1,15 +1,15 @@
-import multiprocessing as mp
 import os
 import sys
 import shutil
 import tempfile
+import multiprocessing as mp
 from subprocess import check_output
-import subprocess
 
 import pytest
 
 import loky
 from loky import cpu_count
+from loky import get_worker_rank
 from loky.backend.context import _cpu_count_user
 
 
@@ -54,7 +54,7 @@ def test_cpu_count_affinity():
 
     res = check_output([taskset_bin, '-c', '0',
                         python_bin, '-c', cpu_count_cmd.format(args='')])
-    
+
     res_physical = check_output([
         taskset_bin, '-c', '0', python_bin, '-c',
         cpu_count_cmd.format(args='only_physical_cores=True')])
@@ -92,15 +92,13 @@ def test_only_physical_cores_error():
     # unable to retrieve the number of physical cores.
     if sys.platform != "linux":
         pytest.skip()
-    
+
     # if number of available cpus is already restricted, cpu_count will return
     # that value and no warning is issued even if only_physical_cores == True.
     # (tested in another test: test_only_physical_cores_with_user_limitation
     cpu_count_mp = mp.cpu_count()
     if _cpu_count_user(cpu_count_mp) < cpu_count_mp:
         pytest.skip()
-
-    start_dir = os.path.abspath('.')
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Write bad lscpu program
@@ -140,3 +138,8 @@ def test_only_physical_cores_with_user_limitation():
     if cpu_count_user < cpu_count_mp:
         assert cpu_count() == cpu_count_user
         assert cpu_count(only_physical_cores=True) == cpu_count_user
+
+
+def test_worker_rank_in_worker_only():
+    with pytest.raises(RuntimeError):
+        get_worker_rank()
