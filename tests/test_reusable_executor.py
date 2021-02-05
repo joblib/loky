@@ -604,7 +604,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
                     assert rank is None or rank == f['rank']
                     workers_rank[f['pid']] = f['rank']
                 assert set(workers_rank.values()) == set(range(size)), (
-                    ', '.join(f'{k}: {v}'
+                    ', '.join('{}: {}'.format(k, v)
                               for k, v in executor._rank_mapper.items())
                 )
         executor.shutdown(wait=True)
