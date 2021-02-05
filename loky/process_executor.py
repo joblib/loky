@@ -122,6 +122,34 @@ try:
 except ImportError:
     _USE_PSUTIL = False
 
+# Mechanism to obtain the rank of a worker and the total number of workers in
+# the executor.
+_WORKER_RANK = None
+_WORKER_WORLD = None
+
+
+def get_worker_rank():
+    """Returns the rank of the worker and the number of workers in the executor
+
+    This helper function should only be called in a worker, else it will throw
+    a RuntimeError.
+    """
+    if _WORKER_RANK is None:
+        raise RuntimeError(
+            "get_worker_id, should only be called in a worker, not in the "
+            "main process."
+        )
+    return _WORKER_RANK, _WORKER_WORLD
+
+
+def set_worker_rank(pid, rank_mapper):
+    """Set worker's rank and world size from the process pid and an rank_mapper.
+    """
+    global _WORKER_RANK, _WORKER_WORLD
+    if pid in rank_mapper:
+        _WORKER_RANK = rank_mapper[pid]
+        _WORKER_WORLD = rank_mapper['world']
+
 
 class _ThreadWakeup:
     def __init__(self):
@@ -273,11 +301,12 @@ class _ResultItem(object):
 
 class _CallItem(object):
 
-    def __init__(self, work_id, fn, args, kwargs):
+    def __init__(self, work_id, fn, args, kwargs, rank_mapper):
         self.work_id = work_id
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
+        self.rank_mapper = rank_mapper
 
         # Store the current loky_pickler so it is correctly set in the worker
         self.loky_pickler = get_loky_pickler_name()
@@ -364,7 +393,7 @@ def _sendback_result(result_queue, work_id, result=None, exception=None):
 
 def _process_worker(call_queue, result_queue, initializer, initargs,
                     processes_management_lock, timeout, worker_exit_lock,
-                    current_depth):
+                    current_depth, rank_mapper):
     """Evaluates calls from call_queue and places the results in result_queue.
 
     This worker is run in a separate process.
@@ -383,6 +412,8 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         worker_exit_lock: Lock to avoid flagging the executor as broken on
             workers timeout.
         current_depth: Nested parallelism level, to avoid infinite spawning.
+        rank_mapper: Initial value for rank and world as a dict with keys None
+            and world.
     """
     if initializer is not None:
         try:
@@ -399,6 +430,13 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     _process_reference_size = None
     _last_memory_leak_check = None
     pid = os.getpid()
+
+    # Passing an initial value is necessary as some jobs can be sent and
+    # serialized before this worker is created. In this case, no rank is
+    # available in the call_item.rank_mapper and this rank is the correct one.
+    # When initialized, main process does not know the pid and pass the worker
+    # rank as None.
+    set_worker_rank(None, rank_mapper)
 
     mp.util.debug('Worker started with timeout=%s' % timeout)
     while True:
@@ -431,6 +469,11 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             with worker_exit_lock:
                 mp.util.debug('Exited cleanly')
                 return
+
+        # If the executor has been resized, this new rank mapper might contain
+        # new rank/world info. Correct the value before runnning the task.
+        set_worker_rank(pid, call_item.rank_mapper)
+
         try:
             r = call_item()
         except BaseException as e:
@@ -547,6 +590,10 @@ class _ExecutorManagerThread(threading.Thread):
         # of new processes or shut down
         self.processes_management_lock = executor._processes_management_lock
 
+        # A dict mapping the workers' pid to their rank. Also contains the
+        # current size of the executor associated to 'world' key.
+        self.rank_mapper = executor._rank_mapper
+
         super(_ExecutorManagerThread, self).__init__()
         if sys.version_info < (3, 9):
             self.daemon = True
@@ -592,11 +639,11 @@ class _ExecutorManagerThread(threading.Thread):
 
                 if work_item.future.set_running_or_notify_cancel():
                     self.running_work_items += [work_id]
-                    self.call_queue.put(_CallItem(work_id,
-                                                  work_item.fn,
-                                                  work_item.args,
-                                                  work_item.kwargs),
-                                        block=True)
+                    self.call_queue.put(
+                        _CallItem(work_id, work_item.fn, work_item.args,
+                                  work_item.kwargs, self.rank_mapper),
+                        block=True
+                    )
                 else:
                     del self.pending_work_items[work_id]
                     continue
@@ -679,6 +726,7 @@ class _ExecutorManagerThread(threading.Thread):
             # itself: we should not mark the executor as broken.
             with self.processes_management_lock:
                 p = self.processes.pop(result_item, None)
+                del self.rank_mapper[result_item]
 
             # p can be None is the executor is concurrently shutting down.
             if p is not None:
@@ -1022,6 +1070,10 @@ class ProcessPoolExecutor(_base.Executor):
         # Finally setup the queues for interprocess communication
         self._setup_queues(job_reducers, result_reducers)
 
+        # A dict mapping the workers' pid to their rank. The current size of
+        # the executor is associated with the 'world' key.
+        self._rank_mapper = {'world': max_workers}
+
         mp.util.debug('ProcessPoolExecutor is setup')
 
     def _setup_queues(self, job_reducers, result_reducers, queue_size=None):
@@ -1082,11 +1134,20 @@ class ProcessPoolExecutor(_base.Executor):
                         _python_exit)
 
     def _adjust_process_count(self):
+        # Compute available worker ranks for newly spawned workers
+        given_ranks = set(
+            v for k, v in self._rank_mapper.items() if k != 'world'
+        )
+        all_ranks = set(range(self._max_workers))
+        available_ranks = all_ranks - given_ranks
+
         for _ in range(len(self._processes), self._max_workers):
             worker_exit_lock = self._context.BoundedSemaphore(1)
+            rank = available_ranks.pop()
             args = (self._call_queue, self._result_queue, self._initializer,
                     self._initargs, self._processes_management_lock,
-                    self._timeout, worker_exit_lock, _CURRENT_DEPTH + 1)
+                    self._timeout, worker_exit_lock, _CURRENT_DEPTH + 1,
+                    {None: rank, 'world': self._max_workers})
             worker_exit_lock.acquire()
             try:
                 # Try to spawn the process with some environment variable to
@@ -1098,6 +1159,14 @@ class ProcessPoolExecutor(_base.Executor):
             p._worker_exit_lock = worker_exit_lock
             p.start()
             self._processes[p.pid] = p
+            self._rank_mapper[p.pid] = rank
+
+        # Reassign rank that are too high to rank that are still available.
+        # They will be passed to the workers when sending the tasks with
+        # the CallItem.
+        for pid, rank in list(self._rank_mapper.items()):
+            if pid != 'world' and rank >= self._max_workers:
+                self._rank_mapper[pid] = available_ranks.pop()
         mp.util.debug('Adjust process count : {}'.format(self._processes))
 
     def _ensure_executor_running(self):
