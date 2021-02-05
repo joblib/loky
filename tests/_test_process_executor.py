@@ -1056,7 +1056,7 @@ class ExecutorTest:
             rank = workers_rank.get(f['pid'], None)
             assert rank is None or rank == f['rank']
             workers_rank[f['pid']] = f['rank']
-        assert set(workers_rank.values()) == set(range(max_workers))(
+        assert set(workers_rank.values()) == set(range(max_workers)), (
             ', '.join('{}: {}'.format(k, v)
                       for k, v in executor._rank_mapper.items())
         )
