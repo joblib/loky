@@ -31,6 +31,7 @@ import threading
 import faulthandler
 from math import sqrt
 from threading import Thread
+import multiprocessing as mp
 from collections import defaultdict
 
 from loky import get_worker_rank
@@ -1041,9 +1042,10 @@ class ExecutorTest:
 
     @staticmethod
     def _worker_rank(x):
-        time.sleep(.1)
+        time.sleep(.2)
         rank, world = get_worker_rank()
-        return dict(pid=os.getpid(), rank=rank, world=world)
+        return dict(pid=os.getpid(), name=mp.current_process().name,
+                    rank=rank, world=world)
 
     @pytest.mark.parametrize('max_workers', [1, 5, 13])
     @pytest.mark.parametrize('timeout', [None, 0.01])

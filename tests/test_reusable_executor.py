@@ -8,6 +8,7 @@ import pytest
 import warnings
 import threading
 from time import sleep
+import multiprocessing as mp
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
 from distutils.version import LooseVersion
@@ -581,9 +582,10 @@ class TestResizeExecutor(ReusableExecutorMixin):
 
     @staticmethod
     def _worker_rank(x):
-        time.sleep(.1)
+        time.sleep(.2)
         rank, world = get_worker_rank()
-        return dict(pid=os.getpid(), rank=rank, world=world)
+        return dict(pid=os.getpid(), name=mp.current_process().name,
+                    rank=rank, world=world)
 
     @pytest.mark.parametrize('timeout', [10, 0.01])
     def test_workers_rank_resize(self, timeout):
