@@ -587,10 +587,9 @@ class TestResizeExecutor(ReusableExecutorMixin):
         return dict(pid=os.getpid(), name=mp.current_process().name,
                     rank=rank, world=world)
 
-    @pytest.mark.parametrize('timeout', [10, 0.01])
-    def test_workers_rank_resize(self, timeout):
+    def test_workers_rank_resize(self):
 
-        executor = get_reusable_executor(max_workers=2, timeout=timeout)
+        executor = get_reusable_executor(max_workers=2)
 
         with warnings.catch_warnings(record=True):
             # Cause all warnings to always be triggered.
@@ -609,7 +608,6 @@ class TestResizeExecutor(ReusableExecutorMixin):
                     ', '.join('{}: {}'.format(k, v)
                               for k, v in executor._rank_mapper.items())
                 )
-        executor.shutdown(wait=True)
 
 
 class TestGetReusableExecutor(ReusableExecutorMixin):

@@ -416,7 +416,8 @@ class ExecutorShutdownTest:
         executor = cls.executor_type(
             max_workers=2, context=cls.context,
             initializer=_executor_mixin.initializer_event,
-            initargs=(_executor_mixin._test_event,))
+            initargs=(_executor_mixin._test_event,)
+        )
         assert executor.submit(sleep_and_return, 0, 42).result() == 42
 
         if depth >= 2:
