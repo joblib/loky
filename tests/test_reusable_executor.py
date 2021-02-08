@@ -585,7 +585,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
         rank, world = get_worker_rank()
         return dict(pid=os.getpid(), rank=rank, world=world)
 
-    @pytest.mark.parametrize('timeout', [10, 0])
+    @pytest.mark.parametrize('timeout', [10, 0.01])
     def test_workers_rank_resize(self, timeout):
 
         executor = get_reusable_executor(max_workers=2, timeout=timeout)

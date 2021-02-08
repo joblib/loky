@@ -1046,7 +1046,7 @@ class ExecutorTest:
         return dict(pid=os.getpid(), rank=rank, world=world)
 
     @pytest.mark.parametrize('max_workers', [1, 5, 13])
-    @pytest.mark.parametrize('timeout', [None, 0.01, 0])
+    @pytest.mark.parametrize('timeout', [None, 0.01])
     def test_workers_rank(self, max_workers, timeout):
         executor = self.executor_type(max_workers, timeout=timeout)
         results = executor.map(self._worker_rank, range(max_workers * 5))
