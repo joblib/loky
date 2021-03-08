@@ -32,7 +32,7 @@ if sys.platform == "win32":
 else:
     from signal import SIGKILL
     from ctypes.util import find_library
-    libc = ctypes.CDLL(find_library("libc"))
+    libc = ctypes.CDLL(find_library("c"))
 
 
 try:
