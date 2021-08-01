@@ -204,8 +204,12 @@ class TestResourceTracker:
             else:
                 raise AssertionError("%s was not unlinked in time"  % name)
         finally:
-            if resource_exists(name, "{rtype}"):
-                resource_unlink(name, "{rtype}")
+            try:
+                if resource_exists(name, "{rtype}"):
+                    resource_unlink(name, "{rtype}")
+            except NameError:
+                # "name" is not defined because create_resource has failed
+                pass
         '''
 
         env = os.environ.copy()
