@@ -1,5 +1,8 @@
 ### 3.0.0 - XXXX-YY-ZZ
 
+- Avoid a NameError when calling the `exit` builtin on Windows when
+  loky is executed as part of a frozen Python binary. (#290)
+
 ### 2.9.0 - 2020-10-02
 
 - Fix a side-effect bug in the registration of custom reducers the loky
