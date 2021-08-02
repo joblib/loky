@@ -1,15 +1,18 @@
 from __future__ import print_function
 try:
-    import test.support
+    try:
+        from test.support.import_helper import import_module
+    except ImportError:
+        from test.support import import_module
 
     # Skip tests if _multiprocessing wasn't built.
-    test.support.import_module('_multiprocessing')
+    import_module('_multiprocessing')
     # Skip tests if sem_open implementation is broken.
-    test.support.import_module('multiprocessing.synchronize')
+    import_module('multiprocessing.synchronize')
     # import threading after _multiprocessing to raise a more revelant error
     # message: "No module named _multiprocessing" if multiprocessing is not
     # compiled without thread support.
-    test.support.import_module('threading')
+    import_module('threading')
 except ImportError:
     pass
 
