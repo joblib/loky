@@ -149,6 +149,67 @@ class _ThreadWakeup:
                 self._reader.recv_bytes()
 
 
+def _viztracer_init(init_kwargs):
+    """Initialize viztracer's profiler in worker processes"""
+    from viztracer import VizTracer
+    tracer = VizTracer(**init_kwargs)
+    tracer.register_exit()
+    tracer.start()
+
+
+def _make_viztracer_initializer_and_initargs():
+    try:
+        import viztracer
+        tracer = viztracer.get_tracer()
+        if tracer is not None:
+            # Profiler is active: introspect its configuration to
+            # initialize the workers with the same configuration.
+            return _viztracer_init, (tracer.init_kwargs,)
+    except ImportError:
+        # viztracer is not installed: nothing to do
+        pass
+    except Exception as e:
+        # In case viztracer's API evolve, we do not want to crash loky but
+        # we want to know about it to be able to update loky.
+        warnings.warn("Unable to introspect viztracer state: %r" % e)
+    return None, ()
+
+
+class _ChainedInitializer():
+    """Compound worker initializer
+
+    This is meant to be used in conjunction with _chain_initializers to
+    produce  the necessary chained_args list to be passed to __call__.
+    """
+
+    def __init__(self, initializers):
+        self._initializers = initializers
+
+    def __call__(self, *chained_args):
+        for initializer, args in zip(self._initializers, chained_args):
+            initializer(*args)
+
+
+def _chain_initializers(all_initializers, all_initargs):
+    """Convenience helper to combine a sequence of initializers.
+
+    If some initializers are None, they are filtered out.
+    """
+    filtered_initializers = []
+    filtered_initargs = []
+    for initializer, initargs in zip(all_initializers, all_initargs):
+        if initializer is not None:
+            filtered_initializers.append(initializer)
+            filtered_initargs.append(initargs)
+
+    if len(filtered_initializers) == 0:
+        return None, ()
+    elif len(filtered_initializers) == 1:
+        return filtered_initializers[0], filtered_initargs[0]
+    else:
+        return _ChainedInitializer(filtered_initializers), filtered_initargs
+
+
 class _ExecutorFlags(object):
     """necessary references to maintain executor states without preventing gc
 
@@ -1082,10 +1143,20 @@ class ProcessPoolExecutor(_base.Executor):
                         _python_exit)
 
     def _adjust_process_count(self):
+        # Lazily introspect runtime to determine if we need to propagate the
+        # viztracer profiler information to the workers:
+        (
+            viztracer_initializer,
+            viztracer_initargs,
+        ) = _make_viztracer_initializer_and_initargs()
+        initializer, initargs = _chain_initializers(
+            [self._initializer, viztracer_initializer],
+            [self._initargs, viztracer_initargs],
+        )
         for _ in range(len(self._processes), self._max_workers):
             worker_exit_lock = self._context.BoundedSemaphore(1)
-            args = (self._call_queue, self._result_queue, self._initializer,
-                    self._initargs, self._processes_management_lock,
+            args = (self._call_queue, self._result_queue, initializer,
+                    initargs, self._processes_management_lock,
                     self._timeout, worker_exit_lock, _CURRENT_DEPTH + 1)
             worker_exit_lock.acquire()
             try:
