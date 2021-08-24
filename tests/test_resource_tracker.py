@@ -1,14 +1,12 @@
 """Tests for the ResourceTracker class"""
 import errno
 import gc
-import io
 import os
 import pytest
 import re
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 import warnings
 import weakref
@@ -19,7 +17,14 @@ from loky.backend.context import get_context
 
 
 def _resource_unlink(name, rtype):
-    resource_tracker._CLEANUP_FUNCS[rtype](name)
+    try:
+        resource_tracker._CLEANUP_FUNCS[rtype](name)
+    except FileNotFoundError as e:
+        new_e = FileNotFoundError(
+            f"Could not find resource of type '{rtype}' with name '{name}'"
+        )
+        new_e.errno = e.errno
+        raise new_e from e
 
 
 def get_rtracker_pid():
