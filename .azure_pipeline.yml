@@ -45,6 +45,10 @@ jobs:
         imageName: "ubuntu-20.04"
         python.version: "3.5"
         tox.env: py35
+      linux-py27:
+        imageName: "ubuntu-20.04"
+        python.version: "2.7"
+        tox.env: py27
 
   pool:
     vmImage: $(imageName)
