@@ -33,6 +33,7 @@ from math import sqrt
 from threading import Thread
 from collections import defaultdict
 
+import loky
 from loky.process_executor import LokyRecursionError
 from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
@@ -1054,5 +1055,34 @@ class ExecutorTest:
                 tracer.start()
                 with self.executor_type(1, context=self.context) as e:
                     assert e.submit(check_viztracer_active).result()
+            finally:
+                tracer.stop()
+
+    def test_viztracer_profiler_with_custom_init(self):
+        # Check that viztracer profiler is initialzed in workers when
+        # installed.
+        viztracer = pytest.importorskip("viztracer")
+
+        # Make sure the auto-viztracer initialization works even when
+        # the call pass their own init.
+        def custom_init():
+            loky.__custom_global_var = 42
+
+        def check_viztracer_active_and_custom_init():
+            assert loky.__custom_global_var == 42
+            return viztracer.get_tracer() is not None
+
+        if viztracer.get_tracer() is None:
+            tracer = viztracer.VizTracer()
+            try:
+                tracer.start()
+                with self.executor_type(
+                    1,
+                    context=self.context,
+                    initializer=custom_init
+                ) as e:
+                    assert e.submit(
+                        check_viztracer_active_and_custom_init
+                    ).result()
             finally:
                 tracer.stop()
