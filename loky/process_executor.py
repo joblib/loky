@@ -1039,6 +1039,17 @@ class ProcessPoolExecutor(_base.Executor):
 
         if initializer is not None and not callable(initializer):
             raise TypeError("initializer must be a callable")
+
+        # Introspect runtime to determine if we need to propagate the
+        # viztracer profiler information to the workers:
+        (
+            viztracer_initializer,
+            viztracer_initargs,
+        ) = _make_viztracer_initializer_and_initargs()
+        initializer, initargs = _chain_initializers(
+            [initializer, viztracer_initializer],
+            [initargs, viztracer_initargs],
+        )
         self._initializer = initializer
         self._initargs = initargs
 
@@ -1143,20 +1154,10 @@ class ProcessPoolExecutor(_base.Executor):
                         _python_exit)
 
     def _adjust_process_count(self):
-        # Lazily introspect runtime to determine if we need to propagate the
-        # viztracer profiler information to the workers:
-        (
-            viztracer_initializer,
-            viztracer_initargs,
-        ) = _make_viztracer_initializer_and_initargs()
-        initializer, initargs = _chain_initializers(
-            [self._initializer, viztracer_initializer],
-            [self._initargs, viztracer_initargs],
-        )
         for _ in range(len(self._processes), self._max_workers):
             worker_exit_lock = self._context.BoundedSemaphore(1)
-            args = (self._call_queue, self._result_queue, initializer,
-                    initargs, self._processes_management_lock,
+            args = (self._call_queue, self._result_queue, self._initializer,
+                    self._initargs, self._processes_management_lock,
                     self._timeout, worker_exit_lock, _CURRENT_DEPTH + 1)
             worker_exit_lock.acquire()
             try:
