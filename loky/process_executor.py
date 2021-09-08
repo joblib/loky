@@ -1040,8 +1040,8 @@ class ProcessPoolExecutor(_base.Executor):
         if initializer is not None and not callable(initializer):
             raise TypeError("initializer must be a callable")
 
-        # Introspect runtime to determine if we need to propagate the
-        # viztracer profiler information to the workers:
+        # Introspect runtime to determine if we need to propagate the viztracer
+        # profiler information to the workers:
         (
             viztracer_initializer,
             viztracer_initargs,
