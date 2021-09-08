@@ -21,7 +21,8 @@ def _resource_unlink(name, rtype):
         resource_tracker._CLEANUP_FUNCS[rtype](name)
     except FileNotFoundError as e:
         new_e = FileNotFoundError(
-            f"Could not find resource of type '{rtype}' with name '{name}'"
+            "Could not find resource of type '{rtype}' with name '{name}'"
+            .format(**locals())
         )
         new_e.errno = e.errno
         raise new_e from e
