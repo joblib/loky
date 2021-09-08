@@ -608,7 +608,9 @@ class _ExecutorManagerThread(threading.Thread):
         # of new processes or shut down
         self.processes_management_lock = executor._processes_management_lock
 
-        super(_ExecutorManagerThread, self).__init__()
+        super(_ExecutorManagerThread, self).__init__(
+            name="ExecutorManagerThread"
+        )
         if sys.version_info < (3, 9):
             self.daemon = True
 
