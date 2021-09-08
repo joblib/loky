@@ -136,7 +136,7 @@ class TestResourceTracker:
         if len(error) > 0:
             expected_warning_msg = (
                 "UserWarning: resource_tracker: There appear to be 2 leaked "
-                "semlock objects to clean up at shutdown"
+                "{rtype} objects to clean up at shutdown".format(**locals())
             )
             if error != expected_warning_msg:
                 print(error)
