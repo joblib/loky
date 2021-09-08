@@ -3,14 +3,10 @@ jobs:
   strategy:
     matrix:
 
-      windows-py38:
+      windows-py39:
         imageName: "vs2017-win2016"
-        python.version: "3.8"
-        tox.env: py38
-      windows-py35:
-        imageName: "vs2017-win2016"
-        python.version: "3.5"
-        tox.env: py35
+        python.version: "3.9"
+        tox.env: py39
       windows-py27:
         imageName: "vs2017-win2016"
         python.version: "2.7"
@@ -20,15 +16,10 @@ jobs:
         imageName: "macos-10.14"
         python.version: "3.8"
         tox.env: py38
-      macos-py35:
+      macos-py36:
         imageName: "macos-10.14"
-        python.version: "3.5"
-        tox.env: py35
-      macos-py27-high-memory:
-        imageName: "macos-10.14"
-        python.version: "2.7"
-        tox.env: py27
-        RUN_MEMORY: "true"
+        python.version: "3.6"
+        tox.env: py36
 
       linux-pypy3:
         imageName: "ubuntu-20.04"
@@ -40,36 +31,20 @@ jobs:
         imageName: "ubuntu-20.04"
         python.version: "3.10"
         tox.env: py310
-      linux-python-py39:
+      linux-python-py39-high-memory:
         imageName: "ubuntu-20.04"
         python.version: "3.9"
         tox.env: py39
-      linux-py38-joblib-tests:
-        imageName: "ubuntu-20.04"
-        python.version: "3.8"
-        tox.env: "py38"
-        joblib.tests: "true"
-      linux-py38-high-memory:
-        imageName: "ubuntu-20.04"
-        python.version: "3.8"
-        tox.env: py38
         RUN_MEMORY: "true"
-      linux-py37:
+      linux-py39-joblib-tests:
         imageName: "ubuntu-20.04"
-        python.version: "3.7"
-        tox.env: py37
-      linux-py36:
-        imageName: "ubuntu-20.04"
-        python.version: "3.6"
-        tox.env: py36
+        python.version: "3.9"
+        tox.env: "py39"
+        joblib.tests: "true"
       linux-py35:
         imageName: "ubuntu-20.04"
         python.version: "3.5"
         tox.env: py35
-      linux-py27:
-        imageName: "ubuntu-20.04"
-        python.version: "2.7"
-        tox.env: py27
 
   pool:
     vmImage: $(imageName)
