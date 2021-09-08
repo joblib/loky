@@ -3,6 +3,9 @@
 - Avoid a NameError when calling the `exit` builtin on Windows when
   loky is executed as part of a frozen Python binary. (#290)
 
+- Make it possible to automatically trace workers when profiling with
+  VizTracer (#299).
+
 ### 2.9.0 - 2020-10-02
 
 - Fix a side-effect bug in the registration of custom reducers the loky
