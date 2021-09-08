@@ -1034,3 +1034,25 @@ class ExecutorTest:
         assert var_child == var_value
 
         executor.shutdown(wait=True)
+
+    def test_viztracer_profiler(self):
+        # Check that viztracer profiler is initialzed in workers when
+        # installed.
+        viztracer = pytest.importorskip("viztracer")
+
+        def check_viztracer_active():
+            return viztracer.get_tracer() is not None
+
+        active_in_main_process = check_viztracer_active()
+        with self.executor_type(1, context=self.context) as e:
+            active_in_child_process = e.submit(check_viztracer_active).result()
+        assert active_in_main_process == active_in_child_process
+
+        if not active_in_main_process:
+            tracer = viztracer.VizTracer()
+            try:
+                tracer.start()
+                with self.executor_type(1, context=self.context) as e:
+                    assert e.submit(check_viztracer_active).result()
+            finally:
+                tracer.stop()
