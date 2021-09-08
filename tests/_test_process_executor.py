@@ -1,20 +1,4 @@
 from __future__ import print_function
-try:
-    import test.support
-
-    # Skip tests if _multiprocessing wasn't built.
-    test.support.import_module('_multiprocessing')
-    # Skip tests if sem_open implementation is broken.
-    test.support.import_module('multiprocessing.synchronize')
-    # import threading after _multiprocessing to raise a more revelant error
-    # message: "No module named _multiprocessing" if multiprocessing is not
-    # compiled without thread support.
-    test.support.import_module('threading')
-except ImportError:
-    pass
-
-
-# from test.support.script_helper import assert_python_ok
 from loky import process_executor
 
 import os
