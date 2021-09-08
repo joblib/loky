@@ -132,6 +132,10 @@ class TestResourceTracker:
                              env=env)
         name1 = p.stdout.readline().rstrip().decode('ascii')
         name2 = p.stdout.readline().rstrip().decode('ascii')
+        error = p.stderr.read().decode("ascii")
+        if len(error) > 0:
+            print(error)
+            raise RuntimeError(error)
 
         # subprocess holding a reference to lock1 is still alive, so this call
         # should succeed
