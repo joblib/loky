@@ -25,7 +25,8 @@ def _resource_unlink(name, rtype):
             .format(**locals())
         )
         new_e.errno = e.errno
-        raise new_e from e
+        new_e.__cause__ = e
+        raise new_e
 
 
 def get_rtracker_pid():
