@@ -171,7 +171,8 @@ def _make_viztracer_initializer_and_initargs():
     except Exception as e:
         # In case viztracer's API evolve, we do not want to crash loky but
         # we want to know about it to be able to update loky.
-        warnings.warn("Unable to introspect viztracer state: %r" % e)
+        warnings.warn("Unable to introspect viztracer state: {}"
+                      .format(e))
     return None, ()
 
 
