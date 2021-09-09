@@ -161,7 +161,7 @@ def _make_viztracer_initializer_and_initargs():
     try:
         import viztracer
         tracer = viztracer.get_tracer()
-        if tracer is not None:
+        if tracer is not None and getattr(tracer, 'enable', False):
             # Profiler is active: introspect its configuration to
             # initialize the workers with the same configuration.
             return _viztracer_init, (tracer.init_kwargs,)

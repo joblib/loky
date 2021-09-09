@@ -1023,11 +1023,13 @@ class ExecutorTest:
     def test_viztracer_profiler(self):
         # Check that viztracer profiler is initialzed in workers when
         # installed.
-        self.executor.shutdown(wait=True)
         viztracer = pytest.importorskip("viztracer")
 
         def check_viztracer_active():
-            return viztracer.get_tracer() is not None
+            tracer = viztracer.get_tracer()
+            if tracer is None:
+                return False
+            return tracer.enable
 
         active_in_main_process = check_viztracer_active()
         with self.executor_type(1, context=self.context) as e:
@@ -1043,12 +1045,14 @@ class ExecutorTest:
             finally:
                 tracer.stop()
 
-        self.check_no_running_workers(patience=2)
+            # Once the tracer has been stopped, should be no side effect on
+            # workers started in new executors.
+            with self.executor_type(1, context=self.context) as e:
+                assert not e.submit(check_viztracer_active).result()
 
     def test_viztracer_profiler_with_custom_init(self):
         # Check that viztracer profiler is initialzed in workers when
         # installed.
-        self.executor.shutdown(wait=True)
         viztracer = pytest.importorskip("viztracer")
 
         # Make sure the auto-viztracer initialization works even when
@@ -1058,7 +1062,10 @@ class ExecutorTest:
 
         def check_viztracer_active_and_custom_init():
             assert loky.__custom_global_var == 42
-            return viztracer.get_tracer() is not None
+            tracer = viztracer.get_tracer()
+            if tracer is None:
+                return False
+            return tracer.enable
 
         if viztracer.get_tracer() is None:
             tracer = viztracer.VizTracer()
@@ -1074,5 +1081,3 @@ class ExecutorTest:
                     ).result()
             finally:
                 tracer.stop()
-
-        self.check_no_running_workers(patience=2)
