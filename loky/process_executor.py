@@ -82,6 +82,7 @@ from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue
 from .backend.reduction import set_loky_pickler, get_loky_pickler_name
 from .backend.utils import recursive_terminate, get_exitcodes_terminated_worker
+from .initializers import _prepare_initializer
 
 try:
     from concurrent.futures.process import BrokenProcessPool as _BPPException
@@ -147,68 +148,6 @@ class _ThreadWakeup:
         if not self._closed:
             while self._reader.poll():
                 self._reader.recv_bytes()
-
-
-def _viztracer_init(init_kwargs):
-    """Initialize viztracer's profiler in worker processes"""
-    from viztracer import VizTracer
-    tracer = VizTracer(**init_kwargs)
-    tracer.register_exit()
-    tracer.start()
-
-
-def _make_viztracer_initializer_and_initargs():
-    try:
-        import viztracer
-        tracer = viztracer.get_tracer()
-        if tracer is not None and getattr(tracer, 'enable', False):
-            # Profiler is active: introspect its configuration to
-            # initialize the workers with the same configuration.
-            return _viztracer_init, (tracer.init_kwargs,)
-    except ImportError:
-        # viztracer is not installed: nothing to do
-        pass
-    except Exception as e:
-        # In case viztracer's API evolve, we do not want to crash loky but
-        # we want to know about it to be able to update loky.
-        warnings.warn("Unable to introspect viztracer state: {}"
-                      .format(e))
-    return None, ()
-
-
-class _ChainedInitializer():
-    """Compound worker initializer
-
-    This is meant to be used in conjunction with _chain_initializers to
-    produce  the necessary chained_args list to be passed to __call__.
-    """
-
-    def __init__(self, initializers):
-        self._initializers = initializers
-
-    def __call__(self, *chained_args):
-        for initializer, args in zip(self._initializers, chained_args):
-            initializer(*args)
-
-
-def _chain_initializers(all_initializers, all_initargs):
-    """Convenience helper to combine a sequence of initializers.
-
-    If some initializers are None, they are filtered out.
-    """
-    filtered_initializers = []
-    filtered_initargs = []
-    for initializer, initargs in zip(all_initializers, all_initargs):
-        if initializer is not None:
-            filtered_initializers.append(initializer)
-            filtered_initargs.append(initargs)
-
-    if len(filtered_initializers) == 0:
-        return None, ()
-    elif len(filtered_initializers) == 1:
-        return filtered_initializers[0], filtered_initargs[0]
-    else:
-        return _ChainedInitializer(filtered_initializers), filtered_initargs
 
 
 class _ExecutorFlags(object):
@@ -1040,22 +979,9 @@ class ProcessPoolExecutor(_base.Executor):
         self._context = context
         self._env = env
 
-        if initializer is not None and not callable(initializer):
-            raise TypeError("initializer must be a callable")
-
-        # Introspect runtime to determine if we need to propagate the viztracer
-        # profiler information to the workers:
-        (
-            viztracer_initializer,
-            viztracer_initargs,
-        ) = _make_viztracer_initializer_and_initargs()
-        initializer, initargs = _chain_initializers(
-            [initializer, viztracer_initializer],
-            [initargs, viztracer_initargs],
+        self._initializer, self._initargs = _prepare_initializer(
+            initializer, initargs
         )
-        self._initializer = initializer
-        self._initargs = initargs
-
         _check_max_depth(self._context)
 
         if result_reducers is None:
