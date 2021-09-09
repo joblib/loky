@@ -1058,10 +1058,10 @@ class ExecutorTest:
         # Make sure the auto-viztracer initialization works even when
         # the call pass their own init.
         def custom_init():
-            loky.__custom_global_var = 42
+            loky._custom_global_var = 42
 
         def check_viztracer_active_and_custom_init():
-            assert loky.__custom_global_var == 42
+            assert loky._custom_global_var == 42
             tracer = viztracer.get_tracer()
             if tracer is None:
                 return False
