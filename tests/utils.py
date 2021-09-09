@@ -10,8 +10,8 @@ import contextlib
 from tempfile import mkstemp, mkdtemp, NamedTemporaryFile, _RandomNameSequence
 from loky.backend import resource_tracker
 if sys.version_info < (3, 4):
-    from .semlock import SemLock as _SemLock
-    from .semlock import sem_unlink
+    from loky.backend.semlock import SemLock as _SemLock
+    from loky.backend.semlock import sem_unlink
 else:
     from _multiprocessing import SemLock as _SemLock
     from _multiprocessing import sem_unlink
