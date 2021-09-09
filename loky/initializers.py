@@ -43,14 +43,14 @@ class _ChainedInitializer():
             initializer(*args)
 
 
-def _chain_initializers(all_initializers, all_initargs):
+def _chain_initializers(initializer_and_args):
     """Convenience helper to combine a sequence of initializers.
 
     If some initializers are None, they are filtered out.
     """
     filtered_initializers = []
     filtered_initargs = []
-    for initializer, initargs in zip(all_initializers, all_initargs):
+    for initializer, initargs in initializer_and_args:
         if initializer is not None:
             filtered_initializers.append(initializer)
             filtered_initargs.append(initargs)
@@ -72,11 +72,7 @@ def _prepare_initializer(initializer, initargs):
 
     # Introspect runtime to determine if we need to propagate the viztracer
     # profiler information to the workers:
-    (
-        viztracer_initializer,
-        viztracer_initargs,
-    ) = _make_viztracer_initializer_and_initargs()
-    return _chain_initializers(
-        [initializer, viztracer_initializer],
-        [initargs, viztracer_initargs],
-    )
+    return _chain_initializers([
+        (initializer, initargs),
+        _make_viztracer_initializer_and_initargs(),
+    ])
