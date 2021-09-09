@@ -31,6 +31,8 @@ class TestResourceTracker:
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
     def test_resource_utils(self, rtype):
         # Check that the resouce utils work as expected in the main process
+        if sys.platform == "win32" and rtype == "semlock":
+            pytest.skip("no semlock on windows")
         name = create_resource(rtype)
         assert resource_exists(name, rtype)
         resource_unlink(name, rtype)
