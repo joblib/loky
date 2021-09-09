@@ -1023,6 +1023,7 @@ class ExecutorTest:
     def test_viztracer_profiler(self):
         # Check that viztracer profiler is initialzed in workers when
         # installed.
+        self.executor.shutdown(wait=True)
         viztracer = pytest.importorskip("viztracer")
 
         def check_viztracer_active():
@@ -1042,9 +1043,12 @@ class ExecutorTest:
             finally:
                 tracer.stop()
 
+        self.check_no_running_workers(patience=2)
+
     def test_viztracer_profiler_with_custom_init(self):
         # Check that viztracer profiler is initialzed in workers when
         # installed.
+        self.executor.shutdown(wait=True)
         viztracer = pytest.importorskip("viztracer")
 
         # Make sure the auto-viztracer initialization works even when
@@ -1070,3 +1074,5 @@ class ExecutorTest:
                     ).result()
             finally:
                 tracer.stop()
+
+        self.check_no_running_workers(patience=2)
