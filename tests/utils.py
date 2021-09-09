@@ -57,7 +57,7 @@ def resource_exists(name, rtype):
             _SemLock(1, 1, 1, name, False)
             sem_unlink(name)
             return False
-        except FileExistsError:
+        except OSError:
             return True
     else:
         raise ValueError("Resource type %s not understood" % rtype)
