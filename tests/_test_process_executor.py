@@ -1085,7 +1085,7 @@ class ExecutorTest:
 
 
 def _custom_initializer():
-    """_custom_init_42 is module function to be picklable
+    """_custom_initializer is module function to be picklable
 
     This is necessary for executor implementations that do not
     use cloudpickle to pickle the initializer.
