@@ -31,8 +31,10 @@ import threading
 import faulthandler
 from math import sqrt
 from threading import Thread
+import multiprocessing as mp
 from collections import defaultdict
 
+from loky import get_worker_rank
 from loky.process_executor import LokyRecursionError
 from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
@@ -414,7 +416,8 @@ class ExecutorShutdownTest:
         executor = cls.executor_type(
             max_workers=2, context=cls.context,
             initializer=_executor_mixin.initializer_event,
-            initargs=(_executor_mixin._test_event,))
+            initargs=(_executor_mixin._test_event,)
+        )
         assert executor.submit(sleep_and_return, 0, 42).result() == 42
 
         if depth >= 2:
@@ -906,8 +909,10 @@ class ExecutorTest:
     @pytest.mark.skipif(sys.maxsize < 2 ** 32,
                         reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
-            sys.version_info[:2] < (3, 8),
-            reason="Python version does not support pickling objects of size > 2 ** 31GB")
+        sys.version_info[:2] < (3, 8),
+        reason="Python version does not support pickling objects "
+        "of size > 2 ** 31GB"
+    )
     def test_no_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
         self.executor.submit(id, data).result()
@@ -916,8 +921,9 @@ class ExecutorTest:
     @pytest.mark.skipif(sys.maxsize < 2 ** 32,
                         reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
-            sys.version_info[:2] >= (3, 8),
-            reason="Python version supports pickling objects of size > 2 ** 31GB")
+        sys.version_info[:2] >= (3, 8),
+        reason="Python version supports pickling objects of size > 2 ** 31GB"
+    )
     def test_expected_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
         with pytest.raises(RuntimeError):
@@ -1034,3 +1040,27 @@ class ExecutorTest:
         assert var_child == var_value
 
         executor.shutdown(wait=True)
+
+    @staticmethod
+    def _worker_rank(x):
+        time.sleep(.2)
+        rank, world = get_worker_rank()
+        return dict(pid=os.getpid(), name=mp.current_process().name,
+                    rank=rank, world=world)
+
+    @pytest.mark.parametrize('max_workers', [1, 5, 13])
+    @pytest.mark.parametrize('timeout', [None, 0.01])
+    def test_workers_rank(self, max_workers, timeout):
+        executor = self.executor_type(max_workers, timeout=timeout)
+        results = executor.map(self._worker_rank, range(max_workers * 5))
+        workers_rank = {}
+        for f in results:
+            assert f['world'] == max_workers
+            rank = workers_rank.get(f['pid'], None)
+            assert rank is None or rank == f['rank']
+            workers_rank[f['pid']] = f['rank']
+        assert set(workers_rank.values()) == set(range(max_workers)), (
+            ', '.join('{}: {}'.format(k, v)
+                      for k, v in executor._rank_mapper.items())
+        )
+        executor.shutdown(wait=True, kill_workers=True)

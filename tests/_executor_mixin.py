@@ -143,7 +143,8 @@ class ExecutorMixin:
         try:
             self.executor = self.executor_type(
                 max_workers=self.worker_count, context=self.context,
-                initializer=initializer_event, initargs=(_test_event,))
+                initializer=initializer_event, initargs=(_test_event,)
+            )
         except NotImplementedError as e:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
