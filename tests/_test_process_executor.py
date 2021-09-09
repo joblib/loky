@@ -1057,8 +1057,6 @@ class ExecutorTest:
 
         # Make sure the auto-viztracer initialization works even when
         # the call pass their own init.
-        def custom_init():
-            loky._custom_global_var = 42
 
         def check_viztracer_active_and_custom_init():
             assert loky._custom_global_var == 42
@@ -1067,17 +1065,29 @@ class ExecutorTest:
                 return False
             return tracer.enable
 
-        if viztracer.get_tracer() is None:
-            tracer = viztracer.VizTracer()
-            try:
-                tracer.start()
-                with self.executor_type(
-                    1,
-                    context=self.context,
-                    initializer=custom_init
-                ) as e:
-                    assert e.submit(
-                        check_viztracer_active_and_custom_init
-                    ).result()
-            finally:
-                tracer.stop()
+        existing_tracer = viztracer.get_tracer()
+        if existing_tracer is not None and existing_tracer.enable:
+            pytest.skip("Cannot run this test if viztracer is active")
+
+        tracer = viztracer.VizTracer()
+        try:
+            tracer.start()
+            with self.executor_type(
+                1,
+                context=self.context,
+                initializer=_custom_initializer
+            ) as e:
+                assert e.submit(
+                    check_viztracer_active_and_custom_init
+                ).result()
+        finally:
+            tracer.stop()
+
+
+def _custom_initializer():
+    """_custom_init_42 is module function to be picklable
+
+    This is necessary for executor implementations that do not
+    use cloudpickle to pickle the initializer.
+    """
+    loky._custom_global_var = 42
