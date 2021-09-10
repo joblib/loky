@@ -1,4 +1,4 @@
-### 3.0.0 - XXXX-YY-ZZ
+### 3.0.0 - 2021-09-10
 
 - Avoid a NameError when calling the `exit` builtin on Windows when
   loky is executed as part of a frozen Python binary. (#290)
