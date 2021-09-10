@@ -1,3 +1,6 @@
+### 3.1.0 - XXXX-XX-XX
+
+
 ### 3.0.0 - 2021-09-10
 
 - Avoid a NameError when calling the `exit` builtin on Windows when
