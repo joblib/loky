@@ -19,7 +19,6 @@
 #
 import os
 import sys
-import sphinx_bootstrap_theme
 
 sys.path.insert(0, os.path.abspath('../loky'))
 
@@ -91,19 +90,13 @@ todo_include_todos = True
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'bootstrap'
+html_theme = 'alabaster'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 html_theme_options = {
     'navbar_sidebarrel': False,
-    'navbar_links': [
-        ("Examples", "auto_examples/index"),
-        ("API", "API"),
-        ("GitHub", "https://github.com/joblib/loky", True)
-    ],
-    'bootswatch_theme': "united"
 }
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -211,6 +204,3 @@ sphinx_gallery_conf = {
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
 
-
-def setup(app):
-    app.add_stylesheet("custom.css")
