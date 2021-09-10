@@ -1,14 +1,12 @@
 """Tests for the ResourceTracker class"""
 import errno
 import gc
-import io
 import os
 import pytest
 import re
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 import warnings
 import weakref
@@ -16,6 +14,7 @@ import weakref
 from loky import ProcessPoolExecutor
 import loky.backend.resource_tracker as resource_tracker
 from loky.backend.context import get_context
+from .utils import resource_unlink, create_resource, resource_exists
 
 
 def _resource_unlink(name, rtype):
@@ -28,6 +27,17 @@ def get_rtracker_pid():
 
 
 class TestResourceTracker:
+
+    @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
+    def test_resource_utils(self, rtype):
+        # Check that the resouce utils work as expected in the main process
+        if sys.platform == "win32" and rtype == "semlock":
+            pytest.skip("no semlock on windows")
+        name = create_resource(rtype)
+        assert resource_exists(name, rtype)
+        resource_unlink(name, rtype)
+        assert not resource_exists(name, rtype)
+
     def test_child_retrieves_resource_tracker(self):
         parent_rtracker_pid = get_rtracker_pid()
         executor = ProcessPoolExecutor(max_workers=2)
@@ -45,7 +55,6 @@ class TestResourceTracker:
 
         from loky import ProcessPoolExecutor
         from loky.backend import resource_tracker
-        from loky.backend.semlock import SemLock
         from tempfile import NamedTemporaryFile
 
 
@@ -102,9 +111,7 @@ class TestResourceTracker:
         import subprocess
         cmd = '''if 1:
             import time, os, tempfile, sys
-
-            from loky.backend.semlock import SemLock
-            from loky.backend import resource_tracker, reduction
+            from loky.backend import resource_tracker
             from utils import create_resource
 
             for _ in range(2):
@@ -170,7 +177,6 @@ class TestResourceTracker:
         import os
         import tempfile
         import time
-        from loky.backend.semlock import SemLock, _sem_open
         from loky.backend import resource_tracker
         from utils import resource_unlink, create_resource, resource_exists
 

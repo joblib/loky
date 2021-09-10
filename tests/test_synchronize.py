@@ -21,7 +21,8 @@ if sys.version_info < (3, 3):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UNIX test")
 def test_semlock_failure():
-    from loky.backend.semlock import SemLock, sem_unlink
+    from loky.backend.synchronize import SemLock, sem_unlink
+
     name = "loky-test-semlock"
     sl = SemLock(0, 1, 1, name=name)
 
@@ -30,7 +31,7 @@ def test_semlock_failure():
     sem_unlink(sl.name)
 
     with pytest.raises(FileNotFoundError):
-        SemLock._rebuild(None, 0, 0, name)
+        sl._semlock._rebuild(0, 0, 0, name)
 
 
 def assert_sem_value_equal(sem, value):
