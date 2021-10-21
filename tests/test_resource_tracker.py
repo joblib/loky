@@ -81,11 +81,12 @@ class TestResourceTracker:
             p = subprocess.Popen(
                 [sys.executable, '-E', '-c', cmd],
                 stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE)
+                stdout=subprocess.PIPE,
+                universal_newlines=True)
             p.wait()
 
-            filename = p.stdout.readline().decode('utf-8').strip()
-            err = p.stderr.read().decode('utf-8')
+            filename = p.stdout.readline().strip()
+            err = p.stderr.read()
             p.stderr.close()
             p.stdout.close()
 
@@ -129,9 +130,10 @@ class TestResourceTracker:
         p = subprocess.Popen([sys.executable, '-c', cmd],
                              stderr=subprocess.PIPE,
                              stdout=subprocess.PIPE,
+                             universal_newlines=True,
                              env=env)
-        name1 = p.stdout.readline().rstrip().decode('ascii')
-        name2 = p.stdout.readline().rstrip().decode('ascii')
+        name1 = p.stdout.readline().rstrip()
+        name2 = p.stdout.readline().rstrip()
 
         # subprocess holding a reference to lock1 is still alive, so this call
         # should succeed
@@ -146,7 +148,8 @@ class TestResourceTracker:
             _resource_unlink(name2, rtype)
         # docs say it should be ENOENT, but OSX seems to give EINVAL
         assert ctx.value.errno in (errno.ENOENT, errno.EINVAL)
-        err = p.stderr.read().decode('utf-8')
+
+        err = p.stderr.read()
         p.stderr.close()
         p.stdout.close()
 
