@@ -7,23 +7,15 @@ jobs:
         imageName: "vs2017-win2016"
         python.version: "3.9"
         tox.env: py39
-      windows-py35:
+      windows-py36:
         imageName: "vs2017-win2016"
-        python.version: "3.5"
-        tox.env: py35
-      windows-py27:
-        imageName: "vs2017-win2016"
-        python.version: "2.7"
-        tox.env: py27
+        python.version: "3.6"
+        tox.env: py36
 
       macos-py37:
         imageName: "macos-10.14"
         python.version: "3.7"
         tox.env: py37
-      macos-py27:
-        imageName: "macos-10.14"
-        python.version: "2.7"
-        tox.env: py27
 
       linux-pypy3:
         imageName: "ubuntu-20.04"
@@ -49,10 +41,6 @@ jobs:
         imageName: "ubuntu-20.04"
         python.version: "3.6"
         tox.env: py36
-      linux-py27:
-        imageName: "ubuntu-20.04"
-        python.version: "2.7"
-        tox.env: py27
 
   pool:
     vmImage: $(imageName)
