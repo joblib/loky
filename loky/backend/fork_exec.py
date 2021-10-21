@@ -7,9 +7,6 @@
 import os
 import sys
 
-if sys.platform == "darwin" and sys.version_info < (3, 3):
-    FileNotFoundError = OSError
-
 
 def close_fds(keep_fds):  # pragma: no cover
     """Close all the file descriptors except those in keep_fds."""

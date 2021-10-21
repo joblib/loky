@@ -13,7 +13,6 @@ from .utils import check_subprocess_call
 
 class TestCloudpickleWrapper:
 
-    @pytest.mark.skipif(sys.version_info[0] == 2, reason="Python 3 or later")
     def test_isolated_pickler_dispatch_tables(self):
         class A:
             pass
@@ -144,7 +143,7 @@ class TestCloudpickleWrapper:
 
             # Make sure the wrapper do not make the object callable
             with pytest.raises(TypeError,
-                              match="'Test' object is not callable"):
+                               match="'Test' object is not callable"):
                 test_obj()
 
             assert not callable(test_obj)

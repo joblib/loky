@@ -1,4 +1,3 @@
-from __future__ import print_function
 from loky import process_executor
 
 import os
@@ -14,24 +13,21 @@ import traceback
 import threading
 import faulthandler
 from math import sqrt
+from pickle import PicklingError
 from threading import Thread
+from concurrent import futures
 from collections import defaultdict
+from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
+                                      CANCELLED_AND_NOTIFIED, FINISHED)
 
 import loky
-from loky.process_executor import LokyRecursionError
-from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
-from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
-                        FINISHED, Future)
+from loky.process_executor import (LokyRecursionError, ShutdownExecutorError,
+                                   TerminatedWorkerError)
+from loky._base import Future
 
 from . import _executor_mixin
 from .utils import id_sleep, check_subprocess_call, filter_match
-from .test_reusable_executor import ErrorAtPickle, ExitAtPickle
-from .test_reusable_executor import PICKLING_ERRORS, c_exit
-
-if sys.version_info[:2] < (3, 3):
-    import loky._base as futures
-else:
-    from concurrent import futures
+from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
 
 
 IS_PYPY = hasattr(sys, "pypy_version_info")
@@ -74,12 +70,12 @@ def sleep_and_write(t, filename, msg):
         f.write(str(msg).encode('utf-8'))
 
 
-class MyObject(object):
+class MyObject:
     def __init__(self, value=0):
         self.value = value
 
     def __repr__(self):
-        return "MyObject({})".format(self.value)
+        return f"MyObject({self.value})"
 
     def my_method(self):
         pass
@@ -359,7 +355,7 @@ class ExecutorShutdownTest:
             # without waiting
             f = executor.submit(id, ErrorAtPickle())
             executor.shutdown(wait=False)
-            with pytest.raises(PICKLING_ERRORS):
+            with pytest.raises(PicklingError):
                 f.result()
 
         # Make sure the executor is eventually shutdown and do not leave
@@ -444,8 +440,8 @@ class WaitTests:
         done, not_done = futures.wait([CANCELLED_FUTURE, future1, future2],
                                       return_when=futures.FIRST_COMPLETED)
 
-        assert set([future1]) == done
-        assert set([CANCELLED_FUTURE, future2]) == not_done
+        assert {future1} == done
+        assert {CANCELLED_FUTURE, future2} == not_done
 
     def test_first_completed_some_already_completed(self):
         future1 = self.executor.submit(time.sleep, 1.5)
@@ -454,9 +450,9 @@ class WaitTests:
                                           SUCCESSFUL_FUTURE, future1],
                                          return_when=futures.FIRST_COMPLETED)
 
-        assert (set([CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE]) ==
+        assert ({CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE} ==
                 finished)
-        assert set([future1]) == pending
+        assert {future1} == pending
 
     @classmethod
     def wait_and_raise(cls, t):
@@ -482,8 +478,8 @@ class WaitTests:
 
         assert _executor_mixin._test_event.is_set()
 
-        assert set([future1, future2]) == finished
-        assert set([future3]) == pending
+        assert {future1, future2} == finished
+        assert {future3} == pending
 
         _executor_mixin._test_event.clear()
 
@@ -496,9 +492,9 @@ class WaitTests:
                                           future1, future2],
                                          return_when=futures.FIRST_EXCEPTION)
 
-        assert set([SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
-                    future1]) == finished
-        assert set([CANCELLED_FUTURE, future2]) == pending
+        assert {SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
+                future1} == finished
+        assert {CANCELLED_FUTURE, future2} == pending
 
     def test_first_exception_one_already_failed(self):
         future1 = self.executor.submit(time.sleep, 2)
@@ -506,8 +502,8 @@ class WaitTests:
         finished, pending = futures.wait([EXCEPTION_FUTURE, future1],
                                          return_when=futures.FIRST_EXCEPTION)
 
-        assert set([EXCEPTION_FUTURE]) == finished
-        assert set([future1]) == pending
+        assert {EXCEPTION_FUTURE} == finished
+        assert {future1} == pending
 
     def test_all_completed(self):
         future1 = self.executor.submit(divmod, 2, 0)
@@ -518,9 +514,9 @@ class WaitTests:
                                           future1, future2],
                                          return_when=futures.ALL_COMPLETED)
 
-        assert set([SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
-                    EXCEPTION_FUTURE, future1, future2]) == finished
-        assert set() == pending
+        assert {SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
+                EXCEPTION_FUTURE, future1, future2} == finished
+        assert not pending
 
     def test_timeout(self):
         # Make sure the executor has already started to avoid timeout happening
@@ -538,9 +534,9 @@ class WaitTests:
                                          timeout=.1,
                                          return_when=futures.ALL_COMPLETED)
 
-        assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
-                    SUCCESSFUL_FUTURE, future1]) == finished
-        assert set([future2]) == pending
+        assert {CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
+                SUCCESSFUL_FUTURE, future1} == finished
+        assert {future2} == pending
 
         _executor_mixin._test_event.set()
         assert future2.result(timeout=10)
@@ -557,8 +553,8 @@ class AsCompletedTests:
                                               EXCEPTION_FUTURE,
                                               SUCCESSFUL_FUTURE,
                                               future1, future2]))
-        assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
-                    SUCCESSFUL_FUTURE, future1, future2]) == completed
+        assert {CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
+                SUCCESSFUL_FUTURE, future1, future2} == completed
 
     def test_zero_timeout(self):
         future1 = self.executor.submit(time.sleep, 2)
@@ -572,8 +568,8 @@ class AsCompletedTests:
                     timeout=0):
                 completed_futures.add(future)
 
-        assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
-                    SUCCESSFUL_FUTURE]) == completed_futures
+        assert {CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
+                SUCCESSFUL_FUTURE} == completed_futures
 
     def test_duplicate_futures(self):
         # Issue 20367. Duplicate futures should not raise exceptions or give
@@ -697,13 +693,7 @@ class ExecutorTest:
 
         exc = cm.value
         assert type(exc) is RuntimeError
-        if sys.version_info > (3,):
-            assert exc.args == (123,)
-        else:
-            assert exc.args[0].startswith("123")
-            # Makes sure that the cause of the RuntimeError is properly
-            # reported in the error message.
-            assert "raise RuntimeError(123)  # some comment" in exc.args[0]
+        assert exc.args == (123,)
 
         cause = exc.__cause__
         assert type(cause) is process_executor._RemoteTraceback

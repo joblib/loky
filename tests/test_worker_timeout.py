@@ -12,7 +12,7 @@ from loky.backend.queues import SimpleQueue
 from loky.backend.reduction import dumps
 
 
-class SlowlyPickling(object):
+class SlowlyPickling:
     """Simulate slowly pickling object, e.g. large numpy array or dict"""
     def __init__(self, delay=1):
         self.delay = delay
@@ -24,7 +24,7 @@ class SlowlyPickling(object):
 
 class DelayedSimpleQueue(SimpleQueue):
     def __init__(self, reducers=None, ctx=None, delay=.1):
-        super(DelayedSimpleQueue, self).__init__(reducers=reducers, ctx=ctx)
+        super().__init__(reducers=reducers, ctx=ctx)
         self.out_queue = SimpleQueue(ctx=ctx)
         self._inner_reader = self._reader
         self._reader = self.out_queue._reader
@@ -65,7 +65,7 @@ class DelayedSimpleQueue(SimpleQueue):
         mp.util.debug("Defeeder clean exit")
 
 
-class TestTimeoutExecutor():
+class TestTimeoutExecutor:
     def test_worker_timeout_mock(self):
         timeout = .001
         context = get_context()

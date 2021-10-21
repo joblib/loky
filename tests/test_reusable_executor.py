@@ -40,20 +40,12 @@ try:
 except ImportError:
     np = None
 
-# Backward compat for python2 cPickle module
-PICKLING_ERRORS = (PicklingError,)
-try:
-    import cPickle
-    PICKLING_ERRORS += (cPickle.PicklingError,)
-except ImportError:
-    pass
-
 
 def clean_warning_registry():
     """Safe way to reset warnings."""
     warnings.resetwarnings()
     reg = "__warningregistry__"
-    for mod_name, mod in list(sys.modules.items()):
+    for mod in list(sys.modules.values()):
         if hasattr(mod, reg):
             getattr(mod, reg).clear()
 
@@ -132,43 +124,43 @@ def do_nothing(arg):
     return True
 
 
-class CrashAtPickle(object):
+class CrashAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         crash()
 
 
-class CrashAtUnpickle(object):
+class CrashAtUnpickle:
     """Bad object that triggers a segfault at unpickling time."""
     def __reduce__(self):
         return crash, ()
 
 
-class ExitAtPickle(object):
+class ExitAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         exit()
 
 
-class ExitAtUnpickle(object):
+class ExitAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
         return exit, ()
 
 
-class CExitAtPickle(object):
+class CExitAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         c_exit()
 
 
-class CExitAtUnpickle(object):
+class CExitAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
         return c_exit, ()
 
 
-class ErrorAtPickle(object):
+class ErrorAtPickle:
     """Bad object that raises an error at pickling time."""
     def __init__(self, fail=True):
         self.fail = fail
@@ -180,7 +172,7 @@ class ErrorAtPickle(object):
             return id, (42, )
 
 
-class ErrorAtUnpickle(object):
+class ErrorAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __init__(self, etype=UnpicklingError, message='the error message'):
         self.etype = etype
@@ -190,14 +182,14 @@ class ErrorAtUnpickle(object):
         return raise_error, (self.etype, self.message)
 
 
-class CrashAtGCInWorker(object):
+class CrashAtGCInWorker:
     """Bad object that triggers a segfault at call item GC time"""
     def __del__(self):
         if current_process().name != "MainProcess":
             crash()
 
 
-class CExitAtGCInWorker(object):
+class CExitAtGCInWorker:
     """Exit worker at call item GC time"""
     def __del__(self):
         if current_process().name != "MainProcess":
@@ -594,8 +586,6 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             executor._resize(max_workers=None)
 
     @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
-    @pytest.mark.skipif(sys.version_info <= (3, 4),
-                        reason="No context before 3.4")
     def test_invalid_context(self):
         """Raise error on invalid context"""
 
@@ -622,7 +612,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             e.submit(id, 42).result()
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
 
     def test_reused_flag(self):
         executor, _ = _ReusablePoolExecutor.get_reusable_executor(
@@ -674,7 +664,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
 
     def test_interactively_defined_recursive_functions(self):
         # Check that it's possible to call a recursive function defined
@@ -705,7 +695,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
 
     def test_compat_with_concurrent_futures_exception(self):
         # It should be possible to use a loky process pool executor as a dropin

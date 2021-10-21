@@ -28,7 +28,7 @@ def _make_viztracer_initializer_and_initargs():
     return None, ()
 
 
-class _ChainedInitializer():
+class _ChainedInitializer:
     """Compound worker initializer
 
     This is meant to be used in conjunction with _chain_initializers to

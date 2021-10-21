@@ -10,7 +10,6 @@
 #    used with multiprocessing.set_start_method
 #  * Add some compat function for python2.7 and 3.3.
 #
-from __future__ import division
 
 import os
 import sys
@@ -18,6 +17,8 @@ import subprocess
 import traceback
 import warnings
 import multiprocessing as mp
+from multiprocessing import get_context as mp_get_context
+from multiprocessing.context import BaseContext
 
 from .process import LokyProcess, LokyInitMainProcess
 
@@ -28,67 +29,27 @@ _DEFAULT_START_METHOD = None
 # It should not change during the lifetime of the program.
 physical_cores_cache = None
 
-if sys.version_info[:2] >= (3, 4):
-    from multiprocessing import get_context as mp_get_context
-    from multiprocessing.context import assert_spawning, set_spawning_popen
-    from multiprocessing.context import get_spawning_popen, BaseContext
+START_METHODS += ['spawn']
+if sys.platform != 'win32':
+    START_METHODS += ['fork', 'forkserver']
 
-    START_METHODS += ['spawn']
-    if sys.platform != 'win32':
-        START_METHODS += ['fork', 'forkserver']
 
-    def get_context(method=None):
-        # Try to overload the default context
-        method = method or _DEFAULT_START_METHOD or "loky"
-        if method == "fork":
-            # If 'fork' is explicitly requested, warn user about potential
-            # issues.
-            warnings.warn("`fork` start method should not be used with "
-                          "`loky` as it does not respect POSIX. Try using "
-                          "`spawn` or `loky` instead.", UserWarning)
-        try:
-            context = mp_get_context(method)
-        except ValueError:
-            raise ValueError("Unknown context '{}'. Value should be in {}."
-                             .format(method, START_METHODS))
+def get_context(method=None):
+    # Try to overload the default context
+    method = method or _DEFAULT_START_METHOD or "loky"
+    if method == "fork":
+        # If 'fork' is explicitly requested, warn user about potential
+        # issues.
+        warnings.warn("`fork` start method should not be used with "
+                      "`loky` as it does not respect POSIX. Try using "
+                      "`spawn` or `loky` instead.", UserWarning)
+    try:
+        context = mp_get_context(method)
+    except ValueError:
+        raise ValueError("Unknown context '{}'. Value should be in {}."
+                         .format(method, START_METHODS))
 
-        return context
-
-else:
-    if sys.platform != 'win32':
-        import threading
-        # Mechanism to check that the current thread is spawning a process
-        _tls = threading.local()
-        popen_attr = 'spawning_popen'
-    else:
-        from multiprocessing.forking import Popen
-        _tls = Popen._tls
-        popen_attr = 'process_handle'
-
-    BaseContext = object
-
-    def get_spawning_popen():
-        return getattr(_tls, popen_attr, None)
-
-    def set_spawning_popen(popen):
-        setattr(_tls, popen_attr, popen)
-
-    def assert_spawning(obj):
-        if get_spawning_popen() is None:
-            raise RuntimeError(
-                '%s objects should only be shared between processes'
-                ' through inheritance' % type(obj).__name__
-            )
-
-    def get_context(method=None):
-        method = method or _DEFAULT_START_METHOD or 'loky'
-        if method == "loky":
-            return LokyContext()
-        elif method == "loky_init_main":
-            return LokyInitMainContext()
-        else:
-            raise ValueError("Unknown context '{}'. Value should be in {}."
-                             .format(method, START_METHODS))
+    return context
 
 
 def set_start_method(method, force=False):
@@ -152,9 +113,7 @@ def cpu_count(only_physical_cores=False):
                     "Returning the number of logical cores instead. You can "
                     "silence this warning by setting LOKY_MAX_CPU_COUNT to "
                     "the number of cores you want to use.")
-                if sys.version_info >= (3, 5):
-                    # TODO remove the version check when dropping py2 support
-                    traceback.print_tb(exception.__traceback__)
+                traceback.print_tb(exception.__traceback__)
 
             cpu_count = max(aggregate_cpu_count, 1)
         else:
@@ -276,41 +235,6 @@ class LokyContext(BaseContext):
         from .queues import SimpleQueue
         return SimpleQueue(reducers=reducers, ctx=self.get_context())
 
-    if sys.version_info[:2] < (3, 4):
-        """Compat for python2.7/3.3 for necessary methods in Context"""
-        def get_context(self):
-            return self
-
-        def get_start_method(self):
-            return self._name
-
-        def Pipe(self, duplex=True):
-            '''Returns two connection object connected by a pipe'''
-            return mp.Pipe(duplex)
-
-        if sys.platform != "win32":
-            """Use the compat Manager for python2.7/3.3 on UNIX to avoid
-            relying on fork processes
-            """
-            def Manager(self):
-                """Returns a manager object"""
-                from .managers import LokyManager
-                m = LokyManager()
-                m.start()
-                return m
-        else:
-            """Compat for context on Windows and python2.7/3.3. Using regular
-            multiprocessing objects as it does not rely on fork.
-            """
-            from multiprocessing import synchronize
-            Semaphore = staticmethod(synchronize.Semaphore)
-            BoundedSemaphore = staticmethod(synchronize.BoundedSemaphore)
-            Lock = staticmethod(synchronize.Lock)
-            RLock = staticmethod(synchronize.RLock)
-            Condition = staticmethod(synchronize.Condition)
-            Event = staticmethod(synchronize.Event)
-            Manager = staticmethod(mp.Manager)
-
     if sys.platform != "win32":
         """For Unix platform, use our custom implementation of synchronize
         relying on ctypes to interface with pthread semaphores.
@@ -364,8 +288,7 @@ class LokyInitMainContext(LokyContext):
     Process = LokyInitMainProcess
 
 
-if sys.version_info > (3, 4):
-    """Register loky context so it works with multiprocessing.get_context"""
-    ctx_loky = LokyContext()
-    mp.context._concrete_contexts['loky'] = ctx_loky
-    mp.context._concrete_contexts['loky_init_main'] = LokyInitMainContext()
+# Register loky context so it works with multiprocessing.get_context
+ctx_loky = LokyContext()
+mp.context._concrete_contexts['loky'] = ctx_loky
+mp.context._concrete_contexts['loky_init_main'] = LokyInitMainContext()

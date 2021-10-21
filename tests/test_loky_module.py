@@ -4,7 +4,6 @@ import sys
 import shutil
 import tempfile
 from subprocess import check_output
-import subprocess
 
 import pytest
 
@@ -54,7 +53,7 @@ def test_cpu_count_affinity():
 
     res = check_output([taskset_bin, '-c', '0',
                         python_bin, '-c', cpu_count_cmd.format(args='')])
-    
+
     res_physical = check_output([
         taskset_bin, '-c', '0', python_bin, '-c',
         cpu_count_cmd.format(args='only_physical_cores=True')])
@@ -92,7 +91,7 @@ def test_only_physical_cores_error():
     # unable to retrieve the number of physical cores.
     if sys.platform != "linux":
         pytest.skip()
-    
+
     # if number of available cpus is already restricted, cpu_count will return
     # that value and no warning is issued even if only_physical_cores == True.
     # (tested in another test: test_only_physical_cores_with_user_limitation

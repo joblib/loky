@@ -5,21 +5,17 @@ import psutil
 import pytest
 import signal
 import pickle
-import platform
 import socket
 import multiprocessing as mp
 from tempfile import mkstemp
+from multiprocessing.connection import wait
 
 from loky.backend import get_context
-from loky.backend.compat import wait
 from loky.backend.context import START_METHODS
 from loky.backend.utils import recursive_terminate
 
 from .utils import (TimingWrapper, check_subprocess_call,
                     with_parallel_sum, _run_openmp_parallel_sum)
-
-if sys.version_info < (3, 3):
-    FileNotFoundError = NameError
 
 
 if not hasattr(socket, "socketpair"):
@@ -83,8 +79,6 @@ class TestLokyBackend:
         assert current.ident == os.getpid()
         assert current.exitcode is None
 
-    @pytest.mark.skipif(sys.version_info < (3, 3),
-                        reason="requires python3.3")
     def test_daemon_argument(self):
 
         # By default uses the current process's daemon flag.
@@ -107,76 +101,55 @@ class TestLokyBackend:
         q.put(current.pid)
 
     @pytest.mark.parametrize("context_name", ["loky", "loky_init_main"])
-    def test_process(self, capsys, context_name):
+    def test_process(self, context_name):
         """behavior of Process variables and functional connection objects
         """
-        import contextlib
+        q = self.Queue()
+        sq = self.SimpleQueue()
+        args = (q, sq, 1, 2)
+        kwargs = {'hello': 23, 'bye': 2.54}
+        name = 'TestLokyProcess'
+        ctx = get_context(context_name)
+        p = ctx.Process(
+            target=self._test_process, args=args, kwargs=kwargs, name=name
+        )
+        p.daemon = True
+        current = self.current_process()
 
-        @contextlib.contextmanager
-        def no_mgr():
-            yield None
+        assert p.authkey == current.authkey
+        assert not p.is_alive()
+        assert p.daemon
+        assert p not in self.active_children()
+        assert type(self.active_children()) is list
+        assert p.exitcode is None
 
-        with capsys.disabled() if sys.version_info[:2] == (3, 3) else no_mgr():
-            if sys.version_info[:2] == (3, 3):
-                import logging
-                logger = mp.util.get_logger()
-                logger.setLevel(5)
-                formatter = logging.Formatter(
-                    mp.util.DEFAULT_LOGGING_FORMAT)
-                handler = logging.StreamHandler()
-                handler.setFormatter(formatter)
-                old_handler = logger.handlers[0]
-                logger.handlers[0] = handler
+        # Make sure we do not break security
+        with pytest.raises(TypeError):
+            pickle.dumps(p.authkey)
 
-            q = self.Queue()
-            sq = self.SimpleQueue()
-            args = (q, sq, 1, 2)
-            kwargs = {'hello': 23, 'bye': 2.54}
-            name = 'TestLokyProcess'
-            ctx = get_context(context_name)
-            p = ctx.Process(
-                target=self._test_process, args=args, kwargs=kwargs, name=name
-            )
-            p.daemon = True
-            current = self.current_process()
+        # Make sure we detect bad pickling
+        with pytest.raises(RuntimeError):
+            pickle.dumps(q)
 
-            assert p.authkey == current.authkey
-            assert not p.is_alive()
-            assert p.daemon
-            assert p not in self.active_children()
-            assert type(self.active_children()) is list
-            assert p.exitcode is None
+        p.start()
 
-            # Make sure we do not break security
-            with pytest.raises(TypeError):
-                pickle.dumps(p.authkey)
+        assert p.exitcode is None
+        assert p.is_alive()
+        assert p in self.active_children()
 
-            # Make sure we detect bad pickling
-            with pytest.raises(RuntimeError):
-                pickle.dumps(q)
+        assert q.get() == args[2:]
+        assert sq.get() == args[2:]
 
-            p.start()
+        assert q.get() == kwargs
+        assert q.get() == p.name
+        assert q.get() == current.authkey
+        assert q.get() == p.pid
 
-            assert p.exitcode is None
-            assert p.is_alive()
-            assert p in self.active_children()
+        p.join()
 
-            assert q.get() == args[2:]
-            assert sq.get() == args[2:]
-
-            assert q.get() == kwargs
-            assert q.get() == p.name
-            assert q.get() == current.authkey
-            assert q.get() == p.pid
-
-            p.join()
-
-            assert p.exitcode == 0
-            assert not p.is_alive()
-            assert p not in self.active_children()
-
-            if sys.version_info[:2] == (3, 3):
-                logger.handlers[0] = old_handler
+        assert p.exitcode == 0
+        assert not p.is_alive()
+        assert p not in self.active_children()
 
     @classmethod
     def _test_connection(cls, conn):
@@ -191,10 +164,6 @@ class TestLokyBackend:
             conn.send_bytes(msg)
         conn.close()
 
-    @pytest.mark.skipif(
-        sys.platform == "win32" and sys.version_info[:2] < (3, 3),
-        reason="socket are not picklable with python2.7 and vanilla"
-        " ForkingPickler on windows")
     def test_socket(self):
         """sockets can be pickled at spawn and are able to send/recv"""
         server, client = socket.socketpair()
@@ -282,8 +251,6 @@ class TestLokyBackend:
 
         queue.put(os.environ.get(key, 'not set'))
 
-    @pytest.mark.xfail(sys.version_info < (3, 6) and sys.platform == "win32",
-                       reason="Can randomly fail with python < 3.6 under windows.")
     def test_child_env_process(self):
         import os
 
@@ -515,11 +482,6 @@ class TestLokyBackend:
             # to /dev/null during `Process._boostrap`. For other version, stdin
             # should be closed.
             is_std = (fd in ["f1", "f2"])
-            if sys.version_info[:2] < (3, 3):
-                if sys.platform != "darwin":
-                    is_std |= (fd == "f0" and name == "n/dev/null")
-                else:
-                    is_std |= (name == "n/dev/null")
 
             # Check if fd is a pipe
             is_pipe = (t in ["tPIPE", "tFIFO"])
@@ -560,11 +522,6 @@ class TestLokyBackend:
 
         return named_sem
 
-    @pytest.mark.skipif(
-        platform.python_implementation() == "PyPy" and
-        sys.version_info[:3] <= (3, 5, 3),
-        reason="early PyPy versions leak a file descriptor, see "
-               "https://bitbucket.org/pypy/pypy/issues/3021")
     def test_sync_object_handling(self):
         """Check the correct handling of semaphores and pipes with loky
 
@@ -726,7 +683,6 @@ class TestLokyBackend:
 
 
 def wait_for_handle(handle, timeout):
-    from loky.backend.compat import wait
     if timeout is not None and timeout < 0.0:
         timeout = None
     return wait([handle], timeout)
@@ -766,12 +722,7 @@ def test_recursive_terminate(use_psutil):
 
 
 def _test_default_subcontext(queue):
-    if sys.version_info >= (3, 3):
-        start_method = mp.get_start_method()
-    else:
-        from loky.backend.context import _DEFAULT_START_METHOD
-        start_method = _DEFAULT_START_METHOD
-
+    start_method = mp.get_start_method()
     queue.put(start_method)
 
 

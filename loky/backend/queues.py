@@ -14,16 +14,12 @@ import sys
 import errno
 import weakref
 import threading
-
 from multiprocessing import util
-from multiprocessing import connection
-from multiprocessing.synchronize import SEM_VALUE_MAX
-from multiprocessing.queues import Full
-from multiprocessing.queues import _sentinel, Queue as mp_Queue
-from multiprocessing.queues import SimpleQueue as mp_SimpleQueue
+from multiprocessing.queues import (Full, _sentinel, Queue as mp_Queue,
+                                    SimpleQueue as mp_SimpleQueue)
+from multiprocessing.context import assert_spawning
 
-from .reduction import loads, dumps
-from .context import assert_spawning, get_context
+from .reduction import dumps
 
 
 __all__ = ['Queue', 'SimpleQueue', 'Full']
@@ -32,33 +28,7 @@ __all__ = ['Queue', 'SimpleQueue', 'Full']
 class Queue(mp_Queue):
 
     def __init__(self, maxsize=0, reducers=None, ctx=None):
-
-        if sys.version_info[:2] >= (3, 4):
-            super().__init__(maxsize=maxsize, ctx=ctx)
-        else:
-            if maxsize <= 0:
-                # Can raise ImportError (see issues #3770 and #23400)
-                maxsize = SEM_VALUE_MAX
-            if ctx is None:
-                ctx = get_context()
-            self._maxsize = maxsize
-            self._reader, self._writer = connection.Pipe(duplex=False)
-            self._rlock = ctx.Lock()
-            self._opid = os.getpid()
-            if sys.platform == 'win32':
-                self._wlock = None
-            else:
-                self._wlock = ctx.Lock()
-            self._sem = ctx.BoundedSemaphore(maxsize)
-
-            # For use by concurrent.futures
-            self._ignore_epipe = False
-
-            self._after_fork()
-
-            if sys.platform != 'win32':
-                util.register_after_fork(self, Queue._after_fork)
-
+        super().__init__(maxsize=maxsize, ctx=ctx)
         self._reducers = reducers
 
     # Use custom queue set/get state to be able to reduce the custom reducers
@@ -133,7 +103,7 @@ class Queue(mp_Queue):
         else:
             wacquire = None
 
-        while 1:
+        while True:
             try:
                 nacquire()
                 try:
@@ -142,7 +112,7 @@ class Queue(mp_Queue):
                 finally:
                     nrelease()
                 try:
-                    while 1:
+                    while True:
                         obj = bpopleft()
                         if obj is sentinel:
                             util.debug('feeder thread got sentinel -- exiting')
@@ -185,29 +155,11 @@ class Queue(mp_Queue):
         import traceback
         traceback.print_exc()
 
-    if sys.version_info[:2] < (3, 4):
-        # Compat for python2.7/3.3 that use _send instead of _send_bytes
-        def _after_fork(self):
-            super(Queue, self)._after_fork()
-            self._send_bytes = self._writer.send_bytes
-
 
 class SimpleQueue(mp_SimpleQueue):
 
     def __init__(self, reducers=None, ctx=None):
-        if sys.version_info[:2] >= (3, 4):
-            super().__init__(ctx=ctx)
-        else:
-            # Use the context to create the sync objects for python2.7/3.3
-            if ctx is None:
-                ctx = get_context()
-            self._reader, self._writer = connection.Pipe(duplex=False)
-            self._rlock = ctx.Lock()
-            self._poll = self._reader.poll
-            if sys.platform == 'win32':
-                self._wlock = None
-            else:
-                self._wlock = ctx.Lock()
+        super().__init__(ctx=ctx)
 
         # Add possiblity to use custom reducers
         self._reducers = reducers
@@ -225,15 +177,6 @@ class SimpleQueue(mp_SimpleQueue):
     def __setstate__(self, state):
         (self._reader, self._writer, self._reducers, self._rlock,
          self._wlock) = state
-
-    if sys.version_info[:2] < (3, 4):
-        # For python2.7/3.3, overload get to avoid creating deadlocks with
-        # unpickling errors.
-        def get(self):
-            with self._rlock:
-                res = self._reader.recv_bytes()
-            # unserialize the data after having released the lock
-            return loads(res)
 
     # Overload put to use our customizable reducer
     def put(self, obj):

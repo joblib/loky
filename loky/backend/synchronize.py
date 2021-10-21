@@ -16,10 +16,9 @@ import tempfile
 import threading
 import _multiprocessing
 from time import time as _time
-from multiprocessing import process
-from multiprocessing import util
+from multiprocessing import process, util
+from multiprocessing.context import assert_spawning
 
-from .context import assert_spawning
 from . import resource_tracker
 
 __all__ = [
@@ -29,20 +28,13 @@ __all__ = [
 # raise ImportError for platforms lacking a working sem_open implementation.
 # See issue 3770
 try:
-    if sys.version_info < (3, 4):
-        from .semlock import SemLock as _SemLock
-        from .semlock import sem_unlink
-    else:
-        from _multiprocessing import SemLock as _SemLock
-        from _multiprocessing import sem_unlink
+    from _multiprocessing import SemLock as _SemLock
+    from _multiprocessing import sem_unlink
 except (ImportError):
     raise ImportError("This platform lacks a functioning sem_open" +
                       " implementation, therefore, the required" +
                       " synchronization primitives needed will not" +
                       " function, see issue 3770.")
-
-if sys.version_info[:2] < (3, 3):
-    FileExistsError = OSError
 
 #
 # Constants
@@ -56,7 +48,7 @@ SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 # Base class for semaphores and mutexes; wraps `_multiprocessing.SemLock`
 #
 
-class SemLock(object):
+class SemLock:
 
     _rand = tempfile._RandomNameSequence()
 
@@ -177,7 +169,7 @@ class BoundedSemaphore(Semaphore):
 class Lock(SemLock):
 
     def __init__(self):
-        super(Lock, self).__init__(SEMAPHORE, 1, 1)
+        super().__init__(SEMAPHORE, 1, 1)
 
     def __repr__(self):
         try:
@@ -203,7 +195,7 @@ class Lock(SemLock):
 class RLock(SemLock):
 
     def __init__(self):
-        super(RLock, self).__init__(RECURSIVE_MUTEX, 1, 1)
+        super().__init__(RECURSIVE_MUTEX, 1, 1)
 
     def __repr__(self):
         try:
@@ -227,7 +219,7 @@ class RLock(SemLock):
 # Condition variable
 #
 
-class Condition(object):
+class Condition:
 
     def __init__(self, lock=None):
         self._lock = lock or RLock()
@@ -351,7 +343,7 @@ class Condition(object):
 # Event
 #
 
-class Event(object):
+class Event:
 
     def __init__(self):
         self._cond = Condition(Lock())

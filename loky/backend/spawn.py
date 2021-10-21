@@ -18,7 +18,7 @@ if sys.platform != 'win32':
     WINSERVICE = False
 else:
     import msvcrt
-    from .reduction import duplicate
+    from multiprocessing.reduction import duplicate
     WINEXE = (sys.platform == 'win32' and getattr(sys, 'frozen', False))
     WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
 

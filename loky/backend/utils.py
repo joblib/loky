@@ -154,14 +154,7 @@ def _get_exitcode_name(exitcode):
     if exitcode < 0:
         try:
             import signal
-            if sys.version_info > (3, 5):
-                return signal.Signals(-exitcode).name
-
-            # construct an inverse lookup table
-            for v, k in signal.__dict__.items():
-                if (v.startswith('SIG') and not v.startswith('SIG_') and
-                        k == -exitcode):
-                        return v
+            return signal.Signals(-exitcode).name
         except ValueError:
             return "UNKNOWN"
     elif exitcode != 255:
