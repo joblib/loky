@@ -20,8 +20,7 @@ class LokyManager(SyncManager):
         '''Spawn a server process for this manager object'''
         assert self._state.value == State.INITIAL
 
-        if (initializer is not None
-                and not hasattr(initializer, '__call__')):
+        if not callable(initializer):
             raise TypeError('initializer must be a callable')
 
         # pipe over which we will retrieve address of server

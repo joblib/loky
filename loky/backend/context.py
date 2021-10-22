@@ -38,18 +38,15 @@ def get_context(method=None):
     # Try to overload the default context
     method = method or _DEFAULT_START_METHOD or "loky"
     if method == "fork":
-        # If 'fork' is explicitly requested, warn user about potential
-        # issues.
+        # If 'fork' is explicitly requested, warn user about potential issues.
         warnings.warn("`fork` start method should not be used with "
                       "`loky` as it does not respect POSIX. Try using "
                       "`spawn` or `loky` instead.", UserWarning)
     try:
-        context = mp_get_context(method)
+        return mp_get_context(method)
     except ValueError:
         raise ValueError(f"Unknown context '{method}'. "
                          f"Value should be in {START_METHODS}.")
-
-    return context
 
 
 def set_start_method(method, force=False):
@@ -89,39 +86,34 @@ def cpu_count(only_physical_cores=False):
 
     It is also always larger or equal to 1.
     """
-    # TODO: use os.cpu_count when dropping python 2 support
-    try:
-        cpu_count_mp = mp.cpu_count()
-    except NotImplementedError:
-        cpu_count_mp = 1
+    cpu_count_mp = os.cpu_count() or 1
 
     cpu_count_user = _cpu_count_user(cpu_count_mp)
     aggregate_cpu_count = min(cpu_count_mp, cpu_count_user)
 
-    if only_physical_cores:
-        cpu_count_physical, exception = _count_physical_cores()
-        if cpu_count_user < cpu_count_mp:
-            # Respect user setting
-            cpu_count = max(cpu_count_user, 1)
-        elif cpu_count_physical == "not found":
-            # Fallback to default behavior
-            if exception is not None:
-                # warns only the first time
-                warnings.warn(
-                    "Could not find the number of physical cores for the "
-                    "following reason:\n" + str(exception) + "\n"
-                    "Returning the number of logical cores instead. You can "
-                    "silence this warning by setting LOKY_MAX_CPU_COUNT to "
-                    "the number of cores you want to use.")
-                traceback.print_tb(exception.__traceback__)
+    if not only_physical_cores:
+        return max(aggregate_cpu_count, 1)
 
-            cpu_count = max(aggregate_cpu_count, 1)
-        else:
-            return cpu_count_physical
-    else:
-        cpu_count = max(aggregate_cpu_count, 1)
+    if cpu_count_user < cpu_count_mp:
+        # Respect user setting
+        return max(cpu_count_user, 1)
 
-    return cpu_count
+    cpu_count_physical, exception = _count_physical_cores()
+    if cpu_count_physical != "not found":
+        return cpu_count_physical
+
+    # Fallback to default behavior
+    if exception is not None:
+        # warns only the first time
+        warnings.warn(
+            "Could not find the number of physical cores for the "
+            f"following reason:\n{exception}\n"
+            "Returning the number of logical cores instead. You can "
+            "silence this warning by setting LOKY_MAX_CPU_COUNT to "
+            "the number of cores you want to use.")
+        traceback.print_tb(exception.__traceback__)
+
+    return max(aggregate_cpu_count, 1)
 
 
 def _cpu_count_user(cpu_count_mp):

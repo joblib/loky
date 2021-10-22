@@ -712,8 +712,8 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # Ensure that loky.Future are compatible with concurrent.futures
         # (see #155)
         assert isinstance(f, concurrent.futures.Future)
-        (done, running) = concurrent.futures.wait([f], timeout=15)
-        assert len(running) == 0
+        _, running = concurrent.futures.wait([f], timeout=15)
+        assert not running
 
     thread_configurations = [
         ('constant', 'clean_start'),

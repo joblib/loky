@@ -826,9 +826,8 @@ _system_limited = None
 
 def _check_system_limits():
     global _system_limits_checked, _system_limited
-    if _system_limits_checked:
-        if _system_limited:
-            raise NotImplementedError(_system_limited)
+    if _system_limits_checked and _system_limited:
+        raise NotImplementedError(_system_limited)
     _system_limits_checked = True
     try:
         nsems_max = os.sysconf("SC_SEM_NSEMS_MAX")

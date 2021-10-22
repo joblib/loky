@@ -70,7 +70,7 @@ def get_preparation_data(name, init_main_module=True):
     # Make sure to pass the information if the multiprocessing logger is active
     if util._logger is not None:
         d['log_level'] = util._logger.getEffectiveLevel()
-        if len(util._logger.handlers) > 0:
+        if util._logger.handlers:
             h = util._logger.handlers[0]
             d['log_fmt'] = h.formatter._fmt
 

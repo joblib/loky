@@ -75,7 +75,7 @@ class TestLokyBackend:
         assert current.is_alive()
         assert not current.daemon
         assert isinstance(authkey, bytes)
-        assert len(authkey) > 0
+        assert authkey
         assert current.ident == os.getpid()
         assert current.exitcode is None
 
@@ -515,7 +515,7 @@ class TestLokyBackend:
 
         # assert that the writable part of the Pipe (not passed to child),
         # have been properly closed.
-        assert len(set(f"f{w}").intersection(lines)) == 0
+        assert not set(f"f{w}").intersection(lines)
 
         return named_sem
 

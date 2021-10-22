@@ -210,14 +210,14 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
     def _wait_job_completion(self):
         """Wait for the cache to be empty before resizing the pool."""
         # Issue a warning to the user about the bad effect of this usage.
-        if len(self._pending_work_items) > 0:
+        if self._pending_work_items:
             warnings.warn("Trying to resize an executor with running jobs: "
                           "waiting for jobs completion before resizing.",
                           UserWarning)
             mp.util.debug(f"Executor {self.executor_id} waiting for jobs "
                           "completion before resizing")
         # Wait for the completion of the jobs
-        while len(self._pending_work_items) > 0:
+        while self._pending_work_items:
             time.sleep(1e-3)
 
     def _setup_queues(self, job_reducers, result_reducers):

@@ -118,6 +118,6 @@ class TestTimeoutExecutor:
 
         # The warning detection is unreliable on pypy
         if not hasattr(sys, "pypy_version_info"):
-            assert len(record) > 0, "No warnings was emitted."
+            assert record, "No warnings was emitted."
             msg = record[0].message.args[0]
             assert 'A worker stopped while some jobs' in msg

@@ -84,7 +84,7 @@ def _check_subprocesses_number(executor, expected_process_number=None,
             # psutil even though it have been terminated. Wait for the system
             # clean up in this case.
             for _ in range(patience):
-                if len(_running_children_with_cmdline(psutil.Process())) == 0:
+                if not _running_children_with_cmdline(psutil.Process()):
                     break
                 time.sleep(.1)
             else:
@@ -174,7 +174,7 @@ class ExecutorMixin:
             time.sleep(sleep_duration)
             p = psutil.Process()
             workers = _running_children_with_cmdline(p)
-            if len(workers) == 0:
+            if not workers:
                 return
 
         # Patience exhausted: log the remaining workers command line and
