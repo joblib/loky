@@ -16,11 +16,11 @@ import tempfile
 import threading
 import _multiprocessing
 from time import time as _time
+from multiprocessing import process
+from multiprocessing import util
 
 from .context import assert_spawning
 from . import resource_tracker
-from multiprocessing import process
-from multiprocessing import util
 
 __all__ = [
     'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event'

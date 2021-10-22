@@ -8,10 +8,10 @@ import sys
 import signal
 import pickle
 from io import BytesIO
+from multiprocessing import util, process
 
 from . import reduction, spawn
 from .context import get_spawning_popen, set_spawning_popen
-from multiprocessing import util, process
 
 if sys.version_info[:2] < (3, 3):
     ProcessLookupError = OSError
@@ -120,7 +120,6 @@ if sys.platform != "win32":
                         raise
 
         def _launch(self, process_obj):
-
             tracker_fd = resource_tracker._resource_tracker.getfd()
 
             fp = BytesIO()

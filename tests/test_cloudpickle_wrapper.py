@@ -4,9 +4,9 @@ import pytest
 import io
 from pickle import loads
 from tempfile import mkstemp
+
 from loky import set_loky_pickler
 from loky.backend.reduction import get_loky_pickler
-
 
 from .utils import check_subprocess_call
 

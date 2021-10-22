@@ -121,7 +121,7 @@ html_sidebars = {
     #    'relations.html',  # needs 'show_related': True theme option to display
     #    'searchbox.html',
     #    'donate.html',
-   # ]
+    # ]
 }
 
 
@@ -203,4 +203,3 @@ sphinx_gallery_conf = {
 }
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
-

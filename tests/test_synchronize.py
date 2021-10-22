@@ -6,6 +6,7 @@ import signal
 import threading
 
 from loky.backend import get_context
+
 from .utils import TimingWrapper
 
 loky_context = get_context("loky")

@@ -45,9 +45,9 @@ import sys
 import signal
 import warnings
 import threading
+from multiprocessing import util
 
 from . import spawn
-from multiprocessing import util
 
 if sys.platform == "win32":
     from .compat_win32 import _winapi

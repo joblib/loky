@@ -4,6 +4,7 @@ import pytest
 import threading
 from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
                         FINISHED, Future)
+
 from .utils import captured_stderr
 
 if sys.version_info[:2] < (3, 3):

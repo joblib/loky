@@ -19,7 +19,6 @@ import traceback
 import warnings
 import multiprocessing as mp
 
-
 from .process import LokyProcess, LokyInitMainProcess
 
 START_METHODS = ['loky', 'loky_init_main']
@@ -126,7 +125,7 @@ def cpu_count(only_physical_cores=False):
     any other way such as: process affinity, restricting CFS scheduler policy
     or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
     cores is not found, return the number of logical cores.
- 
+
     It is also always larger or equal to 1.
     """
     # TODO: use os.cpu_count when dropping python 2 support
@@ -249,14 +248,14 @@ def _count_physical_cores():
         if cpu_count_physical < 1:
             raise ValueError(
                 "found {} physical cores < 1".format(cpu_count_physical))
-        
+
     except Exception as e:
         exception = e
         cpu_count_physical = "not found"
 
     # Put the result in cache
     physical_cores_cache = cpu_count_physical
-    
+
     return cpu_count_physical, exception
 
 

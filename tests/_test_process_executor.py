@@ -385,7 +385,7 @@ class ExecutorShutdownTest:
         code = code.format(executor_type=self.executor_type.__name__,
                            start_method=self.context.get_start_method())
         stdout, stderr = check_subprocess_call(
-                [sys.executable, "-c", code], timeout=55)
+            [sys.executable, "-c", code], timeout=55)
 
         # On OSX, remove UserWarning for broken semaphores
         if sys.platform == "darwin":
@@ -595,7 +595,7 @@ class ExecutorTest:
         assert 16 == future.result()
 
     def test_map(self):
-        assert list(self.executor.map(pow, range(10), range(10))) ==\
+        assert list(self.executor.map(pow, range(10), range(10))) == \
             list(map(pow, range(10), range(10)))
 
     def test_map_exception(self):

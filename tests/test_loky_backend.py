@@ -15,8 +15,8 @@ from loky.backend.compat import wait
 from loky.backend.context import START_METHODS
 from loky.backend.utils import recursive_terminate
 
-from .utils import TimingWrapper, check_subprocess_call
-from .utils import with_parallel_sum, _run_openmp_parallel_sum
+from .utils import (TimingWrapper, check_subprocess_call,
+                    with_parallel_sum, _run_openmp_parallel_sum)
 
 if sys.version_info < (3, 3):
     FileNotFoundError = NameError

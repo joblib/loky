@@ -11,6 +11,7 @@
 
 import multiprocessing as mp
 from multiprocessing.managers import SyncManager, State
+
 from .process import LokyProcess as Process
 
 

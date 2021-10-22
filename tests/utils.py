@@ -8,7 +8,9 @@ import threading
 import subprocess
 import contextlib
 from tempfile import mkstemp, mkdtemp, NamedTemporaryFile, _RandomNameSequence
+
 from loky.backend import resource_tracker
+
 if sys.version_info < (3, 4):
     from loky.backend.semlock import SemLock as _SemLock
     from loky.backend.semlock import sem_unlink
@@ -20,7 +22,6 @@ try:
     FileNotFoundError = FileNotFoundError
 except NameError:  # FileNotFoundError is Python 3-only
     from loky.backend.semlock import FileNotFoundError
-
 
 _rand_name = _RandomNameSequence()
 
