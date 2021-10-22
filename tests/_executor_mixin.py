@@ -55,7 +55,7 @@ def _running_children_with_cmdline(p):
     forkservers = [c for c, cmdline in all_children
                    if u'multiprocessing.forkserver' in cmdline]
     for fs in forkservers:
-        workers.extend(_direct_children_with_cmdline(fs))
+        workers += _direct_children_with_cmdline(fs)
     return workers
 
 
@@ -64,7 +64,7 @@ def _check_subprocesses_number(executor, expected_process_number=None,
     # Wait for terminating processes to disappear
     children_cmdlines = _running_children_with_cmdline(psutil.Process())
     pids_cmdlines = [(c.pid, cmdline) for c, cmdline in children_cmdlines]
-    children_pids = set(pid for pid, _ in pids_cmdlines)
+    children_pids = {pid for pid, _ in pids_cmdlines}
     if executor is not None:
         worker_pids = set(executor._processes.keys())
     else:

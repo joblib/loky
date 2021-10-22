@@ -126,8 +126,7 @@ class TestResourceTracker:
             time.sleep(10)
         '''
         cmd = cmd.format(rtype=rtype, parent_pid=os.getpid())
-        env = os.environ.copy()
-        env['PYTHONPATH'] = os.path.dirname(__file__)
+        env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
         p = subprocess.Popen([sys.executable, '-c', cmd],
                              stderr=subprocess.PIPE,
                              stdout=subprocess.PIPE,
@@ -222,8 +221,7 @@ class TestResourceTracker:
                 pass
         '''
 
-        env = os.environ.copy()
-        env['PYTHONPATH'] = os.path.dirname(__file__)
+        env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
         p = subprocess.Popen(
             [sys.executable, '-c', cmd.format(rtype=rtype)],
             stderr=subprocess.PIPE,

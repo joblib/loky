@@ -322,7 +322,7 @@ class ExecutorShutdownTest:
             self.executor.submit(lambda x: x, 42)
 
         # Check that even after shutdown, all futures are still running
-        assert all(f._state in (PENDING, RUNNING) for f in res)
+        assert {f._state for f in res} <= {PENDING, RUNNING}
 
         # Let the futures finish and make sure that all the executor resources
         # were properly cleaned by the shutdown process
@@ -334,7 +334,7 @@ class ExecutorShutdownTest:
 
         # Make sure the results were all computed before the executor
         # resources were freed.
-        assert all([f.result() == v for f, v in zip(res, range(-5, 5))])
+        assert [f.result() for f in res] == [*range(-5, 5)]
 
     def test_shutdown_deadlock_pickle(self):
         # Test that the pool calling shutdown with wait=False does not cause
@@ -575,7 +575,7 @@ class AsCompletedTests:
         # Issue 20367. Duplicate futures should not raise exceptions or give
         # duplicate responses.
         future1 = self.executor.submit(time.sleep, .1)
-        completed = [f for f in futures.as_completed([future1, future1])]
+        completed = list(futures.as_completed([future1, future1]))
         assert len(completed) == 1
 
 
@@ -733,11 +733,9 @@ class ExecutorTest:
     def test_thread_safety(self):
         # Check that our process-pool executor can be shared to schedule work
         # by concurrent threads
-        threads = []
         results = [None] * 10
-        for i in range(len(results)):
-            threads.append(Thread(target=self._test_thread_safety,
-                                  args=(i, results)))
+        threads = [Thread(target=self._test_thread_safety, args=(i, results))
+                   for i in range(len(results))]
         for t in threads:
             t.start()
         for t in threads:
@@ -921,11 +919,9 @@ class ExecutorTest:
             return os.getpid(), leaked_size
 
         with pytest.warns(UserWarning, match='memory leak'):
-            futures = []
-            for i in range(300):
-                # Total run time should be 3s which is way over the 1s cooldown
-                # period between two consecutive memory checks in the worker.
-                futures.append(executor.submit(_leak_some_memory))
+            # Total run time should be 3s which is way over the 1s cooldown
+            # period between two consecutive memory checks in the worker.
+            futures = [executor.submit(_leak_some_memory) for _ in range(300)]
 
             executor.shutdown(wait=True)
             results = [f.result() for f in futures]
@@ -965,11 +961,10 @@ class ExecutorTest:
             os._loky_cyclic_weakrefs.append(weakref.ref(a))
             return sum(1 for r in os._loky_cyclic_weakrefs if r() is not None)
 
-        futures = []
-        for i in range(300):
-            # Total run time should be 3s which is way over the 1s cooldown
-            # period between two consecutive memory checks in the worker.
-            futures.append(executor.submit(_create_cyclic_reference))
+        # Total run time should be 3s which is way over the 1s cooldown
+        # period between two consecutive memory checks in the worker.
+        futures = [executor.submit(_create_cyclic_reference)
+                   for _ in range(300)]
 
         executor.shutdown(wait=True)
 

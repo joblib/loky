@@ -428,12 +428,9 @@ class TestLokyBackend:
         assert p.exitcode == expected_code
 
     @classmethod
-    def _high_number_Pipe(cls):
+    def _high_number_pipe(cls):
         """Create a Pipe with 2 high numbered file descriptors"""
-        fds = []
-        for _ in range(50):
-            r, w = os.pipe()
-            fds += [r, w]
+        fds = [fd for _ in range(50) for fd in os.pipe()]
         r, w = cls.Pipe(duplex=False)
         for fd in fds:
             os.close(fd)
@@ -538,7 +535,7 @@ class TestLokyBackend:
 
         # TODO generate high numbered mp.Pipe directly
         # -> can be used on windows
-        r, w = self._high_number_Pipe()
+        r, w = self._high_number_pipe()
 
         tmp_fname = "/tmp/foobar" if sys.platform != "win32" else ".foobar"
         with open(tmp_fname, "w"):

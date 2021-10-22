@@ -112,7 +112,7 @@ def set_loky_pickler(loky_pickler=None):
                           " '{}', as required by the env variable LOKY_PICKLER"
                           " or the function set_loky_pickler."
                           .format(loky_pickler))
-            e.args = (e.args[0] + extra_info,) + e.args[1:]
+            e.args = (e.args[0] + extra_info), *e.args[1:]
             e.msg = e.args[0]
             raise e
 

@@ -357,7 +357,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         res = executor.map(sleep_then_check_pids_exist,
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
-        assert all(list(res))
+        assert all(res)
         with pytest.raises(TerminatedWorkerError,
                            match=filter_match(r"SIGKILL")):
             res = executor.map(kill_friend, pids[::-1])

@@ -30,7 +30,7 @@ __all__ = [
 try:
     from _multiprocessing import SemLock as _SemLock
     from _multiprocessing import sem_unlink
-except (ImportError):
+except ImportError:
     raise ImportError("This platform lacks a functioning sem_open" +
                       " implementation, therefore, the required" +
                       " synchronization primitives needed will not" +
@@ -40,7 +40,7 @@ except (ImportError):
 # Constants
 #
 
-RECURSIVE_MUTEX, SEMAPHORE = list(range(2))
+RECURSIVE_MUTEX, SEMAPHORE = range(2)
 SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 
 

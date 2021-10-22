@@ -132,8 +132,7 @@ class ResourceTracker:
                 fds_to_pass.append(r)
                 # process will out live us, so no need to wait on pid
                 exe = spawn.get_executable()
-                args = [exe] + util._args_from_interpreter_flags()
-                args += ['-c', cmd]
+                args = [exe, *util._args_from_interpreter_flags(), '-c', cmd]
                 util.debug("launching resource tracker: {}".format(args))
                 # bpo-33613: Register a signal mask that will block the
                 # signals.  This signal mask will be inherited by the child
@@ -225,7 +224,7 @@ def main(fd, verbose=0):
     if verbose:
         util.debug("Main resource tracker is running")
 
-    registry = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
+    registry = {rtype: {} for rtype in _CLEANUP_FUNCS.keys()}
     try:
         # keep track of registered/unregistered resources
         if sys.platform == "win32":
@@ -347,10 +346,8 @@ def spawnv_passfds(path, args, passfds):
         errpipe_read, errpipe_write = os.pipe()
         try:
             from .reduction import _mk_inheritable
-            _pass = []
-            for fd in passfds:
-                _pass += [_mk_inheritable(fd)]
             from .fork_exec import fork_exec
+            _pass = [_mk_inheritable(fd) for fd in passfds]
             return fork_exec(args, _pass)
         finally:
             os.close(errpipe_read)

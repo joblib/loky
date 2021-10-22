@@ -62,8 +62,7 @@ class Popen(_Popen):
         python_exe = spawn.get_executable()
 
         # copy the environment variables to set in the child process
-        child_env = os.environ.copy()
-        child_env.update(process_obj.env)
+        child_env = {**os.environ, **process_obj.env}
 
         # bpo-35797: When running in a venv, we bypass the redirect
         # executor and launch our base Python.
@@ -128,8 +127,8 @@ def get_command_line(pipe_handle, **kwds):
     else:
         prog = 'from loky.backend.popen_loky_win32 import main; main()'
         opts = util._args_from_interpreter_flags()
-        return [spawn.get_executable()] + opts + [
-            '-c', prog, '--multiprocessing-fork', pipe_handle]
+        return [spawn.get_executable(), *opts,
+                '-c', prog, '--multiprocessing-fork', pipe_handle]
 
 
 def is_forking(argv):

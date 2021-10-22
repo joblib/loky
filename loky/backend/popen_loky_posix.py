@@ -117,7 +117,7 @@ if sys.platform != "win32":
                                str(reduction._mk_inheritable(child_r))]
                 reduction._mk_inheritable(child_w)
                 reduction._mk_inheritable(tracker_fd)
-                self._fds.extend([child_r, child_w, tracker_fd])
+                self._fds += [child_r, child_w, tracker_fd]
                 if sys.version_info >= (3, 8) and os.name == 'posix':
                     mp_tracker_fd = prep_data['mp_tracker_args']['fd']
                     self.duplicate_for_child(mp_tracker_fd)
