@@ -91,11 +91,11 @@ class TestResourceTracker:
             p.stderr.close()
             p.stdout.close()
 
-            pattern = "decremented refcount of file %s" % filename
+            pattern = f"decremented refcount of file {filename}"
             assert pattern in err
             assert "leaked" not in err
 
-            pattern = "KeyError: '%s'" % filename
+            pattern = f"KeyError: '{filename}'"
             assert pattern not in err
 
         finally:
@@ -111,7 +111,7 @@ class TestResourceTracker:
             pytest.skip("no semlock on windows")
 
         import subprocess
-        cmd = '''if 1:
+        cmd = f'''if 1:
             import time, os, tempfile, sys
             from loky.backend import resource_tracker
             from utils import create_resource
@@ -121,11 +121,10 @@ class TestResourceTracker:
                 resource_tracker.register(rname, "{rtype}")
                 # give the resource_tracker time to register the new resource
                 time.sleep(0.5)
-                sys.stdout.write(rname + "\\n")
+                sys.stdout.write(f"{{rname}}\\n")
                 sys.stdout.flush()
             time.sleep(10)
         '''
-        cmd = cmd.format(rtype=rtype, parent_pid=os.getpid())
         env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
         p = subprocess.Popen([sys.executable, '-c', cmd],
                              stderr=subprocess.PIPE,
@@ -153,8 +152,7 @@ class TestResourceTracker:
         p.stderr.close()
         p.stdout.close()
 
-        expected = ('resource_tracker: There appear to be 2 leaked {}'.format(
-                    rtype))
+        expected = f'resource_tracker: There appear to be 2 leaked {rtype}'
         assert re.search(expected, err) is not None
 
         # resource 1 is still registered, but was destroyed externally: the
@@ -162,13 +160,12 @@ class TestResourceTracker:
         if sys.platform == "win32":
             errno_map = {'file': 2, 'folder': 3}
             expected = (
-                "resource_tracker: %s: (WindowsError\\((%d)|"
-                "FileNotFoundError)" % (re.escape(name1), errno_map[rtype])
+                f"resource_tracker: {re.escape(name1)}: "
+                f"(WindowsError\\(({errno_map[rtype]})|FileNotFoundError)"
             )
         else:
-            expected = ("resource_tracker: %s: (OSError\\(%d|"
-                        "FileNotFoundError)" % (re.escape(name1),
-                                                errno.ENOENT))
+            expected = (f"resource_tracker: {re.escape(name1)}: "
+                        f"(OSError\\({errno.ENOENT}|FileNotFoundError)")
         assert re.search(expected, err) is not None
 
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
@@ -176,7 +173,7 @@ class TestResourceTracker:
         if sys.platform == "win32" and rtype == "semlock":
             pytest.skip("no semlock on windows")
 
-        cmd = '''if 1:
+        cmd = f'''if 1:
         import os
         import tempfile
         import time
@@ -211,7 +208,7 @@ class TestResourceTracker:
                     break
                 time.sleep(.1)
             else:
-                raise AssertionError("%s was not unlinked in time"  % name)
+                raise AssertionError(f"{{name}} was not unlinked in time")
         finally:
             try:
                 if resource_exists(name, "{rtype}"):
@@ -223,7 +220,7 @@ class TestResourceTracker:
 
         env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
         p = subprocess.Popen(
-            [sys.executable, '-c', cmd.format(rtype=rtype)],
+            [sys.executable, '-c', cmd],
             stderr=subprocess.PIPE,
             stdout=subprocess.PIPE,
             env=env

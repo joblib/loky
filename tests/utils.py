@@ -26,7 +26,7 @@ def create_resource(rtype):
         return mkdtemp(dir=os.getcwd())
 
     elif rtype == "semlock":
-        name = "test-loky-%i-%s" % (os.getpid(), next(_rand_name))
+        name = f"test-loky-{os.getpid()}-{next(_rand_name)}"
         _SemLock(1, 1, 1, name, False)
         return name
     elif rtype == "file":
@@ -34,7 +34,7 @@ def create_resource(rtype):
         tmpfile.close()
         return tmpfile.name
     else:
-        raise ValueError("Resource type %s not understood" % rtype)
+        raise ValueError(f"Resource type {rtype} not understood")
 
 
 def resource_exists(name, rtype):
@@ -48,7 +48,7 @@ def resource_exists(name, rtype):
         except OSError:
             return True
     else:
-        raise ValueError("Resource type %s not understood" % rtype)
+        raise ValueError(f"Resource type {rtype} not understood")
 
 
 @contextlib.contextmanager
@@ -124,7 +124,7 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
                             universal_newlines=True)
 
     def kill_process():
-        warnings.warn("Timeout running {}".format(cmd))
+        warnings.warn(f"Timeout running {cmd}")
         proc.kill()
 
     timer = threading.Timer(timeout, kill_process)
@@ -134,26 +134,25 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
         if proc.returncode == -9:
             message = (
-                'Subprocess timeout after {}s.\nStdout:\n{}\n'
-                'Stderr:\n{}').format(timeout, stdout, stderr)
+                f'Subprocess timeout after {timeout}s.\nStdout:\n{stdout}\n'
+                f'Stderr:\n{stderr}')
             raise TimeoutError(message)
         elif proc.returncode != 0:
             message = (
-                'Non-zero return code: {}.\nStdout:\n{}\n'
-                'Stderr:\n{}').format(
-                    proc.returncode, stdout, stderr)
+                f'Non-zero return code: {proc.returncode}.\n'
+                f'Stdout:\n{stdout}\nStderr:\n{stderr}')
             raise ValueError(message)
 
         if (stdout_regex is not None and
                 not re.search(stdout_regex, stdout)):
             raise ValueError(
-                "Unexpected stdout: {!r} does not match:\n{!r}".format(
-                    stdout_regex, stdout))
+                f"Unexpected stdout: {stdout_regex!r} does not match:\n"
+                f"{stdout!r}")
         if (stderr_regex is not None and
                 not re.search(stderr_regex, stderr)):
             raise ValueError(
-                "Unexpected stderr: {!r} does not match:\n{!r}".format(
-                    stderr_regex, stderr))
+                f"Unexpected stdout: {stdout_regex!r} does not match:\n"
+                f"{stdout!r}")
 
         return stdout, stderr
 

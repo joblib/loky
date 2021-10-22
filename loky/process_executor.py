@@ -108,7 +108,7 @@ try:
             gc.collect()
 
         mem_size = Process(pid).memory_info().rss
-        mp.util.debug('psutil return memory size: {}'.format(mem_size))
+        mp.util.debug(f'psutil return memory size: {mem_size}')
         return mem_size
 
 except ImportError:
@@ -185,7 +185,7 @@ def _python_exit():
     _global_shutdown = True
     items = list(_threads_wakeups.items())
     mp.util.debug("Interpreter shutting down. Waking up "
-                  "executor_manager_thread {}".format(items))
+                  f"executor_manager_thread {items}")
     for _, (shutdown_lock, thread_wakeup) in items:
         with shutdown_lock:
             thread_wakeup.wakeup()
@@ -213,7 +213,7 @@ class _RemoteTraceback(Exception):
     """Embed stringification of remote traceback in local traceback
     """
     def __init__(self, tb=None):
-        self.tb = '\n"""\n{}"""'.format(tb)
+        self.tb = f'\n"""\n{tb}"""'
 
     def __str__(self):
         return self.tb
@@ -274,8 +274,8 @@ class _CallItem:
         return self.fn(*self.args, **self.kwargs)
 
     def __repr__(self):
-        return "CallItem({}, {}, {}, {})".format(
-            self.work_id, self.fn, self.args, self.kwargs)
+        return ("CallItem"
+                f"({self.work_id}, {self.fn}, {self.args}, {self.kwargs})")
 
 
 class _SafeQueue(Queue):
@@ -383,15 +383,14 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     _last_memory_leak_check = None
     pid = os.getpid()
 
-    mp.util.debug('Worker started with timeout=%s' % timeout)
+    mp.util.debug(f'Worker started with timeout={timeout}')
     while True:
         try:
             call_item = call_queue.get(block=True, timeout=timeout)
             if call_item is None:
                 mp.util.info("Shutting down worker on sentinel")
         except queue.Empty:
-            mp.util.info("Shutting down worker after timeout %0.3fs"
-                         % timeout)
+            mp.util.info(f"Shutting down worker after timeout {timeout:0.3f}s")
             if processes_management_lock.acquire(block=False):
                 processes_management_lock.release()
                 call_item = None
@@ -632,9 +631,8 @@ class _ExecutorManagerThread(threading.Thread):
                 # In Windows, introspecting terminated workers exitcodes seems
                 # unstable, therefore they are not appended in the exception
                 # message.
-                exit_codes = "\nThe exit codes of the workers are {}".format(
-                    get_exitcodes_terminated_worker(self.processes)
-                )
+                int_codes = get_exitcodes_terminated_worker(self.processes)
+                exit_codes = f"\nThe exit codes of the workers are {int_codes}"
             mp.util.debug('A worker unexpectedly terminated. Workers that '
                           'might have caused the breakage: '
                           + str({p.name: p.exitcode
@@ -645,7 +643,7 @@ class _ExecutorManagerThread(threading.Thread):
                 "terminated. This could be caused by a segmentation fault "
                 "while calling the function or by an excessive memory usage "
                 "causing the Operating System to kill the worker.\n"
-                "{}".format(exit_codes)
+                f"{exit_codes}"
             )
 
         self.thread_wakeup.clear()
@@ -755,8 +753,7 @@ class _ExecutorManagerThread(threading.Thread):
         # nested parallelism.
         while self.processes:
             _, p = self.processes.popitem()
-            mp.util.debug("terminate process {}, reason: {}"
-                          .format(p.name, reason))
+            mp.util.debug(f"terminate process {p.name}, reason: {reason}")
             try:
                 recursive_terminate(p)
             except ProcessLookupError:  # pragma: no cover
@@ -815,7 +812,7 @@ class _ExecutorManagerThread(threading.Thread):
             p.join()
 
         mp.util.debug("executor management thread clean shutdown of worker "
-                      "processes: {}".format(list(self.processes)))
+                      f"processes: {list(self.processes)}")
 
     def get_n_children_alive(self):
         # This is an upper bound on the number of children alive.
@@ -846,8 +843,8 @@ def _check_system_limits():
         # minimum number of semaphores available
         # according to POSIX
         return
-    _system_limited = ("system provides too few semaphores (%d available, "
-                       "256 necessary)" % nsems_max)
+    _system_limited = ("system provides too few semaphores "
+                       f"({nsems_max} available, 256 necessary)")
     raise NotImplementedError(_system_limited)
 
 
@@ -875,8 +872,8 @@ def _check_max_depth(context):
     if 0 < MAX_DEPTH and _CURRENT_DEPTH + 1 > MAX_DEPTH:
         raise LokyRecursionError(
             "Could not spawn extra nested processes at depth superior to "
-            "MAX_DEPTH={}. If this is intendend, you can change this limit "
-            "with the LOKY_MAX_DEPTH environment variable.".format(MAX_DEPTH))
+            f"MAX_DEPTH={MAX_DEPTH}. If this is intendend, you can change "
+            "this limit with the LOKY_MAX_DEPTH environment variable.")
 
 
 class LokyRecursionError(RuntimeError):
@@ -1079,7 +1076,7 @@ class ProcessPoolExecutor(Executor):
             p._worker_exit_lock = worker_exit_lock
             p.start()
             self._processes[p.pid] = p
-        mp.util.debug('Adjust process count : {}'.format(self._processes))
+        mp.util.debug(f'Adjust process count : {self._processes}')
 
     def _ensure_executor_running(self):
         """ensures all workers and management thread are running
@@ -1150,7 +1147,7 @@ class ProcessPoolExecutor(Executor):
         return _chain_from_iterable_of_lists(results)
 
     def shutdown(self, wait=True, kill_workers=False):
-        mp.util.debug('shutting down executor %s' % self)
+        mp.util.debug(f'shutting down executor {self}')
 
         self._flags.flag_as_shutting_down(kill_workers)
         executor_manager_thread = self._executor_manager_thread

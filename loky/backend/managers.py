@@ -34,7 +34,7 @@ class LokyManager(SyncManager):
                   self._serializer, writer, initializer, initargs),
         )
         ident = ':'.join(str(i) for i in self._process._identity)
-        self._process.name = type(self).__name__ + '-' + ident
+        self._process.name = f'{type(self).__name__}-{ident}'
         self._process.start()
 
         # get address of server

@@ -57,7 +57,7 @@ class Popen(_Popen):
         os.close(rfd)
 
         cmd = get_command_line(parent_pid=os.getpid(), pipe_handle=rhandle)
-        cmd = ' '.join('"%s"' % x for x in cmd)
+        cmd = ' '.join(f'"{x}"' for x in cmd)
 
         python_exe = spawn.get_executable()
 
@@ -110,8 +110,8 @@ class Popen(_Popen):
             # wfd.close is called. Thus we can safely ignore it.
             if exc.errno != 22:
                 raise
-            util.debug("While starting {}, ignored a IOError 22"
-                       .format(process_obj._name))
+            util.debug(f"While starting {process_obj._name}, "
+                       "ignored a IOError 22")
 
     def duplicate_for_child(self, handle):
         assert self is get_spawning_popen()

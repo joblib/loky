@@ -79,7 +79,7 @@ def test_cpu_count_cfs_limit():
     # We mount the loky source as /loky inside the container,
     # so it can be imported when running commands under /
     res = check_output([docker_bin, 'run', '--rm', '--cpus', '0.5',
-                        '-v', '%s:/loky' % loky_path,
+                        '-v', f'{loky_path}:/loky',
                         'python:3.6',
                         'python', '-c', cpu_count_cmd.format(args='')])
 
@@ -101,7 +101,7 @@ def test_only_physical_cores_error():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Write bad lscpu program
-        lscpu_path = tmp_dir + '/lscpu'
+        lscpu_path = f'{tmp_dir}/lscpu'
         with open(lscpu_path, 'w') as f:
             f.write("#!/bin/sh\n"
                     "exit(1)")
@@ -109,7 +109,7 @@ def test_only_physical_cores_error():
 
         try:
             old_path = os.environ['PATH']
-            os.environ['PATH'] = tmp_dir + ":" + old_path
+            os.environ['PATH'] = f'{tmp_dir}:{old_path}'
 
             # clear the cache otherwise the warning is not triggered
             import loky.backend.context

@@ -52,7 +52,7 @@ large_list = list(range(1000000))
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
 executor.submit(func_async, 21, large_list).result()
-print("With cloudpickle serialization: {:.3f}s".format(time.time() - t_start))
+print(f"With cloudpickle serialization: {time.time() - t_start:.3f}s")
 
 
 ###############################################################################
@@ -70,7 +70,7 @@ set_loky_pickler('pickle')
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
 executor.submit(id, large_list).result()
-print("With pickle serialization: {:.3f}s".format(time.time() - t_start))
+print(f"With pickle serialization: {time.time() - t_start:.3f}s")
 
 
 ###############################################################################
@@ -105,7 +105,7 @@ def func_async_wrapped(i, *args):
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
 executor.submit(func_async_wrapped, 21, large_list).result()
-print("With default and wrapper: {:.3f}s".format(time.time() - t_start))
+print(f"With default and wrapper: {time.time() - t_start:.3f}s")
 
 
 ###############################################################################

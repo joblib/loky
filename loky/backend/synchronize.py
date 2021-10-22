@@ -73,8 +73,8 @@ class SemLock:
                 kind, value, maxvalue, name, unlink_now
             )
         self.name = name
-        util.debug('created semlock with handle %s and name "%s"'
-                   % (self._semlock.handle, self.name))
+        util.debug('created semlock with handle '
+                   f'{self._semlock.handle} and name "{self.name}"')
 
         self._make_methods()
 
@@ -112,14 +112,14 @@ class SemLock:
 
     def __setstate__(self, state):
         self._semlock = _SemLock._rebuild(*state)
-        util.debug('recreated blocker with handle %r and name "%s"'
-                   % (state[0], state[3]))
+        util.debug('recreated blocker with '
+                   f'handle {state[0]!r} and name "{state[3]}"')
         self._make_methods()
 
     @staticmethod
     def _make_name():
         # OSX does not support long names for semaphores
-        return '/loky-%i-%s' % (os.getpid(), next(SemLock._rand))
+        return f'/loky-{os.getpid()}-{next(SemLock._rand)}'
 
 
 #
@@ -141,7 +141,7 @@ class Semaphore(SemLock):
             value = self._semlock._get_value()
         except Exception:
             value = 'unknown'
-        return '<%s(value=%s)>' % (self.__class__.__name__, value)
+        return f'<{self.__class__.__name__}(value={value})>'
 
 
 #
@@ -158,8 +158,8 @@ class BoundedSemaphore(Semaphore):
             value = self._semlock._get_value()
         except Exception:
             value = 'unknown'
-        return '<%s(value=%s, maxvalue=%s)>' % \
-               (self.__class__.__name__, value, self._semlock.maxvalue)
+        return (f'<{self.__class__.__name__}'
+                f'(value={value}, maxvalue={self._semlock.maxvalue})>')
 
 
 #
@@ -176,7 +176,7 @@ class Lock(SemLock):
             if self._semlock._is_mine():
                 name = process.current_process().name
                 if threading.current_thread().name != 'MainThread':
-                    name += '|' + threading.current_thread().name
+                    name = f'{name}|{threading.current_thread().name}'
             elif self._semlock._get_value() == 1:
                 name = 'None'
             elif self._semlock._count() > 0:
@@ -185,7 +185,7 @@ class Lock(SemLock):
                 name = 'SomeOtherProcess'
         except Exception:
             name = 'unknown'
-        return '<%s(owner=%s)>' % (self.__class__.__name__, name)
+        return f'<{self.__class__.__name__}(owner={name})>'
 
 
 #
@@ -202,7 +202,7 @@ class RLock(SemLock):
             if self._semlock._is_mine():
                 name = process.current_process().name
                 if threading.current_thread().name != 'MainThread':
-                    name += '|' + threading.current_thread().name
+                    name = f'{name}|{threading.current_thread().name}'
                 count = self._semlock._count()
             elif self._semlock._get_value() == 1:
                 name, count = 'None', 0
@@ -212,7 +212,7 @@ class RLock(SemLock):
                 name, count = 'SomeOtherProcess', 'nonzero'
         except Exception:
             name, count = 'unknown', 'unknown'
-        return '<%s(%s, %s)>' % (self.__class__.__name__, name, count)
+        return f'<{self.__class__.__name__}({name}, {count})>'
 
 
 #
@@ -254,8 +254,7 @@ class Condition:
                            self._woken_count._semlock._get_value())
         except Exception:
             num_waiters = 'unknown'
-        return '<%s(%s, %s)>' % (self.__class__.__name__,
-                                 self._lock, num_waiters)
+        return f'<{self.__class__.__name__}({self._lock}, {num_waiters})>'
 
     def wait(self, timeout=None):
         assert self._lock._semlock._is_mine(), \

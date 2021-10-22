@@ -102,10 +102,12 @@ class ExecutorShutdownTest:
         # Free resources to avoid random timeout in CI
         self.executor.shutdown(wait=True, kill_workers=True)
 
-        tempdir = tempfile.mkdtemp(prefix='loky_')
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
+        tempdir = tempfile.mkdtemp(prefix='loky_').replace("\\", "/")
         try:
             n_jobs = 4
-            code = """if True:
+            code = f"""if True:
                 from loky.process_executor import {executor_type}
                 from loky.backend import get_context
                 from tests._test_process_executor import sleep_and_write
@@ -115,8 +117,7 @@ class ExecutorShutdownTest:
                 e.submit(id, 42).result()
 
                 task_ids = list(range(2 * {n_jobs}))
-                filenames = ['{tempdir}/task_{{:02}}.log'.format(i)
-                             for i in task_ids]
+                filenames = [f'{tempdir}/task_{{i:02}}.log' for i in task_ids]
                 e.map(sleep_and_write, [0.1] * 2 * {n_jobs},
                       filenames, task_ids)
 
@@ -124,10 +125,6 @@ class ExecutorShutdownTest:
                 # shutdown main Python interpreter while letting the worker
                 # processes finish in the background.
             """
-            code = code.format(executor_type=self.executor_type.__name__,
-                               start_method=self.context.get_start_method(),
-                               n_jobs=n_jobs,
-                               tempdir=tempdir.replace("\\", "/"))
             _, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
@@ -139,7 +136,7 @@ class ExecutorShutdownTest:
 
             # The workers should have completed their work before the main
             # process exits:
-            expected_filenames = ['task_%02d.log' % i
+            expected_filenames = [f'task_{i:02d}.log'
                                   for i in range(2 * n_jobs)]
 
             # Apparently files can take some time to appear under windows
@@ -367,7 +364,9 @@ class ExecutorShutdownTest:
 
         See https://bugs.python.org/issue39205.
         """
-        code = """if True:
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
+        code = f"""if True:
             from loky.process_executor import {executor_type}
             from loky.backend import get_context
             from tests._test_process_executor import sleep_and_print
@@ -378,8 +377,6 @@ class ExecutorShutdownTest:
             e.submit(sleep_and_print, 1.0, "apple")
             e.shutdown(wait=False)
         """
-        code = code.format(executor_type=self.executor_type.__name__,
-                           start_method=self.context.get_start_method())
         stdout, stderr = check_subprocess_call(
             [sys.executable, "-c", code], timeout=55)
 
@@ -779,8 +776,8 @@ class ExecutorTest:
                 # the recursive callback chains have completed successfully
                 break
             elif patience < 0:
-                raise AssertionError("callback submit chains stalled at: %r"
-                                     % collected)
+                raise AssertionError(
+                    f"callback submit chains stalled at: {collected!r}")
             else:
                 patience -= 1
                 time.sleep(0.01)

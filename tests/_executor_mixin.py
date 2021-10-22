@@ -116,14 +116,14 @@ class ExecutorMixin:
 
     @classmethod
     def setup_class(cls):
-        print("setup class with {}".format(cls.context))
+        print(f"setup class with {cls.context}")
         global _test_event
         if _test_event is None:
             _test_event = cls.context.Event()
 
     @classmethod
     def teardown_class(cls):
-        print("teardown class with {}".format(cls.context))
+        print(f"teardown class with {cls.context}")
         global _test_event
         if _test_event is not None:
             _test_event = None
@@ -184,9 +184,8 @@ class ExecutorMixin:
             print(w.pid, w.status(), end='\n', file=sys.stderr)
             print(cmdline, end='\n\n', file=sys.stderr)
         raise AssertionError(
-            'Expected no more running worker processes but got %d after'
-            ' waiting %0.3fs.'
-            % (len(workers), patience))
+            'Expected no more running worker processes '
+            f'but got {len(workers)} after waiting {patience:0.3f}s.')
 
 
 class ReusableExecutorMixin:

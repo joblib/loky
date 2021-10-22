@@ -80,7 +80,7 @@ from loky import get_reusable_executor
 
 def say_hello(k):
     pid = os.getpid()
-    print("Hello from {} with arg {}".format(pid, k))
+    print(f"Hello from {pid} with arg {k}")
     sleep(.01)
     return pid
 

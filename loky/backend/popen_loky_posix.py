@@ -124,8 +124,8 @@ if sys.platform != "win32":
 
                 from .fork_exec import fork_exec
                 pid = fork_exec(cmd_python, self._fds, env=process_obj.env)
-                util.debug("launched python with pid {} and cmd:\n{}"
-                           .format(pid, cmd_python))
+                util.debug(f"launched python with pid {pid} and cmd:\n"
+                           f"{cmd_python}")
                 self.sentinel = parent_r
 
                 method = 'getbuffer'
@@ -171,7 +171,7 @@ if __name__ == '__main__':
         exitcode = process_obj._bootstrap()
     except Exception:
         print('\n\n' + '-' * 80)
-        print('{} failed with traceback: '.format(args.process_name))
+        print(f'{args.process_name} failed with traceback: ')
         print('-' * 80)
         import traceback
         print(traceback.format_exc())

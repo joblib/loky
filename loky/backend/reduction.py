@@ -109,15 +109,14 @@ def set_loky_pickler(loky_pickler=None):
             loky_pickler_cls = module_pickle.Pickler
         except (ImportError, AttributeError) as e:
             extra_info = ("\nThis error occurred while setting loky_pickler to"
-                          " '{}', as required by the env variable LOKY_PICKLER"
-                          " or the function set_loky_pickler."
-                          .format(loky_pickler))
+                          f" '{loky_pickler}',"
+                          " as required by the env variable LOKY_PICKLER"
+                          " or the function set_loky_pickler.")
             e.args = (e.args[0] + extra_info), *e.args[1:]
             e.msg = e.args[0]
             raise e
 
-    util.debug("Using '{}' for serialization."
-               .format(loky_pickler if loky_pickler else "cloudpickle"))
+    util.debug(f"Using '{loky_pickler}' for serialization.")
 
     class CustomizablePickler(loky_pickler_cls):
         _loky_pickler_cls = loky_pickler_cls
