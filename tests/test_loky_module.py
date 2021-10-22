@@ -99,8 +99,6 @@ def test_only_physical_cores_error():
     if _cpu_count_user(cpu_count_mp) < cpu_count_mp:
         pytest.skip()
 
-    start_dir = os.path.abspath('.')
-
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Write bad lscpu program
         lscpu_path = tmp_dir + '/lscpu'

@@ -719,7 +719,7 @@ class _ExecutorManagerThread(threading.Thread):
         self.executor_flags.flag_as_broken(bpe)
 
         # Mark pending tasks as failed.
-        for work_id, work_item in self.pending_work_items.items():
+        for work_item in self.pending_work_items.values():
             work_item.future.set_exception(bpe)
             # Delete references to object. See issue16284
             del work_item
@@ -781,7 +781,7 @@ class _ExecutorManagerThread(threading.Thread):
         n_sentinels_sent = 0
         while (n_sentinels_sent < n_children_to_stop
                 and self.get_n_children_alive() > 0):
-            for i in range(n_children_to_stop - n_sentinels_sent):
+            for _ in range(n_children_to_stop - n_sentinels_sent):
                 try:
                     self.call_queue.put_nowait(None)
                     n_sentinels_sent += 1

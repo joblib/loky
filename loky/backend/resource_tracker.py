@@ -355,7 +355,7 @@ def spawnv_passfds(path, args, passfds):
     else:
         cmd = ' '.join('"%s"' % x for x in args)
         try:
-            hp, ht, pid, tid = _winapi.CreateProcess(
+            _, ht, pid, _ = _winapi.CreateProcess(
                 path, cmd, None, None, True, 0, None, None, None)
             _winapi.CloseHandle(ht)
         except BaseException:

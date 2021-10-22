@@ -12,9 +12,6 @@ except ImportError:
     psutil = None
 
 
-WIN32 = sys.platform == "win32"
-
-
 def _flag_current_thread_clean_exit():
     """Put a ``_clean_exit`` flag on the current thread"""
     thread = threading.current_thread()
@@ -28,7 +25,7 @@ def recursive_terminate(process, use_psutil=True):
         _recursive_terminate_without_psutil(process)
 
 
-def _recursive_terminate_with_psutil(process, retries=5):
+def _recursive_terminate_with_psutil(process):
     try:
         children = psutil.Process(process.pid).children(recursive=True)
     except psutil.NoSuchProcess:
@@ -51,7 +48,7 @@ def _recursive_terminate_without_psutil(process):
     """
     try:
         _recursive_terminate(process.pid)
-    except OSError as e:
+    except OSError:
         warnings.warn("Failed to kill subprocesses on this platform. Please"
                       "install psutil: https://github.com/giampaolo/psutil")
         # In case we cannot introspect the children, we fall back to the

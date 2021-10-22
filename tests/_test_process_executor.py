@@ -128,7 +128,7 @@ class ExecutorShutdownTest:
                                start_method=self.context.get_start_method(),
                                n_jobs=n_jobs,
                                tempdir=tempdir.replace("\\", "/"))
-            stdout, stderr = check_subprocess_call(
+            _, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
             # On OSX, remove UserWarning for broken semaphores
@@ -144,7 +144,7 @@ class ExecutorShutdownTest:
 
             # Apparently files can take some time to appear under windows
             # on AppVeyor
-            for retry_idx in range(20):
+            for _ in range(20):
                 filenames = sorted(os.listdir(tempdir))
                 if len(filenames) != len(expected_filenames):
                     time.sleep(1)
@@ -631,13 +631,13 @@ class ExecutorTest:
         # https://bugs.python.org/issue39492
         my_object = MyObject()
         collect = threading.Event()
-        _ = weakref.ref(my_object, lambda obj: collect.set())  # noqa
+        _ref = weakref.ref(my_object, lambda obj: collect.set())  # noqa
         # Deliberately discarding the future.
         self.executor.submit(my_object.my_method)
         del my_object
 
         collected = False
-        for i in range(5):
+        for _ in range(5):
             if IS_PYPY:
                 gc.collect()
             collected = collect.wait(timeout=1.0)
@@ -714,7 +714,7 @@ class ExecutorTest:
                 # another
                 time.sleep(0.001)
             submit_futures = [self.executor.submit(time.sleep, 0.0001)
-                              for i in range(20)]
+                              for _ in range(20)]
             for i, f in enumerate(submit_futures):
                 if i % 2 == 0:
                     f.cancel()
@@ -796,9 +796,9 @@ class ExecutorTest:
         except NotImplementedError as e:
             self.skipTest(str(e))
 
-        for i in range(5):
+        for _ in range(5):
             # Trigger worker spawn for lazy executor implementations
-            for result in self.executor.map(id, range(8)):
+            for _ in self.executor.map(id, range(8)):
                 pass
 
             # Check that all workers shutdown (via timeout) when waiting a bit:

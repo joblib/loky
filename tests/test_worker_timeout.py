@@ -76,9 +76,9 @@ class TestTimeoutExecutor:
 
         with pytest.warns(UserWarning,
                           match=r'^A worker stopped while some jobs'):
-            for i in range(5):
+            for _ in range(5):
                 # Trigger worker spawn for lazy executor implementations
-                for result in executor.map(id, range(8)):
+                for _ in executor.map(id, range(8)):
                     pass
 
         executor.shutdown()

@@ -193,7 +193,7 @@ class TestCondition:
         woken = loky_context.Semaphore(0)
 
         # start some threads/processes which will timeout
-        for i in range(3):
+        for _ in range(3):
             p = loky_context.Process(target=self._test_notify,
                                      args=(cond, sleeping, woken, TIMEOUT1))
             p.daemon = True
@@ -205,11 +205,11 @@ class TestCondition:
             t.start()
 
         # wait for them all to sleep
-        for i in range(6):
+        for _ in range(6):
             sleeping.acquire()
 
         # check they have all timed out
-        for i in range(6):
+        for _ in range(6):
             woken.acquire()
         assert_sem_value_equal(woken, 0)
 
@@ -217,7 +217,7 @@ class TestCondition:
         self.check_invariant(cond)
 
         # start some more threads/processes
-        for i in range(3):
+        for _ in range(3):
             p = loky_context.Process(target=self._test_notify,
                                      args=(cond, sleeping, woken))
             p.daemon = True
@@ -229,7 +229,7 @@ class TestCondition:
             t.start()
 
         # wait for them to all sleep
-        for i in range(6):
+        for _ in range(6):
             sleeping.acquire()
 
         # check no process/thread has woken up
@@ -242,7 +242,7 @@ class TestCondition:
         cond.release()
 
         # check they have all woken
-        for i in range(50):
+        for _ in range(50):
             try:
                 if woken.get_value() == 6:
                     break
@@ -292,7 +292,7 @@ class TestCondition:
             assert result
             assert state.get_value() == 1
 
-        for i in range(4):
+        for _ in range(4):
             time.sleep(0.01)
             with cond:
                 state.release()

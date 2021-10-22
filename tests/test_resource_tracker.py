@@ -229,7 +229,7 @@ class TestResourceTracker:
             env=env
         )
         p.wait()
-        out, err = p.communicate()
+        _, err = p.communicate()
         assert p.returncode == 0, err
 
     def check_resource_tracker_death(self, signum, should_die):

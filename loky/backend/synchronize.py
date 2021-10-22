@@ -57,7 +57,7 @@ class SemLock:
         unlink_now = False
         if name is None:
             # Try to find an unused name for the SemLock instance.
-            for i in range(100):
+            for _ in range(100):
                 try:
                     self._semlock = _SemLock(
                         kind, value, maxvalue, SemLock._make_name(), unlink_now
@@ -266,7 +266,7 @@ class Condition:
 
         # release lock
         count = self._lock._semlock._count()
-        for i in range(count):
+        for _ in range(count):
             self._lock.release()
 
         try:
@@ -277,7 +277,7 @@ class Condition:
             self._woken_count.release()
 
             # reacquire lock
-            for i in range(count):
+            for _ in range(count):
                 self._lock.acquire()
 
     def notify(self):
@@ -313,7 +313,7 @@ class Condition:
             sleepers += 1
 
         if sleepers:
-            for i in range(sleepers):
+            for _ in range(sleepers):
                 self._woken_count.acquire()       # wait for a sleeper to wake
 
             # rezero wait_semaphore in case some timeouts just happened

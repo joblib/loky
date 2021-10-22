@@ -82,7 +82,7 @@ class Popen(_Popen):
                     # the cleaner multiprocessing.reduction.steal_handle should
                     # be used instead.
                     inherit = True
-                    hp, ht, pid, tid = _winapi.CreateProcess(
+                    hp, ht, pid, _ = _winapi.CreateProcess(
                         python_exe, cmd,
                         None, None, inherit, 0,
                         child_env, None, None)

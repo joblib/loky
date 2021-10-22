@@ -52,7 +52,7 @@ def clean_warning_registry():
 
 def wait_dead(worker, n_tries=1000, delay=0.001):
     """Wait for process pid to die"""
-    for i in range(n_tries):
+    for _ in range(n_tries):
         if worker.exitcode is not None:
             return
         sleep(delay)
@@ -385,9 +385,9 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
     def test_queue_full_deadlock(self):
         executor = get_reusable_executor(max_workers=1)
         fs_fail = [executor.submit(do_nothing, ErrorAtPickle(True))
-                   for i in range(100)]
+                   for _ in range(100)]
         fs = [executor.submit(do_nothing, ErrorAtPickle(False))
-              for i in range(100)]
+              for _ in range(100)]
         with pytest.raises(PicklingError):
             fs_fail[99].result()
         assert fs[99].result()
@@ -473,7 +473,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # when processing subsequently dispatched tasks:
         with pytest.raises(TerminatedWorkerError, match=filter_match(match)):
             executor.submit(gc.collect).result()
-            for r in executor.map(sleep, [.1] * 100):
+            for _ in executor.map(sleep, [.1] * 100):
                 pass
 
 
@@ -740,7 +740,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             with warnings.catch_warnings():  # ignore resize warnings
                 warnings.simplefilter("always")
                 executor = get_reusable_executor(max_workers=max_workers)
-                for i in range(n_outer_steps):
+                for _ in range(n_outer_steps):
                     results = executor.map(
                         lambda x: x ** 2, range(n_inner_steps))
                     expected_result = [x ** 2 for x in range(n_inner_steps)]

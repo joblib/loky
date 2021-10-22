@@ -26,7 +26,7 @@ if not hasattr(socket, "socketpair"):
         s1.bind((socket.gethostname(), 8080))
         s1.listen(1)
         s2.connect((socket.gethostname(), 8080))
-        conn, addr = s1.accept()
+        conn, _ = s1.accept()
         return conn, s2
 
     socket.socketpair = socketpair
@@ -713,7 +713,7 @@ def test_recursive_terminate(use_psutil):
     recursive_terminate(p, use_psutil=use_psutil)
 
     # The process can take some time finishing so we should wait up to 5s
-    gone, alive = psutil.wait_procs(children, timeout=5)
+    _, alive = psutil.wait_procs(children, timeout=5)
     msg = "Should be no descendant left but found:\n{}"
     assert len(alive) == 0, msg.format(alive)
 
