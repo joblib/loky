@@ -4,18 +4,11 @@ import time
 import errno
 import signal
 import warnings
-import threading
 import subprocess
 try:
     import psutil
 except ImportError:
     psutil = None
-
-
-def _flag_current_thread_clean_exit():
-    """Put a ``_clean_exit`` flag on the current thread"""
-    thread = threading.current_thread()
-    thread._clean_exit = True
 
 
 def recursive_terminate(process, use_psutil=True):

@@ -240,10 +240,3 @@ def _fixup_main_from_path(main_path):
                                   run_name="__mp_main__")
     main_module.__dict__.update(main_content)
     sys.modules['__main__'] = sys.modules['__mp_main__'] = main_module
-
-
-def import_main_path(main_path):
-    '''
-    Set sys.modules['__main__'] to module at main_path
-    '''
-    _fixup_main_from_path(main_path)

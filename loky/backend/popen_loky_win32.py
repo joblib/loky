@@ -22,10 +22,6 @@ __all__ = ['Popen']
 #
 #
 
-TERMINATE = 0x10000
-WINEXE = (sys.platform == 'win32' and getattr(sys, 'frozen', False))
-WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
-
 
 def _path_eq(p1, p2):
     return p1 == p2 or os.path.normcase(p1) == os.path.normcase(p2)
