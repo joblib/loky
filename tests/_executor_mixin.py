@@ -5,12 +5,9 @@ import psutil
 import pytest
 import threading
 
-from loky import TimeoutError, get_reusable_executor, cpu_count
+from loky import TimeoutError, get_reusable_executor
 from loky.backend import get_context
 
-
-# Compat Travis
-CPU_COUNT = cpu_count()
 
 # Set a large timeout as it should only be reached in case of deadlocks
 TIMEOUT = 40

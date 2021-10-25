@@ -14,9 +14,6 @@ from .backend import get_context
 
 __all__ = ['get_reusable_executor']
 
-# Python 2 compat helper
-STRING_TYPE = type("")
-
 # Singleton executor and id management
 _executor_lock = threading.RLock()
 _next_executor_id = 0
@@ -120,7 +117,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                 raise ValueError(
                     f"max_workers must be greater than 0, got {max_workers}.")
 
-            if isinstance(context, STRING_TYPE):
+            if isinstance(context, str):
                 context = get_context(context)
             if context is not None and context.get_start_method() == "fork":
                 raise ValueError(

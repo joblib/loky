@@ -399,13 +399,11 @@ class TestLokyBackend:
         with pytest.raises(ValueError):
             p.sentinel
         p.start()
-        # Cast long to int for 64-bit Python 2.7 under Windows
-        sentinel = int(p.sentinel)
-        assert not wait_for_handle(sentinel, timeout=0.0)
+        assert not wait_for_handle(p.sentinel, timeout=0.0)
         event.set()
         p.join()
         assert p.exitcode == 0
-        assert wait_for_handle(sentinel, timeout=1)
+        assert wait_for_handle(p.sentinel, timeout=1)
 
     @classmethod
     def _test_wait_sentinel(cls):
@@ -418,11 +416,9 @@ class TestLokyBackend:
         with pytest.raises(ValueError):
             p.sentinel
         p.start()
-        # Cast long to int for 64-bit Python 2.7 under Windows
-        sentinel = int(p.sentinel)
-        assert isinstance(sentinel, int)
-        assert not wait([sentinel], timeout=0.0)
-        assert wait([sentinel], timeout=5), (p.exitcode)
+        assert isinstance(p.sentinel, int)
+        assert not wait([p.sentinel], timeout=0.0)
+        assert wait([p.sentinel], timeout=5), p.exitcode
         expected_code = 15 if sys.platform == 'win32' else -15
         p.join()  # force refresh of p.exitcode
         assert p.exitcode == expected_code

@@ -122,8 +122,6 @@ def get_preparation_data(name, init_main_module=True):
                         process.ORIGINAL_DIR is not None):
                     main_path = os.path.join(process.ORIGINAL_DIR, main_path)
                 d['init_main_from_path'] = os.path.normpath(main_path)
-                # Compat for python2.7
-                d['main_path'] = d['init_main_from_path']
 
     return d
 
