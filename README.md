@@ -8,6 +8,7 @@ alt="Loky logo" width=96/></a>
 [![Build Status](https://dev.azure.com/joblib/loky/_apis/build/status/joblib.loky?branchName=master)](https://dev.azure.com/joblib/loky/_build/latest?definitionId=2&branchName=master)
 [![Documentation Status](https://readthedocs.org/projects/loky/badge/?version=latest)](https://loky.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/joblib/loky/branch/master/graph/badge.svg)](https://codecov.io/gh/joblib/loky)
+[![DOI](https://zenodo.org/badge/48578152.svg)](https://zenodo.org/badge/latestdoi/48578152)
 
 
 ### Goal
