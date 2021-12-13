@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Moreau"
+  given-names: "Thomas"
+  orcid: "https://orcid.org/0000-0002-1523-3419"
+- family-names: "Grisel"
+  given-names: "Olivier"
+  orcid: "https://orcid.org/0000-0002-8226-4012"
+title: "Loky"
+version: latest
+doi: 10.5281/zenodo.5770406
+date-released: 2017-06-20
+url: "https://github.com/joblib/loky"
