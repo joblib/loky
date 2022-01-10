@@ -18,11 +18,15 @@ if sys.version_info >= (3, 4):
 else:
     from multiprocessing.process import Process as BaseProcess
 
-# Platform specific compat
-if sys.platform == "win32":
-    from .compat_win32 import wait
-else:
-    from .compat_posix import wait
+try:
+    # Platform specific compat
+    if sys.platform == "win32":
+        from .compat_win32 import wait
+    else:
+        from .compat_posix import wait
+except ImportError:
+    def wait(object_list, timeout):
+        raise OSError("Wait is unavailable")
 
 
 def set_cause(exc, cause):

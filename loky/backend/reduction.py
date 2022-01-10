@@ -115,10 +115,13 @@ def _rebuild_partial(func, args, keywords):
 
 register(functools.partial, _reduce_partial)
 
-if sys.platform != "win32":
-    from ._posix_reduction import _mk_inheritable  # noqa: F401
-else:
-    from . import _win_reduction  # noqa: F401
+try:
+    if sys.platform != "win32":
+        from ._posix_reduction import _mk_inheritable  # noqa: F401
+    else:
+        from . import _win_reduction  # noqa: F401
+except ImportError:
+    pass
 
 # global variable to change the pickler behavior
 try:

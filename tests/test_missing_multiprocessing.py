@@ -27,4 +27,4 @@ def test_missing_multiprocessing():
     env["PYTHONPATH"] = ":".join(
         [missing_multiprocessing_path] + sys.path
     )
-    subprocess.check_call([sys.executable, "-c", "import loky; import sys; print(sys.modules['_multiprocessing'])"], env=env)
+    subprocess.check_call([sys.executable, "-c", "import loky"], env=env)

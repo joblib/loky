@@ -10,7 +10,10 @@ if sys.version_info > (3, 4):
         return name
 
     # monkey patch the name creation for multiprocessing
-    from multiprocessing import synchronize
-    synchronize.SemLock._make_name = staticmethod(_make_name)
+    try:
+        from multiprocessing import synchronize
+        synchronize.SemLock._make_name = staticmethod(_make_name)
+    except ImportError:
+        pass
 
 __all__ = ["get_context"]
