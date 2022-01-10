@@ -21,11 +21,11 @@ def test_missing_multiprocessing(tmp_path):
     if sys.version_info[0] == 2:
         pytest.skip("pathlib is missing in Python 2")
 
-    (tmp_path / "_multiprocessing.py").write_text('raise ImportError("No _multiprocessing module!")')
+    (tmp_path / "_multiprocessing.py").write_text(
+        'raise ImportError("No _multiprocessing module!")'
+    )
     env = dict(os.environ)
     # For subprocess, use current sys.path with our custom version of
     # multiprocessing inserted.
-    env["PYTHONPATH"] = ":".join(
-        [str(tmp_path)] + sys.path
-    )
+    env["PYTHONPATH"] = ":".join([str(tmp_path)] + sys.path)
     subprocess.check_call([sys.executable, "-c", "import loky"], env=env)
