@@ -16,20 +16,24 @@ import logging
 import threading
 import collections
 
-
+HAS_CONCURRENT_FUTURES = False
 if sys.version_info[:2] >= (3, 3):
+    try:
+        from concurrent.futures import wait, as_completed
+        from concurrent.futures import TimeoutError, CancelledError
+        from concurrent.futures import Executor, Future as _BaseFuture
 
-    from concurrent.futures import wait, as_completed
-    from concurrent.futures import TimeoutError, CancelledError
-    from concurrent.futures import Executor, Future as _BaseFuture
+        from concurrent.futures import FIRST_EXCEPTION
+        from concurrent.futures import ALL_COMPLETED, FIRST_COMPLETED
 
-    from concurrent.futures import FIRST_EXCEPTION
-    from concurrent.futures import ALL_COMPLETED, FIRST_COMPLETED
+        from concurrent.futures._base import LOGGER
+        from concurrent.futures._base import PENDING, RUNNING, CANCELLED
+        from concurrent.futures._base import CANCELLED_AND_NOTIFIED, FINISHED
+        HAS_CONCURRENT_FUTURES = True
+    except ImportError:
+        pass
 
-    from concurrent.futures._base import LOGGER
-    from concurrent.futures._base import PENDING, RUNNING, CANCELLED
-    from concurrent.futures._base import CANCELLED_AND_NOTIFIED, FINISHED
-else:
+if not HAS_CONCURRENT_FUTURES:
 
     FIRST_COMPLETED = 'FIRST_COMPLETED'
     FIRST_EXCEPTION = 'FIRST_EXCEPTION'
