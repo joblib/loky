@@ -4,6 +4,7 @@ _multiprocessing module. Test that loky still works in this environment.
 """
 
 import os
+import pytest
 import subprocess
 import sys
 
@@ -17,6 +18,9 @@ def test_missing_multiprocessing():
     Python process. This also ensures that we don't break other tests by
     importing a bad `_multiprocessing` module.
     """
+    if sys.version_info[0] == 2:
+        pytest.skip("pathlib is missing in Python 2")
+
     env = dict(os.environ)
     # For subprocess, use current sys.path with our custom version of
     # multiprocessing inserted.
