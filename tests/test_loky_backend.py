@@ -471,8 +471,7 @@ class TestLokyBackend:
         named_sem = []
         for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
 
-            # Check if fd is a standard IO file. For python2.7, stdin is set
-            # to /dev/null during `Process._boostrap`. For other version, stdin
+            # Check if fd is a standard IO file. For python3.x, stdin
             # should be closed.
             is_std = (fd in ["f1", "f2"])
 
@@ -524,9 +523,6 @@ class TestLokyBackend:
 
         To ensure we have the right number of fd in the child Process, we used
         `lsof` as it is compatible with Unix systems.
-        Different behaviors are observed with the open fds, in particular:
-        - python2.7 and 3.4 have an open fd for /dev/urandom.
-        - python2.7 links stdin to /dev/null even if it is closed beforehand.
         """
 
         # TODO generate high numbered mp.Pipe directly

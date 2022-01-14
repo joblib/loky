@@ -70,7 +70,7 @@ def cpu_count(only_physical_cores=False):
      * the number of CPUs in the system, as given by
        ``multiprocessing.cpu_count``;
      * the CPU affinity settings of the current process
-       (available with Python 3.4+ on some Unix systems);
+       (available on some Unix systems);
      * CFS scheduler CPU bandwidth limit (available on Linux only, typically
        set by docker and similar container orchestration systems);
      * the value of the LOKY_MAX_CPU_COUNT environment variable if defined.
@@ -166,26 +166,23 @@ def _count_physical_cores():
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
-                "lscpu --parse=core".split(" "),
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                universal_newlines=True)
+                "lscpu --parse=core".split(),
+                capture_output=True, text=True)
             cpu_info = cpu_info.stdout.splitlines()
             cpu_info = {line for line in cpu_info if not line.startswith("#")}
             cpu_count_physical = len(cpu_info)
         elif sys.platform == "win32":
             cpu_info = subprocess.run(
-                "wmic CPU Get NumberOfCores /Format:csv".split(" "),
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                universal_newlines=True)
+                "wmic CPU Get NumberOfCores /Format:csv".split(),
+                capture_output=True, text=True)
             cpu_info = cpu_info.stdout.splitlines()
             cpu_info = [l.split(",")[1] for l in cpu_info
                         if (l and l != "Node,NumberOfCores")]
             cpu_count_physical = sum(map(int, cpu_info))
         elif sys.platform == "darwin":
             cpu_info = subprocess.run(
-                "sysctl -n hw.physicalcpu".split(" "),
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                universal_newlines=True)
+                "sysctl -n hw.physicalcpu".split(),
+                capture_output=True, text=True)
             cpu_info = cpu_info.stdout
             cpu_count_physical = int(cpu_info)
         else:
@@ -268,7 +265,7 @@ class LokyInitMainContext(LokyContext):
     functions and variable used from main should be out of this block.
 
     This mimics the default behavior of multiprocessing under Windows and the
-    behavior of the ``spawn`` start method on a posix system for python3.4+.
+    behavior of the ``spawn`` start method on a posix system.
     For more details, see the end of the following section of python doc
     https://docs.python.org/3/library/multiprocessing.html#multiprocessing-programming
     """

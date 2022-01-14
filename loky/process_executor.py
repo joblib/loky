@@ -938,8 +938,7 @@ class ProcessPoolExecutor(Executor):
             initargs: A tuple of arguments to pass to the initializer.
             env: A dict of environment variable to overwrite in the child
                 process. The environment variables are set before any module is
-                loaded. Note that this only works with the loky context and it
-                is unreliable under windows with Python < 3.6.
+                loaded. Note that this only works with the loky context.
         """
         _check_system_limits()
 

@@ -83,7 +83,7 @@ class TestResourceTracker:
                 [sys.executable, '-E', '-c', cmd],
                 stderr=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                universal_newlines=True)
+                text=True)
             p.wait()
 
             filename = p.stdout.readline().strip()
@@ -129,7 +129,7 @@ class TestResourceTracker:
         p = subprocess.Popen([sys.executable, '-c', cmd],
                              stderr=subprocess.PIPE,
                              stdout=subprocess.PIPE,
-                             universal_newlines=True,
+                             text=True,
                              env=env)
         name1 = p.stdout.readline().rstrip()
         name2 = p.stdout.readline().rstrip()

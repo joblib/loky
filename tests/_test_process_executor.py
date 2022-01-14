@@ -252,7 +252,7 @@ class ExecutorShutdownTest:
 
         # The crashing job should be executed after the non-failing jobs
         # have completed. The crash should be detected.
-        match = filter_match(r"SIGSEGV", self.context.get_start_method())
+        match = filter_match(r"SIGSEGV")
         with pytest.raises(TerminatedWorkerError, match=match):
             crash_result.result()
 
@@ -404,13 +404,6 @@ class ExecutorShutdownTest:
             f.result()
 
     def test_recursive_kill(self):
-        if (self.context.get_start_method() == 'forkserver' and
-                sys.version_info < (3, 7)):
-            # Before python3.7, the forserver was shared with the child
-            # processes so there is no way to detect the children of a given
-            # process for recursive_kill. This break the test.
-            pytest.skip("Need python3.7+")
-
         f = self.executor.submit(self._test_recursive_kill, 1)
         # Wait for the nested executors to be started
         _executor_mixin._test_event.wait()
@@ -656,7 +649,7 @@ class ExecutorTest:
         # Get one of the processes, and terminate (kill) it
         p = next(iter(self.executor._processes.values()))
         p.terminate()
-        match = filter_match(r"SIGTERM", self.context.get_start_method())
+        match = filter_match(r"SIGTERM")
         with pytest.raises(TerminatedWorkerError, match=match):
             future.result()
         # Submitting other jobs fails as well.
@@ -876,7 +869,7 @@ class ExecutorTest:
     @pytest.mark.skipif(sys.maxsize < 2 ** 32,
                         reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
-            sys.version_info[:2] < (3, 8),
+            sys.version_info < (3, 8),
             reason="Python version does not support pickling objects of size > 2 ** 31GB")
     def test_no_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
@@ -886,7 +879,7 @@ class ExecutorTest:
     @pytest.mark.skipif(sys.maxsize < 2 ** 32,
                         reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
-            sys.version_info[:2] >= (3, 8),
+            sys.version_info >= (3, 8),
             reason="Python version supports pickling objects of size > 2 ** 31GB")
     def test_expected_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
@@ -974,7 +967,7 @@ class ExecutorTest:
         # When a child process is abruptly terminated, the whole pool gets
         # "broken".
         print(self.context.get_start_method())
-        match = filter_match(r"EXIT\(42\)", self.context.get_start_method())
+        match = filter_match(r"EXIT\(42\)")
         future = self.executor.submit(c_exit, 42)
         with pytest.raises(TerminatedWorkerError, match=match):
             future.result()
