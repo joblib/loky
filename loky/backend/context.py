@@ -22,16 +22,15 @@ from multiprocessing.context import BaseContext
 
 from .process import LokyProcess, LokyInitMainProcess
 
-START_METHODS = ['loky', 'loky_init_main']
+START_METHODS = ['loky', 'loky_init_main', 'spawn']
+if sys.platform != 'win32':
+    START_METHODS += ['fork', 'forkserver']
+
 _DEFAULT_START_METHOD = None
 
 # Cache for the number of physical cores to avoid repeating subprocess calls.
 # It should not change during the lifetime of the program.
 physical_cores_cache = None
-
-START_METHODS += ['spawn']
-if sys.platform != 'win32':
-    START_METHODS += ['fork', 'forkserver']
 
 
 def get_context(method=None):
