@@ -60,4 +60,6 @@ if sys.platform == 'win32':
     dispatch_table[PipeConnection] = reduce_pipe_connection
 
 
+# XXX: we introduce a side effect when importing this module on a
+# non-Windows OS. Is this intended?
 dispatch_table[socket.socket] = _reduce_socket
