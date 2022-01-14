@@ -13,7 +13,7 @@ jobs:
         tox.env: py36
 
       macos-py37:
-        imageName: "macos-10.14"
+        imageName: "macos-10.15"
         python.version: "3.7"
         tox.env: py37
 
