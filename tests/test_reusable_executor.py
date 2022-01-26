@@ -6,7 +6,7 @@ import psutil
 import pytest
 import warnings
 import threading
-from time import sleep
+from time import sleep, time
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
 from distutils.version import LooseVersion
@@ -827,3 +827,24 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=4)
         for x in executor.map(self._test_initializer, delay=.1):
             assert x == 'uninitialized'
+
+
+class TestExecutorHighPrioritySubmit(ReusableExecutorMixin):
+    def _now(self):
+        return time()
+
+    def test_high_priority(self):
+        executor = get_reusable_executor(max_workers=1)
+
+        # Submit a bunch of jobs.
+        later_job_futures = []
+        for _ in range(0, 10):
+            later_job_futures.append(executor.submit(self._now))
+
+        high_priority_job = executor.submit_high_priority(self._now)
+
+        high_priority_result = high_priority_job.result()
+        last_job_result = later_job_futures[-1].result()
+
+        # Ensure the high priority job ran before the last submitted job.
+        assert high_priority_result < last_job_result
