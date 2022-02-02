@@ -52,7 +52,7 @@ if sys.version_info[:2] >= (3, 4):
         except ValueError:
             raise ValueError(
                 f"Unknown context '{method}'. Value should be in "
-                "{START_METHODS}."
+                f"{START_METHODS}."
             )
 
         return context
