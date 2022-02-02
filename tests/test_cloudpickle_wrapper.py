@@ -177,7 +177,7 @@ class TestCloudpickleWrapper:
     def test_set_loky_pickler(self, loky_pickler):
         # Test that the function set_loky_pickler correctly changes the pickler
         # used in loky.
-        code = """if True:
+        code = f"""if True:
             from loky import set_loky_pickler
             from loky import get_reusable_executor
             from loky import wrap_non_picklable_objects
@@ -190,8 +190,8 @@ class TestCloudpickleWrapper:
             # Check the default loky_pickler is cloudpickle
             current_loky_pickler_name = get_loky_pickler_name()
             assert current_loky_pickler_name == 'cloudpickle', (
-                "default got loky_pickler={{}}"
-                .format(current_loky_pickler_name))
+                f"default got loky_pickler={{current_loky_pickler_name}}"
+            )
             assert issubclass(get_loky_pickler(), CloudPickler)
 
             # Check that setting loky pickler to a value is working
@@ -205,14 +205,13 @@ class TestCloudpickleWrapper:
                 expected_loky_pickler = Pickler
                 expected_loky_pickler_name = 'pickle'
             else:
-                raise RuntimeError("unexpected value {{}} for loky_pickler"
-                                   .format(loky_pickler))
+                raise RuntimeError(
+                    f"unexpected value {{loky_pickler}} for loky_pickler")
 
 
             current_loky_pickler_name = get_loky_pickler_name()
             assert current_loky_pickler_name == expected_loky_pickler_name, (
-                    "Expected 'pickle' and got {{}}"
-                    .format(current_loky_pickler_name))
+                f"Expected 'pickle' and got {{current_loky_pickler_name}}")
             assert issubclass(get_loky_pickler(), expected_loky_pickler)
 
             # Make sure that the default behavior is restored when
@@ -220,8 +219,7 @@ class TestCloudpickleWrapper:
             set_loky_pickler()
             current_loky_pickler_name = get_loky_pickler_name()
             assert current_loky_pickler_name == 'cloudpickle', (
-                "default got loky_pickler={{}}"
-                .format(current_loky_pickler_name))
+                f"default got loky_pickler={{current_loky_pickler_name}}")
             assert issubclass(get_loky_pickler(), CloudPickler)
 
             # Check that the loky pickler in the workers is the correct one.
@@ -229,8 +227,8 @@ class TestCloudpickleWrapper:
             e = get_reusable_executor()
             worker_loky_pickler = e.submit(get_loky_pickler_name).result()
             assert worker_loky_pickler == expected_loky_pickler_name, (
-                "expected {{}} but got {{}} for the worker loky pickler"
-                .format(loky_pickler, worker_loky_pickler)
+                f"expected {{loky_pickler}} "
+                f"but got {{worker_loky_pickler}} for the worker loky pickler"
             )
 
 
@@ -242,7 +240,7 @@ class TestCloudpickleWrapper:
             e = get_reusable_executor()
             assert e.submit(test_func, 42).result() == 42
             print("ok")
-        """.format(loky_pickler=loky_pickler)
+        """
         cmd = [sys.executable]
         try:
             fid, filename = mkstemp(suffix="_joblib.py")

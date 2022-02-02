@@ -835,7 +835,7 @@ class _ExecutorManagerThread(threading.Thread):
             p.join()
 
         mp.util.debug("executor management thread clean shutdown of worker "
-                      f"processes: {list(self.processses)}")
+                      f"processes: {list(self.processes)}")
 
     def get_n_children_alive(self):
         # This is an upper bound on the number of children alive.

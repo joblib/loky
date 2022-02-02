@@ -499,7 +499,7 @@ class TestLokyBackend:
         import subprocess
         try:
             out = subprocess.check_output(["lsof", "-a", "-Fftn",
-                                           "-p", "{}".format(pid),
+                                           "-p", f"{pid}",
                                            "-d", "^txt,^cwd,^rtd"])
             lines = out.decode().split("\n")[1:-1]
         except (FileNotFoundError, OSError):
@@ -556,7 +556,7 @@ class TestLokyBackend:
 
         # assert that the writable part of the Pipe (not passed to child),
         # have been properly closed.
-        assert len(set("f{}".format(w)).intersection(lines)) == 0
+        assert len(set(f"f{w}").intersection(lines)) == 0
 
         return named_sem
 
@@ -640,7 +640,7 @@ class TestLokyBackend:
         code = '\n'.join([
             'from loky.backend.process import LokyProcess',
             'p = LokyProcess(target=id, args=(1,), ',
-            '                init_main_module={})'.format(not run_file),
+            f'                init_main_module={not run_file})',
             'p.start()',
             'p.join()',
             'msg = "LokyProcess failed to load without safeguard"',
@@ -761,8 +761,8 @@ def test_recursive_terminate(use_psutil):
 
     # The process can take some time finishing so we should wait up to 5s
     gone, alive = psutil.wait_procs(children, timeout=5)
-    msg = "Should be no descendant left but found:\n{}"
-    assert len(alive) == 0, msg.format(alive)
+    msg = f"Should be no descendant left but found:\n{alive}"
+    assert len(alive) == 0, msg
 
 
 def _test_default_subcontext(queue):
@@ -777,7 +777,7 @@ def _test_default_subcontext(queue):
 
 @pytest.mark.parametrize('method', START_METHODS)
 def test_default_subcontext(method):
-    code = """if True:
+    code = f"""if True:
         import sys
 
         from loky.backend.context import get_context, set_start_method
@@ -805,7 +805,7 @@ def test_default_subcontext(method):
         set_start_method(None, force=True)
         ctx = get_context()
         assert ctx.get_start_method() == 'loky'
-    """.format(method=method)
+    """
 
     cmd = [sys.executable, "-c", code]
     check_subprocess_call(cmd, timeout=10)

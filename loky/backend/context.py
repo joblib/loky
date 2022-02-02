@@ -90,8 +90,10 @@ else:
         elif method == "loky_init_main":
             return LokyInitMainContext()
         else:
-            raise ValueError("Unknown context '{}'. Value should be in {}."
-                             .format(method, START_METHODS))
+            raise ValueError(
+                f"Unknown context '{method}'. Value should be in "
+                f"{START_METHODS}."
+            )
 
 
 def set_start_method(method, force=False):
@@ -99,8 +101,9 @@ def set_start_method(method, force=False):
     if _DEFAULT_START_METHOD is not None and not force:
         raise RuntimeError('context has already been set')
     assert method is None or method in START_METHODS, (
-        "'{}' is not a valid start_method. It should be in {}"
-        .format(method, START_METHODS))
+        f"'{method}' is not a valid start_method. It should be in "
+        f"{START_METHODS}"
+    )
 
     _DEFAULT_START_METHOD = method
 
@@ -240,20 +243,21 @@ def _count_physical_cores():
             cpu_count_physical = int(cpu_info)
         else:
             raise NotImplementedError(
-                "unsupported platform: {}".format(sys.platform))
+                f"unsupported platform: {sys.platform}"
+            )
 
         # if cpu_count_physical < 1, we did not find a valid value
         if cpu_count_physical < 1:
             raise ValueError(
-                "found {} physical cores < 1".format(cpu_count_physical))
-        
+                f"found {cpu_count_physical} physical cores < 1")
+
     except Exception as e:
         exception = e
         cpu_count_physical = "not found"
 
     # Put the result in cache
     physical_cores_cache = cpu_count_physical
-    
+
     return cpu_count_physical, exception
 
 
