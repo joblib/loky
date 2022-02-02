@@ -67,7 +67,7 @@ jobs:
         sudo apt install python3.11 python3.11-venv python3.11-dev
         python3.11 -m venv nightly-venv
         echo "##vso[task.prependpath]nightly-venv/bin"
-      displayName: Install Python 3.10 from ppa:deadsnakes/nightly
+      displayName: Install Python 3.11 from ppa:deadsnakes/nightly
       condition: eq(variables['python.version'], '3.11')
     # azure-pipelines unpredictably switches between Git\bin\bash and
     # Git\usr\bin\bash when running a bash script inside Windows environments.
