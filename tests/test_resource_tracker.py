@@ -89,11 +89,11 @@ class TestResourceTracker:
             p.stderr.close()
             p.stdout.close()
 
-            pattern = "decremented refcount of file %s" % filename
+            pattern = f"decremented refcount of file {filename}"
             assert pattern in err
             assert "leaked" not in err
 
-            pattern = "KeyError: '%s'" % filename
+            pattern = f"KeyError: '{filename}'"
             assert pattern not in err
 
         finally:
