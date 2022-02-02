@@ -135,11 +135,14 @@ class ExecutorShutdownTest:
             stdout, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
-            # On OSX, remove UserWarning for broken semaphores
             if sys.platform == "darwin":
-                stderr = [e for e in stderr.strip().split("\n")
-                          if "increase its maximal value" not in e]
-            assert len(stderr) == 0 or stderr[0] == ''
+                # On macOS, ignore serWarning for broken semaphores
+                stderr = "\n".join(
+                    line
+                    for line in stderr.splitlines()
+                    if "increase its maximal value" not in line
+                )
+            assert len(stderr) == 0, stderr
 
             # The workers should have completed their work before the main
             # process exits:
