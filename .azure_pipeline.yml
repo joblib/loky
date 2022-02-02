@@ -3,27 +3,23 @@ jobs:
   strategy:
     matrix:
 
-      windows-py39:
-        imageName: "vs2017-win2016"
-        python.version: "3.9"
-        tox.env: py39
-      windows-py35:
-        imageName: "vs2017-win2016"
-        python.version: "3.5"
-        tox.env: py35
-      windows-py27:
-        imageName: "vs2017-win2016"
-        python.version: "2.7"
-        tox.env: py27
-
-      macos-py37:
-        imageName: "macos-10.14"
+      windows-py310:
+        imageName: windows-latest
+        python.version: "3.10"
+        tox.env: py310
+      windows-py37:
+        imageName: windows-latest
         python.version: "3.7"
         tox.env: py37
-      macos-py27:
-        imageName: "macos-10.14"
-        python.version: "2.7"
-        tox.env: py27
+
+      macos-py310:
+        imageName: "macos-10.15"
+        python.version: "3.10"
+        tox.env: py310
+      macos-py37:
+        imageName: "macos-10.15"
+        python.version: "3.7"
+        tox.env: py37
 
       linux-pypy3:
         imageName: "ubuntu-20.04"
@@ -32,6 +28,10 @@ jobs:
         LOKY_MAX_CPU_COUNT: "2"
 
       linux-python-nightly:
+        imageName: "ubuntu-20.04"
+        python.version: "3.11"
+        tox.env: py311
+      linux-py310:
         imageName: "ubuntu-20.04"
         python.version: "3.10"
         tox.env: py310
@@ -45,14 +45,10 @@ jobs:
         python.version: "3.9"
         tox.env: "py39"
         joblib.tests: "true"
-      linux-py36:
+      linux-py37:
         imageName: "ubuntu-20.04"
-        python.version: "3.6"
-        tox.env: py36
-      linux-py27:
-        imageName: "ubuntu-20.04"
-        python.version: "2.7"
-        tox.env: py27
+        python.version: "3.7"
+        tox.env: py37
 
   pool:
     vmImage: $(imageName)
@@ -64,15 +60,15 @@ jobs:
       inputs:
         versionSpec: '$(python.version)'
       displayName: 'Use Python $(python.version)'
-      condition: ne(variables['python.version'], '3.10')
+      condition: ne(variables['python.version'], '3.11')
     - bash: |
         sudo add-apt-repository ppa:deadsnakes/nightly
         sudo apt update
-        sudo apt install python3.10 python3.10-venv python3.10-dev
-        python3.10 -m venv nightly-venv
+        sudo apt install python3.11 python3.11-venv python3.11-dev
+        python3.11 -m venv nightly-venv
         echo "##vso[task.prependpath]nightly-venv/bin"
       displayName: Install Python 3.10 from ppa:deadsnakes/nightly
-      condition: eq(variables['python.version'], '3.10')
+      condition: eq(variables['python.version'], '3.11')
     # azure-pipelines unpredictably switches between Git\bin\bash and
     # Git\usr\bin\bash when running a bash script inside Windows environments.
     # The latter may use wrong bash commands, resulting in errors when codecov
