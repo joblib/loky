@@ -848,8 +848,10 @@ def _check_system_limits():
         # minimum number of semaphores available
         # according to POSIX
         return
-    _system_limited = ("system provides too few semaphores "
-                       f"({nsems_max} available, 256 necessary)")
+    _system_limited = (
+        f"system provides too few semaphores ({nsems_max} available, "
+        "256 necessary)"
+    )
     raise NotImplementedError(_system_limited)
 
 

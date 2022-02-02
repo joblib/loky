@@ -73,8 +73,10 @@ class SemLock:
                 kind, value, maxvalue, name, unlink_now
             )
         self.name = name
-        util.debug('created semlock with handle '
-                   f'{self._semlock.handle} and name "{self.name}"')
+        util.debug(
+            f'created semlock with handle {self._semlock.handle} and name '
+            f'"{self.name}"'
+        )
 
         self._make_methods()
 
@@ -112,8 +114,9 @@ class SemLock:
 
     def __setstate__(self, state):
         self._semlock = _SemLock._rebuild(*state)
-        util.debug('recreated blocker with '
-                   f'handle {state[0]!r} and name "{state[3]}"')
+        util.debug(
+            f'recreated blocker with handle {state[0]!r} and name "{state[3]}"'
+        )
         self._make_methods()
 
     @staticmethod
@@ -158,8 +161,10 @@ class BoundedSemaphore(Semaphore):
             value = self._semlock._get_value()
         except Exception:
             value = 'unknown'
-        return (f'<{self.__class__.__name__}'
-                f'(value={value}, maxvalue={self._semlock.maxvalue})>')
+        return (
+            f'<{self.__class__.__name__}(value={value}, '
+            f'maxvalue={self._semlock.maxvalue})>'
+        )
 
 
 #

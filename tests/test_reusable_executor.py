@@ -56,8 +56,10 @@ def wait_dead(worker, n_tries=1000, delay=0.001):
         if worker.exitcode is not None:
             return
         sleep(delay)
-    raise RuntimeError(f"Process {worker.pid} failed to die "
-                       f"for at least {delay * n_tries:0.3f}s")
+    raise RuntimeError(
+        f"Process {worker.pid} failed to die for at least "
+        f"{delay * n_tries:0.3f}s"
+    )
 
 
 def crash():

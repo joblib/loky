@@ -141,7 +141,7 @@ class Queue(mp_Queue):
                 # We ignore errors which happen after the process has
                 # started to cleanup.
                 if util.is_exiting():
-                    util.info('error in queue thread: %s', e)
+                    util.info(f'error in queue thread: {e}')
                     return
                 else:
                     queue_sem.release()

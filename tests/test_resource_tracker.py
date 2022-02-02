@@ -164,8 +164,10 @@ class TestResourceTracker:
                 f"(WindowsError\\(({errno_map[rtype]})|FileNotFoundError)"
             )
         else:
-            expected = (f"resource_tracker: {re.escape(name1)}: "
-                        f"(OSError\\({errno.ENOENT}|FileNotFoundError)")
+            expected = (
+                f"resource_tracker: {re.escape(name1)}: "
+                f"(OSError\\({errno.ENOENT}|FileNotFoundError)"
+            )
         assert re.search(expected, err) is not None
 
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])

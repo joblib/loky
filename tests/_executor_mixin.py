@@ -181,8 +181,9 @@ class ExecutorMixin:
             print(w.pid, w.status(), end='\n', file=sys.stderr)
             print(cmdline, end='\n\n', file=sys.stderr)
         raise AssertionError(
-            'Expected no more running worker processes '
-            f'but got {len(workers)} after waiting {patience:0.3f}s.')
+            f'Expected no more running worker processes but got {len(workers)}'
+            f' after waiting {patience:0.3f}s.'
+        )
 
 
 class ReusableExecutorMixin:

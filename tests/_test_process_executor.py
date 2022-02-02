@@ -777,7 +777,8 @@ class ExecutorTest:
                 break
             elif patience < 0:
                 raise AssertionError(
-                    f"callback submit chains stalled at: {collected!r}")
+                    f"callback submit chains stalled at: {collected!r}"
+                )
             else:
                 patience -= 1
                 time.sleep(0.01)

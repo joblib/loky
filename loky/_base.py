@@ -23,4 +23,4 @@ class Future(_BaseFuture):
             try:
                 callback(self)
             except BaseException:
-                LOGGER.exception('exception calling callback for %r', self)
+                LOGGER.exception(f'exception calling callback for {self!r}')

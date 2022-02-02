@@ -25,7 +25,11 @@ def create_resource(rtype):
     if rtype == "folder":
         return mkdtemp(dir=os.getcwd())
 
+<<<<<<< HEAD
     if rtype == "semlock":
+=======
+    elif rtype == "semlock":
+>>>>>>> origin/master
         name = f"test-loky-{os.getpid()}-{next(_rand_name)}"
         _SemLock(1, 1, 1, name, False)
         return name
@@ -34,8 +38,13 @@ def create_resource(rtype):
         tmpfile = NamedTemporaryFile(delete=False)
         tmpfile.close()
         return tmpfile.name
+<<<<<<< HEAD
 
     raise ValueError(f"Resource type {rtype} not understood")
+=======
+    else:
+        raise ValueError(f"Resource type {rtype} not understood")
+>>>>>>> origin/master
 
 
 def resource_exists(name, rtype):
@@ -49,8 +58,13 @@ def resource_exists(name, rtype):
             return False
         except OSError:
             return True
+<<<<<<< HEAD
 
     raise ValueError(f"Resource type {rtype} not understood")
+=======
+    else:
+        raise ValueError(f"Resource type {rtype} not understood")
+>>>>>>> origin/master
 
 
 @contextlib.contextmanager

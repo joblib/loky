@@ -303,10 +303,11 @@ def main(fd, verbose=0):
         def _unlink_resources(rtype_registry, rtype):
             if rtype_registry:
                 try:
-                    warnings.warn('resource_tracker: '
-                                  f'There appear to be {len(rtype_registry)} '
-                                  f'leaked {rtype} objects to clean up '
-                                  'at shutdown')
+                    warnings.warn(
+                        'resource_tracker: There appear to be '
+                        f'{len(rtype_registry)} leaked {rtype} objects to '
+                        'clean up at shutdown'
+                    )
                 except Exception:
                     pass
             for name in rtype_registry:
