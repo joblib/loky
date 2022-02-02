@@ -306,7 +306,7 @@ def main(fd, verbose=0):
                                     f'resource_tracker: {name}: {e!r}')
 
                     else:
-                        raise RuntimeError('unrecognized command {cmd!r}')
+                        raise RuntimeError(f'unrecognized command {cmd!r}')
                 except BaseException:
                     try:
                         sys.excepthook(*sys.exc_info())
