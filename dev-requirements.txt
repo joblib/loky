@@ -1,7 +1,6 @@
 numpy
 psutil
 cython
-faulthandler ; python_version < '3.3'
 coverage
 pytest
 pytest-coverage

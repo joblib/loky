@@ -3,27 +3,23 @@ jobs:
   strategy:
     matrix:
 
-      windows-py39:
-        imageName: "vs2017-win2016"
-        python.version: "3.9"
-        tox.env: py39
-      windows-py35:
-        imageName: "vs2017-win2016"
-        python.version: "3.5"
-        tox.env: py35
-      windows-py27:
-        imageName: "vs2017-win2016"
-        python.version: "2.7"
-        tox.env: py27
-
-      macos-py37:
-        imageName: "macos-10.14"
+      windows-py310:
+        imageName: windows-latest
+        python.version: "3.10"
+        tox.env: py310
+      windows-py37:
+        imageName: windows-latest
         python.version: "3.7"
         tox.env: py37
-      macos-py27:
-        imageName: "macos-10.14"
-        python.version: "2.7"
-        tox.env: py27
+
+      macos-py310:
+        imageName: "macos-10.15"
+        python.version: "3.10"
+        tox.env: py310
+      macos-py37:
+        imageName: "macos-10.15"
+        python.version: "3.7"
+        tox.env: py37
 
       linux-pypy3:
         imageName: "ubuntu-20.04"
@@ -31,28 +27,24 @@ jobs:
         tox.env: pypy3
         LOKY_MAX_CPU_COUNT: "2"
 
-      linux-python-nightly:
+      linux-py310:
         imageName: "ubuntu-20.04"
         python.version: "3.10"
         tox.env: py310
-      linux-python-py38-high-memory:
-        imageName: "ubuntu-20.04"
-        python.version: "3.8"
-        tox.env: py38
-        RUN_MEMORY: "true"
       linux-py39-joblib-tests:
         imageName: "ubuntu-20.04"
         python.version: "3.9"
         tox.env: "py39"
         joblib.tests: "true"
-      linux-py36:
+      linux-python-py38-high-memory:
         imageName: "ubuntu-20.04"
-        python.version: "3.6"
-        tox.env: py36
-      linux-py27:
+        python.version: "3.8"
+        tox.env: py38
+        RUN_MEMORY: "true"
+      linux-py37:
         imageName: "ubuntu-20.04"
-        python.version: "2.7"
-        tox.env: py27
+        python.version: "3.7"
+        tox.env: py37
 
   pool:
     vmImage: $(imageName)
@@ -64,15 +56,18 @@ jobs:
       inputs:
         versionSpec: '$(python.version)'
       displayName: 'Use Python $(python.version)'
-      condition: ne(variables['python.version'], '3.10')
+      condition: ne(variables['python.version'], 'pypy3')
     - bash: |
-        sudo add-apt-repository ppa:deadsnakes/nightly
-        sudo apt update
-        sudo apt install python3.10 python3.10-venv python3.10-dev
-        python3.10 -m venv nightly-venv
-        echo "##vso[task.prependpath]nightly-venv/bin"
-      displayName: Install Python 3.10 from ppa:deadsnakes/nightly
-      condition: eq(variables['python.version'], '3.10')
+        wget -q https://downloads.python.org/pypy/pypy3.7-v7.3.7-linux64.tar.bz2 -O pypy.tar.bz2
+        mkdir -p pypy3
+        (cd pypy3; tar --strip-components=1 -xf ../pypy.tar.bz2)
+        mv pypy3 /opt/pypy37
+        /opt/pypy37/bin/pypy3 -m ensurepip
+        /opt/pypy37/bin/pypy3 -m pip install --upgrade pip wheel
+        /opt/pypy37/bin/pypy3 -m venv pypy-venv
+        echo "##vso[task.prependpath]pypy-venv/bin"
+      displayName: 'Install PyPy 3.7'
+      condition: eq(variables['python.version'], 'pypy3')
     # azure-pipelines unpredictably switches between Git\bin\bash and
     # Git\usr\bin\bash when running a bash script inside Windows environments.
     # The latter may use wrong bash commands, resulting in errors when codecov
