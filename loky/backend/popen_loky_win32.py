@@ -61,7 +61,7 @@ class Popen(_Popen):
         os.close(rfd)
 
         cmd = get_command_line(parent_pid=os.getpid(), pipe_handle=rhandle)
-        cmd = ' '.join('"%s"' % x for x in cmd)
+        cmd = ' '.join(f'"{x}"' for x in cmd)
 
         python_exe = spawn.get_executable()
 

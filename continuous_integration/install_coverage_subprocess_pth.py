@@ -13,4 +13,4 @@ filename = op.join(get_python_lib(), 'coverage_subprocess.pth')
 with open(filename, 'wb') as f:
     f.write(FILE_CONTENT.encode('ascii'))
 
-print('Installed subprocess coverage support: %s' % filename)
+print(f'Installed subprocess coverage support: {filename}')

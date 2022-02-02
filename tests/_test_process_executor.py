@@ -147,7 +147,7 @@ class ExecutorShutdownTest:
 
             # The workers should have completed their work before the main
             # process exits:
-            expected_filenames = ['task_%02d.log' % i
+            expected_filenames = [f'task_{i:02d}.log'
                                   for i in range(2 * n_jobs)]
 
             # Apparently files can take some time to appear under windows
@@ -775,8 +775,9 @@ class ExecutorTest:
                 # the recursive callback chains have completed successfully
                 break
             elif patience < 0:
-                raise AssertionError("callback submit chains stalled at: %r"
-                                     % collected)
+                raise AssertionError(
+                    f"callback submit chains stalled at: {collected!r}"
+                )
             else:
                 patience -= 1
                 time.sleep(0.01)

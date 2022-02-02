@@ -79,8 +79,8 @@ else:
     def assert_spawning(obj):
         if get_spawning_popen() is None:
             raise RuntimeError(
-                '%s objects should only be shared between processes'
-                ' through inheritance' % type(obj).__name__
+                f'{type(obj).__name__} objects should only be shared between '
+                'processes through inheritance'
             )
 
     def get_context(method=None):
