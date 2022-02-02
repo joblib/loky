@@ -103,7 +103,7 @@ def kill_friend(pid, delay=0):
         if psutil.pid_exists(pid):
             util.debug("Fail to kill an alive process?!?")
             raise e
-        util.debug("process {} was already dead".format(pid))
+        util.debug(f"process {pid} was already dead")
 
 
 def raise_error(etype=UnpicklingError, message=None):

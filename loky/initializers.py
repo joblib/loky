@@ -23,8 +23,7 @@ def _make_viztracer_initializer_and_initargs():
     except Exception as e:
         # In case viztracer's API evolve, we do not want to crash loky but
         # we want to know about it to be able to update loky.
-        warnings.warn("Unable to introspect viztracer state: {}"
-                      .format(e))
+        warnings.warn(f"Unable to introspect viztracer state: {e}")
     return None, ()
 
 
@@ -66,8 +65,7 @@ def _chain_initializers(initializer_and_args):
 def _prepare_initializer(initializer, initargs):
     if initializer is not None and not callable(initializer):
         raise TypeError(
-            "initializer must be a callable, got: {!r}"
-            .format(initializer)
+            f"initializer must be a callable, got: {initializer!r}"
         )
 
     # Introspect runtime to determine if we need to propagate the viztracer

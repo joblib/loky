@@ -79,7 +79,7 @@ class MyObject(object):
         self.value = value
 
     def __repr__(self):
-        return "MyObject({})".format(self.value)
+        return f"MyObject({self.value})"
 
     def my_method(self):
         pass
@@ -119,9 +119,13 @@ class ExecutorShutdownTest:
         self.executor.shutdown(wait=True, kill_workers=True)
 
         tempdir = tempfile.mkdtemp(prefix='loky_')
+
+        executor_type=self.executor_type.__name__
+        start_method=self.context.get_start_method()
+        tempdir=tempdir.replace("\\", "/")
         try:
             n_jobs = 4
-            code = """if True:
+            code = f"""if True:
                 from loky.process_executor import {executor_type}
                 from loky.backend import get_context
                 from tests._test_process_executor import sleep_and_write
@@ -131,7 +135,7 @@ class ExecutorShutdownTest:
                 e.submit(id, 42).result()
 
                 task_ids = list(range(2 * {n_jobs}))
-                filenames = ['{tempdir}/task_{{:02}}.log'.format(i)
+                filenames = [f'{tempdir}/task_{{i:02}}.log'
                              for i in task_ids]
                 e.map(sleep_and_write, [0.1] * 2 * {n_jobs},
                       filenames, task_ids)
@@ -140,10 +144,6 @@ class ExecutorShutdownTest:
                 # shutdown main Python interpreter while letting the worker
                 # processes finish in the background.
             """
-            code = code.format(executor_type=self.executor_type.__name__,
-                               start_method=self.context.get_start_method(),
-                               n_jobs=n_jobs,
-                               tempdir=tempdir.replace("\\", "/"))
             stdout, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
@@ -379,7 +379,9 @@ class ExecutorShutdownTest:
 
         See https://bugs.python.org/issue39205.
         """
-        code = """if True:
+        executor_type=self.executor_type.__name__
+        start_method=self.context.get_start_method()
+        code = f"""if True:
             from loky.process_executor import {executor_type}
             from loky.backend import get_context
             from tests._test_process_executor import sleep_and_print
@@ -390,8 +392,6 @@ class ExecutorShutdownTest:
             e.submit(sleep_and_print, 1.0, "apple")
             e.shutdown(wait=False)
         """
-        code = code.format(executor_type=self.executor_type.__name__,
-                           start_method=self.context.get_start_method())
         stdout, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
