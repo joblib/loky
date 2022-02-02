@@ -50,8 +50,10 @@ if sys.version_info[:2] >= (3, 4):
         try:
             context = mp_get_context(method)
         except ValueError:
-            raise ValueError("Unknown context '{}'. Value should be in {}."
-                             .format(method, START_METHODS))
+            raise ValueError(
+                f"Unknown context '{method}'. Value should be in "
+                "{START_METHODS}."
+            )
 
         return context
 
