@@ -303,10 +303,10 @@ def main(fd, verbose=0):
                                 _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
                                 warnings.warn(
-                                    'resource_tracker: %s: %r' % (name, e))
+                                    f'resource_tracker: {name}: {e!r}')
 
                     else:
-                        raise RuntimeError('unrecognized command %r' % cmd)
+                        raise RuntimeError('unrecognized command {cmd!r}')
                 except BaseException:
                     try:
                         sys.excepthook(*sys.exc_info())
@@ -317,9 +317,11 @@ def main(fd, verbose=0):
         def _unlink_resources(rtype_registry, rtype):
             if rtype_registry:
                 try:
-                    warnings.warn('resource_tracker: There appear to be %d '
-                                  'leaked %s objects to clean up at shutdown' %
-                                  (len(rtype_registry), rtype))
+                    warnings.warn(
+                        'resource_tracker: There appear to be '
+                        f'{len(rtype_registry)} leaked {rtype} objects to '
+                        'clean up at shutdown'
+                    )
                 except Exception:
                     pass
             for name in rtype_registry:
@@ -331,7 +333,7 @@ def main(fd, verbose=0):
                     if verbose:
                         util.debug(f"[ResourceTracker] unlink {name}")
                 except Exception as e:
-                    warnings.warn('resource_tracker: %s: %r' % (name, e))
+                    warnings.warn(f'resource_tracker: {name}: {e!r}')
 
         for rtype, rtype_registry in registry.items():
             if rtype == "folder":
@@ -371,7 +373,7 @@ def spawnv_passfds(path, args, passfds):
             os.close(errpipe_read)
             os.close(errpipe_write)
     else:
-        cmd = ' '.join('"%s"' % x for x in args)
+        cmd = ' '.join(f'"{x}"' for x in args)
         try:
             hp, ht, pid, tid = _winapi.CreateProcess(
                 path, cmd, None, None, True, 0, None, None, None)

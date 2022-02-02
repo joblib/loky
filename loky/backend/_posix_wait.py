@@ -77,7 +77,7 @@ if hasattr(select, 'poll'):
         ls = []
         for fd, event in pollster.poll(timeout):
             if event & select.POLLNVAL:  # pragma: no cover
-                raise ValueError('invalid file descriptor %i' % fd)
+                raise ValueError(f'invalid file descriptor {fd}')
             ls.append(fd_map[fd])
         return ls
 else:
