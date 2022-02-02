@@ -2,16 +2,12 @@ import sys
 import time
 import pytest
 import threading
-from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
-                        FINISHED, Future)
-from .utils import captured_stderr
+from concurrent import futures
+from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
+                                      CANCELLED_AND_NOTIFIED, FINISHED)
 
-if sys.version_info[:2] < (3, 3):
-    import loky._base as futures
-else:
-    # This makes sure of the compatibility of the Error raised by loky with
-    # the ones from concurrent.futures
-    from concurrent import futures
+from loky._base import Future
+from .utils import captured_stderr
 
 
 def create_future(state=PENDING, exception=None, result=None):
