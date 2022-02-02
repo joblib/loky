@@ -38,7 +38,7 @@ def create_resource(rtype):
         return mkdtemp(dir=os.getcwd())
 
     elif rtype == "semlock":
-        name = "test-loky-%i-%s" % (os.getpid(), next(_rand_name))
+        name = f"test-loky-{os.getpid()}-{next(_rand_name)}"
         _SemLock(1, 1, 1, name, False)
         return name
     elif rtype == "file":
@@ -46,7 +46,7 @@ def create_resource(rtype):
         tmpfile.close()
         return tmpfile.name
     else:
-        raise ValueError("Resource type %s not understood" % rtype)
+        raise ValueError(f"Resource type {rtype} not understood")
 
 
 def resource_exists(name, rtype):
@@ -60,7 +60,7 @@ def resource_exists(name, rtype):
         except OSError:
             return True
     else:
-        raise ValueError("Resource type %s not understood" % rtype)
+        raise ValueError(f"Resource type {rtype} not understood")
 
 
 @contextlib.contextmanager
