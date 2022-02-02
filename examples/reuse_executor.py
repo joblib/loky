@@ -48,4 +48,4 @@ print("All the jobs were run in a process different from main process")
 
 assert len(set(pids)) == 1
 print("All the computation where run in a single `ProcessPoolExecutor` with "
-      "worker pid={}".format(pids[0]))
+      f"worker pid={pids[0]}")

@@ -133,8 +133,7 @@ class ResourceTracker(object):
                 os.close(r)
                 r = _r
 
-            cmd = 'from {} import main; main({}, {})'.format(
-                main.__module__, r, VERBOSE)
+            cmd = f'from {main.__module__} import main; main({r}, {VERBOSE})'
             try:
                 fds_to_pass.append(r)
                 # process will out live us, so no need to wait on pid
@@ -148,7 +147,7 @@ class ResourceTracker(object):
                     for i in range(1, len(args)):
                         args[i] = re.sub("-R+", "-R", args[i])
                 args += ['-c', cmd]
-                util.debug("launching resource tracker: {}".format(args))
+                util.debug(f"launching resource tracker: {args}")
                 # bpo-33613: Register a signal mask that will block the
                 # signals.  This signal mask will be inherited by the child
                 # that is going to be spawned and will protect the child from a
@@ -201,7 +200,7 @@ class ResourceTracker(object):
         self._send("MAYBE_UNLINK", name, rtype)
 
     def _send(self, cmd, name, rtype):
-        msg = '{0}:{1}:{2}\n'.format(cmd, name, rtype).encode('ascii')
+        msg = f'{cmd}:{name}:{rtype}\n'.encode('ascii')
         if len(name) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
             # bytes are atomic, and that PIPE_BUF >= 512
@@ -261,10 +260,11 @@ def main(fd, verbose=0):
 
                     if rtype not in _CLEANUP_FUNCS:
                         raise ValueError(
-                            'Cannot register {} for automatic cleanup: '
-                            'unknown resource type ({}). Resource type should '
-                            'be one of the following: {}'.format(
-                                name, rtype, list(_CLEANUP_FUNCS.keys())))
+                            f'Cannot register {name} for automatic cleanup: '
+                            f'unknown resource type ({rtype}). Resource type '
+                            'should be one of the following: '
+                            f'{list(_CLEANUP_FUNCS.keys())}'
+                        )
 
                     if cmd == 'REGISTER':
                         if name not in registry[rtype]:
@@ -274,30 +274,32 @@ def main(fd, verbose=0):
 
                         if verbose:
                             util.debug(
-                                "[ResourceTracker] incremented refcount of {} "
-                                "{} (current {})".format(
-                                    rtype, name, registry[rtype][name]))
+                                "[ResourceTracker] incremented refcount of "
+                                f"{rtype} {name} "
+                                f"(current {registry[rtype][name]})"
+                            )
                     elif cmd == 'UNREGISTER':
                         del registry[rtype][name]
                         if verbose:
                             util.debug(
-                                "[ResourceTracker] unregister {} {}: "
-                                "registry({})".format(name, rtype, len(registry)))
+                                f"[ResourceTracker] unregister {name} {rtype}: "
+                                f"registry({len(registry)})"
+                            )
                     elif cmd == 'MAYBE_UNLINK':
                         registry[rtype][name] -= 1
                         if verbose:
                             util.debug(
-                                "[ResourceTracker] decremented refcount of {} "
-                                "{} (current {})".format(
-                                    rtype, name, registry[rtype][name]))
+                                "[ResourceTracker] decremented refcount of "
+                                f"{rtype} {name} (current {registry[rtype][name]})"
+                            )
 
                         if registry[rtype][name] == 0:
                             del registry[rtype][name]
                             try:
                                 if verbose:
                                     util.debug(
-                                            "[ResourceTracker] unlink {}"
-                                            .format(name))
+                                            f"[ResourceTracker] unlink {name}"
+                                    )
                                 _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
                                 warnings.warn(
@@ -327,8 +329,7 @@ def main(fd, verbose=0):
                 try:
                     _CLEANUP_FUNCS[rtype](name)
                     if verbose:
-                        util.debug("[ResourceTracker] unlink {}"
-                                         .format(name))
+                        util.debug(f"[ResourceTracker] unlink {name}")
                 except Exception as e:
                     warnings.warn('resource_tracker: %s: %r' % (name, e))
 

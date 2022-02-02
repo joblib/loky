@@ -16,7 +16,7 @@ loky._INITIALIZER_STATUS = "uninitialized"
 
 
 def initializer(x):
-    print("[{}] init".format(mp.current_process().name))
+    print(f"[{mp.current_process().name}] init")
     loky._INITIALIZER_STATUS = x
 
 

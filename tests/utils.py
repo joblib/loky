@@ -112,11 +112,15 @@ class TimingWrapper(object):
         finally:
             self.elapsed = time.time() - t
 
-    def assert_timing_almost_equal(self, delay):
-        assert round(self.elapsed - delay, 1) == 0
+    def assert_timing_lower_than(self, delay):
+        msg = (
+            f"expected duration lower than {delay:.3f}s, "
+            f"got {self.elapsed:.3f}s"
+        )
+        assert self.elapsed < delay, msg
 
     def assert_timing_almost_zero(self):
-        self.assert_timing_almost_equal(0.0)
+        self.assert_timing_lower_than(0.1)
 
 
 #
@@ -144,7 +148,7 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
                             stderr=subprocess.PIPE, env=env)
 
     def kill_process():
-        warnings.warn("Timeout running {}".format(cmd))
+        warnings.warn(f"Timeout running {cmd}")
         proc.kill()
 
     timer = threading.Timer(timeout, kill_process)
@@ -156,26 +160,26 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
             stdout, stderr = stdout.decode(), stderr.decode()
         if proc.returncode == -9:
             message = (
-                'Subprocess timeout after {}s.\nStdout:\n{}\n'
-                'Stderr:\n{}').format(timeout, stdout, stderr)
+                f'Subprocess timeout after {timeout}s.\nStdout:\n{stdout}\n'
+                f'Stderr:\n{stderr}')
             raise TimeoutError(message)
         elif proc.returncode != 0:
             message = (
-                'Non-zero return code: {}.\nStdout:\n{}\n'
-                'Stderr:\n{}').format(
-                    proc.returncode, stdout, stderr)
+                f'Non-zero return code: {proc.returncode}.\nStdout:\n{stdout}'
+                f'\nStderr:\n{stderr}')
             raise ValueError(message)
 
         if (stdout_regex is not None and
                 not re.search(stdout_regex, stdout)):
             raise ValueError(
-                "Unexpected stdout: {!r} does not match:\n{!r}".format(
-                    stdout_regex, stdout))
+                f"Unexpected stdout: {stdout_regex!r} does not match:"
+                f"\n{stdout!r}"
+            )
         if (stderr_regex is not None and
                 not re.search(stderr_regex, stderr)):
             raise ValueError(
-                "Unexpected stderr: {!r} does not match:\n{!r}".format(
-                    stderr_regex, stderr))
+                f"Unexpected stderr: {stderr_regex!r} does not match:\n{stderr!r}"
+            )
 
         return stdout, stderr
 

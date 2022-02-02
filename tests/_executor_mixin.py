@@ -124,14 +124,14 @@ class ExecutorMixin:
 
     @classmethod
     def setup_class(cls):
-        print("setup class with {}".format(cls.context))
+        print(f"setup class with {cls.context}")
         global _test_event
         if _test_event is None:
             _test_event = cls.context.Event()
 
     @classmethod
     def teardown_class(cls):
-        print("teardown class with {}".format(cls.context))
+        print(f"teardown class with {cls.context}")
         global _test_event
         if _test_event is not None:
             _test_event = None
