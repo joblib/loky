@@ -1,5 +1,9 @@
 ### 3.1.0 - XXXX-XX-XX
 
+- Fix an exception that could be raised in an auxiliary thread when
+  garbage collecting an executor instance when shutting down the
+  the Python interpreter (#311).
+
 
 ### 3.0.0 - 2021-09-10
 

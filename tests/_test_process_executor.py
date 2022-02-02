@@ -81,6 +81,18 @@ class MyObject:
         pass
 
 
+def _assert_no_error(stderr):
+    if sys.platform == "darwin":
+        # On macOS, ignore UserWarning related to their broken semaphore
+        # implementation.
+        stderr = "\n".join(
+            line
+            for line in stderr.splitlines()
+            if "increase its maximal value" not in line
+        )
+    assert len(stderr) == 0, stderr
+
+
 class ExecutorShutdownTest:
 
     def test_run_after_shutdown(self):
@@ -128,11 +140,7 @@ class ExecutorShutdownTest:
             _, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
-            # On OSX, remove UserWarning for broken semaphores
-            if sys.platform == "darwin":
-                stderr = [e for e in stderr.strip().split("\n")
-                          if "increase its maximal value" not in e]
-            assert len(stderr) == 0 or stderr[0] == ''
+            _assert_no_error(stderr)
 
             # The workers should have completed their work before the main
             # process exits:
@@ -380,11 +388,7 @@ class ExecutorShutdownTest:
         stdout, stderr = check_subprocess_call(
             [sys.executable, "-c", code], timeout=55)
 
-        # On OSX, remove UserWarning for broken semaphores
-        if sys.platform == "darwin":
-            stderr = [e for e in stderr.strip().split("\n")
-                      if "increase its maximal value" not in e]
-        assert len(stderr) == 0 or stderr[0] == ''
+        _assert_no_error(stderr)
         assert stdout.strip() == "apple"
 
     @classmethod

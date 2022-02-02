@@ -495,8 +495,12 @@ class _ExecutorManagerThread(threading.Thread):
         def weakref_cb(_,
                        thread_wakeup=self.thread_wakeup,
                        shutdown_lock=self.shutdown_lock):
-            mp.util.debug('Executor collected: triggering callback for'
-                          ' QueueManager wakeup')
+            if mp is not None:
+                # At this point, the multiprocessing module can already be
+                # garbage collected. We only log debug info when still
+                # possible.
+                mp.util.debug('Executor collected: triggering callback for'
+                              ' QueueManager wakeup')
             with shutdown_lock:
                 thread_wakeup.wakeup()
 
