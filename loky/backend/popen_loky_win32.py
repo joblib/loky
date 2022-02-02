@@ -106,8 +106,9 @@ class Popen(_Popen):
             # wfd.close is called. Thus we can safely ignore it.
             if exc.errno != 22:
                 raise
-            util.debug(f"While starting {process_obj._name}, "
-                       "ignored a IOError 22")
+            util.debug(
+                f"While starting {process_obj._name}, ignored a IOError 22"
+            )
 
     def duplicate_for_child(self, handle):
         assert self is get_spawning_popen()

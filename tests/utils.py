@@ -141,20 +141,22 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
             raise TimeoutError(message)
         elif proc.returncode != 0:
             message = (
-                f'Non-zero return code: {proc.returncode}.\n'
-                f'Stdout:\n{stdout}\nStderr:\n{stderr}')
+                f'Non-zero return code: {proc.returncode}.\nStdout:\n{stdout}'
+                f'\nStderr:\n{stderr}')
             raise ValueError(message)
 
         if (stdout_regex is not None and
                 not re.search(stdout_regex, stdout)):
             raise ValueError(
-                f"Unexpected stdout: {stdout_regex!r} does not match:\n"
-                f"{stdout!r}")
+                f"Unexpected stdout: {stdout_regex!r} does not match:"
+                f"\n{stdout!r}"
+            )
         if (stderr_regex is not None and
                 not re.search(stderr_regex, stderr)):
             raise ValueError(
-                f"Unexpected stdout: {stdout_regex!r} does not match:\n"
-                f"{stdout!r}")
+                f"Unexpected stderr: {stderr_regex!r} does not "
+                f"match:\n{stderr!r}"
+            )
 
         return stdout, stderr
 

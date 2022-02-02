@@ -53,8 +53,9 @@ def set_start_method(method, force=False):
     if _DEFAULT_START_METHOD is not None and not force:
         raise RuntimeError('context has already been set')
     assert method is None or method in START_METHODS, (
-        f"'{method}' is not a valid start_method. "
-        f"It should be in {START_METHODS}")
+        f"'{method}' is not a valid start_method. It should be in "
+        f"{START_METHODS}"
+    )
 
     _DEFAULT_START_METHOD = method
 

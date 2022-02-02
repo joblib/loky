@@ -130,9 +130,9 @@ def get_exitcodes_terminated_worker(processes):
 
 def _format_exitcodes(exitcodes):
     """Format a list of exit code with names of the signals if possible"""
-    str_exitcodes = ', '.join(f"{_get_exitcode_name(e)}({e})"
-                              for e in exitcodes if e is not None)
-    return f"{{{str_exitcodes}}}"
+    str_exitcodes = [f"{_get_exitcode_name(e)}({e})"
+                     for e in exitcodes if e is not None]
+    return "{" + ", ".join(str_exitcodes) + "}"
 
 
 def _get_exitcode_name(exitcode):

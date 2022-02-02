@@ -124,8 +124,9 @@ if sys.platform != "win32":
 
                 from .fork_exec import fork_exec
                 pid = fork_exec(cmd_python, self._fds, env=process_obj.env)
-                util.debug(f"launched python with pid {pid} and cmd:\n"
-                           f"{cmd_python}")
+                util.debug(
+                    f"launched python with pid {pid} and cmd:\n{cmd_python}"
+                )
                 self.sentinel = parent_r
 
                 method = 'getbuffer'

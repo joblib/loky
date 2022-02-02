@@ -246,9 +246,10 @@ def main(fd, verbose=0):
                     if rtype not in _CLEANUP_FUNCS:
                         raise ValueError(
                             f'Cannot register {name} for automatic cleanup: '
-                            f'unknown resource type ({rtype}). '
-                            'Resource type should be one of the following: '
-                            f'{list(_CLEANUP_FUNCS)}')
+                            f'unknown resource type ({rtype}). Resource type '
+                            'should be one of the following: '
+                            f'{list(_CLEANUP_FUNCS.keys())}'
+                        )
 
                     if cmd == 'REGISTER':
                         if name not in registry[rtype]:
@@ -260,27 +261,31 @@ def main(fd, verbose=0):
                             util.debug(
                                 "[ResourceTracker] incremented refcount of "
                                 f"{rtype} {name} "
-                                f"(current {registry[rtype][name]})")
+                                f"(current {registry[rtype][name]})"
+                            )
                     elif cmd == 'UNREGISTER':
                         del registry[rtype][name]
                         if verbose:
                             util.debug(
-                                "[ResourceTracker] unregister "
-                                f"{name} {rtype}: registry({len(registry)})")
+                                f"[ResourceTracker] unregister {name} {rtype}: "
+                                f"registry({len(registry)})"
+                            )
                     elif cmd == 'MAYBE_UNLINK':
                         registry[rtype][name] -= 1
                         if verbose:
                             util.debug(
                                 "[ResourceTracker] decremented refcount of "
                                 f"{rtype} {name} "
-                                f"(current {registry[rtype][name]})")
+                                f"(current {registry[rtype][name]})"
+                            )
 
                         if registry[rtype][name] == 0:
                             del registry[rtype][name]
                             try:
                                 if verbose:
                                     util.debug(
-                                        f"[ResourceTracker] unlink {name}")
+                                        f"[ResourceTracker] unlink {name}"
+                                    )
                                 _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
                                 warnings.warn(

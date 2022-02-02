@@ -510,7 +510,7 @@ class TestLokyBackend:
 
         # assert that the writable part of the Pipe (not passed to child),
         # have been properly closed.
-        assert not set(f"f{w}").intersection(lines)
+        assert len(set(f"f{w}").intersection(lines)) == 0
 
         return named_sem
 
@@ -705,8 +705,9 @@ def test_recursive_terminate(use_psutil):
     recursive_terminate(p, use_psutil=use_psutil)
 
     # The process can take some time finishing so we should wait up to 5s
-    _, alive = psutil.wait_procs(children, timeout=5)
-    assert len(alive) == 0, f"Should be no descendant left but found:\n{alive}"
+    gone, alive = psutil.wait_procs(children, timeout=5)
+    msg = f"Should be no descendant left but found:\n{alive}"
+    assert len(alive) == 0, msg
 
 
 def _test_default_subcontext(queue):

@@ -274,9 +274,9 @@ class _CallItem:
         return self.fn(*self.args, **self.kwargs)
 
     def __repr__(self):
-        return ("CallItem"
-                f"({self.work_id}, {self.fn}, {self.args}, {self.kwargs})")
-
+        return (
+            f"CallItem({self.work_id}, {self.fn}, {self.args}, {self.kwargs})"
+        )
 
 class _SafeQueue(Queue):
     """Safe Queue set exception to the future object linked to a job"""
@@ -635,8 +635,10 @@ class _ExecutorManagerThread(threading.Thread):
                 # In Windows, introspecting terminated workers exitcodes seems
                 # unstable, therefore they are not appended in the exception
                 # message.
-                int_codes = get_exitcodes_terminated_worker(self.processes)
-                exit_codes = f"\nThe exit codes of the workers are {int_codes}"
+                exit_codes = (
+                    "\nThe exit codes of the workers are "
+                    f"{get_exitcodes_terminated_worker(self.processes)}"
+                )
             mp.util.debug('A worker unexpectedly terminated. Workers that '
                           'might have caused the breakage: '
                           + str({p.name: p.exitcode
