@@ -79,9 +79,6 @@ from multiprocessing.connection import wait
 
 from . import _base
 from .backend import get_context
-from .backend.compat import queue
-from .backend.compat import wait
-from .backend.compat import set_cause
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue
 from .backend.reduction import set_loky_pickler, get_loky_pickler_name
