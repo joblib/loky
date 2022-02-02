@@ -89,11 +89,11 @@ class TestResourceTracker:
             p.stderr.close()
             p.stdout.close()
 
-            pattern = "decremented refcount of file %s" % filename
+            pattern = f"decremented refcount of file {filename}"
             assert pattern in err
             assert "leaked" not in err
 
-            pattern = "KeyError: '%s'" % filename
+            pattern = f"KeyError: '{filename}'"
             assert pattern not in err
 
         finally:
@@ -157,13 +157,14 @@ class TestResourceTracker:
         if sys.platform == "win32":
             errno_map = {'file': 2, 'folder': 3}
             expected = (
-                "resource_tracker: %s: (WindowsError\\((%d)|"
-                "FileNotFoundError)" % (re.escape(name1), errno_map[rtype])
+                f"resource_tracker: {re.escape(name1)}: "
+                f"(WindowsError\\(({errno_map[rtype]})|FileNotFoundError)"
             )
         else:
-            expected = ("resource_tracker: %s: (OSError\\(%d|"
-                        "FileNotFoundError)" % (re.escape(name1),
-                                                errno.ENOENT))
+            expected = (
+                f"resource_tracker: {re.escape(name1)}: "
+                f"(OSError\\({errno.ENOENT}|FileNotFoundError)"
+            )
         assert re.search(expected, err) is not None
 
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])

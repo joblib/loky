@@ -80,7 +80,7 @@ def test_cpu_count_cfs_limit():
     # We mount the loky source as /loky inside the container,
     # so it can be imported when running commands under /
     res = check_output([docker_bin, 'run', '--rm', '--cpus', '0.5',
-                        '-v', '%s:/loky' % loky_path,
+                        '-v', f'{loky_path}:/loky',
                         'python:3.6',
                         'python', '-c', cpu_count_cmd.format(args='')])
 

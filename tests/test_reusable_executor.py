@@ -64,8 +64,10 @@ def wait_dead(worker, n_tries=1000, delay=0.001):
         if worker.exitcode is not None:
             return
         sleep(delay)
-    raise RuntimeError("Process %d failed to die for at least %0.3fs" %
-                       (worker.pid, delay * n_tries))
+    raise RuntimeError(
+        f"Process {worker.pid} failed to die for at least "
+        f"{delay * n_tries:0.3f}s"
+    )
 
 
 def crash():
@@ -766,7 +768,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         output_collector = []
         threads = [threading.Thread(
             target=helper_func, args=(output_collector, w),
-            name='test_thread_%02d_max_workers_%d' % (i, w))
+            name=f'test_thread_{i:02d}_max_workers_{w}')
             for i, w in enumerate(max_workers)]
 
         with warnings.catch_warnings(record=True):

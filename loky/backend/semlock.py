@@ -87,9 +87,9 @@ def _sem_open(name, value=None):
     if handle == SEM_FAILURE:
         e = ctypes.get_errno()
         if e == errno.EEXIST:
-            raise FileExistsError("a semaphore named %s already exists" % name)
+            raise FileExistsError(f"a semaphore named {name} already exists")
         elif e == errno.ENOENT:
-            raise FileNotFoundError('cannot find semaphore named %s' % name)
+            raise FileNotFoundError(f'cannot find semaphore named {name}')
         elif e == errno.ENOSYS:
             raise NotImplementedError('No semaphore implementation on this '
                                       'system')
