@@ -401,15 +401,14 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
     _last_memory_leak_check = None
     pid = os.getpid()
 
-    mp.util.debug('Worker started with timeout=%s' % timeout)
+    mp.util.debug(f'Worker started with timeout={timeout}')
     while True:
         try:
             call_item = call_queue.get(block=True, timeout=timeout)
             if call_item is None:
                 mp.util.info("Shutting down worker on sentinel")
         except queue.Empty:
-            mp.util.info("Shutting down worker after timeout %0.3fs"
-                         % timeout)
+            mp.util.info(f"Shutting down worker after timeout {timeout:0.3f}s")
             if processes_management_lock.acquire(block=False):
                 processes_management_lock.release()
                 call_item = None
@@ -870,8 +869,10 @@ def _check_system_limits():
         # minimum number of semaphores available
         # according to POSIX
         return
-    _system_limited = ("system provides too few semaphores (%d available, "
-                       "256 necessary)" % nsems_max)
+    _system_limited = (
+        f"system provides too few semaphores ({nsems_max} available, "
+        "256 necessary)"
+    )
     raise NotImplementedError(_system_limited)
 
 
@@ -1174,7 +1175,7 @@ class ProcessPoolExecutor(_base.Executor):
         return _chain_from_iterable_of_lists(results)
 
     def shutdown(self, wait=True, kill_workers=False):
-        mp.util.debug('shutting down executor %s' % self)
+        mp.util.debug(f'shutting down executor {self}')
 
         self._flags.flag_as_shutting_down(kill_workers)
         executor_manager_thread = self._executor_manager_thread
