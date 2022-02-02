@@ -62,6 +62,7 @@ __author__ = 'Thomas Moreau (thomas.moreau.2010@gmail.com)'
 import os
 import gc
 import sys
+import queue
 import struct
 import weakref
 import warnings
@@ -72,6 +73,9 @@ from time import time
 import multiprocessing as mp
 from functools import partial
 from pickle import PicklingError
+from concurrent.futures import Executor
+from concurrent.futures.process import BrokenProcessPool as _BPPException
+from multiprocessing.connection import wait
 
 from . import _base
 from .backend import get_context
@@ -83,16 +87,6 @@ from .backend.queues import Queue, SimpleQueue
 from .backend.reduction import set_loky_pickler, get_loky_pickler_name
 from .backend.utils import recursive_terminate, get_exitcodes_terminated_worker
 from .initializers import _prepare_initializer
-
-try:
-    from concurrent.futures.process import BrokenProcessPool as _BPPException
-except ImportError:
-    _BPPException = RuntimeError
-
-
-# Compatibility for python2.7
-if sys.version_info[0] == 2:
-    ProcessLookupError = OSError
 
 
 # Mechanism to prevent infinite process spawning. When a worker of a
@@ -137,12 +131,7 @@ class _ThreadWakeup:
 
     def wakeup(self):
         if not self._closed:
-            if sys.platform == "win32" and sys.version_info[:2] < (3, 4):
-                # Compat for python2.7 on windows, where poll return false for
-                # b"" messages. Use the slightly larger message b"0".
-                self._writer.send_bytes(b"0")
-            else:
-                self._writer.send_bytes(b"")
+            self._writer.send_bytes(b"")
 
     def clear(self):
         if not self._closed:
@@ -150,7 +139,7 @@ class _ThreadWakeup:
                 self._reader.recv_bytes()
 
 
-class _ExecutorFlags(object):
+class _ExecutorFlags:
     """necessary references to maintain executor states without preventing gc
 
     It permits to keep the information needed by executor_manager_thread
@@ -249,11 +238,11 @@ class _ExceptionWithTraceback(BaseException):
 
 
 def _rebuild_exc(exc, tb):
-    exc = set_cause(exc, _RemoteTraceback(tb))
+    exc.__cause__ = _RemoteTraceback(tb)
     return exc
 
 
-class _WorkItem(object):
+class _WorkItem:
 
     __slots__ = ["future", "fn", "args", "kwargs"]
 
@@ -264,7 +253,7 @@ class _WorkItem(object):
         self.kwargs = kwargs
 
 
-class _ResultItem(object):
+class _ResultItem:
 
     def __init__(self, work_id, exception=None, result=None):
         self.work_id = work_id
@@ -272,7 +261,7 @@ class _ResultItem(object):
         self.result = result
 
 
-class _CallItem(object):
+class _CallItem:
 
     def __init__(self, work_id, fn, args, kwargs):
         self.work_id = work_id
@@ -299,7 +288,7 @@ class _SafeQueue(Queue):
         self.thread_wakeup = thread_wakeup
         self.pending_work_items = pending_work_items
         self.running_work_items = running_work_items
-        super(_SafeQueue, self).__init__(max_size, reducers=reducers, ctx=ctx)
+        super().__init__(max_size, reducers=reducers, ctx=ctx)
 
     def _on_queue_feeder_error(self, e, obj):
         if isinstance(obj, _CallItem):
@@ -313,8 +302,7 @@ class _SafeQueue(Queue):
                     "Could not pickle the task to send it to the workers.")
             tb = traceback.format_exception(
                 type(e), e, getattr(e, "__traceback__", None))
-            raised_error = set_cause(raised_error,
-                                     _RemoteTraceback(''.join(tb)))
+            raised_error.__cause__ = _RemoteTraceback(''.join(tb))
             work_item = self.pending_work_items.pop(obj.work_id, None)
             self.running_work_items.remove(obj.work_id)
             # work_item can be None if another process terminated. In this
@@ -325,15 +313,12 @@ class _SafeQueue(Queue):
                 del work_item
             self.thread_wakeup.wakeup()
         else:
-            super(_SafeQueue, self)._on_queue_feeder_error(e, obj)
+            super()._on_queue_feeder_error(e, obj)
 
 
 def _get_chunks(chunksize, *iterables):
     """Iterates over zip()ed iterables in chunks. """
-    if sys.version_info < (3, 3):
-        it = itertools.izip(*iterables)
-    else:
-        it = zip(*iterables)
+    it = zip(*iterables)
     while True:
         chunk = tuple(itertools.islice(it, chunksize))
         if not chunk:
@@ -548,9 +533,7 @@ class _ExecutorManagerThread(threading.Thread):
         # of new processes or shut down
         self.processes_management_lock = executor._processes_management_lock
 
-        super(_ExecutorManagerThread, self).__init__(
-            name="ExecutorManagerThread"
-        )
+        super().__init__(name="ExecutorManagerThread")
         if sys.version_info < (3, 9):
             self.daemon = True
 
@@ -627,7 +610,7 @@ class _ExecutorManagerThread(threading.Thread):
                         "A task has failed to un-serialize. Please ensure that"
                         " the arguments of the function are all picklable."
                     )
-                    set_cause(bpe, result_item)
+                    bpe.__cause__ = result_item
                 else:
                     is_broken = False
             except BaseException as e:
@@ -638,7 +621,7 @@ class _ExecutorManagerThread(threading.Thread):
                 )
                 tb = traceback.format_exception(
                     type(e), e, getattr(e, "__traceback__", None))
-                set_cause(bpe,  _RemoteTraceback(''.join(tb)))
+                bpe.__cause__ = _RemoteTraceback(''.join(tb))
 
         elif wakeup_reader in ready:
             # This is simply a wake-up event that might either trigger putting
@@ -801,7 +784,7 @@ class _ExecutorManagerThread(threading.Thread):
         n_sentinels_sent = 0
         while (n_sentinels_sent < n_children_to_stop
                 and self.get_n_children_alive() > 0):
-            for i in range(n_children_to_stop - n_sentinels_sent):
+            for _ in range(n_children_to_stop - n_sentinels_sent):
                 try:
                     self.call_queue.put_nowait(None)
                     n_sentinels_sent += 1
@@ -849,9 +832,8 @@ _system_limited = None
 
 def _check_system_limits():
     global _system_limits_checked, _system_limited
-    if _system_limits_checked:
-        if _system_limited:
-            raise NotImplementedError(_system_limited)
+    if _system_limits_checked and _system_limited:
+        raise NotImplementedError(_system_limited)
     _system_limits_checked = True
     try:
         nsems_max = os.sysconf("SC_SEM_NSEMS_MAX")
@@ -933,7 +915,7 @@ class ShutdownExecutorError(RuntimeError):
     """
 
 
-class ProcessPoolExecutor(_base.Executor):
+class ProcessPoolExecutor(Executor):
 
     _at_exit = None
 
@@ -962,8 +944,7 @@ class ProcessPoolExecutor(_base.Executor):
             initargs: A tuple of arguments to pass to the initializer.
             env: A dict of environment variable to overwrite in the child
                 process. The environment variables are set before any module is
-                loaded. Note that this only works with the loky context and it
-                is unreliable under windows with Python < 3.6.
+                loaded. Note that this only works with the loky context.
         """
         _check_system_limits()
 
@@ -1048,17 +1029,6 @@ class ProcessPoolExecutor(_base.Executor):
         if self._executor_manager_thread is None:
             mp.util.debug('_start_executor_manager_thread called')
 
-            # When the executor gets garbarge collected, the weakref callback
-            # will wake up the queue management thread so that it can terminate
-            # if there is no pending work item.
-            def weakref_cb(
-                    _, thread_wakeup=self._executor_manager_thread_wakeup,
-                    shutdown_lock=self._shutdown_lock):
-                mp.util.debug('Executor collected: triggering callback for'
-                              ' QueueManager wakeup')
-                with self._shutdown_lock:
-                    thread_wakeup.wakeup()
-
             # Start the processes so that their sentinels are known.
             self._executor_manager_thread = _ExecutorManagerThread(self)
             self._executor_manager_thread.start()
@@ -1134,7 +1104,7 @@ class ProcessPoolExecutor(_base.Executor):
 
             self._ensure_executor_running()
             return f
-    submit.__doc__ = _base.Executor.submit.__doc__
+    submit.__doc__ = Executor.submit.__doc__
 
     def map(self, fn, *iterables, **kwargs):
         """Returns an iterator equivalent to map(fn, iter).
@@ -1163,7 +1133,7 @@ class ProcessPoolExecutor(_base.Executor):
         if chunksize < 1:
             raise ValueError("chunksize must be >= 1.")
 
-        results = super(ProcessPoolExecutor, self).map(
+        results = super().map(
             partial(_process_chunk, fn), _get_chunks(chunksize, *iterables),
             timeout=timeout
         )
@@ -1192,4 +1162,4 @@ class ProcessPoolExecutor(_base.Executor):
         self._result_queue = None
         self._processes_management_lock = None
 
-    shutdown.__doc__ = _base.Executor.shutdown.__doc__
+    shutdown.__doc__ = Executor.shutdown.__doc__
