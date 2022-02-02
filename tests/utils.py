@@ -95,11 +95,15 @@ class TimingWrapper:
         finally:
             self.elapsed = time.time() - t
 
-    def assert_timing_almost_equal(self, delay):
-        assert round(self.elapsed - delay, 1) == 0
+    def assert_timing_lower_than(self, delay):
+        msg = (
+            f"expected duration lower than {delay:.3f}s, "
+            f"got {self.elapsed:.3f}s"
+        )
+        assert self.elapsed < delay, msg
 
     def assert_timing_almost_zero(self):
-        self.assert_timing_almost_equal(0.0)
+        self.assert_timing_lower_than(0.1)
 
 
 #
