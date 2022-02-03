@@ -19,7 +19,7 @@ def raise_error(Err):
     raise Err()
 
 
-class ObjectWithPickleError():
+class ObjectWithPickleError:
     """Triggers a RuntimeError when sending job to the workers"""
 
     def __reduce__(self):
