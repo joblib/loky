@@ -9,7 +9,7 @@ from concurrent.futures is not robust to pickling error (at least in versions
 import argparse
 
 
-class ObjectWithPickleError():
+class ObjectWithPickleError:
     """Triggers a RuntimeError when sending job to the workers"""
 
     def __reduce__(self):

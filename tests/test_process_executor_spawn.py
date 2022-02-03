@@ -2,6 +2,7 @@ import sys
 
 from loky import process_executor
 from loky.backend import get_context
+
 from ._executor_mixin import ExecutorMixin
 
 
