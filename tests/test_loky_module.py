@@ -82,7 +82,7 @@ def test_cpu_count_cfs_limit():
     # so it can be imported when running commands under /
     res = check_output(
         f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.7 "
-        f"/bin/bash -c 'pip install -e /loky ; "
+        f"/bin/bash -c 'pip install --quiet -e /loky ; "
         f"python -c \"{cpu_count_cmd.format(args='')}\"'",
         shell=True
     )
