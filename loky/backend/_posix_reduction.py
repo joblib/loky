@@ -65,4 +65,5 @@ def rebuild_connection(df, readable, writable):
     fd = df.detach()
     return Connection(fd, readable, writable)
 
+
 _dispatch_table[Connection] = reduce_connection
