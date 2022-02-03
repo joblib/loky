@@ -118,11 +118,9 @@ class ExecutorShutdownTest:
         # Free resources to avoid random timeout in CI
         self.executor.shutdown(wait=True, kill_workers=True)
 
-        tempdir = tempfile.mkdtemp(prefix='loky_')
-
-        executor_type=self.executor_type.__name__
-        start_method=self.context.get_start_method()
-        tempdir=tempdir.replace("\\", "/")
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
+        tempdir = tempfile.mkdtemp(prefix='loky_').replace("\\", "/")
         try:
             n_jobs = 4
             code = f"""if True:
