@@ -172,7 +172,7 @@ class ExecutorMixin:
             time.sleep(sleep_duration)
             p = psutil.Process()
             workers = _running_children_with_cmdline(p)
-            if notworkers:
+            if not workers:
                 return
 
         # Patience exhausted: log the remaining workers command line and
