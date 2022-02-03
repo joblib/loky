@@ -70,8 +70,8 @@ def sleep_and_return(delay, x):
 
 def sleep_and_write(t, filename, msg):
     time.sleep(t)
-    with open(filename, 'wb') as f:
-        f.write(str(msg).encode('utf-8'))
+    with open(filename, 'w') as f:
+        f.write(str(msg))
 
 
 class MyObject:

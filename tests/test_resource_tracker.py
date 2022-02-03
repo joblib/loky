@@ -78,24 +78,17 @@ class TestResourceTracker:
         e.shutdown()
         '''
         try:
-            p = subprocess.Popen(
-                [sys.executable, '-E', '-c', cmd],
-                stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                text=True)
-            p.wait()
-
-            filename = p.stdout.readline().strip()
-            err = p.stderr.read()
-            p.stderr.close()
-            p.stdout.close()
+            p = subprocess.run([sys.executable, '-E', '-c', cmd],
+                               capture_output=True,
+                               text=True)
+            filename = p.stdout.strip()
 
             pattern = f"decremented refcount of file {filename}"
-            assert pattern in err
-            assert "leaked" not in err
+            assert pattern in p.stderr
+            assert "leaked" not in p.stderr
 
             pattern = f"KeyError: '{filename}'"
-            assert pattern not in err
+            assert pattern not in p.stderr
 
         finally:
             executor.shutdown()
@@ -219,15 +212,10 @@ class TestResourceTracker:
         '''
 
         env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
-        p = subprocess.Popen(
-            [sys.executable, '-c', cmd],
-            stderr=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            env=env
-        )
-        p.wait()
-        _, err = p.communicate()
-        assert p.returncode == 0, err
+        p = subprocess.run([sys.executable, '-c', cmd],
+                           capture_output=True,
+                           env=env)
+        assert p.returncode == 0, p.stderr
 
     def check_resource_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
@@ -327,9 +315,7 @@ class TestResourceTracker:
             f = executor.submit(shm.unlink).result()
 
         '''
-        p = subprocess.Popen([sys.executable, '-c', cmd],
-                             stderr=subprocess.PIPE,
-                             stdout=subprocess.PIPE)
-        out, err = p.communicate()
-        assert out.decode() == ""
-        assert err.decode() == ""
+        p = subprocess.run([sys.executable, '-c', cmd],
+                           capture_output=True, text=True)
+        assert not p.stdout
+        assert not p.stderr
