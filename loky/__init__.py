@@ -3,10 +3,17 @@ It provides a robust and dynamic implementation os the
 :class:`ProcessPoolExecutor` and a function :func:`get_reusable_executor` which
 hide the pool management under the hood.
 """
-from ._base import Executor, Future
-from ._base import wait, as_completed
-from ._base import TimeoutError, CancelledError
-from ._base import ALL_COMPLETED, FIRST_COMPLETED, FIRST_EXCEPTION
+from concurrent.futures import (
+    Executor,
+    wait,
+    TimeoutError,
+    CancelledError,
+    as_completed,
+    ALL_COMPLETED,
+    FIRST_COMPLETED,
+    FIRST_EXCEPTION,
+    Future,
+)
 
 from .backend.context import cpu_count
 from .backend.reduction import set_loky_pickler
