@@ -229,4 +229,5 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         # underestimating capacity and introducing overhead
         queue_size = 2 * cpu_count() + EXTRA_QUEUED_CALLS
         super()._setup_queues(
-            job_reducers, result_reducers, queue_size=queue_size)
+            job_reducers, result_reducers, queue_size=queue_size
+        )

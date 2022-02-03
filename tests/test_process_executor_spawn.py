@@ -7,9 +7,12 @@ from ._executor_mixin import ExecutorMixin
 
 
 if not hasattr(sys, "pypy_version_info"):
-    from ._test_process_executor import (AsCompletedTests,
-                                         ExecutorShutdownTest, ExecutorTest,
-                                         WaitTests)
+    from ._test_process_executor import (
+        AsCompletedTests,
+        ExecutorShutdownTest,
+        ExecutorTest,
+        WaitTests
+    )
 
     class ProcessPoolSpawnMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor

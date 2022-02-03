@@ -715,7 +715,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # (see #155)
         assert isinstance(f, concurrent.futures.Future)
         _, running = concurrent.futures.wait([f], timeout=15)
-        assert not running
+        assert len(running) == 0
 
     thread_configurations = [
         ('constant', 'clean_start'),

@@ -17,12 +17,16 @@ from pickle import PicklingError
 from threading import Thread
 from concurrent import futures
 from collections import defaultdict
+from concurrent import futures
 from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
                                       CANCELLED_AND_NOTIFIED, FINISHED)
 
 import loky
-from loky.process_executor import (LokyRecursionError, ShutdownExecutorError,
-                                   TerminatedWorkerError)
+from loky.process_executor import (
+    LokyRecursionError,
+    ShutdownExecutorError,
+    TerminatedWorkerError,
+)
 from loky._base import Future
 
 from . import _executor_mixin
@@ -447,8 +451,7 @@ class WaitTests:
                                           SUCCESSFUL_FUTURE, future1],
                                          return_when=futures.FIRST_COMPLETED)
 
-        assert ({CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE} ==
-                finished)
+        assert {CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE} == finished
         assert {future1} == pending
 
     @classmethod
@@ -489,8 +492,10 @@ class WaitTests:
                                           future1, future2],
                                          return_when=futures.FIRST_EXCEPTION)
 
-        assert {SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
-                future1} == finished
+        assert (
+            {SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE, future1} ==
+            finished
+        )
         assert {CANCELLED_FUTURE, future2} == pending
 
     def test_first_exception_one_already_failed(self):
@@ -877,8 +882,9 @@ class ExecutorTest:
     @pytest.mark.skipif(sys.maxsize < 2 ** 32,
                         reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
-            sys.version_info < (3, 8),
-            reason="Python version does not support pickling objects of size > 2 ** 31GB")
+        sys.version_info < (3, 8),
+        reason="Python version does not support pickling objects of size > 2 ** 31GB"
+    )
     def test_no_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
         self.executor.submit(id, data).result()
@@ -887,8 +893,9 @@ class ExecutorTest:
     @pytest.mark.skipif(sys.maxsize < 2 ** 32,
                         reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
-            sys.version_info >= (3, 8),
-            reason="Python version supports pickling objects of size > 2 ** 31GB")
+        sys.version_info >= (3, 8),
+        reason="Python version supports pickling objects of size > 2 ** 31GB"
+    )
     def test_expected_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
         with pytest.raises(RuntimeError):
@@ -961,8 +968,9 @@ class ExecutorTest:
 
         # Total run time should be 3s which is way over the 1s cooldown
         # period between two consecutive memory checks in the worker.
-        futures = [executor.submit(_create_cyclic_reference)
-                   for _ in range(300)]
+        futures = [
+            executor.submit(_create_cyclic_reference) for _ in range(300)
+        ]
 
         executor.shutdown(wait=True)
 
