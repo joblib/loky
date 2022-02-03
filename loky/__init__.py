@@ -12,10 +12,9 @@ from concurrent.futures import (
     ALL_COMPLETED,
     FIRST_COMPLETED,
     FIRST_EXCEPTION,
-
+    Future,
 )
 
-from ._base import Future
 from .backend.context import cpu_count
 from .backend.reduction import set_loky_pickler
 from .reusable_executor import get_reusable_executor
