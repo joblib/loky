@@ -248,11 +248,11 @@ class TestCloudpickleWrapper:
                 f.write(code.encode('ascii'))
             cmd += [filename]
             if loky_pickler == "'pickle'":
-                match = r"(Can't get|has no) attribute 'test_func'"
+                match = "(Can't get|has no) attribute 'test_func'"
                 with pytest.raises(ValueError, match=match):
                     check_subprocess_call(cmd, timeout=10)
             else:
-                check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+                check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
         finally:
             os.unlink(filename)
 
