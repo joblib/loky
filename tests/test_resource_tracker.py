@@ -14,6 +14,7 @@ import weakref
 from loky import ProcessPoolExecutor
 import loky.backend.resource_tracker as resource_tracker
 from loky.backend.context import get_context
+
 from .utils import resource_unlink, create_resource, resource_exists
 
 
@@ -288,8 +289,6 @@ class TestResourceTracker:
 
     @pytest.mark.skipif(sys.platform == "win32",
                         reason="Limited signal support on Windows")
-    @pytest.mark.skipif(sys.version_info[0] < 3,
-                        reason="warnings.catch_warnings limitation")
     def test_resource_tracker_sigkill(self):
         # Uncatchable signal.
         self.check_resource_tracker_death(signal.SIGKILL, True)
