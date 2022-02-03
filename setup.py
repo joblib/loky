@@ -83,5 +83,5 @@ setup(
     platforms='any',
     python_requires='>=3.7',
     install_requires=['cloudpickle'],
-    tests_require=['pytest', 'psutil'],
+    tests_require=['packaging', 'pytest', 'psutil'],
 )

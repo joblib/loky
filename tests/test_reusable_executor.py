@@ -9,7 +9,9 @@ import threading
 from time import sleep
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
-from distutils.version import LooseVersion
+
+import cloudpickle
+from packaging.version import Version
 
 import loky
 from loky import cpu_count
@@ -17,13 +19,12 @@ from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 from loky.reusable_executor import _ReusablePoolExecutor
-import cloudpickle
 
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep, check_python_subprocess_call
 from .utils import filter_match
 
-cloudpickle_version = LooseVersion(cloudpickle.__version__)
+cloudpickle_version = Version(cloudpickle.__version__)
 
 # Compat windows
 if sys.platform == "win32":
@@ -630,8 +631,8 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         )
         assert not reused
 
-    @pytest.mark.xfail(cloudpickle_version >= LooseVersion("0.5.4") and
-                       cloudpickle_version <= LooseVersion("0.7.0"),
+    @pytest.mark.xfail(cloudpickle_version >= Version("0.5.4") and
+                       cloudpickle_version <= Version("0.7.0"),
                        reason="Known issue in cloudpickle")
     # https://github.com/cloudpipe/cloudpickle/pull/240
     def test_interactively_defined_nested_functions(self):
