@@ -8,70 +8,23 @@
 #  * Add CustomizableLokyPickler to allow customizing pickling process
 #    on the fly.
 #
+import copyreg
 import io
-import os
-import sys
 import functools
-from multiprocessing import util
 import types
-try:
-    # Python 2 compat
-    from cPickle import loads as pickle_loads
-except ImportError:
-    from pickle import loads as pickle_loads
-    import copyreg
+import sys
+import os
 
-from pickle import HIGHEST_PROTOCOL
-
-if sys.platform == "win32":
-    if sys.version_info[:2] > (3, 3):
-        from multiprocessing.reduction import duplicate
-    else:
-        from multiprocessing.forking import duplicate
-
+from multiprocessing import util
+from pickle import loads, HIGHEST_PROTOCOL
 
 ###############################################################################
 # Enable custom pickling in Loky.
-# To allow instance customization of the pickling process, we use 2 classes.
-# _ReducerRegistry gives module level customization and CustomizablePickler
-# permits to use instance base custom reducers. Only CustomizablePickler
-# should be used.
 
-class _ReducerRegistry(object):
-    """Registry for custom reducers.
-
-    HIGHEST_PROTOCOL is selected by default as this pickler is used
-    to pickle ephemeral datastructures for interprocess communication
-    hence no backward compatibility is required.
-
-    """
-
-    # We override the pure Python pickler as its the only way to be able to
-    # customize the dispatch table without side effects in Python 2.6
-    # to 3.2. For Python 3.3+ leverage the new dispatch_table
-    # feature from http://bugs.python.org/issue14166 that makes it possible
-    # to use the C implementation of the Pickler which is faster.
-
-    dispatch_table = {}
-
-    @classmethod
-    def register(cls, type, reduce_func):
-        """Attach a reducer function to a given type in the dispatch table."""
-        if sys.version_info < (3,):
-            # Python 2 pickler dispatching is not explicitly customizable.
-            # Let us use a closure to workaround this limitation.
-            def dispatcher(cls, obj):
-                reduced = reduce_func(obj)
-                cls.save_reduce(obj=obj, *reduced)
-            cls.dispatch_table[type] = dispatcher
-        else:
-            cls.dispatch_table[type] = reduce_func
-
+_dispatch_table = {}
 
 ###############################################################################
 # Registers extra pickling routines to improve picklization  for loky
-
-register = _ReducerRegistry.register
 
 
 # make methods picklable
@@ -91,8 +44,8 @@ class _C:
         pass
 
 
-register(type(_C().f), _reduce_method)
-register(type(_C.h), _reduce_method)
+_dispatch_table[type(_C().f)] = _reduce_method
+_dispatch_table[type(_C.h)] = _reduce_method
 
 
 if not hasattr(sys, "pypy_version_info"):
@@ -100,8 +53,8 @@ if not hasattr(sys, "pypy_version_info"):
     def _reduce_method_descriptor(m):
         return getattr, (m.__objclass__, m.__name__)
 
-    register(type(list.append), _reduce_method_descriptor)
-    register(type(int.__add__), _reduce_method_descriptor)
+    _dispatch_table[type(list.append)] = _reduce_method_descriptor
+    _dispatch_table[type(int.__add__)] = _reduce_method_descriptor
 
 
 # Make partial func pickable
@@ -113,7 +66,7 @@ def _rebuild_partial(func, args, keywords):
     return functools.partial(func, *args, **keywords)
 
 
-register(functools.partial, _reduce_partial)
+_dispatch_table[functools.partial] = _reduce_partial
 
 if sys.platform != "win32":
     from ._posix_reduction import _mk_inheritable  # noqa: F401
@@ -196,20 +149,17 @@ def set_loky_pickler(loky_pickler=None):
             loky_pickler_cls.__init__(self, writer, protocol=protocol)
             if reducers is None:
                 reducers = {}
-            if sys.version_info < (3,):
-                self.dispatch = loky_pickler_cls.dispatch.copy()
-                self.dispatch.update(_ReducerRegistry.dispatch_table)
+
+            if hasattr(self, "dispatch_table"):
+                # Force a copy that we will update without mutating the
+                # any class level defined dispatch_table.
+                base_dt = dict(self.dispatch_table)
             else:
-                if hasattr(self, "dispatch_table"):
-                    # Force a copy that we will update without mutating the
-                    # any class level defined dispatch_table.
-                    loky_dt = dict(self.dispatch_table)
-                else:
-                    # Use standard reducers as bases
-                    loky_dt = copyreg.dispatch_table.copy()
+                # Use standard reducers as bases
+                base_dt = copyreg.dispatch_table.copy()
 
                 # Register loky specific reducers
-                loky_dt.update(_ReducerRegistry.dispatch_table)
+                loky_dt = {**base_dt, **_dispatch_table, **reducers}
 
                 # Set the new dispatch table, taking care of the fact that we
                 # need to use the member_descriptor when we inherit from a
@@ -217,22 +167,6 @@ def set_loky_pickler(loky_pickler=None):
                 # with an class level dispatch_table attribute.
                 self._set_dispatch_table(loky_dt)
 
-            # Register custom reducers
-            for type, reduce_func in reducers.items():
-                self.register(type, reduce_func)
-
-        def register(self, type, reduce_func):
-            """Attach a reducer function to a given type in the dispatch table.
-            """
-            if sys.version_info < (3,):
-                # Python 2 pickler dispatching is not explicitly customizable.
-                # Let us use a closure to workaround this limitation.
-                def dispatcher(self, obj):
-                    reduced = reduce_func(obj)
-                    self.save_reduce(obj=obj, *reduced)
-                self.dispatch[type] = dispatcher
-            else:
-                self.dispatch_table[type] = reduce_func
 
     _LokyPickler = CustomizablePickler
     _loky_pickler_name = loky_pickler
@@ -252,13 +186,6 @@ def get_loky_pickler():
 set_loky_pickler()
 
 
-def loads(buf):
-    # Compat for python2.7 version
-    if sys.version_info < (3, 3) and isinstance(buf, io.BytesIO):
-        buf = buf.getvalue()
-    return pickle_loads(buf)
-
-
 def dump(obj, file, reducers=None, protocol=None):
     '''Replacement for pickle.dump() using _LokyPickler.'''
     global _LokyPickler
@@ -270,12 +197,11 @@ def dumps(obj, reducers=None, protocol=None):
 
     buf = io.BytesIO()
     dump(obj, buf, reducers=reducers, protocol=protocol)
-    if sys.version_info < (3, 3):
-        return buf.getvalue()
     return buf.getbuffer()
 
 
-__all__ = ["dump", "dumps", "loads", "register", "set_loky_pickler"]
+__all__ = ["dump", "dumps", "loads", "set_loky_pickler"]
 
 if sys.platform == "win32":
+    from multiprocessing.reduction import duplicate
     __all__ += ["duplicate"]

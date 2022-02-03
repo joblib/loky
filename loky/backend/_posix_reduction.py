@@ -11,7 +11,7 @@ import sys
 import socket
 import _socket
 
-from .reduction import register
+from .reduction import _dispatch_table
 from .context import get_spawning_popen
 
 if sys.version_info >= (3, 3):
@@ -58,8 +58,8 @@ else:
     from multiprocessing.reduction import reduce_socket as _reduce_socket
 
 
-register(socket.socket, _reduce_socket)
-register(_socket.socket, _reduce_socket)
+_dispatch_table[socket.socket] = _reduce_socket
+_dispatch_table[_socket.socket] = _reduce_socket
 
 
 if sys.version_info[:2] != (3, 3):
@@ -73,4 +73,4 @@ if sys.version_info[:2] != (3, 3):
 else:
     from multiprocessing.reduction import reduce_connection
 
-register(Connection, reduce_connection)
+_dispatch_table[Connection] = reduce_connection
