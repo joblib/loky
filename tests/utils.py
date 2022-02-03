@@ -24,47 +24,30 @@ def resource_unlink(name, rtype):
 def create_resource(rtype):
     if rtype == "folder":
         return mkdtemp(dir=os.getcwd())
-
-<<<<<<< HEAD
-    if rtype == "semlock":
-=======
     elif rtype == "semlock":
->>>>>>> origin/master
         name = f"test-loky-{os.getpid()}-{next(_rand_name)}"
         _SemLock(1, 1, 1, name, False)
         return name
-
-    if rtype == "file":
+    elif rtype == "file":
         tmpfile = NamedTemporaryFile(delete=False)
         tmpfile.close()
         return tmpfile.name
-<<<<<<< HEAD
-
-    raise ValueError(f"Resource type {rtype} not understood")
-=======
     else:
         raise ValueError(f"Resource type {rtype} not understood")
->>>>>>> origin/master
 
 
 def resource_exists(name, rtype):
     if rtype in ["folder", "file"]:
         return os.path.exists(name)
-
-    if rtype == "semlock":
+    elif rtype == "semlock":
         try:
             _SemLock(1, 1, 1, name, False)
             sem_unlink(name)
             return False
         except OSError:
             return True
-<<<<<<< HEAD
-
-    raise ValueError(f"Resource type {rtype} not understood")
-=======
     else:
         raise ValueError(f"Resource type {rtype} not understood")
->>>>>>> origin/master
 
 
 @contextlib.contextmanager
