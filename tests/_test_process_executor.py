@@ -267,7 +267,7 @@ class ExecutorShutdownTest:
 
         # The crashing job should be executed after the non-failing jobs
         # have completed. The crash should be detected.
-        match = filter_match(r"SIGSEGV")
+        match = filter_match("SIGSEGV")
         with pytest.raises(TerminatedWorkerError, match=match):
             crash_result.result()
 
@@ -661,7 +661,7 @@ class ExecutorTest:
         # Get one of the processes, and terminate (kill) it
         p = next(iter(self.executor._processes.values()))
         p.terminate()
-        match = filter_match(r"SIGTERM")
+        match = filter_match("SIGTERM")
         with pytest.raises(TerminatedWorkerError, match=match):
             future.result()
         # Submitting other jobs fails as well.
@@ -993,7 +993,6 @@ class ExecutorTest:
 
     @staticmethod
     def _test_child_env(var_name):
-        import os
         return os.environ.get(var_name, "unset")
 
     def test_child_env_executor(self):

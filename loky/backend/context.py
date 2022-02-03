@@ -13,6 +13,7 @@
 
 import os
 import sys
+import math
 import subprocess
 import traceback
 import warnings
@@ -118,8 +119,6 @@ def cpu_count(only_physical_cores=False):
 
 def _cpu_count_user(cpu_count_mp):
     """Number of user defined available CPUs"""
-    import math
-
     # Number of available CPUs given affinity settings
     cpu_count_affinity = cpu_count_mp
     if hasattr(os, 'sched_getaffinity'):
@@ -134,9 +133,9 @@ def _cpu_count_user(cpu_count_mp):
     cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
     cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
     if os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
-        with open(cfs_quota_fname, 'r') as fh:
+        with open(cfs_quota_fname) as fh:
             cfs_quota_us = int(fh.read())
-        with open(cfs_period_fname, 'r') as fh:
+        with open(cfs_period_fname) as fh:
             cfs_period_us = int(fh.read())
 
         if cfs_quota_us > 0 and cfs_period_us > 0:

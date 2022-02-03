@@ -9,6 +9,7 @@ import signal
 import pickle
 from io import BytesIO
 from multiprocessing import util, process
+from multiprocessing.connection import wait
 from multiprocessing.context import set_spawning_popen
 
 from . import reduction, spawn
@@ -72,7 +73,6 @@ if sys.platform != "win32":
         def wait(self, timeout=None):
             if self.returncode is None:
                 if timeout is not None:
-                    from multiprocessing.connection import wait
                     if not wait([self.sentinel], timeout):
                         return None
                 # This shouldn't block if wait() returned successfully.

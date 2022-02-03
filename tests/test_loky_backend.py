@@ -247,13 +247,9 @@ class TestLokyBackend:
 
     @staticmethod
     def _test_child_env(key, queue):
-        import os
-
         queue.put(os.environ.get(key, 'not set'))
 
     def test_child_env_process(self):
-        import os
-
         key = 'loky_child_env_process'
         value = 'loky works'
         out_queue = self.SimpleQueue()
@@ -463,7 +459,7 @@ class TestLokyBackend:
                                            "-d", "^txt,^cwd,^rtd"])
             lines = out.decode().split("\n")[1:-1]
         except (FileNotFoundError, OSError):
-            print("lsof does not exist on this plateform. Skip open files"
+            print("lsof does not exist on this platform. Skip open files"
                   "check.")
             return []
 
@@ -603,7 +599,7 @@ class TestLokyBackend:
                 cmd += [filename]
             else:
                 cmd += ["-c", code]
-            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+            check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
         finally:
             if run_file:
                 os.unlink(filename)
@@ -666,7 +662,7 @@ class TestLokyBackend:
             with open(filename, mode='wb') as f:
                 f.write(code.encode('ascii'))
             check_subprocess_call([sys.executable, filename],
-                                  stdout_regex=r'ok', timeout=10)
+                                  stdout_regex='ok', timeout=10)
         finally:
             os.unlink(filename)
 

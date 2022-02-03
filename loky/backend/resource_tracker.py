@@ -185,11 +185,11 @@ class ResourceTracker:
         self._send("MAYBE_UNLINK", name, rtype)
 
     def _send(self, cmd, name, rtype):
-        msg = f'{cmd}:{name}:{rtype}\n'.encode('ascii')
         if len(name) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
             # bytes are atomic, and that PIPE_BUF >= 512
             raise ValueError('name too long')
+        msg = f'{cmd}:{name}:{rtype}\n'.encode('ascii')
         nbytes = os.write(self._fd, msg)
         assert nbytes == len(msg)
 

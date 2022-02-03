@@ -50,7 +50,6 @@ class TestResourceTracker:
         # Register a resource in the parent process, and un-register it in the
         # child process. If the two processes do not share the same
         # resource_tracker, a cache KeyError should be printed in stderr.
-        import subprocess
         cmd = '''if 1:
         import os, sys
 
@@ -110,7 +109,6 @@ class TestResourceTracker:
         if (sys.platform == "win32") and rtype == "semlock":
             pytest.skip("no semlock on windows")
 
-        import subprocess
         cmd = f'''if 1:
             import time, os, tempfile, sys
             from loky.backend import resource_tracker

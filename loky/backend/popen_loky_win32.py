@@ -120,7 +120,7 @@ def get_command_line(pipe_handle, **kwds):
     Returns prefix of command line used for spawning a child process
     '''
     if getattr(sys, 'frozen', False):
-        return ([sys.executable, '--multiprocessing-fork', pipe_handle])
+        return [sys.executable, '--multiprocessing-fork', pipe_handle]
     else:
         prog = 'from loky.backend.popen_loky_win32 import main; main()'
         opts = util._args_from_interpreter_flags()

@@ -12,7 +12,6 @@ from loky import get_reusable_executor
 
 
 def func_async(i):
-    import os
     pid = os.getpid()
     return (2 * i, pid)
 

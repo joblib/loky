@@ -278,6 +278,7 @@ class _CallItem:
             f"CallItem({self.work_id}, {self.fn}, {self.args}, {self.kwargs})"
         )
 
+
 class _SafeQueue(Queue):
     """Safe Queue set exception to the future object linked to a job"""
     def __init__(self, max_size=0, ctx=None, pending_work_items=None,
@@ -458,9 +459,9 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         else:
             # if psutil is not installed, trigger gc.collect events
             # regularly to limit potential memory leaks due to reference cycles
-            if ((_last_memory_leak_check is None) or
-                    (time() - _last_memory_leak_check >
-                     _MEMORY_LEAK_CHECK_DELAY)):
+            if (_last_memory_leak_check is None or
+                    time() - _last_memory_leak_check >
+                    _MEMORY_LEAK_CHECK_DELAY):
                 gc.collect()
                 _last_memory_leak_check = time()
 
