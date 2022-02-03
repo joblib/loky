@@ -40,27 +40,19 @@ try:
 except ImportError:
     np = None
 
-# Backward compat for python2 cPickle module
-PICKLING_ERRORS = (PicklingError,)
-try:
-    import cPickle
-    PICKLING_ERRORS += (cPickle.PicklingError,)
-except ImportError:
-    pass
-
 
 def clean_warning_registry():
     """Safe way to reset warnings."""
     warnings.resetwarnings()
     reg = "__warningregistry__"
-    for mod_name, mod in list(sys.modules.items()):
+    for mod in list(sys.modules.values()):
         if hasattr(mod, reg):
             getattr(mod, reg).clear()
 
 
 def wait_dead(worker, n_tries=1000, delay=0.001):
     """Wait for process pid to die"""
-    for i in range(n_tries):
+    for _ in range(n_tries):
         if worker.exitcode is not None:
             return
         sleep(delay)
@@ -134,43 +126,43 @@ def do_nothing(arg):
     return True
 
 
-class CrashAtPickle(object):
+class CrashAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         crash()
 
 
-class CrashAtUnpickle(object):
+class CrashAtUnpickle:
     """Bad object that triggers a segfault at unpickling time."""
     def __reduce__(self):
         return crash, ()
 
 
-class ExitAtPickle(object):
+class ExitAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         exit()
 
 
-class ExitAtUnpickle(object):
+class ExitAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
         return exit, ()
 
 
-class CExitAtPickle(object):
+class CExitAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         c_exit()
 
 
-class CExitAtUnpickle(object):
+class CExitAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
         return c_exit, ()
 
 
-class ErrorAtPickle(object):
+class ErrorAtPickle:
     """Bad object that raises an error at pickling time."""
     def __init__(self, fail=True):
         self.fail = fail
@@ -182,7 +174,7 @@ class ErrorAtPickle(object):
             return id, (42, )
 
 
-class ErrorAtUnpickle(object):
+class ErrorAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __init__(self, etype=UnpicklingError, message='the error message'):
         self.etype = etype
@@ -192,14 +184,14 @@ class ErrorAtUnpickle(object):
         return raise_error, (self.etype, self.message)
 
 
-class CrashAtGCInWorker(object):
+class CrashAtGCInWorker:
     """Bad object that triggers a segfault at call item GC time"""
     def __del__(self):
         if current_process().name != "MainProcess":
             crash()
 
 
-class CExitAtGCInWorker(object):
+class CExitAtGCInWorker:
     """Exit worker at call item GC time"""
     def __del__(self):
         if current_process().name != "MainProcess":
@@ -367,7 +359,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         res = executor.map(sleep_then_check_pids_exist,
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
-        assert all(list(res))
+        assert all(res)
         with pytest.raises(TerminatedWorkerError,
                            match=filter_match(r"SIGKILL")):
             res = executor.map(kill_friend, pids[::-1])
@@ -395,9 +387,9 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
     def test_queue_full_deadlock(self):
         executor = get_reusable_executor(max_workers=1)
         fs_fail = [executor.submit(do_nothing, ErrorAtPickle(True))
-                   for i in range(100)]
+                   for _ in range(100)]
         fs = [executor.submit(do_nothing, ErrorAtPickle(False))
-              for i in range(100)]
+              for _ in range(100)]
         with pytest.raises(PicklingError):
             fs_fail[99].result()
         assert fs[99].result()
@@ -483,7 +475,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # when processing subsequently dispatched tasks:
         with pytest.raises(TerminatedWorkerError, match=filter_match(match)):
             executor.submit(gc.collect).result()
-            for r in executor.map(sleep, [.1] * 100):
+            for _ in executor.map(sleep, [.1] * 100):
                 pass
 
 
@@ -596,8 +588,6 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             executor._resize(max_workers=None)
 
     @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
-    @pytest.mark.skipif(sys.version_info <= (3, 4),
-                        reason="No context before 3.4")
     def test_invalid_context(self):
         """Raise error on invalid context"""
 
@@ -724,7 +714,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # Ensure that loky.Future are compatible with concurrent.futures
         # (see #155)
         assert isinstance(f, concurrent.futures.Future)
-        (done, running) = concurrent.futures.wait([f], timeout=15)
+        _, running = concurrent.futures.wait([f], timeout=15)
         assert len(running) == 0
 
     thread_configurations = [
@@ -752,7 +742,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             with warnings.catch_warnings():  # ignore resize warnings
                 warnings.simplefilter("always")
                 executor = get_reusable_executor(max_workers=max_workers)
-                for i in range(n_outer_steps):
+                for _ in range(n_outer_steps):
                     results = executor.map(
                         lambda x: x ** 2, range(n_inner_steps))
                     expected_result = [x ** 2 for x in range(n_inner_steps)]
