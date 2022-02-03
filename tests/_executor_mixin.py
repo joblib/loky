@@ -1,5 +1,3 @@
-from __future__ import print_function
-import os
 import sys
 import time
 import math
@@ -7,21 +5,13 @@ import psutil
 import pytest
 import threading
 
-from loky._base import TimeoutError
+from loky import TimeoutError
+from loky import get_reusable_executor
 from loky.backend import get_context
-from loky import get_reusable_executor, cpu_count
 
 
 IS_PYPY = hasattr(sys, "pypy_version_info")
 
-
-# Compat Travis
-CPU_COUNT = cpu_count()
-if os.environ.get("TRAVIS_OS_NAME") is not None and sys.version_info < (3, 4):
-    # Hard code number of cpu in travis as cpu_count return 32 whereas we
-    # only access 2 cores.
-    # This is done automatically by cpu_count for Python >= 3.4
-    CPU_COUNT = 2
 
 # Set a large timeout as it should only be reached in case of deadlocks
 TIMEOUT = 40
@@ -75,7 +65,7 @@ def _check_subprocesses_number(executor, expected_process_number=None,
     # Wait for terminating processes to disappear
     children_cmdlines = _running_children_with_cmdline(psutil.Process())
     pids_cmdlines = [(c.pid, cmdline) for c, cmdline in children_cmdlines]
-    children_pids = set(pid for pid, _ in pids_cmdlines)
+    children_pids = {pid for pid, _ in pids_cmdlines}
     if executor is not None:
         worker_pids = set(executor._processes.keys())
     else:
@@ -95,7 +85,7 @@ def _check_subprocesses_number(executor, expected_process_number=None,
             # psutil even though it have been terminated. Wait for the system
             # clean up in this case.
             for _ in range(patience):
-                if len(_running_children_with_cmdline(psutil.Process())) == 0:
+                if not _running_children_with_cmdline(psutil.Process()):
                     break
                 time.sleep(.1)
             else:
@@ -185,7 +175,7 @@ class ExecutorMixin:
             time.sleep(sleep_duration)
             p = psutil.Process()
             workers = _running_children_with_cmdline(p)
-            if len(workers) == 0:
+            if not workers:
                 return
 
         # Patience exhausted: log the remaining workers command line and
