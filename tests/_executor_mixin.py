@@ -12,6 +12,9 @@ from loky.backend import get_context
 from loky import get_reusable_executor, cpu_count
 
 
+IS_PYPY = hasattr(sys, "pypy_version_info")
+
+
 # Compat Travis
 CPU_COUNT = cpu_count()
 if os.environ.get("TRAVIS_OS_NAME") is not None and sys.version_info < (3, 4):
@@ -120,7 +123,7 @@ def _check_executor_started(executor):
 
 
 class ExecutorMixin:
-    worker_count = 5
+    worker_count = 2 if IS_PYPY else 5
 
     @classmethod
     def setup_class(cls):
