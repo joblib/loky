@@ -18,7 +18,7 @@ if sys.platform != 'win32':
     WINSERVICE = False
 else:
     import msvcrt
-    from .reduction import duplicate
+    from multiprocessing.reduction import duplicate
     WINEXE = (sys.platform == 'win32' and getattr(sys, 'frozen', False))
     WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
 
@@ -65,14 +65,7 @@ def get_preparation_data(name, init_main_module=True):
     )
 
     # Send sys_path and make sure the current directory will not be changed
-    sys_path = [p for p in sys.path]
-    try:
-        i = sys_path.index('')
-    except ValueError:
-        pass
-    else:
-        sys_path[i] = process.ORIGINAL_DIR
-    d['sys_path'] = sys_path
+    d['sys_path'] = [p if p != '' else process.ORIGINAL_DIR for p in sys.path]
 
     # Make sure to pass the information if the multiprocessing logger is active
     if util._logger is not None:
