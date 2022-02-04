@@ -8,9 +8,7 @@
 #  * Create a context ensuring loky uses only objects that are compatible
 #  * Add LokyContext to the list of context of multiprocessing so loky can be
 #    used with multiprocessing.set_start_method
-#  * Add some compat function for python2.7 and 3.3.
 #
-
 import os
 import sys
 import math
@@ -48,6 +46,7 @@ def get_context(method=None):
         raise ValueError(f"Unknown context '{method}'. "
                          f"Value should be in {START_METHODS}.")
 
+    return context
 
 def set_start_method(method, force=False):
     global _DEFAULT_START_METHOD
@@ -89,8 +88,8 @@ def cpu_count(only_physical_cores=False):
     """
     cpu_count_mp = os.cpu_count() or 1
 
-    cpu_count_user = _cpu_count_user(cpu_count_mp)
-    aggregate_cpu_count = min(cpu_count_mp, cpu_count_user)
+    cpu_count_user = _cpu_count_user(os_cpu_count)
+    aggregate_cpu_count = min(os_cpu_count, cpu_count_user)
 
     if not only_physical_cores:
         return max(aggregate_cpu_count, 1)
@@ -117,10 +116,10 @@ def cpu_count(only_physical_cores=False):
     return max(aggregate_cpu_count, 1)
 
 
-def _cpu_count_user(cpu_count_mp):
+def _cpu_count_user(os_cpu_count):
     """Number of user defined available CPUs"""
     # Number of available CPUs given affinity settings
-    cpu_count_affinity = cpu_count_mp
+    cpu_count_affinity = os_cpu_count
     if hasattr(os, 'sched_getaffinity'):
         try:
             cpu_count_affinity = len(os.sched_getaffinity(0))
@@ -129,7 +128,7 @@ def _cpu_count_user(cpu_count_mp):
 
     # CFS scheduler CPU bandwidth limit
     # available in Linux since 2.6 kernel
-    cpu_count_cfs = cpu_count_mp
+    cpu_count_cfs = os_cpu_count
     cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
     cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
     if os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
@@ -142,7 +141,7 @@ def _cpu_count_user(cpu_count_mp):
             cpu_count_cfs = math.ceil(cfs_quota_us / cfs_period_us)
 
     # User defined soft-limit passed as a loky specific environment variable.
-    cpu_count_loky = int(os.environ.get('LOKY_MAX_CPU_COUNT', cpu_count_mp))
+    cpu_count_loky = int(os.environ.get('LOKY_MAX_CPU_COUNT', os_cpu_count))
 
     return min(cpu_count_affinity, cpu_count_cfs, cpu_count_loky)
 

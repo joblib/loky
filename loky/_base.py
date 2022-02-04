@@ -1,5 +1,5 @@
 ###############################################################################
-# Backport concurrent.futures for python2.7/3.3
+# Modification of concurrent.futures.Future
 #
 # author: Thomas Moreau and Olivier Grisel
 #

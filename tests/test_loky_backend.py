@@ -7,6 +7,7 @@ import signal
 import pickle
 import socket
 import multiprocessing as mp
+from multiprocessing.connection import wait
 from tempfile import mkstemp
 from multiprocessing.connection import wait
 
@@ -467,7 +468,7 @@ class TestLokyBackend:
         named_sem = []
         for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
 
-            # Check if fd is a standard IO file. For python3.x, stdin
+            # Check if fd is a standard IO file. For python 3.x stdin
             # should be closed.
             is_std = (fd in ["f1", "f2"])
 
@@ -707,8 +708,7 @@ def test_recursive_terminate(use_psutil):
 
 
 def _test_default_subcontext(queue):
-    start_method = mp.get_start_method()
-    queue.put(start_method)
+    queue.put(mp.get_start_method())
 
 
 @pytest.mark.parametrize('method', START_METHODS)

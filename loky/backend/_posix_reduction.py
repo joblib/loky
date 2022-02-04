@@ -62,5 +62,4 @@ def rebuild_connection(df, readable, writable):
 
 dispatch_table[socket.socket] = _reduce_socket
 dispatch_table[_socket.socket] = _reduce_socket
-
 dispatch_table[Connection] = reduce_connection

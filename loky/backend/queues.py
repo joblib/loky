@@ -4,8 +4,6 @@
 # authors: Thomas Moreau, Olivier Grisel
 #
 # based on multiprocessing/queues.py (16/02/2017)
-# * Add some compatibility function for python2.7 and 3.3 and makes sure
-#   it uses the right synchronization primitive.
 # * Add some custom reducers for the Queues/SimpleQueue to tweak the
 #   pickling process. (overload Queue._feed/SimpleQueue.put)
 #
