@@ -40,8 +40,8 @@ def get_context(method=None):
         # If 'fork' is explicitly requested, warn user about potential
         # issues.
         warnings.warn("`fork` start method should not be used with "
-                        "`loky` as it does not respect POSIX. Try using "
-                        "`spawn` or `loky` instead.", UserWarning)
+                      "`loky` as it does not respect POSIX. Try using "
+                      "`spawn` or `loky` instead.", UserWarning)
     try:
         context = mp_get_context(method)
     except ValueError:
