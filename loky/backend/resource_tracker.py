@@ -47,6 +47,7 @@ import warnings
 import threading
 from _multiprocessing import sem_unlink
 from multiprocessing import util
+import contextlib
 
 from . import spawn
 
@@ -61,9 +62,20 @@ __all__ = ['ensure_running', 'register', 'unregister']
 _HAVE_SIGMASK = hasattr(signal, 'pthread_sigmask')
 _IGNORED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
+
+def _rmtree_ignore_not_found(folderpath):
+    with contextlib.suppress(FileNotFoundError):
+        shutil.rmtree(folderpath)
+
+
+def _unlink_ignore_not_found(filepath):
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(filepath)
+
+
 _CLEANUP_FUNCS = {
-    'folder': shutil.rmtree,
-    'file': os.unlink
+    'folder': _rmtree_ignore_not_found,
+    'file': _unlink_ignore_not_found
 }
 
 if os.name == "posix":
