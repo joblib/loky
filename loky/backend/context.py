@@ -97,7 +97,7 @@ def cpu_count(only_physical_cores=False):
 
     if only_physical_cores:
         cpu_count_physical, exception = _count_physical_cores()
-        if cpu_count_user < os.cpu_count:
+        if cpu_count_user < os_cpu_count:
             # Respect user setting
             cpu_count = max(cpu_count_user, 1)
         elif cpu_count_physical == "not found":
