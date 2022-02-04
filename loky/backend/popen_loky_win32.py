@@ -1,20 +1,15 @@
 import os
 import sys
+import msvcrt
+import _winapi
 from pickle import load
 from multiprocessing import process, util
 from multiprocessing.context import get_spawning_popen, set_spawning_popen
+from multiprocessing.popen_spawn_win32 import Popen as _Popen
+from multiprocessing.reduction import duplicate
 
 from . import reduction, spawn
 
-if sys.platform == "win32":
-    # Avoid import error by code introspection tools such as test runners
-    # trying to import this module while running on non-Windows systems.
-    import msvcrt
-    import _winapi
-    from multiprocessing.popen_spawn_win32 import Popen as _Popen
-    from multiprocessing.reduction import duplicate
-else:
-    _Popen = object
 
 __all__ = ['Popen']
 

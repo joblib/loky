@@ -312,6 +312,7 @@ class TestLokyBackend:
 
         p.terminate()
 
+        MAX_JOIN_TIME = 10
         if hasattr(signal, 'alarm'):
             # On the Gentoo buildbot waitpid() often seems to block forever.
             # We use alarm() to interrupt it if it blocks for too long.
@@ -319,7 +320,7 @@ class TestLokyBackend:
                 raise RuntimeError(f'join took too long: {p}')
             old_handler = signal.signal(signal.SIGALRM, handler)
             try:
-                signal.alarm(10)
+                signal.alarm(MAX_JOIN_TIME)
                 assert join() is None
             finally:
                 signal.alarm(0)
@@ -327,7 +328,7 @@ class TestLokyBackend:
         else:
             assert join() is None
 
-        join.assert_timing_almost_zero()
+        join.assert_timing_lower_than(MAX_JOIN_TIME)
 
         assert not p.is_alive()
         assert p not in self.active_children()
