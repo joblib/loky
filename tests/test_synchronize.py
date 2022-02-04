@@ -6,6 +6,7 @@ import signal
 import threading
 
 from loky.backend import get_context
+
 from .utils import TimingWrapper
 
 loky_context = get_context("loky")
@@ -13,10 +14,6 @@ loky_context = get_context("loky")
 DELTA = 0.1
 TIMEOUT1 = .1
 TIMEOUT2 = .3
-
-if sys.version_info < (3, 3):
-    FileExistsError = OSError
-    FileNotFoundError = OSError
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UNIX test")
@@ -45,7 +42,7 @@ def assert_timing_almost_equal(t1, t2=0):
     assert abs(t1 - t2) < 1e-1
 
 
-class TestLock():
+class TestLock:
 
     def test_lock(self):
         lock = loky_context.Lock()
@@ -75,7 +72,7 @@ class TestLock():
             pass
 
 
-class TestSemaphore():
+class TestSemaphore:
 
     def _test_semaphore(self, sem):
         assert_sem_value_equal(sem, 2)
@@ -128,7 +125,7 @@ class TestSemaphore():
         assert_timing_almost_equal(acquire.elapsed, TIMEOUT2)
 
 
-class TestCondition():
+class TestCondition:
 
     @classmethod
     def _test_notify(cls, cond, sleeping, woken, timeout=None):
@@ -193,16 +190,13 @@ class TestCondition():
         self.check_invariant(cond)
         p.join()
 
-    @pytest.mark.xfail(sys.platform != "win32" and
-                       sys.version_info[:2] <= (3, 3),
-                       reason="The test if not robust enough. See issue#74")
     def test_notify_all(self):
         cond = loky_context.Condition()
         sleeping = loky_context.Semaphore(0)
         woken = loky_context.Semaphore(0)
 
         # start some threads/processes which will timeout
-        for i in range(3):
+        for _ in range(3):
             p = loky_context.Process(target=self._test_notify,
                                      args=(cond, sleeping, woken, TIMEOUT1))
             p.daemon = True
@@ -214,11 +208,11 @@ class TestCondition():
             t.start()
 
         # wait for them all to sleep
-        for i in range(6):
+        for _ in range(6):
             sleeping.acquire()
 
         # check they have all timed out
-        for i in range(6):
+        for _ in range(6):
             woken.acquire()
         assert_sem_value_equal(woken, 0)
 
@@ -226,7 +220,7 @@ class TestCondition():
         self.check_invariant(cond)
 
         # start some more threads/processes
-        for i in range(3):
+        for _ in range(3):
             p = loky_context.Process(target=self._test_notify,
                                      args=(cond, sleeping, woken))
             p.daemon = True
@@ -238,7 +232,7 @@ class TestCondition():
             t.start()
 
         # wait for them to all sleep
-        for i in range(6):
+        for _ in range(6):
             sleeping.acquire()
 
         # check no process/thread has woken up
@@ -251,7 +245,7 @@ class TestCondition():
         cond.release()
 
         # check they have all woken
-        for i in range(50):
+        for _ in range(50):
             try:
                 if woken.get_value() == 6:
                     break
@@ -282,10 +276,6 @@ class TestCondition():
             if not result or state.get_value() != 5:
                 sys.exit(1)
 
-    @pytest.mark.skipif(sys.platform == "win32" and
-                        sys.version_info[:2] < (3, 3),
-                        reason="Condition.wait_for was introduced in 3.3 and "
-                        "we do not overload win32 Condition")
     def test_waitfor(self):
         # based on test in test/lock_tests.py
         cond = loky_context.Condition()
@@ -305,7 +295,7 @@ class TestCondition():
             assert result
             assert state.get_value() == 1
 
-        for i in range(4):
+        for _ in range(4):
             time.sleep(0.01)
             with cond:
                 state.release()
@@ -323,10 +313,6 @@ class TestCondition():
         if pid is not None:
             os.kill(pid, signal.SIGINT)
 
-    @pytest.mark.skipif(sys.platform == "win32" and
-                        sys.version_info[:2] < (3, 3),
-                        reason="Condition.wait always returned None before 3.3"
-                        " and we do not overload win32 Condition")
     def test_wait_result(self):
         if sys.platform != 'win32':
             pid = os.getpid()
@@ -349,7 +335,7 @@ class TestCondition():
             p.join()
 
 
-class TestEvent():
+class TestEvent:
 
     @classmethod
     def _test_event(cls, event):
