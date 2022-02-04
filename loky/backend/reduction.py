@@ -23,6 +23,10 @@ from pickle import loads, HIGHEST_PROTOCOL
 
 _dispatch_table = {}
 
+
+def register(type_, reduce_function):
+    _dispatch_table[type_] = reduce_function
+
 ###############################################################################
 # Registers extra pickling routines to improve picklization  for loky
 
@@ -44,8 +48,8 @@ class _C:
         pass
 
 
-_dispatch_table[type(_C().f)] = _reduce_method
-_dispatch_table[type(_C.h)] = _reduce_method
+register(type(_C().f), _reduce_method)
+register(type(_C.h), _reduce_method)
 
 
 if not hasattr(sys, "pypy_version_info"):
@@ -53,8 +57,8 @@ if not hasattr(sys, "pypy_version_info"):
     def _reduce_method_descriptor(m):
         return getattr, (m.__objclass__, m.__name__)
 
-    _dispatch_table[type(list.append)] = _reduce_method_descriptor
-    _dispatch_table[type(int.__add__)] = _reduce_method_descriptor
+    register(type(list.append), _reduce_method_descriptor)
+    register(type(int.__add__), _reduce_method_descriptor)
 
 
 # Make partial func pickable
@@ -66,7 +70,7 @@ def _rebuild_partial(func, args, keywords):
     return functools.partial(func, *args, **keywords)
 
 
-_dispatch_table[functools.partial] = _reduce_partial
+register(functools.partial, _reduce_partial)
 
 if sys.platform != "win32":
     from ._posix_reduction import _mk_inheritable  # noqa: F401
@@ -208,7 +212,7 @@ def dumps(obj, reducers=None, protocol=None):
     return buf.getbuffer()
 
 
-__all__ = ["dump", "dumps", "loads", "set_loky_pickler"]
+__all__ = ["dump", "dumps", "loads", "register", "set_loky_pickler"]
 
 if sys.platform == "win32":
     from multiprocessing.reduction import duplicate

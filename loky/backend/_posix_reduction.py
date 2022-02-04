@@ -7,14 +7,13 @@
 #  * Add adapted reduction for LokyProcesses and socket/Connection
 #
 import os
-import sys
 import socket
 import _socket
 
 from multiprocessing.connection import Connection
 
-from .reduction import _dispatch_table
 from .context import get_spawning_popen
+from .reduction import register
 
 
 HAVE_SEND_HANDLE = (hasattr(socket, 'CMSG_LEN') and
@@ -52,8 +51,9 @@ def _rebuild_socket(df, family, type, proto):
     return socket.fromfd(fd, family, type, proto)
 
 
-_dispatch_table[socket.socket] = _reduce_socket
-_dispatch_table[_socket.socket] = _reduce_socket
+def rebuild_connection(df, readable, writable):
+    fd = df.detach()
+    return Connection(fd, readable, writable)
 
 
 def reduce_connection(conn):
@@ -61,9 +61,6 @@ def reduce_connection(conn):
     return rebuild_connection, (df, conn.readable, conn.writable)
 
 
-def rebuild_connection(df, readable, writable):
-    fd = df.detach()
-    return Connection(fd, readable, writable)
-
-
-_dispatch_table[Connection] = reduce_connection
+register(socket.socket, _reduce_socket)
+register(_socket.socket, _reduce_socket)
+register(Connection, reduce_connection)
