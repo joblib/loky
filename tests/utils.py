@@ -8,25 +8,13 @@ import threading
 import subprocess
 import contextlib
 from tempfile import mkstemp, mkdtemp, NamedTemporaryFile, _RandomNameSequence
-from loky.backend import resource_tracker
-if sys.version_info < (3, 4):
-    from loky.backend.semlock import SemLock as _SemLock
-    from loky.backend.semlock import sem_unlink
-else:
-    from _multiprocessing import SemLock as _SemLock
-    from _multiprocessing import sem_unlink
+from _multiprocessing import SemLock as _SemLock
+from _multiprocessing import sem_unlink
 
-try:
-    FileNotFoundError = FileNotFoundError
-except NameError:  # FileNotFoundError is Python 3-only
-    from loky.backend.semlock import FileNotFoundError
+from loky.backend import resource_tracker
 
 
 _rand_name = _RandomNameSequence()
-
-if sys.version_info[0] == 2:
-    class TimeoutError(OSError):
-        pass
 
 
 def resource_unlink(name, rtype):
@@ -70,13 +58,6 @@ def captured_output(stream_name):
     import io
     orig_stdout = getattr(sys, stream_name)
     s = io.StringIO()
-    if sys.version_info[:2] < (3, 3):
-        import types
-        s.wrt = s.write
-
-        def write(self, msg):
-            self.wrt(unicode(msg))
-        s.write = types.MethodType(write, s)
 
     setattr(sys, stream_name, s)
     try:
@@ -99,7 +80,7 @@ def captured_stderr():
 # Wrapper
 #
 
-class TimingWrapper(object):
+class TimingWrapper:
 
     def __init__(self, func):
         self.func = func
@@ -141,9 +122,8 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
     stderr if stderr_regex is set.
     """
     if env is not None:
-        env_ = os.environ.copy()
-        env_.update(env)
-        env = env_
+        env = {**os.environ, **env}
+
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=env)
 
@@ -156,8 +136,7 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
         timer.start()
         stdout, stderr = proc.communicate()
 
-        if sys.version_info[0] >= 3:
-            stdout, stderr = stdout.decode(), stderr.decode()
+        stdout, stderr = stdout.decode(), stderr.decode()
         if proc.returncode == -9:
             message = (
                 f'Subprocess timeout after {timeout}s.\nStdout:\n{stdout}\n'
@@ -239,11 +218,8 @@ def check_python_subprocess_call(code, stdout_regex=None):
         os.unlink(filename)
 
 
-def filter_match(match, start_method=None):
+def filter_match(match):
     if sys.platform == "win32":
         return
-
-    if start_method == "forkserver" and sys.version_info < (3, 7):
-        return "UNKNOWN"
 
     return match
