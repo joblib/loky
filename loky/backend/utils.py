@@ -4,21 +4,11 @@ import time
 import errno
 import signal
 import warnings
-import threading
 import subprocess
 try:
     import psutil
 except ImportError:
     psutil = None
-
-
-WIN32 = sys.platform == "win32"
-
-
-def _flag_current_thread_clean_exit():
-    """Put a ``_clean_exit`` flag on the current thread"""
-    thread = threading.current_thread()
-    thread._clean_exit = True
 
 
 def recursive_terminate(process, use_psutil=True):
@@ -28,7 +18,7 @@ def recursive_terminate(process, use_psutil=True):
         _recursive_terminate_without_psutil(process)
 
 
-def _recursive_terminate_with_psutil(process, retries=5):
+def _recursive_terminate_with_psutil(process):
     try:
         children = psutil.Process(process.pid).children(recursive=True)
     except psutil.NoSuchProcess:
@@ -129,7 +119,7 @@ def get_exitcodes_terminated_worker(processes):
     # the terminated worker.
     exitcodes = [p.exitcode for p in list(processes.values())
                  if p.exitcode is not None]
-    while len(exitcodes) == 0 and patience > 0:
+    while not exitcodes and patience > 0:
         patience -= 1
         exitcodes = [p.exitcode for p in list(processes.values())
                      if p.exitcode is not None]
@@ -154,14 +144,7 @@ def _get_exitcode_name(exitcode):
     if exitcode < 0:
         try:
             import signal
-            if sys.version_info > (3, 5):
-                return signal.Signals(-exitcode).name
-
-            # construct an inverse lookup table
-            for v, k in signal.__dict__.items():
-                if (v.startswith('SIG') and not v.startswith('SIG_') and
-                        k == -exitcode):
-                        return v
+            return signal.Signals(-exitcode).name
         except ValueError:
             return "UNKNOWN"
     elif exitcode != 255:
