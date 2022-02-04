@@ -153,9 +153,6 @@ class TestLokyBackend:
         assert not p.is_alive()
         assert p not in self.active_children()
 
-        if sys.version_info[:2] == (3, 3):
-            logger.handlers[0] = old_handler
-
     @classmethod
     def _test_connection(cls, conn):
         """Make sure a connection object is functional"""
