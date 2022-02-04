@@ -12,7 +12,7 @@ import _socket
 
 from multiprocessing.connection import Connection
 
-from .context import get_spawning_popen
+from multiprocessing.context import get_spawning_popen
 from .reduction import register
 
 
