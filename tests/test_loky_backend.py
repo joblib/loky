@@ -8,7 +8,7 @@ import pickle
 import platform
 import socket
 import multiprocessing as mp
-from multiprocessing.connexion import wait
+from multiprocessing.connection import wait
 from tempfile import mkstemp
 
 from loky.backend import get_context
