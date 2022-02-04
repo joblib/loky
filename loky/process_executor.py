@@ -74,10 +74,11 @@ import multiprocessing as mp
 from functools import partial
 from pickle import PicklingError
 from concurrent.futures import Executor
+from concurrent.futures import Future
 from concurrent.futures.process import BrokenProcessPool as _BPPException
+from concurrent.futures._base import LOGGER
 from multiprocessing.connection import wait
 
-from . import _base
 from .backend import get_context
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue
@@ -371,7 +372,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         try:
             initializer(*initargs)
         except BaseException:
-            _base.LOGGER.critical('Exception in initializer:', exc_info=True)
+            LOGGER.critical('Exception in initializer:', exc_info=True)
             # The parent will notice that the process stopped and
             # mark the pool broken
             return
@@ -1095,7 +1096,7 @@ class ProcessPoolExecutor(Executor):
                 raise RuntimeError('cannot schedule new futures after '
                                    'interpreter shutdown')
 
-            f = _base.Future()
+            f = Future()
             w = _WorkItem(f, fn, args, kwargs)
 
             self._pending_work_items[self._queue_count] = w
