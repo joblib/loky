@@ -45,23 +45,16 @@ import sys
 import signal
 import warnings
 import threading
-
-from . import spawn
+from _multiprocessing import sem_unlink
 from multiprocessing import util
 
+from . import spawn
+
 if sys.platform == "win32":
-    from .compat_win32 import _winapi
-    from .reduction import duplicate
+    import _winapi
+    from multiprocessing.reduction import duplicate
     import msvcrt
 
-try:
-    from _multiprocessing import sem_unlink
-except ImportError:
-    from .semlock import sem_unlink
-
-if sys.version_info < (3,):
-    BrokenPipeError = OSError
-    from os import fdopen as open
 
 __all__ = ['ensure_running', 'register', 'unregister']
 
@@ -80,7 +73,7 @@ if os.name == "posix":
 VERBOSE = False
 
 
-class ResourceTracker(object):
+class ResourceTracker:
 
     def __init__(self):
         self._lock = threading.Lock()
@@ -138,15 +131,7 @@ class ResourceTracker(object):
                 fds_to_pass.append(r)
                 # process will out live us, so no need to wait on pid
                 exe = spawn.get_executable()
-                args = [exe] + util._args_from_interpreter_flags()
-                # In python 3.3, there is a bug which put `-RRRRR..` instead of
-                # `-R` in args. Replace it to get the correct flags.
-                # See https://github.com/python/cpython/blob/3.3/Lib/subprocess.py#L488
-                if sys.version_info[:2] <= (3, 3):
-                    import re
-                    for i in range(1, len(args)):
-                        args[i] = re.sub("-R+", "-R", args[i])
-                args += ['-c', cmd]
+                args = [exe, *util._args_from_interpreter_flags(), '-c', cmd]
                 util.debug(f"launching resource tracker: {args}")
                 # bpo-33613: Register a signal mask that will block the
                 # signals.  This signal mask will be inherited by the child
@@ -364,10 +349,8 @@ def spawnv_passfds(path, args, passfds):
         errpipe_read, errpipe_write = os.pipe()
         try:
             from .reduction import _mk_inheritable
-            _pass = []
-            for fd in passfds:
-                _pass += [_mk_inheritable(fd)]
             from .fork_exec import fork_exec
+            _pass = [_mk_inheritable(fd) for fd in passfds]
             return fork_exec(args, _pass)
         finally:
             os.close(errpipe_read)
