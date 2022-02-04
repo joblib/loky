@@ -17,13 +17,13 @@ from pickle import PicklingError
 from threading import Thread
 from collections import defaultdict
 from concurrent import futures
-from concurrent.futures import Future
 from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
                                       CANCELLED_AND_NOTIFIED, FINISHED)
 
 import loky
 from loky.process_executor import LokyRecursionError
 from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
+from loky._base import Future
 
 from . import _executor_mixin
 from .utils import id_sleep, check_subprocess_call, filter_match
