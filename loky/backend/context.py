@@ -46,7 +46,6 @@ def get_context(method=None):
         raise ValueError(f"Unknown context '{method}'. "
                          f"Value should be in {START_METHODS}.")
 
-    return context
 
 def set_start_method(method, force=False):
     global _DEFAULT_START_METHOD
@@ -86,7 +85,7 @@ def cpu_count(only_physical_cores=False):
 
     It is also always larger or equal to 1.
     """
-    cpu_count_mp = os.cpu_count() or 1
+    os_cpu_count = os.cpu_count() or 1
 
     cpu_count_user = _cpu_count_user(os_cpu_count)
     aggregate_cpu_count = min(os_cpu_count, cpu_count_user)
@@ -94,7 +93,7 @@ def cpu_count(only_physical_cores=False):
     if not only_physical_cores:
         return max(aggregate_cpu_count, 1)
 
-    if cpu_count_user < cpu_count_mp:
+    if cpu_count_user < os_cpu_count:
         # Respect user setting
         return max(cpu_count_user, 1)
 

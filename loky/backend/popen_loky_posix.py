@@ -17,6 +17,7 @@ from . import reduction, resource_tracker, spawn
 
 __all__ = ['Popen']
 
+
 #
 # Wrapper for an fd used while launching a process
 #
@@ -27,6 +28,7 @@ class _DupFd:
 
     def detach(self):
         return self.fd
+
 
 #
 # Start child process using subprocess.Popen
@@ -110,11 +112,10 @@ class Popen:
             cmd_python = [sys.executable]
             cmd_python += ['-m', self.__module__]
             cmd_python += ['--process-name', str(process_obj.name)]
-            cmd_python += ['--pipe',
-                           str(reduction._mk_inheritable(child_r))]
+            cmd_python += ['--pipe', str(reduction._mk_inheritable(child_r))]
             reduction._mk_inheritable(child_w)
             reduction._mk_inheritable(tracker_fd)
-            self._fds.extend([child_r, child_w, tracker_fd])
+            self._fds += [child_r, child_w, tracker_fd]
             if sys.version_info >= (3, 8) and os.name == 'posix':
                 mp_tracker_fd = prep_data['mp_tracker_args']['fd']
                 self.duplicate_for_child(mp_tracker_fd)

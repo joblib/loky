@@ -7,7 +7,6 @@ import signal
 import pickle
 import socket
 import multiprocessing as mp
-from multiprocessing.connection import wait
 from tempfile import mkstemp
 from multiprocessing.connection import wait
 

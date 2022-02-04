@@ -78,7 +78,6 @@ from concurrent.futures._base import LOGGER
 from concurrent.futures.process import BrokenProcessPool as _BPPException
 from multiprocessing.connection import wait
 
-
 from ._base import Future
 from .backend import get_context
 from .backend.context import cpu_count
