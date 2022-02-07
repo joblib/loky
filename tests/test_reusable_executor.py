@@ -28,10 +28,12 @@ cloudpickle_version = LooseVersion(cloudpickle.__version__)
 # Compat windows
 if sys.platform == "win32":
     from signal import SIGTERM as SIGKILL
+
     libc = ctypes.cdll.msvcrt
 else:
     from signal import SIGKILL
     from ctypes.util import find_library
+
     libc = ctypes.CDLL(find_library("c"))
 
 
@@ -65,6 +67,7 @@ def wait_dead(worker, n_tries=1000, delay=0.001):
 def crash():
     """Induces a segfault"""
     import faulthandler
+
     faulthandler._sigsegv()
 
 
@@ -128,42 +131,49 @@ def do_nothing(arg):
 
 class CrashAtPickle:
     """Bad object that triggers a segfault at pickling time."""
+
     def __reduce__(self):
         crash()
 
 
 class CrashAtUnpickle:
     """Bad object that triggers a segfault at unpickling time."""
+
     def __reduce__(self):
         return crash, ()
 
 
 class ExitAtPickle:
     """Bad object that triggers a segfault at pickling time."""
+
     def __reduce__(self):
         exit()
 
 
 class ExitAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
+
     def __reduce__(self):
         return exit, ()
 
 
 class CExitAtPickle:
     """Bad object that triggers a segfault at pickling time."""
+
     def __reduce__(self):
         c_exit()
 
 
 class CExitAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
+
     def __reduce__(self):
         return c_exit, ()
 
 
 class ErrorAtPickle:
     """Bad object that raises an error at pickling time."""
+
     def __init__(self, fail=True):
         self.fail = fail
 
@@ -171,12 +181,13 @@ class ErrorAtPickle:
         if self.fail:
             raise PicklingError("Error in pickle")
         else:
-            return id, (42, )
+            return id, (42,)
 
 
 class ErrorAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
-    def __init__(self, etype=UnpicklingError, message='the error message'):
+
+    def __init__(self, etype=UnpicklingError, message="the error message"):
         self.etype = etype
         self.message = message
 
@@ -186,6 +197,7 @@ class ErrorAtUnpickle:
 
 class CrashAtGCInWorker:
     """Bad object that triggers a segfault at call item GC time"""
+
     def __del__(self):
         if current_process().name != "MainProcess":
             crash()
@@ -193,6 +205,7 @@ class CrashAtGCInWorker:
 
 class CExitAtGCInWorker:
     """Exit worker at call item GC time"""
+
     def __del__(self):
         if current_process().name != "MainProcess":
             c_exit()
@@ -218,14 +231,22 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # on workers
         (return_instance, (CrashAtPickle,), TerminatedWorkerError, r"SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), TerminatedWorkerError,
-         r"EXIT\(0\)"),
+        (
+            return_instance,
+            (CExitAtPickle,),
+            TerminatedWorkerError,
+            r"EXIT\(0\)",
+        ),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
         (return_instance, (ExitAtUnpickle,), BrokenProcessPool, r"SystemExit"),
-        (return_instance, (ErrorAtUnpickle,), BrokenProcessPool,
-         r"UnpicklingError"),
+        (
+            return_instance,
+            (ErrorAtUnpickle,),
+            BrokenProcessPool,
+            r"UnpicklingError",
+        ),
     ]
 
     @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
@@ -248,14 +269,16 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                 raise exc_info.value.__cause__
 
     @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
-    def test_in_callback_submit_with_crash(self, func, args, expected_err,
-                                           match):
+    def test_in_callback_submit_with_crash(
+        self, func, args, expected_err, match
+    ):
         """Test the recovery from callback crash"""
         executor = get_reusable_executor(max_workers=2, timeout=12)
 
         def in_callback_submit(future):
-            future2 = get_reusable_executor(
-                max_workers=2, timeout=12).submit(func, *args)
+            future2 = get_reusable_executor(max_workers=2, timeout=12).submit(
+                func, *args
+            )
             # Store the future of the job submitted in the callback to make it
             # easy to introspect.
             future.callback_future = future2
@@ -270,7 +293,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         f.add_done_callback(in_callback_submit)
         assert f.result() == 42
         if not f.callback_done.wait(timeout=3):
-            raise AssertionError('callback not done before timeout')
+            raise AssertionError("callback not done before timeout")
 
         match_err = None
         if expected_err is TerminatedWorkerError:
@@ -307,7 +330,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         f = executor.submit(id_sleep, 42, delay)
         f.add_done_callback(lambda _: raise_error())
         assert f.result() == 42
-        assert executor.submit(id_sleep, 42, 0.).result() == 42
+        assert executor.submit(id_sleep, 42, 0.0).result() == 42
 
     def test_deadlock_kill(self):
         """Test deadlock recovery for reusable_executor"""
@@ -318,30 +341,36 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         with pytest.warns(UserWarning) as recorded_warnings:
             executor = get_reusable_executor(max_workers=2, timeout=None)
         assert len(recorded_warnings) == 1
-        expected_msg = ("Trying to resize an executor with running jobs:"
-                        " waiting for jobs completion before resizing.")
+        expected_msg = (
+            "Trying to resize an executor with running jobs:"
+            " waiting for jobs completion before resizing."
+        )
         assert recorded_warnings[0].message.args[0] == expected_msg
         os.kill(worker.pid, SIGKILL)
         wait_dead(worker)
 
         # wait for the executor to be able to detect the issue and set itself
         # in broken state:
-        sleep(.5)
-        with pytest.raises(TerminatedWorkerError,
-                           match=filter_match(r"SIGKILL")):
+        sleep(0.5)
+        with pytest.raises(
+            TerminatedWorkerError, match=filter_match(r"SIGKILL")
+        ):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
         # working instance
         executor = get_reusable_executor(max_workers=2, timeout=None)
-        assert executor.submit(id_sleep, 42, 0.).result() == 42
+        assert executor.submit(id_sleep, 42, 0.0).result() == 42
 
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, n_proc):
         """Test the race conditions in reusable_executor crash handling"""
 
-        if (sys.platform == 'win32' and sys.version_info >= (3, 8)
-                and n_proc > 5):
+        if (
+            sys.platform == "win32"
+            and sys.version_info >= (3, 8)
+            and n_proc > 5
+        ):
             pytest.skip(
                 "On win32, the paging size can be too small to import numpy "
                 "multiple times in the sub-processes (imported when loading "
@@ -356,12 +385,14 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         pids = list(executor._processes.keys())
         assert len(pids) == n_proc
         assert None not in pids
-        res = executor.map(sleep_then_check_pids_exist,
-                           [(.0001 * (j // 2), pids)
-                            for j in range(2 * n_proc)])
+        res = executor.map(
+            sleep_then_check_pids_exist,
+            [(0.0001 * (j // 2), pids) for j in range(2 * n_proc)],
+        )
         assert all(res)
-        with pytest.raises(TerminatedWorkerError,
-                           match=filter_match(r"SIGKILL")):
+        with pytest.raises(
+            TerminatedWorkerError, match=filter_match(r"SIGKILL")
+        ):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -370,39 +401,46 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # builded version of python
         executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            executor.map(id_sleep, exception_throwing_generator(10, 3),
-                         chunksize=1)
+            executor.map(
+                id_sleep, exception_throwing_generator(10, 3), chunksize=1
+            )
 
         # SayWhenError seen at start of problematic chunk's results
         executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            executor.map(id_sleep, exception_throwing_generator(20, 7),
-                         chunksize=2)
+            executor.map(
+                id_sleep, exception_throwing_generator(20, 7), chunksize=2
+            )
 
         executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            executor.map(id_sleep, exception_throwing_generator(20, 7),
-                         chunksize=4)
+            executor.map(
+                id_sleep, exception_throwing_generator(20, 7), chunksize=4
+            )
 
     def test_queue_full_deadlock(self):
         executor = get_reusable_executor(max_workers=1)
-        fs_fail = [executor.submit(do_nothing, ErrorAtPickle(True))
-                   for _ in range(100)]
-        fs = [executor.submit(do_nothing, ErrorAtPickle(False))
-              for _ in range(100)]
+        fs_fail = [
+            executor.submit(do_nothing, ErrorAtPickle(True))
+            for _ in range(100)
+        ]
+        fs = [
+            executor.submit(do_nothing, ErrorAtPickle(False))
+            for _ in range(100)
+        ]
         with pytest.raises(PicklingError):
             fs_fail[99].result()
         assert fs[99].result()
 
     def test_informative_error_when_fail_at_unpickle(self):
         executor = get_reusable_executor(max_workers=2)
-        obj = ErrorAtUnpickle(RuntimeError, 'message raised in child')
+        obj = ErrorAtUnpickle(RuntimeError, "message raised in child")
         f = executor.submit(id, obj)
 
         with pytest.raises(BrokenProcessPool) as exc_info:
             f.result()
-        assert 'RuntimeError' in str(exc_info.value.__cause__)
-        assert 'message raised in child' in str(exc_info.value.__cause__)
+        assert "RuntimeError" in str(exc_info.value.__cause__)
+        assert "message raised in child" in str(exc_info.value.__cause__)
 
     @pytest.mark.skipif(np is None, reason="requires numpy")
     def test_numpy_dot_parent_and_child_no_freeze(self):
@@ -417,12 +455,12 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):
-
     def test_shutdown_kill(self):
         """Test reusable_executor termination handling"""
         from itertools import repeat
+
         executor = get_reusable_executor(max_workers=5)
-        res1 = executor.map(id_sleep, range(100), repeat(.001))
+        res1 = executor.map(id_sleep, range(100), repeat(0.001))
         res2 = executor.map(id_sleep, range(100), repeat(1))
         assert list(res1) == list(range(100))
 
@@ -440,9 +478,10 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # Test the executor.shutdown call do not cause deadlock
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))  # start the worker processes
-        executor.submit(kill_friend, (next(iter(executor._processes.keys())),
-                                      .0))
-        sleep(.01)
+        executor.submit(
+            kill_friend, (next(iter(executor._processes.keys())), 0.0)
+        )
+        sleep(0.01)
         executor.shutdown(wait=True)
 
     def test_kill_workers_on_new_options(self):
@@ -453,15 +492,18 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # change the constructor parameter while requesting not to wait
         # for the long running task to complete (the workers will get
         # shutdown forcibly)
-        executor = get_reusable_executor(max_workers=2, timeout=5,
-                                         kill_workers=True)
+        executor = get_reusable_executor(
+            max_workers=2, timeout=5, kill_workers=True
+        )
         with pytest.raises(ShutdownExecutorError):
             f.result()
         f2 = executor.submit(id_sleep, 42, 0)
         assert f2.result() == 42
 
-    @pytest.mark.parametrize("bad_object, match", [
-        (CrashAtGCInWorker, r"SIGSEGV"), (CExitAtGCInWorker, r"EXIT\(0\)")])
+    @pytest.mark.parametrize(
+        "bad_object, match",
+        [(CrashAtGCInWorker, r"SIGSEGV"), (CExitAtGCInWorker, r"EXIT\(0\)")],
+    )
     def test_call_item_gc_crash_or_exit(self, bad_object, match):
         executor = get_reusable_executor(max_workers=1)
         bad_object = bad_object()
@@ -475,7 +517,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # when processing subsequently dispatched tasks:
         with pytest.raises(TerminatedWorkerError, match=filter_match(match)):
             executor.submit(gc.collect).result()
-            for _ in executor.map(sleep, [.1] * 100):
+            for _ in executor.map(sleep, [0.1] * 100):
                 pass
 
 
@@ -490,7 +532,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
         # the old one as it is still in a good shape. The resize should not
         # occur while there are on going works.
         pids = list(executor._processes.keys())
-        res1 = executor.submit(sleep_then_check_pids_exist, (.3, pids))
+        res1 = executor.submit(sleep_then_check_pids_exist, (0.3, pids))
         clean_warning_registry()
         with warnings.catch_warnings(record=True) as w:
             # Cause all warnings to always be triggered.
@@ -499,8 +541,9 @@ class TestResizeExecutor(ReusableExecutorMixin):
             assert len(w) == 1
             expected_msg = "Trying to resize an executor with running jobs"
             assert expected_msg in str(w[0].message)
-            assert res1.result(), ("Resize should wait for current processes "
-                                   " to finish")
+            assert res1.result(), (
+                "Resize should wait for current processes " " to finish"
+            )
             assert len(executor._processes) == 1
             assert next(iter(executor._processes.keys())) in pids
 
@@ -524,9 +567,9 @@ class TestResizeExecutor(ReusableExecutorMixin):
         # Tentative non-regression test for a deadlock when shutting down
         # the workers of an executor prior to resizing it.
         kwargs = {
-            'timeout': None,
-            'kill_workers': kill_workers,
-            'reuse': reuse,
+            "timeout": None,
+            "kill_workers": kill_workers,
+            "reuse": reuse,
         }
         with warnings.catch_warnings(record=True):
             # Cause all warnings to always be triggered.
@@ -543,37 +586,38 @@ class TestResizeExecutor(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))  # trigger the creation of worker processes
         pid = next(iter(executor._processes.keys()))
-        executor.submit(kill_friend, (pid, .1))
+        executor.submit(kill_friend, (pid, 0.1))
 
         with pytest.warns(UserWarning) as recorded_warnings:
             warnings.simplefilter("always")
             executor = get_reusable_executor(max_workers=1, timeout=None)
         assert len(recorded_warnings) == 1
-        expected_msg = ("Trying to resize an executor with running jobs:"
-                        " waiting for jobs completion before resizing.")
+        expected_msg = (
+            "Trying to resize an executor with running jobs:"
+            " waiting for jobs completion before resizing."
+        )
         assert recorded_warnings[0].message.args[0] == expected_msg
-        assert executor.submit(id_sleep, 42, 0.).result() == 42
+        assert executor.submit(id_sleep, 42, 0.0).result() == 42
         executor.shutdown()
 
     def test_resize_after_timeout(self):
         with warnings.catch_warnings(record=True) as recorded_warnings:
             warnings.simplefilter("always")
-            executor = get_reusable_executor(max_workers=2, timeout=.001)
-            assert executor.submit(id_sleep, 42, 0.).result() == 42
-            sleep(.1)
-            executor = get_reusable_executor(max_workers=8, timeout=.001)
-            assert executor.submit(id_sleep, 42, 0.).result() == 42
-            sleep(.1)
-            executor = get_reusable_executor(max_workers=2, timeout=.001)
-            assert executor.submit(id_sleep, 42, 0.).result() == 42
+            executor = get_reusable_executor(max_workers=2, timeout=0.001)
+            assert executor.submit(id_sleep, 42, 0.0).result() == 42
+            sleep(0.1)
+            executor = get_reusable_executor(max_workers=8, timeout=0.001)
+            assert executor.submit(id_sleep, 42, 0.0).result() == 42
+            sleep(0.1)
+            executor = get_reusable_executor(max_workers=2, timeout=0.001)
+            assert executor.submit(id_sleep, 42, 0.0).result() == 42
 
         if len(recorded_warnings) > 1:
-            expected_msg = 'A worker stopped'
+            expected_msg = "A worker stopped"
             assert expected_msg in recorded_warnings[0].message.args[0]
 
 
 class TestGetReusableExecutor(ReusableExecutorMixin):
-
     def test_invalid_process_number(self):
         """Raise error on invalid process number"""
 
@@ -596,11 +640,11 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 get_reusable_executor(max_workers=2, context="fork")
 
     def test_pass_start_method_name_as_context(self):
-        executor = get_reusable_executor(max_workers=2, context='loky')
+        executor = get_reusable_executor(max_workers=2, context="loky")
         assert executor.submit(id, 42).result() >= 0
 
         with pytest.raises(ValueError):
-            get_reusable_executor(max_workers=2, context='bad_start_method')
+            get_reusable_executor(max_workers=2, context="bad_start_method")
 
     def test_interactively_defined_executor_no_main(self):
         # check that the init_main_module parameter works properly
@@ -630,9 +674,11 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         )
         assert not reused
 
-    @pytest.mark.xfail(cloudpickle_version >= LooseVersion("0.5.4") and
-                       cloudpickle_version <= LooseVersion("0.7.0"),
-                       reason="Known issue in cloudpickle")
+    @pytest.mark.xfail(
+        cloudpickle_version >= LooseVersion("0.5.4")
+        and cloudpickle_version <= LooseVersion("0.7.0"),
+        reason="Known issue in cloudpickle",
+    )
     # https://github.com/cloudpipe/cloudpickle/pull/240
     def test_interactively_defined_nested_functions(self):
         # Check that it's possible to call nested interactively defined
@@ -703,7 +749,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # It should be possible to use a loky process pool executor as a dropin
         # replacement for a ProcessPoolExecutor, including when catching
         # exceptions:
-        concurrent = pytest.importorskip('concurrent')
+        concurrent = pytest.importorskip("concurrent")
         from concurrent.futures.process import BrokenProcessPool as BPPExc
 
         with pytest.raises(BPPExc):
@@ -718,55 +764,62 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         assert len(running) == 0
 
     thread_configurations = [
-        ('constant', 'clean_start'),
-        ('constant', 'broken_start'),
-        ('varying', 'clean_start'),
-        ('varying', 'broken_start'),
+        ("constant", "clean_start"),
+        ("constant", "broken_start"),
+        ("varying", "clean_start"),
+        ("varying", "broken_start"),
     ]
 
     @pytest.mark.parametrize("workers, executor_state", thread_configurations)
     def test_reusable_executor_thread_safety(self, workers, executor_state):
-        if executor_state == 'clean_start':
+        if executor_state == "clean_start":
             # Create a new shared executor and ensures that it's workers are
             # ready:
             get_reusable_executor(reuse=False).submit(id, 42).result()
         else:
             # Break the shared executor before launching the threads:
-            with pytest.raises(TerminatedWorkerError,
-                               match=filter_match(r"SIGSEGV")):
+            with pytest.raises(
+                TerminatedWorkerError, match=filter_match(r"SIGSEGV")
+            ):
                 executor = get_reusable_executor(reuse=False)
                 executor.submit(return_instance, CrashAtPickle).result()
 
-        def helper_func(output_collector, max_workers=2, n_outer_steps=5,
-                        n_inner_steps=10):
+        def helper_func(
+            output_collector, max_workers=2, n_outer_steps=5, n_inner_steps=10
+        ):
             with warnings.catch_warnings():  # ignore resize warnings
                 warnings.simplefilter("always")
                 executor = get_reusable_executor(max_workers=max_workers)
                 for _ in range(n_outer_steps):
                     results = executor.map(
-                        lambda x: x ** 2, range(n_inner_steps))
+                        lambda x: x ** 2, range(n_inner_steps)
+                    )
                     expected_result = [x ** 2 for x in range(n_inner_steps)]
                     assert list(results) == expected_result
-                output_collector.append('ok')
+                output_collector.append("ok")
 
-        if workers == 'constant':
+        if workers == "constant":
             max_workers = [2] * 10
         else:
             max_workers = [(i % 4) + 1 for i in range(10)]
         # Use the same executor with the same number of workers concurrently
         # in different threads:
         output_collector = []
-        threads = [threading.Thread(
-            target=helper_func, args=(output_collector, w),
-            name=f'test_thread_{i:02d}_max_workers_{w}')
-            for i, w in enumerate(max_workers)]
+        threads = [
+            threading.Thread(
+                target=helper_func,
+                args=(output_collector, w),
+                name=f"test_thread_{i:02d}_max_workers_{w}",
+            )
+            for i, w in enumerate(max_workers)
+        ]
 
         with warnings.catch_warnings(record=True):
             for t in threads:
                 t.start()
             for t in threads:
                 t.join()
-        assert output_collector == ['ok'] * len(threads)
+        assert output_collector == ["ok"] * len(threads)
 
     def test_reusable_executor_reuse_true(self):
         executor = get_reusable_executor(max_workers=3, timeout=42)
@@ -800,22 +853,24 @@ class TestExecutorInitializer(ReusableExecutorMixin):
 
     def test_reusable_initializer(self):
         executor = get_reusable_executor(
-            max_workers=2, initializer=self._initializer, initargs=('done',))
+            max_workers=2, initializer=self._initializer, initargs=("done",)
+        )
 
-        assert executor.submit(self._test_initializer).result() == 'done'
+        assert executor.submit(self._test_initializer).result() == "done"
 
         # when the initializer change, the executor is re-spawned
         executor = get_reusable_executor(
-            max_workers=2, initializer=self._initializer, initargs=(42,))
+            max_workers=2, initializer=self._initializer, initargs=(42,)
+        )
 
         assert executor.submit(self._test_initializer).result() == 42
 
         # With reuse=True, the executor use the same initializer
         executor = get_reusable_executor(max_workers=4, reuse=True)
-        for x in executor.map(self._test_initializer, delay=.1):
+        for x in executor.map(self._test_initializer, delay=0.1):
             assert x == 42
 
         # With reuse='auto', the initializer is not used anymore
         executor = get_reusable_executor(max_workers=4)
-        for x in executor.map(self._test_initializer, delay=.1):
-            assert x == 'uninitialized'
+        for x in executor.map(self._test_initializer, delay=0.1):
+            assert x == "uninitialized"

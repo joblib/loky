@@ -12,8 +12,8 @@ from .utils import TimingWrapper
 loky_context = get_context("loky")
 
 DELTA = 0.1
-TIMEOUT1 = .1
-TIMEOUT2 = .3
+TIMEOUT1 = 0.1
+TIMEOUT2 = 0.3
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UNIX test")
@@ -43,7 +43,6 @@ def assert_timing_almost_equal(t1, t2=0):
 
 
 class TestLock:
-
     def test_lock(self):
         lock = loky_context.Lock()
         assert lock.acquire()
@@ -73,7 +72,6 @@ class TestLock:
 
 
 class TestSemaphore:
-
     def _test_semaphore(self, sem):
         assert_sem_value_equal(sem, 2)
         assert sem.acquire()
@@ -95,8 +93,9 @@ class TestSemaphore:
         assert sem.release() is None
         assert_sem_value_equal(sem, 4)
 
-    @pytest.mark.skipif(sys.platform == "darwin",
-                        reason="OSX have borken `get_value`")
+    @pytest.mark.skipif(
+        sys.platform == "darwin", reason="OSX have borken `get_value`"
+    )
     def test_bounded_semaphore(self):
         sem = loky_context.BoundedSemaphore(2)
         self._test_semaphore(sem)
@@ -126,7 +125,6 @@ class TestSemaphore:
 
 
 class TestCondition:
-
     @classmethod
     def _test_notify(cls, cond, sleeping, woken, timeout=None):
         cond.acquire()
@@ -138,8 +136,10 @@ class TestCondition:
     def check_invariant(self, cond):
         # this is only supposed to succeed when there are no sleepers
         try:
-            sleepers = (cond._sleeping_count.get_value() -
-                        cond._woken_count.get_value())
+            sleepers = (
+                cond._sleeping_count.get_value()
+                - cond._woken_count.get_value()
+            )
             sleepers == 0
             cond._wait_semaphore.get_value() == 0
         except NotImplementedError:
@@ -150,13 +150,15 @@ class TestCondition:
         sleeping = loky_context.Semaphore(0)
         woken = loky_context.Semaphore(0)
 
-        p = loky_context.Process(target=self._test_notify,
-                                 args=(cond, sleeping, woken))
+        p = loky_context.Process(
+            target=self._test_notify, args=(cond, sleeping, woken)
+        )
         p.daemon = True
         p.start()
 
-        p = threading.Thread(target=self._test_notify,
-                             args=(cond, sleeping, woken))
+        p = threading.Thread(
+            target=self._test_notify, args=(cond, sleeping, woken)
+        )
         p.daemon = True
         p.start()
 
@@ -197,13 +199,17 @@ class TestCondition:
 
         # start some threads/processes which will timeout
         for _ in range(3):
-            p = loky_context.Process(target=self._test_notify,
-                                     args=(cond, sleeping, woken, TIMEOUT1))
+            p = loky_context.Process(
+                target=self._test_notify,
+                args=(cond, sleeping, woken, TIMEOUT1),
+            )
             p.daemon = True
             p.start()
 
-            t = threading.Thread(target=self._test_notify,
-                                 args=(cond, sleeping, woken, TIMEOUT1))
+            t = threading.Thread(
+                target=self._test_notify,
+                args=(cond, sleeping, woken, TIMEOUT1),
+            )
             t.daemon = True
             t.start()
 
@@ -221,13 +227,15 @@ class TestCondition:
 
         # start some more threads/processes
         for _ in range(3):
-            p = loky_context.Process(target=self._test_notify,
-                                     args=(cond, sleeping, woken))
+            p = loky_context.Process(
+                target=self._test_notify, args=(cond, sleeping, woken)
+            )
             p.daemon = True
             p.start()
 
-            t = threading.Thread(target=self._test_notify,
-                                 args=(cond, sleeping, woken))
+            t = threading.Thread(
+                target=self._test_notify, args=(cond, sleeping, woken)
+            )
             t.daemon = True
             t.start()
 
@@ -285,8 +293,9 @@ class TestCondition:
         except NotImplementedError:
             pytest.skip(msg="`sem_get_value not implemented")
 
-        p = loky_context.Process(target=self._test_waitfor_f,
-                                 args=(cond, state))
+        p = loky_context.Process(
+            target=self._test_waitfor_f, args=(cond, state)
+        )
         p.daemon = True
         p.start()
 
@@ -314,7 +323,7 @@ class TestCondition:
             os.kill(pid, signal.SIGINT)
 
     def test_wait_result(self):
-        if sys.platform != 'win32':
+        if sys.platform != "win32":
             pid = os.getpid()
         else:
             pid = None
@@ -324,8 +333,9 @@ class TestCondition:
             assert not c.wait(0)
             assert not c.wait(0.1)
 
-            p = loky_context.Process(target=self._test_wait_result,
-                                     args=(c, pid))
+            p = loky_context.Process(
+                target=self._test_wait_result, args=(c, pid)
+            )
             p.start()
 
             assert c.wait(10)
@@ -336,7 +346,6 @@ class TestCondition:
 
 
 class TestEvent:
-
     @classmethod
     def _test_event(cls, event):
         time.sleep(TIMEOUT1)

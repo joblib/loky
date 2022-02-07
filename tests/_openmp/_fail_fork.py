@@ -4,11 +4,16 @@ import multiprocessing as mp
 from openmp_parallel_sum import parallel_sum
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser('Test compat openMP/multproc')
-    parser.add_argument('--start', type=str, default='fork',
-                        help='define start method tested with openMP')
+
+    parser = argparse.ArgumentParser("Test compat openMP/multproc")
+    parser.add_argument(
+        "--start",
+        type=str,
+        default="fork",
+        help="define start method tested with openMP",
+    )
     args = parser.parse_args()
 
     parallel_sum(10)

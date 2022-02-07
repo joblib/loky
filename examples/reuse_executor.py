@@ -13,6 +13,7 @@ from loky import get_reusable_executor
 
 def func_async(i):
     import os
+
     pid = os.getpid()
     return (2 * i, pid)
 
@@ -47,5 +48,7 @@ for i, (val, pid) in enumerate(results):
 print("All the jobs were run in a process different from main process")
 
 assert len(set(pids)) == 1
-print("All the computation where run in a single `ProcessPoolExecutor` with "
-      f"worker pid={pids[0]}")
+print(
+    "All the computation where run in a single `ProcessPoolExecutor` with "
+    f"worker pid={pids[0]}"
+)

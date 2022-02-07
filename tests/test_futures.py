@@ -3,8 +3,13 @@ import time
 import pytest
 import threading
 from concurrent import futures
-from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
-                                      CANCELLED_AND_NOTIFIED, FINISHED)
+from concurrent.futures._base import (
+    PENDING,
+    RUNNING,
+    CANCELLED,
+    CANCELLED_AND_NOTIFIED,
+    FINISHED,
+)
 
 from loky._base import Future
 from .utils import captured_stderr
@@ -46,8 +51,8 @@ class TestsFuture:
 
         f = Future()
         f.add_done_callback(fn)
-        f.set_exception(Exception('test'))
-        assert ('test',) == callback_exception[0].args
+        f.set_exception(Exception("test"))
+        assert ("test",) == callback_exception[0].args
 
     def test_done_callback_with_cancel(self):
         was_cancelled = [None]
@@ -63,6 +68,7 @@ class TestsFuture:
     def test_done_callback_raises(self):
         with captured_stderr() as stderr:
             import logging
+
             log = logging.getLogger("concurrent.futures")
             log.addHandler(logging.StreamHandler())
             raising_was_called = [False]
@@ -70,7 +76,7 @@ class TestsFuture:
 
             def raising_fn(callback_future):
                 raising_was_called[0] = True
-                raise Exception('foobar')
+                raise Exception("foobar")
 
             def fn(callback_future):
                 fn_was_called[0] = True
@@ -81,7 +87,7 @@ class TestsFuture:
             f.set_result(5)
             assert raising_was_called[0]
             assert fn_was_called[0]
-            assert 'Exception: foobar' in stderr.getvalue()
+            assert "Exception: foobar" in stderr.getvalue()
 
             del log.handlers[:]
 
@@ -103,9 +109,9 @@ class TestsFuture:
             callback_exception[0] = callback_future.exception()
 
         f = Future()
-        f.set_exception(Exception('test'))
+        f.set_exception(Exception("test"))
         f.add_done_callback(fn)
-        assert ('test',) == callback_exception[0].args
+        assert ("test",) == callback_exception[0].args
 
     def test_done_callback_already_cancelled(self):
         was_cancelled = [None]
@@ -120,18 +126,47 @@ class TestsFuture:
 
     def test_repr(self):
         import re
-        assert re.match('<Future at 0x[0-9a-f]+ state=pending>',
-                        repr(PENDING_FUTURE)).pos > -1
-        assert re.match('<Future at 0x[0-9a-f]+ state=running>',
-                        repr(RUNNING_FUTURE)).pos > -1
-        assert re.match('<Future at 0x[0-9a-f]+ state=cancelled>',
-                        repr(CANCELLED_FUTURE)).pos > -1
-        assert re.match('<Future at 0x[0-9a-f]+ state=cancelled>',
-                        repr(CANCELLED_AND_NOTIFIED_FUTURE)).pos > -1
-        assert re.match('<Future at 0x[0-9a-f]+ state=finished raised '
-                        'OSError>', repr(EXCEPTION_FUTURE)).pos > -1
-        assert re.match('<Future at 0x[0-9a-f]+ state=finished returned int>',
-                        repr(SUCCESSFUL_FUTURE)).pos > -1
+
+        assert (
+            re.match(
+                "<Future at 0x[0-9a-f]+ state=pending>", repr(PENDING_FUTURE)
+            ).pos
+            > -1
+        )
+        assert (
+            re.match(
+                "<Future at 0x[0-9a-f]+ state=running>", repr(RUNNING_FUTURE)
+            ).pos
+            > -1
+        )
+        assert (
+            re.match(
+                "<Future at 0x[0-9a-f]+ state=cancelled>",
+                repr(CANCELLED_FUTURE),
+            ).pos
+            > -1
+        )
+        assert (
+            re.match(
+                "<Future at 0x[0-9a-f]+ state=cancelled>",
+                repr(CANCELLED_AND_NOTIFIED_FUTURE),
+            ).pos
+            > -1
+        )
+        assert (
+            re.match(
+                "<Future at 0x[0-9a-f]+ state=finished raised " "OSError>",
+                repr(EXCEPTION_FUTURE),
+            ).pos
+            > -1
+        )
+        assert (
+            re.match(
+                "<Future at 0x[0-9a-f]+ state=finished returned int>",
+                repr(SUCCESSFUL_FUTURE),
+            ).pos
+            > -1
+        )
 
     def test_cancel(self):
         f1 = create_future(state=PENDING)
@@ -200,7 +235,7 @@ class TestsFuture:
         def notification(ready):
             # Wait until the main thread is waiting for the result.
             ready.wait(1)
-            time.sleep(.1)
+            time.sleep(0.1)
             f1.set_result(42)
 
         ready = threading.Event()
@@ -215,7 +250,7 @@ class TestsFuture:
         def notification(ready):
             # Wait until the main thread is waiting for the result.
             ready.wait(1)
-            time.sleep(.1)
+            time.sleep(0.1)
             f1.cancel()
 
         ready = threading.Event()
@@ -243,7 +278,7 @@ class TestsFuture:
         def notification(ready):
             # Wait until the main thread is waiting for the exception.
             ready.wait(1)
-            time.sleep(.1)
+            time.sleep(0.1)
             with f1._condition:
                 f1._state = FINISHED
                 f1._exception = OSError()

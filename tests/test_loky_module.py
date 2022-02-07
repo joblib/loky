@@ -14,8 +14,9 @@ from loky.backend.context import _cpu_count_user
 
 
 def test_version():
-    assert hasattr(loky, '__version__'), (
-        "There are no __version__ argument on the loky module")
+    assert hasattr(
+        loky, "__version__"
+    ), "There are no __version__ argument on the loky module"
 
 
 def test_cpu_count():
@@ -33,16 +34,17 @@ def test_cpu_count():
     assert 1 <= cpus_physical <= cpus
 
 
-cpu_count_cmd = ("from loky.backend.context import cpu_count;"
-                 "print(cpu_count({args}))")
+cpu_count_cmd = (
+    "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
+)
 
 
 def test_cpu_count_affinity():
-    if not hasattr(os, 'sched_getaffinity') or not hasattr(shutil, 'which'):
+    if not hasattr(os, "sched_getaffinity") or not hasattr(shutil, "which"):
         pytest.skip()
 
-    taskset_bin = shutil.which('taskset')
-    python_bin = shutil.which('python')
+    taskset_bin = shutil.which("taskset")
+    python_bin = shutil.which("python")
 
     if taskset_bin is None or python_bin is None:
         raise pytest.skip()
@@ -52,30 +54,47 @@ def test_cpu_count_affinity():
     except NotImplementedError:
         pytest.skip()
 
-    res = check_output([taskset_bin, '-c', '0',
-                        python_bin, '-c', cpu_count_cmd.format(args='')])
+    res = check_output(
+        [
+            taskset_bin,
+            "-c",
+            "0",
+            python_bin,
+            "-c",
+            cpu_count_cmd.format(args=""),
+        ]
+    )
 
-    res_physical = check_output([
-        taskset_bin, '-c', '0', python_bin, '-c',
-        cpu_count_cmd.format(args='only_physical_cores=True')])
+    res_physical = check_output(
+        [
+            taskset_bin,
+            "-c",
+            "0",
+            python_bin,
+            "-c",
+            cpu_count_cmd.format(args="only_physical_cores=True"),
+        ]
+    )
 
-    assert res.strip().decode('utf-8') == '1'
-    assert res_physical.strip().decode('utf-8') == '1'
+    assert res.strip().decode("utf-8") == "1"
+    assert res_physical.strip().decode("utf-8") == "1"
 
 
 def test_cpu_count_cfs_limit():
     if sys.platform == "win32":
         pytest.skip()
 
-    if not hasattr(shutil, 'which'):
+    if not hasattr(shutil, "which"):
         pytest.skip()
 
-    docker_bin = shutil.which('docker')
+    docker_bin = shutil.which("docker")
     if docker_bin is None:
         raise pytest.skip()
 
     loky_module_path = os.path.abspath(os.path.dirname(loky.__file__))
-    loky_project_path = os.path.abspath(os.path.join(loky_module_path, os.pardir))
+    loky_project_path = os.path.abspath(
+        os.path.join(loky_module_path, os.pardir)
+    )
 
     # The following will always run using the Python 3.7 docker image.
     # We mount the loky source as /loky inside the container,
@@ -84,10 +103,10 @@ def test_cpu_count_cfs_limit():
         f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.7 "
         f"/bin/bash -c 'pip install --quiet -e /loky ; "
         f"python -c \"{cpu_count_cmd.format(args='')}\"'",
-        shell=True
+        shell=True,
     )
 
-    assert res.strip().decode('utf-8') == '1'
+    assert res.strip().decode("utf-8") == "1"
 
 
 def test_only_physical_cores_error():
@@ -103,26 +122,28 @@ def test_only_physical_cores_error():
     if _cpu_count_user(cpu_count_mp) < cpu_count_mp:
         pytest.skip()
 
-    start_dir = os.path.abspath('.')
+    start_dir = os.path.abspath(".")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Write bad lscpu program
-        lscpu_path = tmp_dir + '/lscpu'
-        with open(lscpu_path, 'w') as f:
-            f.write("#!/bin/sh\n"
-                    "exit(1)")
+        lscpu_path = tmp_dir + "/lscpu"
+        with open(lscpu_path, "w") as f:
+            f.write("#!/bin/sh\n" "exit(1)")
         os.chmod(lscpu_path, 0o777)
 
         try:
-            old_path = os.environ['PATH']
-            os.environ['PATH'] = tmp_dir + ":" + old_path
+            old_path = os.environ["PATH"]
+            os.environ["PATH"] = tmp_dir + ":" + old_path
 
             # clear the cache otherwise the warning is not triggered
             import loky.backend.context
+
             loky.backend.context.physical_cores_cache = None
 
-            with pytest.warns(UserWarning, match="Could not find the number of"
-                                                 " physical cores"):
+            with pytest.warns(
+                UserWarning,
+                match="Could not find the number of" " physical cores",
+            ):
                 cpu_count(only_physical_cores=True)
 
             # Should not warn the second time
@@ -131,7 +152,7 @@ def test_only_physical_cores_error():
                 assert not record
 
         finally:
-            os.environ['PATH'] = old_path
+            os.environ["PATH"] = old_path
 
 
 def test_only_physical_cores_with_user_limitation():
