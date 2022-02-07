@@ -122,9 +122,9 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
     """
     if env is not None:
         env = {**os.environ, **env}
+
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, env=env,
-                            text=True)
+                            stderr=subprocess.PIPE, env=env, text=True)
 
     def kill_process():
         warnings.warn(f"Timeout running {cmd}")

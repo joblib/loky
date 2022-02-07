@@ -9,8 +9,8 @@
 import os
 import socket
 import _socket
-from multiprocessing.context import get_spawning_popen
 from multiprocessing.connection import Connection
+from multiprocessing.context import get_spawning_popen
 
 from .reduction import register
 
@@ -29,15 +29,14 @@ def DupFd(fd):
     popen_obj = get_spawning_popen()
     if popen_obj is not None:
         return popen_obj.DupFd(popen_obj.duplicate_for_child(fd))
-
-    if HAVE_SEND_HANDLE:
+    elif HAVE_SEND_HANDLE:
         from multiprocessing import resource_sharer
         return resource_sharer.DupFd(fd)
-
-    raise TypeError(
-        'Cannot pickle connection object. This object can only be '
-        'passed when spawning a new process'
-    )
+    else:
+        raise TypeError(
+            'Cannot pickle connection object. This object can only be '
+            'passed when spawning a new process'
+        )
 
 
 def _reduce_socket(s):
@@ -50,14 +49,14 @@ def _rebuild_socket(df, family, type, proto):
     return socket.fromfd(fd, family, type, proto)
 
 
-def reduce_connection(conn):
-    df = DupFd(conn.fileno())
-    return rebuild_connection, (df, conn.readable, conn.writable)
-
-
 def rebuild_connection(df, readable, writable):
     fd = df.detach()
     return Connection(fd, readable, writable)
+
+
+def reduce_connection(conn):
+    df = DupFd(conn.fileno())
+    return rebuild_connection, (df, conn.readable, conn.writable)
 
 
 register(socket.socket, _reduce_socket)

@@ -15,7 +15,6 @@ import faulthandler
 from math import sqrt
 from pickle import PicklingError
 from threading import Thread
-from concurrent import futures
 from collections import defaultdict
 from concurrent import futures
 from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
@@ -332,7 +331,7 @@ class ExecutorShutdownTest:
             self.executor.submit(lambda x: x, 42)
 
         # Check that even after shutdown, all futures are still running
-        assert {f._state for f in res} <= {PENDING, RUNNING}
+        assert all(f._state in (PENDING, RUNNING) for f in res)
 
         # Let the futures finish and make sure that all the executor resources
         # were properly cleaned by the shutdown process
@@ -344,7 +343,7 @@ class ExecutorShutdownTest:
 
         # Make sure the results were all computed before the executor
         # resources were freed.
-        assert [f.result() for f in res] == [*range(-5, 5)]
+        assert [f.result() for f in res] == list(range(-5, 5))
 
     def test_shutdown_deadlock_pickle(self):
         # Test that the pool calling shutdown with wait=False does not cause
@@ -736,6 +735,7 @@ class ExecutorTest:
         results = [None] * 10
         threads = [Thread(target=self._test_thread_safety, args=(i, results))
                    for i in range(len(results))]
+
         for t in threads:
             t.start()
         for t in threads:

@@ -56,9 +56,10 @@ def _chain_initializers(initializer_and_args):
 
     if not filtered_initializers:
         return None, ()
-    if len(filtered_initializers) == 1:
+    elif len(filtered_initializers) == 1:
         return filtered_initializers[0], filtered_initargs[0]
-    return _ChainedInitializer(filtered_initializers), filtered_initargs
+    else:
+        return _ChainedInitializer(filtered_initializers), filtered_initargs
 
 
 def _prepare_initializer(initializer, initargs):

@@ -8,12 +8,12 @@
 #  * Add CustomizableLokyPickler to allow customizing pickling process
 #    on the fly.
 #
-import io
-import os
-import sys
 import copyreg
+import io
 import functools
 import types
+import sys
+import os
 from multiprocessing import util
 from pickle import HIGHEST_PROTOCOL
 

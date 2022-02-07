@@ -138,7 +138,6 @@ class TestResourceTracker:
             _resource_unlink(name2, rtype)
         # docs say it should be ENOENT, but OSX seems to give EINVAL
         assert ctx.value.errno in (errno.ENOENT, errno.EINVAL)
-
         err = p.stderr.read()
         p.stderr.close()
         p.stdout.close()

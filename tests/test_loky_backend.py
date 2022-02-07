@@ -7,18 +7,18 @@ import signal
 import pickle
 import socket
 import multiprocessing as mp
-from tempfile import mkstemp
 from multiprocessing.connection import wait
+from tempfile import mkstemp
 
 from loky.backend import get_context
 from loky.backend.context import START_METHODS
 from loky.backend.utils import recursive_terminate
 
-from .utils import (TimingWrapper, check_subprocess_call,
-                    with_parallel_sum, _run_openmp_parallel_sum)
-
+from .utils import (TimingWrapper, check_subprocess_call, with_parallel_sum,
+                    _run_openmp_parallel_sum)
 
 if not hasattr(socket, "socketpair"):
+
     def socketpair():
         s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -45,8 +45,8 @@ import sys
 import signal
 import warnings
 import threading
-from multiprocessing import util
 from _multiprocessing import sem_unlink
+from multiprocessing import util
 
 from . import spawn
 
