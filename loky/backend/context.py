@@ -43,8 +43,10 @@ def get_context(method=None):
     try:
         return mp_get_context(method)
     except ValueError:
-        raise ValueError(f"Unknown context '{method}'. "
-                         f"Value should be in {START_METHODS}.")
+        raise ValueError(
+            f"Unknown context '{method}'. Value should be in "
+            f"{START_METHODS}."
+        )
 
 
 def set_start_method(method, force=False):

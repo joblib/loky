@@ -3,9 +3,16 @@ It provides a robust and dynamic implementation os the
 :class:`ProcessPoolExecutor` and a function :func:`get_reusable_executor` which
 hide the pool management under the hood.
 """
-from concurrent.futures import (ALL_COMPLETED, FIRST_COMPLETED,
-                                FIRST_EXCEPTION, CancelledError, Executor,
-                                TimeoutError, as_completed, wait)
+from concurrent.futures import (
+    ALL_COMPLETED,
+    FIRST_COMPLETED,
+    FIRST_EXCEPTION,
+    CancelledError,
+    Executor,
+    TimeoutError,
+    as_completed,
+    wait,
+)
 
 from ._base import Future
 from .backend.context import cpu_count
