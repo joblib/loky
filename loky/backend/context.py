@@ -52,6 +52,7 @@ def get_context(method=None):
 
     return context
 
+
 def set_start_method(method, force=False):
     global _DEFAULT_START_METHOD
     if _DEFAULT_START_METHOD is not None and not force:
@@ -87,7 +88,7 @@ def cpu_count(only_physical_cores=False):
     any other way such as: process affinity, restricting CFS scheduler policy
     or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
     cores is not found, return the number of logical cores.
- 
+
     It is also always larger or equal to 1.
     """
     os_cpu_count = os.cpu_count()
@@ -110,9 +111,7 @@ def cpu_count(only_physical_cores=False):
                     "Returning the number of logical cores instead. You can "
                     "silence this warning by setting LOKY_MAX_CPU_COUNT to "
                     "the number of cores you want to use.")
-                if sys.version_info >= (3, 5):
-                    # TODO remove the version check when dropping py2 support
-                    traceback.print_tb(exception.__traceback__)
+                traceback.print_tb(exception.__traceback__)
 
             cpu_count = max(aggregate_cpu_count, 1)
         else:
@@ -139,9 +138,9 @@ def _cpu_count_user(os_cpu_count):
     cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
     cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
     if os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
-        with open(cfs_quota_fname, 'r') as fh:
+        with open(cfs_quota_fname, mode='r') as fh:
             cfs_quota_us = int(fh.read())
-        with open(cfs_period_fname, 'r') as fh:
+        with open(cfs_period_fname, mode='r') as fh:
             cfs_period_us = int(fh.read())
 
         if cfs_quota_us > 0 and cfs_period_us > 0:
@@ -172,22 +171,24 @@ def _count_physical_cores():
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
-                "lscpu --parse=core".split(" "), capture_output=True)
-            cpu_info = cpu_info.stdout.decode("utf-8").splitlines()
+                "lscpu --parse=core".split(" "), capture_output=True,
+                text=True)
+            cpu_info = cpu_info.stdout.splitlines()
             cpu_info = {line for line in cpu_info if not line.startswith("#")}
             cpu_count_physical = len(cpu_info)
         elif sys.platform == "win32":
             cpu_info = subprocess.run(
                 "wmic CPU Get NumberOfCores /Format:csv".split(" "),
-                capture_output=True)
-            cpu_info = cpu_info.stdout.decode('utf-8').splitlines()
+                capture_output=True, text=True)
+            cpu_info = cpu_info.stdout.splitlines()
             cpu_info = [l.split(",")[1] for l in cpu_info
                         if (l and l != "Node,NumberOfCores")]
             cpu_count_physical = sum(map(int, cpu_info))
         elif sys.platform == "darwin":
             cpu_info = subprocess.run(
-                "sysctl -n hw.physicalcpu".split(" "), capture_output=True)
-            cpu_info = cpu_info.stdout.decode('utf-8')
+                "sysctl -n hw.physicalcpu".split(" "), capture_output=True,
+                text=True)
+            cpu_info = cpu_info.stdout
             cpu_count_physical = int(cpu_info)
         else:
             raise NotImplementedError(
@@ -279,7 +280,7 @@ class LokyInitMainContext(LokyContext):
     Process = LokyInitMainProcess
 
 
-"""Register loky context so it works with multiprocessing.get_context"""
+# Register loky context so it works with multiprocessing.get_context
 ctx_loky = LokyContext()
 mp.context._concrete_contexts['loky'] = ctx_loky
 mp.context._concrete_contexts['loky_init_main'] = LokyInitMainContext()
