@@ -5,6 +5,7 @@ import errno
 import signal
 import warnings
 import subprocess
+
 try:
     import psutil
 except ImportError:
@@ -37,13 +38,14 @@ def _recursive_terminate_with_psutil(process):
 
 
 def _recursive_terminate_without_psutil(process):
-    """Terminate a process and its descendants.
-    """
+    """Terminate a process and its descendants."""
     try:
         _recursive_terminate(process.pid)
     except OSError as e:
-        warnings.warn("Failed to kill subprocesses on this platform. Please"
-                      "install psutil: https://github.com/giampaolo/psutil")
+        warnings.warn(
+            "Failed to kill subprocesses on this platform. Please"
+            "install psutil: https://github.com/giampaolo/psutil"
+        )
         # In case we cannot introspect the children, we fall back to the
         # classic Process.terminate.
         process.terminate()
@@ -51,16 +53,15 @@ def _recursive_terminate_without_psutil(process):
 
 
 def _recursive_terminate(pid):
-    """Recursively kill the descendants of a process before killing it.
-    """
+    """Recursively kill the descendants of a process before killing it."""
 
     if sys.platform == "win32":
         # On windows, the taskkill function with option `/T` terminate a given
         # process pid and its children.
         try:
             subprocess.check_output(
-                ["taskkill", "/F", "/T", "/PID", str(pid)],
-                stderr=None)
+                ["taskkill", "/F", "/T", "/PID", str(pid)], stderr=None
+            )
         except subprocess.CalledProcessError as e:
             # In windows, taskkill return 1 for permission denied and 128, 255
             # for no process found.
@@ -80,18 +81,17 @@ def _recursive_terminate(pid):
     else:
         try:
             children_pids = subprocess.check_output(
-                ["pgrep", "-P", str(pid)],
-                stderr=None
+                ["pgrep", "-P", str(pid)], stderr=None
             )
         except subprocess.CalledProcessError as e:
             # `ps` returns 1 when no child process has been found
             if e.returncode == 1:
-                children_pids = b''
+                children_pids = b""
             else:
                 raise
 
         # Decode the result, split the cpid and remove the trailing line
-        children_pids = children_pids.decode().split('\n')[:-1]
+        children_pids = children_pids.decode().split("\n")[:-1]
         for cpid in children_pids:
             cpid = int(cpid)
             _recursive_terminate(cpid)
@@ -117,21 +117,26 @@ def get_exitcodes_terminated_worker(processes):
     # Catch the exitcode of the terminated workers. There should at least be
     # one. If not, wait a bit for the system to correctly set the exitcode of
     # the terminated worker.
-    exitcodes = [p.exitcode for p in list(processes.values())
-                 if p.exitcode is not None]
+    exitcodes = [
+        p.exitcode for p in list(processes.values()) if p.exitcode is not None
+    ]
     while len(exitcodes) == 0 and patience > 0:
         patience -= 1
-        exitcodes = [p.exitcode for p in list(processes.values())
-                     if p.exitcode is not None]
-        time.sleep(.05)
+        exitcodes = [
+            p.exitcode
+            for p in list(processes.values())
+            if p.exitcode is not None
+        ]
+        time.sleep(0.05)
 
     return _format_exitcodes(exitcodes)
 
 
 def _format_exitcodes(exitcodes):
     """Format a list of exit code with names of the signals if possible"""
-    str_exitcodes = [f"{_get_exitcode_name(e)}({e})"
-                     for e in exitcodes if e is not None]
+    str_exitcodes = [
+        f"{_get_exitcode_name(e)}({e})" for e in exitcodes if e is not None
+    ]
     return "{" + ", ".join(str_exitcodes) + "}"
 
 
@@ -144,6 +149,7 @@ def _get_exitcode_name(exitcode):
     if exitcode < 0:
         try:
             import signal
+
             return signal.Signals(-exitcode).name
         except ValueError:
             return "UNKNOWN"
