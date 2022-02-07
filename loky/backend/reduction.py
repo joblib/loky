@@ -20,7 +20,11 @@ from pickle import HIGHEST_PROTOCOL
 
 ###############################################################################
 # Enable custom pickling in Loky.
-dispatch_table = {}
+_dispatch_table = {}
+
+
+def register(type_, reduce_function):
+    _dispatch_table[type_] = reduce_function
 
 ###############################################################################
 # Registers extra pickling routines to improve picklization  for loky
@@ -43,8 +47,8 @@ class _C:
         pass
 
 
-dispatch_table[type(_C().f)] = _reduce_method
-dispatch_table[type(_C.h)] = _reduce_method
+register(type(_C().f), _reduce_method)
+register(type(_C.h), _reduce_method)
 
 
 if not hasattr(sys, "pypy_version_info"):
@@ -52,8 +56,8 @@ if not hasattr(sys, "pypy_version_info"):
     def _reduce_method_descriptor(m):
         return getattr, (m.__objclass__, m.__name__)
 
-    dispatch_table[type(list.append)] = _reduce_method_descriptor
-    dispatch_table[type(int.__add__)] = _reduce_method_descriptor
+    register(type(list.append), _reduce_method_descriptor)
+    register(type(int.__add__), _reduce_method_descriptor)
 
 
 # Make partial func pickable
@@ -65,7 +69,7 @@ def _rebuild_partial(func, args, keywords):
     return functools.partial(func, *args, **keywords)
 
 
-dispatch_table[functools.partial] = _reduce_partial
+register(functools.partial, _reduce_partial)
 
 if sys.platform != "win32":
     from ._posix_reduction import _mk_inheritable  # noqa: F401
@@ -158,7 +162,7 @@ def set_loky_pickler(loky_pickler=None):
                 base_dt = copyreg.dispatch_table.copy()
 
             # Register loky specific reducers, including custom reducers
-            loky_dt = {**base_dt, **dispatch_table, **reducers}
+            loky_dt = {**base_dt, **_dispatch_table, **reducers}
 
             # Set the new dispatch table, taking care of the fact that we
             # need to use the member_descriptor when we inherit from a
@@ -198,4 +202,4 @@ def dumps(obj, reducers=None, protocol=None):
     return buf.getbuffer()
 
 
-__all__ = ["dispatch_table", "dump", "dumps", "set_loky_pickler"]
+__all__ = ["dump", "dumps", "register", "set_loky_pickler"]

@@ -12,7 +12,7 @@ import _winapi
 from multiprocessing.connection import PipeConnection
 from multiprocessing.reduction import _reduce_socket
 
-from .reduction import dispatch_table
+from .reduction import register
 
 
 class DupHandle:
@@ -56,5 +56,5 @@ def reduce_pipe_connection(conn):
     return rebuild_pipe_connection, (dh, conn.readable, conn.writable)
 
 
-dispatch_table[PipeConnection] = reduce_pipe_connection
-dispatch_table[socket.socket] = _reduce_socket
+register(PipeConnection, reduce_pipe_connection)
+register(socket.socket, _reduce_socket)

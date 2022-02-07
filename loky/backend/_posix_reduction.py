@@ -12,7 +12,7 @@ import _socket
 from multiprocessing.context import get_spawning_popen
 from multiprocessing.connection import Connection
 
-from .reduction import dispatch_table
+from .reduction import register
 
 HAVE_SEND_HANDLE = (hasattr(socket, 'CMSG_LEN') and
                     hasattr(socket, 'SCM_RIGHTS') and
@@ -60,6 +60,6 @@ def rebuild_connection(df, readable, writable):
     return Connection(fd, readable, writable)
 
 
-dispatch_table[socket.socket] = _reduce_socket
-dispatch_table[_socket.socket] = _reduce_socket
-dispatch_table[Connection] = reduce_connection
+register(socket.socket, _reduce_socket)
+register(_socket.socket, _reduce_socket)
+register(Connection, reduce_connection)
