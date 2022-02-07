@@ -59,8 +59,7 @@ def wait_dead(worker, n_tries=1000, delay=0.001):
             return
         sleep(delay)
     raise RuntimeError(
-        f"Process {worker.pid} failed to die for at least "
-        f"{delay * n_tries:0.3f}s"
+        f"Process {worker.pid} failed to die for at least " f"{delay * n_tries:0.3f}s"
     )
 
 
@@ -269,9 +268,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                 raise exc_info.value.__cause__
 
     @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
-    def test_in_callback_submit_with_crash(
-        self, func, args, expected_err, match
-    ):
+    def test_in_callback_submit_with_crash(self, func, args, expected_err, match):
         """Test the recovery from callback crash"""
         executor = get_reusable_executor(max_workers=2, timeout=12)
 
@@ -352,9 +349,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # wait for the executor to be able to detect the issue and set itself
         # in broken state:
         sleep(0.5)
-        with pytest.raises(
-            TerminatedWorkerError, match=filter_match(r"SIGKILL")
-        ):
+        with pytest.raises(TerminatedWorkerError, match=filter_match(r"SIGKILL")):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -366,11 +361,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
     def test_crash_races(self, n_proc):
         """Test the race conditions in reusable_executor crash handling"""
 
-        if (
-            sys.platform == "win32"
-            and sys.version_info >= (3, 8)
-            and n_proc > 5
-        ):
+        if sys.platform == "win32" and sys.version_info >= (3, 8) and n_proc > 5:
             pytest.skip(
                 "On win32, the paging size can be too small to import numpy "
                 "multiple times in the sub-processes (imported when loading "
@@ -390,9 +381,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
             [(0.0001 * (j // 2), pids) for j in range(2 * n_proc)],
         )
         assert all(res)
-        with pytest.raises(
-            TerminatedWorkerError, match=filter_match(r"SIGKILL")
-        ):
+        with pytest.raises(TerminatedWorkerError, match=filter_match(r"SIGKILL")):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -401,33 +390,21 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # builded version of python
         executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            executor.map(
-                id_sleep, exception_throwing_generator(10, 3), chunksize=1
-            )
+            executor.map(id_sleep, exception_throwing_generator(10, 3), chunksize=1)
 
         # SayWhenError seen at start of problematic chunk's results
         executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            executor.map(
-                id_sleep, exception_throwing_generator(20, 7), chunksize=2
-            )
+            executor.map(id_sleep, exception_throwing_generator(20, 7), chunksize=2)
 
         executor = get_reusable_executor(max_workers=2)
         with pytest.raises(SayWhenError):
-            executor.map(
-                id_sleep, exception_throwing_generator(20, 7), chunksize=4
-            )
+            executor.map(id_sleep, exception_throwing_generator(20, 7), chunksize=4)
 
     def test_queue_full_deadlock(self):
         executor = get_reusable_executor(max_workers=1)
-        fs_fail = [
-            executor.submit(do_nothing, ErrorAtPickle(True))
-            for _ in range(100)
-        ]
-        fs = [
-            executor.submit(do_nothing, ErrorAtPickle(False))
-            for _ in range(100)
-        ]
+        fs_fail = [executor.submit(do_nothing, ErrorAtPickle(True)) for _ in range(100)]
+        fs = [executor.submit(do_nothing, ErrorAtPickle(False)) for _ in range(100)]
         with pytest.raises(PicklingError):
             fs_fail[99].result()
         assert fs[99].result()
@@ -478,9 +455,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # Test the executor.shutdown call do not cause deadlock
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))  # start the worker processes
-        executor.submit(
-            kill_friend, (next(iter(executor._processes.keys())), 0.0)
-        )
+        executor.submit(kill_friend, (next(iter(executor._processes.keys())), 0.0))
         sleep(0.01)
         executor.shutdown(wait=True)
 
@@ -492,9 +467,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # change the constructor parameter while requesting not to wait
         # for the long running task to complete (the workers will get
         # shutdown forcibly)
-        executor = get_reusable_executor(
-            max_workers=2, timeout=5, kill_workers=True
-        )
+        executor = get_reusable_executor(max_workers=2, timeout=5, kill_workers=True)
         with pytest.raises(ShutdownExecutorError):
             f.result()
         f2 = executor.submit(id_sleep, 42, 0)
@@ -661,17 +634,11 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         check_python_subprocess_call(code, stdout_regex=r"ok")
 
     def test_reused_flag(self):
-        executor, _ = _ReusablePoolExecutor.get_reusable_executor(
-            max_workers=2
-        )
-        executor, reused = _ReusablePoolExecutor.get_reusable_executor(
-            max_workers=2
-        )
+        executor, _ = _ReusablePoolExecutor.get_reusable_executor(max_workers=2)
+        executor, reused = _ReusablePoolExecutor.get_reusable_executor(max_workers=2)
         assert reused
         executor.shutdown(kill_workers=True)
-        executor, reused = _ReusablePoolExecutor.get_reusable_executor(
-            max_workers=2
-        )
+        executor, reused = _ReusablePoolExecutor.get_reusable_executor(max_workers=2)
         assert not reused
 
     @pytest.mark.xfail(
@@ -778,9 +745,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             get_reusable_executor(reuse=False).submit(id, 42).result()
         else:
             # Break the shared executor before launching the threads:
-            with pytest.raises(
-                TerminatedWorkerError, match=filter_match(r"SIGSEGV")
-            ):
+            with pytest.raises(TerminatedWorkerError, match=filter_match(r"SIGSEGV")):
                 executor = get_reusable_executor(reuse=False)
                 executor.submit(return_instance, CrashAtPickle).result()
 
@@ -791,9 +756,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 warnings.simplefilter("always")
                 executor = get_reusable_executor(max_workers=max_workers)
                 for _ in range(n_outer_steps):
-                    results = executor.map(
-                        lambda x: x ** 2, range(n_inner_steps)
-                    )
+                    results = executor.map(lambda x: x ** 2, range(n_inner_steps))
                     expected_result = [x ** 2 for x in range(n_inner_steps)]
                     assert list(results) == expected_result
                 output_collector.append("ok")

@@ -152,9 +152,7 @@ class ExecutorShutdownTest:
 
             # The workers should have completed their work before the main
             # process exits:
-            expected_filenames = [
-                f"task_{i:02d}.log" for i in range(2 * n_jobs)
-            ]
+            expected_filenames = [f"task_{i:02d}.log" for i in range(2 * n_jobs)]
 
             # Apparently files can take some time to appear under windows
             # on AppVeyor
@@ -333,10 +331,7 @@ class ExecutorShutdownTest:
 
         # submit tasks that will finish after the shutdown and make sure they
         # were started
-        res = [
-            self.executor.submit(self._wait_and_return, x)
-            for x in range(-5, 5)
-        ]
+        res = [self.executor.submit(self._wait_and_return, x) for x in range(-5, 5)]
 
         self.executor.shutdown(wait=False)
 
@@ -365,9 +360,7 @@ class ExecutorShutdownTest:
         # a deadlock if a task fails at pickle after the shutdown call.
         # Reported in bpo-39104.
         self.executor.shutdown(wait=True)
-        with self.executor_type(
-            max_workers=2, context=self.context
-        ) as executor:
+        with self.executor_type(max_workers=2, context=self.context) as executor:
             self.executor = executor  # Allow clean up in fail_on_deadlock
 
             # Start the executor and get the executor_manager_thread to collect
@@ -405,9 +398,7 @@ class ExecutorShutdownTest:
             e.submit(sleep_and_print, 1.0, "apple")
             e.shutdown(wait=False)
         """
-        stdout, stderr = check_subprocess_call(
-            [sys.executable, "-c", code], timeout=55
-        )
+        stdout, stderr = check_subprocess_call([sys.executable, "-c", code], timeout=55)
 
         _assert_no_error(stderr)
         assert stdout.strip() == "apple"
@@ -742,18 +733,9 @@ class ExecutorTest:
             list(self.executor.map(pow, range(40), range(40), chunksize=-1))
 
         ref = list(map(pow, range(40), range(40)))
-        assert (
-            list(self.executor.map(pow, range(40), range(40), chunksize=6))
-            == ref
-        )
-        assert (
-            list(self.executor.map(pow, range(40), range(40), chunksize=50))
-            == ref
-        )
-        assert (
-            list(self.executor.map(pow, range(40), range(40), chunksize=40))
-            == ref
-        )
+        assert list(self.executor.map(pow, range(40), range(40), chunksize=6)) == ref
+        assert list(self.executor.map(pow, range(40), range(40), chunksize=50)) == ref
+        assert list(self.executor.map(pow, range(40), range(40), chunksize=40)) == ref
         with pytest.raises(ValueError):
             bad_map()
 
@@ -923,9 +905,7 @@ class ExecutorTest:
 
         obj = MyObject(1)
         try:
-            ret_obj_custom = executor.submit(self.return_inputs, obj).result()[
-                0
-            ]
+            ret_obj_custom = executor.submit(self.return_inputs, obj).result()[0]
             ret_obj = self.executor.submit(self.return_inputs, obj).result()[0]
 
             assert ret_obj.value == 1
@@ -1068,9 +1048,7 @@ class ExecutorTest:
 
         # Total run time should be 3s which is way over the 1s cooldown
         # period between two consecutive memory checks in the worker.
-        futures = [
-            executor.submit(_create_cyclic_reference) for _ in range(300)
-        ]
+        futures = [executor.submit(_create_cyclic_reference) for _ in range(300)]
 
         executor.shutdown(wait=True)
 
@@ -1167,9 +1145,7 @@ class ExecutorTest:
             with self.executor_type(
                 1, context=self.context, initializer=_custom_initializer
             ) as e:
-                assert e.submit(
-                    check_viztracer_active_and_custom_init
-                ).result()
+                assert e.submit(check_viztracer_active_and_custom_init).result()
         finally:
             tracer.stop()
 

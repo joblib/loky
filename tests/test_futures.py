@@ -128,15 +128,11 @@ class TestsFuture:
         import re
 
         assert (
-            re.match(
-                "<Future at 0x[0-9a-f]+ state=pending>", repr(PENDING_FUTURE)
-            ).pos
+            re.match("<Future at 0x[0-9a-f]+ state=pending>", repr(PENDING_FUTURE)).pos
             > -1
         )
         assert (
-            re.match(
-                "<Future at 0x[0-9a-f]+ state=running>", repr(RUNNING_FUTURE)
-            ).pos
+            re.match("<Future at 0x[0-9a-f]+ state=running>", repr(RUNNING_FUTURE)).pos
             > -1
         )
         assert (

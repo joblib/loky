@@ -168,9 +168,7 @@ class TestCloudpickleWrapper:
         finally:
             os.unlink(filename)
 
-    @pytest.mark.parametrize(
-        "loky_pickler", [None, "''", "'cloudpickle'", "'pickle'"]
-    )
+    @pytest.mark.parametrize("loky_pickler", [None, "''", "'cloudpickle'", "'pickle'"])
     def test_set_loky_pickler(self, loky_pickler):
         # Test that the function set_loky_pickler correctly changes the pickler
         # used in loky.

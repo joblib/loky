@@ -34,9 +34,7 @@ def test_cpu_count():
     assert 1 <= cpus_physical <= cpus
 
 
-cpu_count_cmd = (
-    "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
-)
+cpu_count_cmd = "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
 
 
 def test_cpu_count_affinity():
@@ -92,9 +90,7 @@ def test_cpu_count_cfs_limit():
         raise pytest.skip()
 
     loky_module_path = os.path.abspath(os.path.dirname(loky.__file__))
-    loky_project_path = os.path.abspath(
-        os.path.join(loky_module_path, os.pardir)
-    )
+    loky_project_path = os.path.abspath(os.path.join(loky_module_path, os.pardir))
 
     # The following will always run using the Python 3.7 docker image.
     # We mount the loky source as /loky inside the container,

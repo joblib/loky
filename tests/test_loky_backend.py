@@ -111,9 +111,7 @@ class TestLokyBackend:
         kwargs = {"hello": 23, "bye": 2.54}
         name = "TestLokyProcess"
         ctx = get_context(context_name)
-        p = ctx.Process(
-            target=self._test_process, args=args, kwargs=kwargs, name=name
-        )
+        p = ctx.Process(target=self._test_process, args=args, kwargs=kwargs, name=name)
         p.daemon = True
         current = self.current_process()
 
@@ -214,9 +212,7 @@ class TestLokyBackend:
         """connections can be pickled at spawn and are able to send/recv"""
         parent_connection, child_connection = self.Pipe(duplex=True)
 
-        p = self.Process(
-            target=self._test_connection, args=(child_connection,)
-        )
+        p = self.Process(target=self._test_connection, args=(child_connection,))
         p.start()
 
         msg = b"42"
@@ -263,9 +259,7 @@ class TestLokyBackend:
             # Test that the environment variable is correctly copied in the
             # child process.
             os.environ[key] = value
-            p = self.Process(
-                target=self._test_child_env, args=(key, out_queue)
-            )
+            p = self.Process(target=self._test_child_env, args=(key, out_queue))
             p.start()
             child_var = out_queue.get()
             p.join()
@@ -369,9 +363,7 @@ class TestLokyBackend:
         wconn.send(l)
         if len(l) < 2:
             for i in range(2):
-                p = cls.Process(
-                    target=cls._test_recursion, args=(wconn, l + [i])
-                )
+                p = cls.Process(target=cls._test_recursion, args=(wconn, l + [i]))
                 p.start()
                 p.join()
                 assert p.exitcode == 0
@@ -474,10 +466,7 @@ class TestLokyBackend:
             )
             lines = out.decode().split("\n")[1:-1]
         except (FileNotFoundError, OSError):
-            print(
-                "lsof does not exist on this platform. Skip open files"
-                "check."
-            )
+            print("lsof does not exist on this platform. Skip open files" "check.")
             return []
 
         n_pipe = 0
@@ -517,10 +506,7 @@ class TestLokyBackend:
             n_expected_pipes = 4
         else:
             n_expected_pipes = 3
-        msg = (
-            "Some pipes were not properly closed during the child process "
-            "setup."
-        )
+        msg = "Some pipes were not properly closed during the child process " "setup."
         assert n_pipe == n_expected_pipes, msg
 
         # assert that the writable part of the Pipe (not passed to child),
@@ -578,8 +564,7 @@ class TestLokyBackend:
                     for sem in named_sem:
                         if pid not in sem:
                             assert not os.path.exists(sem), (
-                                "Some named semaphore are not properly cleaned"
-                                " up"
+                                "Some named semaphore are not properly cleaned" " up"
                             )
 
                 assert p.exitcode == 0
@@ -705,9 +690,7 @@ def wait_for_handle(handle, timeout):
 
 def _run_nested_delayed(depth, delay, event):
     if depth > 0:
-        p = ctx_loky.Process(
-            target=_run_nested_delayed, args=(depth - 1, delay, event)
-        )
+        p = ctx_loky.Process(target=_run_nested_delayed, args=(depth - 1, delay, event))
         p.start()
         p.join()
     else:
@@ -726,8 +709,7 @@ def test_recursive_terminate(use_psutil):
     if not event.wait(30):
         recursive_terminate(p, use_psutil=use_psutil)
         raise RuntimeError(
-            "test_recursive_terminate was not able to launch "
-            "all nested processes."
+            "test_recursive_terminate was not able to launch " "all nested processes."
         )
 
     children = psutil.Process(pid=p.pid).children(recursive=True)

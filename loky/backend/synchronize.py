@@ -95,9 +95,7 @@ class SemLock:
         # When the object is garbage collected or the
         # process shuts down we unlink the semaphore name
         resource_tracker.register(self._semlock.name, "semlock")
-        util.Finalize(
-            self, SemLock._cleanup, (self._semlock.name,), exitpriority=0
-        )
+        util.Finalize(self, SemLock._cleanup, (self._semlock.name,), exitpriority=0)
 
     @staticmethod
     def _cleanup(name):
@@ -122,9 +120,7 @@ class SemLock:
 
     def __setstate__(self, state):
         self._semlock = _SemLock._rebuild(*state)
-        util.debug(
-            f'recreated blocker with handle {state[0]!r} and name "{state[3]}"'
-        )
+        util.debug(f'recreated blocker with handle {state[0]!r} and name "{state[3]}"')
         self._make_methods()
 
     @staticmethod

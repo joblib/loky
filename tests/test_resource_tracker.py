@@ -259,9 +259,7 @@ class TestResourceTracker:
             warnings.simplefilter("always")
 
             # remove unrelated MacOS warning messages first
-            warnings.filterwarnings(
-                "ignore", message="semaphore are broken on OSX"
-            )
+            warnings.filterwarnings("ignore", message="semaphore are broken on OSX")
 
             sem = ctx.Semaphore()
             sem.acquire()
@@ -276,9 +274,7 @@ class TestResourceTracker:
                 assert len(all_warn) == 1
                 the_warn = all_warn[0]
                 assert issubclass(the_warn.category, UserWarning)
-                assert "resource_tracker: process died" in str(
-                    the_warn.message
-                )
+                assert "resource_tracker: process died" in str(the_warn.message)
             else:
                 assert len(all_warn) == 0
 

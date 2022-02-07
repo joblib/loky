@@ -74,15 +74,11 @@ class TestTimeoutExecutor:
     def test_worker_timeout_mock(self):
         timeout = 0.001
         context = get_context()
-        executor = ProcessPoolExecutor(
-            max_workers=4, context=context, timeout=timeout
-        )
+        executor = ProcessPoolExecutor(max_workers=4, context=context, timeout=timeout)
         result_queue = DelayedSimpleQueue(ctx=context, delay=0.001)
         executor._result_queue = result_queue
 
-        with pytest.warns(
-            UserWarning, match=r"^A worker stopped while some jobs"
-        ):
+        with pytest.warns(UserWarning, match=r"^A worker stopped while some jobs"):
             for _ in range(5):
                 # Trigger worker spawn for lazy executor implementations
                 for _ in executor.map(id, range(8)):
@@ -98,23 +94,17 @@ class TestTimeoutExecutor:
         pickling large arguments, the executor should ensure that there is an
         appropriate amount of workers to move one and not get stalled.
         """
-        with pytest.warns(
-            UserWarning, match=r"^A worker stopped while some jobs"
-        ):
+        with pytest.warns(UserWarning, match=r"^A worker stopped while some jobs"):
             for timeout, delay in [
                 (0.01, 0.02),
                 (0.01, 0.1),
                 (0.1, 0.1),
                 (0.001, 0.1),
             ]:
-                executor = get_reusable_executor(
-                    max_workers=2, timeout=timeout
-                )
+                executor = get_reusable_executor(max_workers=2, timeout=timeout)
                 # First make sure the executor is started
                 executor.submit(id, 42).result()
-                results = list(
-                    executor.map(id, [SlowlyPickling(delay)] * n_tasks)
-                )
+                results = list(executor.map(id, [SlowlyPickling(delay)] * n_tasks))
                 assert len(results) == n_tasks
 
     def test_worker_timeout_shutdown_deadlock(self):

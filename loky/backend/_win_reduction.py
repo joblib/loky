@@ -34,9 +34,7 @@ class DupHandle:
         # retrieve handle from process which currently owns it
         if self._pid == os.getpid():
             return self._handle
-        proc = _winapi.OpenProcess(
-            _winapi.PROCESS_DUP_HANDLE, False, self._pid
-        )
+        proc = _winapi.OpenProcess(_winapi.PROCESS_DUP_HANDLE, False, self._pid)
         try:
             return _winapi.DuplicateHandle(
                 proc,

@@ -18,18 +18,14 @@ if not hasattr(sys, "pypy_version_info"):
         executor_type = process_executor.ProcessPoolExecutor
         context = get_context("spawn")
 
-    class TestsProcessPoolSpawnShutdown(
-        ProcessPoolSpawnMixin, ExecutorShutdownTest
-    ):
+    class TestsProcessPoolSpawnShutdown(ProcessPoolSpawnMixin, ExecutorShutdownTest):
         def _prime_executor(self):
             pass
 
     class TestsProcessPoolSpawnWait(ProcessPoolSpawnMixin, WaitTests):
         pass
 
-    class TestsProcessPoolSpawnAsCompleted(
-        ProcessPoolSpawnMixin, AsCompletedTests
-    ):
+    class TestsProcessPoolSpawnAsCompleted(ProcessPoolSpawnMixin, AsCompletedTests):
         pass
 
     class TestsProcessPoolSpawnExecutor(ProcessPoolSpawnMixin, ExecutorTest):

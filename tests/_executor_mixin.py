@@ -56,9 +56,7 @@ def _running_children_with_cmdline(p):
     ]
 
     forkservers = [
-        c
-        for c, cmdline in all_children
-        if "multiprocessing.forkserver" in cmdline
+        c for c, cmdline in all_children if "multiprocessing.forkserver" in cmdline
     ]
     for fs in forkservers:
         workers.extend(_direct_children_with_cmdline(fs))
@@ -180,8 +178,7 @@ class ExecutorMixin:
         # Make sure that the executor is ready to do work before running the
         # tests. This should reduce the probability of timeouts in the tests.
         futures = [
-            self.executor.submit(time.sleep, 0.1)
-            for _ in range(self.worker_count)
+            self.executor.submit(time.sleep, 0.1) for _ in range(self.worker_count)
         ]
         for f in futures:
             f.result()

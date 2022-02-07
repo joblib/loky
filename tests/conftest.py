@@ -28,9 +28,7 @@ def pytest_configure(config):
     logging._levelToName[5] = "SUBDEBUG"
     log = log_to_stderr(config.getoption("--loky-verbosity"))
     log.handlers[0].setFormatter(
-        logging.Formatter(
-            "[%(levelname)s:%(processName)s:%(threadName)s] %(message)s"
-        )
+        logging.Formatter("[%(levelname)s:%(processName)s:%(threadName)s] %(message)s")
     )
 
     warnings.simplefilter("always")
@@ -44,9 +42,7 @@ def pytest_collection_modifyitems(config, items):
     if not config.getoption("--skip-high-memory"):
         # --skip-high-memory given in cli: skip high-memory tests
         return
-    skip_high_memory = pytest.mark.skip(
-        reason="--skip-high-memory option was provided"
-    )
+    skip_high_memory = pytest.mark.skip(reason="--skip-high-memory option was provided")
     for item in items:
         if "high_memory" in item.keywords:
             item.add_marker(skip_high_memory)

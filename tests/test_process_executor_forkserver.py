@@ -25,9 +25,7 @@ if sys.platform != "win32" and not hasattr(sys, "pypy_version_info"):
         def _prime_executor(self):
             pass
 
-    class TestsProcessPoolForkserverWait(
-        ProcessPoolForkserverMixin, WaitTests
-    ):
+    class TestsProcessPoolForkserverWait(ProcessPoolForkserverMixin, WaitTests):
         pass
 
     class TestsProcessPoolForkserverAsCompleted(
@@ -35,7 +33,5 @@ if sys.platform != "win32" and not hasattr(sys, "pypy_version_info"):
     ):
         pass
 
-    class TestsProcessPoolForkserverExecutor(
-        ProcessPoolForkserverMixin, ExecutorTest
-    ):
+    class TestsProcessPoolForkserverExecutor(ProcessPoolForkserverMixin, ExecutorTest):
         pass
