@@ -18,14 +18,17 @@ TIMEOUT2 = .3
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UNIX test")
 def test_semlock_failure():
-    from _multiprocessing import SemLock, sem_unlink
+    from loky.backend.synchronize import SemLock, sem_unlink
 
     name = "loky-test-semlock"
-    sl = SemLock(0, 1, 1, name, False)
+    sl = SemLock(0, 1, 1, name=name)
 
     with pytest.raises(FileExistsError):
-        SemLock(0, 1, 1, name, False)
+        SemLock(0, 1, 1, name=name)
     sem_unlink(sl.name)
+
+    with pytest.raises(FileNotFoundError):
+        sl._semlock._rebuild(0, 0, 0, name)
 
 
 def assert_sem_value_equal(sem, value):
