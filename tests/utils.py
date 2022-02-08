@@ -125,7 +125,7 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
         env = {**os.environ, **env}
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, env=env)
+                            stderr=subprocess.PIPE, env=env, text=True)
 
     def kill_process():
         warnings.warn(f"Timeout running {cmd}")
@@ -136,7 +136,6 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
         timer.start()
         stdout, stderr = proc.communicate()
 
-        stdout, stderr = stdout.decode(), stderr.decode()
         if proc.returncode == -9:
             message = (
                 f'Subprocess timeout after {timeout}s.\nStdout:\n{stdout}\n'
@@ -210,8 +209,8 @@ def check_python_subprocess_call(code, stdout_regex=None):
     try:
         fid, filename = mkstemp(suffix="_joblib.py")
         os.close(fid)
-        with open(filename, mode='wb') as f:
-            f.write(code.encode('ascii'))
+        with open(filename, mode='w') as f:
+            f.write(code)
         cmd += [filename]
         check_subprocess_call(cmd, stdout_regex=stdout_regex, timeout=10)
     finally:

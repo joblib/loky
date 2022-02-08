@@ -53,14 +53,15 @@ def test_cpu_count_affinity():
         pytest.skip()
 
     res = check_output([taskset_bin, '-c', '0',
-                        python_bin, '-c', cpu_count_cmd.format(args='')])
+                        python_bin, '-c', cpu_count_cmd.format(args='')],
+                       text=True)
 
     res_physical = check_output([
         taskset_bin, '-c', '0', python_bin, '-c',
-        cpu_count_cmd.format(args='only_physical_cores=True')])
+        cpu_count_cmd.format(args='only_physical_cores=True')], text=True)
 
-    assert res.strip().decode('utf-8') == '1'
-    assert res_physical.strip().decode('utf-8') == '1'
+    assert res.strip() == '1'
+    assert res_physical.strip() == '1'
 
 
 def test_cpu_count_cfs_limit():
@@ -84,10 +85,10 @@ def test_cpu_count_cfs_limit():
         f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.7 "
         f"/bin/bash -c 'pip install --quiet -e /loky ; "
         f"python -c \"{cpu_count_cmd.format(args='')}\"'",
-        shell=True
+        shell=True, text=True
     )
 
-    assert res.strip().decode('utf-8') == '1'
+    assert res.strip() == '1'
 
 
 def test_only_physical_cores_error():
