@@ -23,13 +23,14 @@ def test_semlock_failure():
     name = "loky-test-semlock"
     try:
         sl = SemLock(0, 1, 1, name=name)
+        assert sl.name == name
 
         with pytest.raises(FileExistsError):
             SemLock(0, 1, 1, name=name)
     finally:
         # Always clean-up the test semaphore to make this test independent of
         # previous runs (successful or not).
-        sem_unlink(sl.name)
+        sem_unlink(name)
 
     with pytest.raises(FileNotFoundError):
         sl._semlock._rebuild(0, 0, 0, name)
