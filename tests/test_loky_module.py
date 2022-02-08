@@ -3,6 +3,7 @@ import os
 import sys
 import shutil
 import tempfile
+import warnings
 from subprocess import check_output
 
 import pytest
@@ -124,9 +125,9 @@ def test_only_physical_cores_error():
                 cpu_count(only_physical_cores=True)
 
             # Should not warn the second time
-            with pytest.warns(None) as record:
+            with warnings.catch_warnings():
+                warnings.simplefilter('error')
                 cpu_count(only_physical_cores=True)
-                assert not record
 
         finally:
             os.environ['PATH'] = old_path

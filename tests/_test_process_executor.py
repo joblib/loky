@@ -997,7 +997,7 @@ class ExecutorTest:
         # Test that for loky context, setting argument env correctly overwrite
         # the environment of the child process.
         if self.context.get_start_method() != 'loky':
-            pytest.skip(msg="Only work with loky context")
+            pytest.skip("Only work with loky context")
 
         var_name = "loky_child_env_executor"
         var_value = "variable set"
