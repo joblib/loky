@@ -110,9 +110,7 @@ def cpu_count(only_physical_cores=False):
                     "Returning the number of logical cores instead. You can "
                     "silence this warning by setting LOKY_MAX_CPU_COUNT to "
                     "the number of cores you want to use.")
-                if sys.version_info >= (3, 5):
-                    # TODO remove the version check when dropping py2 support
-                    traceback.print_tb(exception.__traceback__)
+                traceback.print_tb(exception.__traceback__)
 
             cpu_count = max(aggregate_cpu_count, 1)
         else:
