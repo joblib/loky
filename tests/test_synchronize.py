@@ -22,6 +22,10 @@ def test_semlock_failure():
 
     name = "loky-test-semlock"
     try:
+        sem_unlink(name)
+    except FileNotFoundError:
+        pass
+    try:
         sl = SemLock(0, 1, 1, name=name)
         assert sl.name == name
 
