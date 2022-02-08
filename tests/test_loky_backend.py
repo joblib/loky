@@ -460,10 +460,11 @@ class TestLokyBackend:
         """
         import subprocess
         try:
-            out = subprocess.check_output(["lsof", "-a", "-Fftn",
-                                           "-p", f"{pid}",
-                                           "-d", "^txt,^cwd,^rtd"])
-            lines = out.decode().split("\n")[1:-1]
+            out = subprocess.check_output(
+                f"lsof -a -Fftn -p {pid} -d ^txt,^cwd,^rtd".split(),
+                text=True,
+            )
+            lines = out.splitlines()[1:]
         except (FileNotFoundError, OSError):
             print("lsof does not exist on this platform. Skip open files"
                   "check.")
@@ -600,8 +601,8 @@ class TestLokyBackend:
             if run_file:
                 fid, filename = mkstemp(suffix="_joblib.py")
                 os.close(fid)
-                with open(filename, mode='wb') as f:
-                    f.write(code.encode('ascii'))
+                with open(filename, mode='w') as f:
+                    f.write(code)
                 cmd += [filename]
             else:
                 cmd += ["-c", code]
@@ -624,8 +625,8 @@ class TestLokyBackend:
         fid, filename = mkstemp(suffix="_joblib.py")
         os.close(fid)
         try:
-            with open(filename, mode='wb') as f:
-                f.write(code.encode('ascii'))
+            with open(filename, mode='w') as f:
+                f.write(code)
             stdout, stderr = check_subprocess_call([sys.executable, filename],
                                                    timeout=10)
             if sys.platform == "win32":
@@ -665,8 +666,8 @@ class TestLokyBackend:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='wb') as f:
-                f.write(code.encode('ascii'))
+            with open(filename, mode='w') as f:
+                f.write(code)
             check_subprocess_call([sys.executable, filename],
                                   stdout_regex=r'ok', timeout=10)
         finally:

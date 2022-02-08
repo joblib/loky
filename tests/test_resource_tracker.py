@@ -50,7 +50,6 @@ class TestResourceTracker:
         # Register a resource in the parent process, and un-register it in the
         # child process. If the two processes do not share the same
         # resource_tracker, a cache KeyError should be printed in stderr.
-        import subprocess
         cmd = '''if 1:
         import os, sys
 
@@ -79,23 +78,17 @@ class TestResourceTracker:
         e.shutdown()
         '''
         try:
-            p = subprocess.Popen(
-                [sys.executable, '-E', '-c', cmd],
-                stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE)
-            p.wait()
-
-            filename = p.stdout.readline().decode('utf-8').strip()
-            err = p.stderr.read().decode('utf-8')
-            p.stderr.close()
-            p.stdout.close()
+            p = subprocess.run([sys.executable, '-E', '-c', cmd],
+                               capture_output=True,
+                               text=True)
+            filename = p.stdout.strip()
 
             pattern = f"decremented refcount of file {filename}"
-            assert pattern in err
-            assert "leaked" not in err
+            assert pattern in p.stderr
+            assert "leaked" not in p.stderr
 
             pattern = f"KeyError: '{filename}'"
-            assert pattern not in err
+            assert pattern not in p.stderr
 
         finally:
             executor.shutdown()
@@ -109,7 +102,6 @@ class TestResourceTracker:
         if (sys.platform == "win32") and rtype == "semlock":
             pytest.skip("no semlock on windows")
 
-        import subprocess
         cmd = f'''if 1:
             import time, os, tempfile, sys
             from loky.backend import resource_tracker
@@ -129,9 +121,10 @@ class TestResourceTracker:
         p = subprocess.Popen([sys.executable, '-c', cmd],
                              stderr=subprocess.PIPE,
                              stdout=subprocess.PIPE,
-                             env=env)
-        name1 = p.stdout.readline().rstrip().decode('ascii')
-        name2 = p.stdout.readline().rstrip().decode('ascii')
+                             env=env,
+                             text=True)
+        name1 = p.stdout.readline().rstrip()
+        name2 = p.stdout.readline().rstrip()
 
         # subprocess holding a reference to lock1 is still alive, so this call
         # should succeed
@@ -146,7 +139,7 @@ class TestResourceTracker:
             _resource_unlink(name2, rtype)
         # docs say it should be ENOENT, but OSX seems to give EINVAL
         assert ctx.value.errno in (errno.ENOENT, errno.EINVAL)
-        err = p.stderr.read().decode('utf-8')
+        err = p.stderr.read()
         p.stderr.close()
         p.stdout.close()
 
@@ -218,17 +211,11 @@ class TestResourceTracker:
                 pass
         '''
 
-        env = os.environ.copy()
-        env['PYTHONPATH'] = os.path.dirname(__file__)
-        p = subprocess.Popen(
-            [sys.executable, '-c', cmd],
-            stderr=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            env=env
-        )
-        p.wait()
-        out, err = p.communicate()
-        assert p.returncode == 0, err
+        env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
+        p = subprocess.run([sys.executable, '-c', cmd],
+                           capture_output=True,
+                           env=env)
+        assert p.returncode == 0, p.stderr
 
     def check_resource_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
@@ -328,9 +315,7 @@ class TestResourceTracker:
             f = executor.submit(shm.unlink).result()
 
         '''
-        p = subprocess.Popen([sys.executable, '-c', cmd],
-                             stderr=subprocess.PIPE,
-                             stdout=subprocess.PIPE)
-        out, err = p.communicate()
-        assert out.decode() == ""
-        assert err.decode() == ""
+        p = subprocess.run([sys.executable, '-c', cmd],
+                           capture_output=True, text=True)
+        assert not p.stdout
+        assert not p.stderr

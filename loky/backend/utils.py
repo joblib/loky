@@ -81,18 +81,17 @@ def _recursive_terminate(pid):
         try:
             children_pids = subprocess.check_output(
                 ["pgrep", "-P", str(pid)],
-                stderr=None
+                stderr=None, text=True
             )
         except subprocess.CalledProcessError as e:
             # `ps` returns 1 when no child process has been found
             if e.returncode == 1:
-                children_pids = b''
+                children_pids = ''
             else:
                 raise
 
         # Decode the result, split the cpid and remove the trailing line
-        children_pids = children_pids.decode().split('\n')[:-1]
-        for cpid in children_pids:
+        for cpid in children_pids.splitlines():
             cpid = int(cpid)
             _recursive_terminate(cpid)
 

@@ -64,8 +64,8 @@ class TestCloudpickleWrapper:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='wb') as f:
-                f.write(code.encode('ascii'))
+            with open(filename, mode='w') as f:
+                f.write(code)
             cmd += [filename]
             check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
 
@@ -107,8 +107,8 @@ class TestCloudpickleWrapper:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='wb') as f:
-                f.write(code.encode('ascii'))
+            with open(filename, mode='w') as f:
+                f.write(code)
             cmd += [filename]
             check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
         finally:
@@ -162,8 +162,8 @@ class TestCloudpickleWrapper:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='wb') as f:
-                f.write(code.encode('ascii'))
+            with open(filename, mode='w') as f:
+                f.write(code)
             cmd += [filename]
 
             env = {'LOKY_PICKLER': 'pickle'}
@@ -244,8 +244,8 @@ class TestCloudpickleWrapper:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='wb') as f:
-                f.write(code.encode('ascii'))
+            with open(filename, mode='w') as f:
+                f.write(code)
             cmd += [filename]
             if loky_pickler == "'pickle'":
                 match = r"(Can't get|has no) attribute 'test_func'"
