@@ -21,6 +21,9 @@ from multiprocessing.context import BaseContext
 
 
 from .process import LokyProcess, LokyInitMainProcess
+from .queues import Queue, SimpleQueue
+from .synchronize import BoundedSemaphore, Condition, Event, Lock, RLock, Semaphore
+
 
 START_METHODS = ["loky", "loky_init_main", "spawn"]
 if sys.platform != "win32":
@@ -59,9 +62,9 @@ def set_start_method(method, force=False):
     global _DEFAULT_START_METHOD
     if _DEFAULT_START_METHOD is not None and not force:
         raise RuntimeError("context has already been set")
-    assert method is None or method in START_METHODS, (
-        f"'{method}' is not a valid start_method. It should be in {START_METHODS}"
-    )
+    assert (
+        method is None or method in START_METHODS
+    ), f"'{method}' is not a valid start_method. It should be in {START_METHODS}"
 
     _DEFAULT_START_METHOD = method
 
@@ -222,13 +225,11 @@ class LokyContext(BaseContext):
 
     def Queue(self, maxsize=0, reducers=None):
         """Returns a queue object"""
-        from .queues import Queue
 
         return Queue(maxsize, reducers=reducers, ctx=self.get_context())
 
     def SimpleQueue(self, reducers=None):
         """Returns a queue object"""
-        from .queues import SimpleQueue
 
         return SimpleQueue(reducers=reducers, ctx=self.get_context())
 
@@ -239,37 +240,31 @@ class LokyContext(BaseContext):
 
         def Semaphore(self, value=1):
             """Returns a semaphore object"""
-            from .synchronize import Semaphore
 
             return Semaphore(value=value)
 
         def BoundedSemaphore(self, value):
             """Returns a bounded semaphore object"""
-            from .synchronize import BoundedSemaphore
 
             return BoundedSemaphore(value)
 
         def Lock(self):
             """Returns a lock object"""
-            from .synchronize import Lock
 
             return Lock()
 
         def RLock(self):
             """Returns a recurrent lock object"""
-            from .synchronize import RLock
 
             return RLock()
 
         def Condition(self, lock=None):
             """Returns a condition object"""
-            from .synchronize import Condition
 
             return Condition(lock)
 
         def Event(self):
             """Returns an event object"""
-            from .synchronize import Event
 
             return Event()
 
