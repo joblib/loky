@@ -594,7 +594,7 @@ class TestLokyBackend:
             if run_file:
                 fid, filename = mkstemp(suffix="_joblib.py")
                 os.close(fid)
-                with open(filename, 'w') as f:
+                with open(filename, mode='w') as f:
                     f.write(code)
                 cmd += [filename]
             else:
@@ -618,7 +618,7 @@ class TestLokyBackend:
         fid, filename = mkstemp(suffix="_joblib.py")
         os.close(fid)
         try:
-            with open(filename, 'w') as f:
+            with open(filename, mode='w') as f:
                 f.write(code)
             stdout, stderr = check_subprocess_call([sys.executable, filename],
                                                    timeout=10)
@@ -659,7 +659,7 @@ class TestLokyBackend:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, 'w') as f:
+            with open(filename, mode='w') as f:
                 f.write(code)
             check_subprocess_call([sys.executable, filename],
                                   stdout_regex='ok', timeout=10)

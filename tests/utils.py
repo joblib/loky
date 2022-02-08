@@ -209,7 +209,7 @@ def check_python_subprocess_call(code, stdout_regex=None):
     try:
         fid, filename = mkstemp(suffix="_joblib.py")
         os.close(fid)
-        with open(filename, 'w') as f:
+        with open(filename, mode='w') as f:
             f.write(code)
         cmd += [filename]
         check_subprocess_call(cmd, stdout_regex=stdout_regex, timeout=10)

@@ -10,7 +10,7 @@ import coverage; coverage.process_startup()
 """
 
 filename = op.join(get_python_lib(), 'coverage_subprocess.pth')
-with open(filename, 'w') as f:
+with open(filename, mode='w') as f:
     f.write(FILE_CONTENT)
 
 print(f'Installed subprocess coverage support: {filename}')

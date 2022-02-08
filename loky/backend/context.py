@@ -167,8 +167,7 @@ def _count_physical_cores():
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
-                "lscpu --parse=core".split(),
-                capture_output=True, text=True)
+                "lscpu --parse=core".split(), capture_output=True, text=True)
             cpu_info = cpu_info.stdout.splitlines()
             cpu_info = {line for line in cpu_info if not line.startswith("#")}
             cpu_count_physical = len(cpu_info)

@@ -120,8 +120,8 @@ class TestResourceTracker:
         p = subprocess.Popen([sys.executable, '-c', cmd],
                              stderr=subprocess.PIPE,
                              stdout=subprocess.PIPE,
-                             text=True,
-                             env=env)
+                             env=env,
+                             text=True)
         name1 = p.stdout.readline().rstrip()
         name2 = p.stdout.readline().rstrip()
 
