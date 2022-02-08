@@ -514,9 +514,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
             assert len(w) == 1
             expected_msg = "Trying to resize an executor with running jobs"
             assert expected_msg in str(w[0].message)
-            assert res1.result(), (
-                "Resize should wait for current processes to finish"
-            )
+            assert res1.result(), "Resize should wait for current processes to finish"
             assert len(executor._processes) == 1
             assert next(iter(executor._processes.keys())) in pids
 

@@ -563,9 +563,9 @@ class TestLokyBackend:
                     pid = str(os.getpid())
                     for sem in named_sem:
                         if pid not in sem:
-                            assert not os.path.exists(sem), (
-                                "Some named semaphore are not properly cleaned up"
-                            )
+                            assert not os.path.exists(
+                                sem
+                            ), "Some named semaphore are not properly cleaned up"
 
                 assert p.exitcode == 0
 
