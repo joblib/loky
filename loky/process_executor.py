@@ -461,8 +461,8 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             # if psutil is not installed, trigger gc.collect events
             # regularly to limit potential memory leaks due to reference cycles
             if (_last_memory_leak_check is None or
-                    time() - _last_memory_leak_check >
-                    _MEMORY_LEAK_CHECK_DELAY):
+                    (time() - _last_memory_leak_check >
+                     _MEMORY_LEAK_CHECK_DELAY)):
                 gc.collect()
                 _last_memory_leak_check = time()
 
