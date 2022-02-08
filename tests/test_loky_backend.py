@@ -466,7 +466,7 @@ class TestLokyBackend:
             )
             lines = out.decode().split("\n")[1:-1]
         except (FileNotFoundError, OSError):
-            print("lsof does not exist on this platform. Skip open files" "check.")
+            print("lsof does not exist on this platform. Skip open files check.")
             return []
 
         n_pipe = 0
@@ -506,7 +506,7 @@ class TestLokyBackend:
             n_expected_pipes = 4
         else:
             n_expected_pipes = 3
-        msg = "Some pipes were not properly closed during the child process " "setup."
+        msg = "Some pipes were not properly closed during the child process setup."
         assert n_pipe == n_expected_pipes, msg
 
         # assert that the writable part of the Pipe (not passed to child),
@@ -564,7 +564,7 @@ class TestLokyBackend:
                     for sem in named_sem:
                         if pid not in sem:
                             assert not os.path.exists(sem), (
-                                "Some named semaphore are not properly cleaned" " up"
+                                "Some named semaphore are not properly cleaned up"
                             )
 
                 assert p.exitcode == 0
@@ -709,7 +709,7 @@ def test_recursive_terminate(use_psutil):
     if not event.wait(30):
         recursive_terminate(p, use_psutil=use_psutil)
         raise RuntimeError(
-            "test_recursive_terminate was not able to launch " "all nested processes."
+            "test_recursive_terminate was not able to launch all nested processes."
         )
 
     children = psutil.Process(pid=p.pid).children(recursive=True)

@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use-stdlib",
         action="store_true",
-        help="Use concurrent.futures.ProcessPoolExecutor" " instead of loy",
+        help="Use concurrent.futures.ProcessPoolExecutor instead of loy",
     )
     args = parser.parse_args()
     if args.use_stdlib:

@@ -59,7 +59,7 @@ def wait_dead(worker, n_tries=1000, delay=0.001):
             return
         sleep(delay)
     raise RuntimeError(
-        f"Process {worker.pid} failed to die for at least " f"{delay * n_tries:0.3f}s"
+        f"Process {worker.pid} failed to die for at least {delay * n_tries:0.3f}s"
     )
 
 
@@ -515,7 +515,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
             expected_msg = "Trying to resize an executor with running jobs"
             assert expected_msg in str(w[0].message)
             assert res1.result(), (
-                "Resize should wait for current processes " " to finish"
+                "Resize should wait for current processes to finish"
             )
             assert len(executor._processes) == 1
             assert next(iter(executor._processes.keys())) in pids

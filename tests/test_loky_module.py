@@ -34,7 +34,7 @@ def test_cpu_count():
     assert 1 <= cpus_physical <= cpus
 
 
-cpu_count_cmd = "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
+cpu_count_cmd = "from loky.backend.context import cpu_count; print(cpu_count({args}))"
 
 
 def test_cpu_count_affinity():
@@ -124,7 +124,7 @@ def test_only_physical_cores_error():
         # Write bad lscpu program
         lscpu_path = tmp_dir + "/lscpu"
         with open(lscpu_path, "w") as f:
-            f.write("#!/bin/sh\n" "exit(1)")
+            f.write("#!/bin/sh\nexit(1)")
         os.chmod(lscpu_path, 0o777)
 
         try:
@@ -138,7 +138,7 @@ def test_only_physical_cores_error():
 
             with pytest.warns(
                 UserWarning,
-                match="Could not find the number of" " physical cores",
+                match="Could not find the number of physical cores",
             ):
                 cpu_count(only_physical_cores=True)
 

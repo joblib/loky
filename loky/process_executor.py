@@ -521,7 +521,7 @@ class _ExecutorManagerThread(threading.Thread):
                 # garbage collected. We only log debug info when still
                 # possible.
                 mp.util.debug(
-                    "Executor collected: triggering callback for" " QueueManager wakeup"
+                    "Executor collected: triggering callback for QueueManager wakeup"
                 )
             with shutdown_lock:
                 thread_wakeup.wakeup()
@@ -887,7 +887,7 @@ def _check_system_limits():
         # according to POSIX
         return
     _system_limited = (
-        f"system provides too few semaphores ({nsems_max} available, " "256 necessary)"
+        f"system provides too few semaphores ({nsems_max} available, 256 necessary)"
     )
     raise NotImplementedError(_system_limited)
 
@@ -1150,7 +1150,7 @@ class ProcessPoolExecutor(Executor):
             # This check avoids spawning new processes at exit.
             if _global_shutdown:
                 raise RuntimeError(
-                    "cannot schedule new futures after " "interpreter shutdown"
+                    "cannot schedule new futures after interpreter shutdown"
                 )
 
             f = Future()

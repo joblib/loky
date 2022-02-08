@@ -95,7 +95,7 @@ class TimingWrapper:
             self.elapsed = time.time() - t
 
     def assert_timing_lower_than(self, delay):
-        msg = f"expected duration lower than {delay:.3f}s, " f"got {self.elapsed:.3f}s"
+        msg = f"expected duration lower than {delay:.3f}s, got {self.elapsed:.3f}s"
         assert self.elapsed < delay, msg
 
     def assert_timing_almost_zero(self):
@@ -153,7 +153,7 @@ def check_subprocess_call(
 
         if stdout_regex is not None and not re.search(stdout_regex, stdout):
             raise ValueError(
-                f"Unexpected stdout: {stdout_regex!r} does not match:" f"\n{stdout!r}"
+                f"Unexpected stdout: {stdout_regex!r} does not match: \n{stdout!r}"
             )
         if stderr_regex is not None and not re.search(stderr_regex, stderr):
             raise ValueError(

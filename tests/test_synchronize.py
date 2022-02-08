@@ -93,7 +93,7 @@ class TestSemaphore:
         assert sem.release() is None
         assert_sem_value_equal(sem, 4)
 
-    @pytest.mark.skipif(sys.platform == "darwin", reason="OSX have borken `get_value`")
+    @pytest.mark.skipif(sys.platform == "darwin", reason="OSX have broken `get_value`")
     def test_bounded_semaphore(self):
         sem = loky_context.BoundedSemaphore(2)
         self._test_semaphore(sem)

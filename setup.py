@@ -55,7 +55,7 @@ setup(
     name="loky",
     version=find_version(),
     description=(
-        "A robust implementation of " "concurrent.futures.ProcessPoolExecutor"
+        "A robust implementation of concurrent.futures.ProcessPoolExecutor"
     ),
     long_description=open("README.md", "rb").read().decode("utf-8"),
     long_description_content_type="text/markdown",
