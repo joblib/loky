@@ -21,11 +21,20 @@ def test_semlock_failure():
     from loky.backend.synchronize import SemLock, sem_unlink
 
     name = "loky-test-semlock"
-    sl = SemLock(0, 1, 1, name=name)
+    try:
+        sem_unlink(name)
+    except FileNotFoundError:
+        pass
+    try:
+        sl = SemLock(0, 1, 1, name=name)
+        assert sl.name == name
 
-    with pytest.raises(FileExistsError):
-        SemLock(0, 1, 1, name=name)
-    sem_unlink(sl.name)
+        with pytest.raises(FileExistsError):
+            SemLock(0, 1, 1, name=name)
+    finally:
+        # Always clean-up the test semaphore to make this test independent of
+        # previous runs (successful or not).
+        sem_unlink(name)
 
     with pytest.raises(FileNotFoundError):
         sl._semlock._rebuild(0, 0, 0, name)
