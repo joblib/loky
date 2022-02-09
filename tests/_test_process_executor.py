@@ -395,7 +395,7 @@ class ExecutorShutdownTest:
         assert stdout.strip() == "apple"
 
     @classmethod
-    def _test_recursive_kill(cls, depth):
+    def _test_shutdown_and_kill_workers(cls, depth):
         executor = cls.executor_type(
             max_workers=2, context=cls.context,
             initializer=_executor_mixin.initializer_event,
@@ -407,11 +407,11 @@ class ExecutorShutdownTest:
             executor.submit(sleep_and_return, 30, 42).result()
             executor.shutdown()
         else:
-            f = executor.submit(cls._test_recursive_kill, depth + 1)
+            f = executor.submit(cls._test_shutdown_and_kill_workers, depth + 1)
             f.result()
 
-    def test_recursive_kill(self):
-        f = self.executor.submit(self._test_recursive_kill, 1)
+    def test_shutdown_and_kill_workers(self):
+        f = self.executor.submit(self._test_shutdown_and_kill_workers, 1)
         # Wait for the nested executors to be started
         _executor_mixin._test_event.wait()
 

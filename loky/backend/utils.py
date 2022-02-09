@@ -11,9 +11,86 @@ except ImportError:
     psutil = None
 
 
+def kill_process_tree(process, use_psutil=True):
+    """Terminate process and its descendants with SIGKILL"""
+    if use_psutil and psutil is not None:
+        _kill_process_tree_with_psutil(process)
+    else:
+        _kill_process_tree_without_psutil(process)
+
+
+def recursive_terminate(process, use_psutil=True):
+    warnings.warn(
+        "recursive_terminate is deprecated in loky 3.2, use kill_process_tree"
+        "instead",
+        DeprecationWarning,
+    )
+    kill_process_tree(process, use_psutil=use_psutil)
+
+
+def _kill_process_tree_with_psutil(process):
+    try:
+        descendants = psutil.Process(process.pid).children(recursive=True)
+    except psutil.NoSuchProcess:
+        return
+
+    # Kill the descendants in reverse order to avoid killing the parents before
+    # the descendant in cases where there are more processes nested.
+    for descendant in descendants[::-1]:
+        try:
+            descendant.kill()
+        except psutil.NoSuchProcess:
+            pass
+
+    try:
+        psutil.Process(process.pid).kill()
+    except psutil.NoSuchProcess:
+        pass
+    process.join()
+
+
+def _kill_process_tree_without_psutil(process):
+    """Terminate a process and its descendants."""
+    if sys.platform == "win32":
+        # On windows, the taskkill function with option `/T` terminate a given
+        # process pid and its children.
+        try:
+            subprocess.check_output(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)], stderr=None
+            )
+        except subprocess.CalledProcessError as e:
+            # In Windows, taskkill returns 1 for permission denied and 128, 255
+            # for no process found.
+            if e.returncode == 1:
+                # Try to terminate the process without its descendants if
+                # taskkill was denied permission. If this fails too, with an
+                # error different from process not found, let the top level
+                # function raise a warning and retry to kill the process.
+                process.terminate()
+            elif e.returncode in [128, 255]:
+                # Process not found: ignore.
+                pass
+            else:
+                raise
+    else:
+        try:
+            _kill_process_tree(process.pid)
+        except OSError as e:
+            warnings.warn(
+                "Failed to kill subprocesses on this platform. Please install"
+                "psutil: https://github.com/giampaolo/psutil"
+            )
+            # In case we cannot introspect the children, we fall back to only
+            # kill the main process.
+            process.kill()
+    process.join()
+
+
 def _kill(pid):
     # Not all systems (e.g. Windows) have a SIGKILL, but the C specification
-    # requires a SIGTERM signal.
+    # mandates a SIGTERM signal. While Windows is handled specifically above,
+    # let's try to be safe for other hypothetic platforms that only have
+    # SIGTERM without SIGKILL.
     kill_signal = getattr(signal, 'SIGKILL', signal.SIGTERM)
     try:
         os.kill(pid, kill_signal)
@@ -25,96 +102,25 @@ def _kill(pid):
             raise
 
 
-def recursive_kill(process, use_psutil=True):
-    """Terminate process and its descendants with SIGKILL"""
-    if use_psutil and psutil is not None:
-        _recursive_kill_with_psutil(process)
-    else:
-        _recursive_kill_without_psutil(process)
-
-
-def recursive_terminate(process, use_psutil=True):
-    warnings.warn(
-        "recursive_terminate is deprecated in loky 3.2, use recursive_kill"
-        "instead",
-        DeprecationWarning,
-    )
-    recursive_kill(process, use_psutil=use_psutil)
-
-
-def _recursive_kill_with_psutil(process):
-    try:
-        children = psutil.Process(process.pid).children(recursive=True)
-    except psutil.NoSuchProcess:
-        return
-
-    # Kill the children in reverse order to avoid killing the parents before
-    # the children in cases where there are more processes nested.
-    for child in children[::-1]:
-        try:
-            child.kill()
-        except psutil.NoSuchProcess:
-            pass
-
-    _kill(process.pid)
-    process.join()
-
-
-def _recursive_kill_without_psutil(process):
-    """Terminate a process and its descendants."""
-    try:
-        _recursive_kill(process.pid)
-    except OSError as e:
-        warnings.warn("Failed to kill subprocesses on this platform. Please"
-                      "install psutil: https://github.com/giampaolo/psutil")
-        # In case we cannot introspect the children, we fall back to only
-        # kill the main process.
-        _kill(process.pid)
-    process.join()
-
-
-def _recursive_kill(pid):
+def _kill_process_tree(pid):
     """Recursively kill the descendants of a process before killing it."""
+    try:
+        children_pids = subprocess.check_output(
+            ["pgrep", "-P", str(pid)], stderr=None, text=True
+        )
+    except subprocess.CalledProcessError as e:
+        # `ps` returns 1 when no child process has been found
+        if e.returncode == 1:
+            children_pids = ''
+        else:
+            raise
 
-    if sys.platform == "win32":
-        # On windows, the taskkill function with option `/T` terminate a given
-        # process pid and its children.
-        try:
-            subprocess.check_output(
-                ["taskkill", "/F", "/T", "/PID", str(pid)], stderr=None
-            )
-        except subprocess.CalledProcessError as e:
-            # In Windows, taskkill returns 1 for permission denied and 128, 255
-            # for no process found.
-            if e.returncode == 1:
-                # Try to kill the process without its descendants if taskkill
-                # was denied permission. If this fails too, with an error
-                # different from process not found, let the top level function
-                # raise a warning and retry to kill the process.
-                _kill(pid)
-            elif e.returncode in [128, 255]:
-                # Process not found: ignore.
-                return
-            else:
-                raise
-    else:
-        try:
-            children_pids = subprocess.check_output(
-                ["pgrep", "-P", str(pid)], stderr=None, text=True
-            )
-        except subprocess.CalledProcessError as e:
-            # `ps` returns 1 when no child process has been found
-            if e.returncode == 1:
-                children_pids = ''
-            else:
-                raise
+    # Decode the result, split the cpid and remove the trailing line
+    for cpid in children_pids.splitlines():
+        cpid = int(cpid)
+        _kill_process_tree(cpid)
 
-        # Decode the result, split the cpid and remove the trailing line
-        for cpid in children_pids.splitlines():
-            cpid = int(cpid)
-            _recursive_kill(cpid)
-
-        _kill(pid)
+    _kill(pid)
 
 
 def get_exitcodes_terminated_worker(processes):

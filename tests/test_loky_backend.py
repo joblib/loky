@@ -13,7 +13,7 @@ from tempfile import mkstemp
 
 from loky.backend import get_context
 from loky.backend.context import START_METHODS
-from loky.backend.utils import recursive_kill
+from loky.backend.utils import kill_process_tree
 
 from .utils import TimingWrapper, check_subprocess_call
 from .utils import with_parallel_sum, _run_openmp_parallel_sum
@@ -66,7 +66,7 @@ class TestLokyBackend:
         """Clean up the test environment from any remaining subprocesses.
         """
         for child_process in cls.active_children():
-            recursive_kill(child_process)
+            kill_process_tree(child_process)
 
     def test_current(self):
 
@@ -693,19 +693,19 @@ def _run_nested_delayed(depth, delay, event):
 
 
 @pytest.mark.parametrize("use_psutil", [True, False])
-def test_recursive_kill(use_psutil):
+def test_kill_process_tree(use_psutil):
     event = ctx_loky.Event()
     p = ctx_loky.Process(target=_run_nested_delayed, args=(4, 1000, event))
     p.start()
 
     # Wait for all the processes to be launched
     if not event.wait(30):
-        recursive_kill(p, use_psutil=use_psutil)
-        raise RuntimeError("test_recursive_kill was not able to launch "
+        kill_process_tree(p, use_psutil=use_psutil)
+        raise RuntimeError("test_kill_process_tree was not able to launch "
                            "all nested processes.")
 
     children = psutil.Process(pid=p.pid).children(recursive=True)
-    recursive_kill(p, use_psutil=use_psutil)
+    kill_process_tree(p, use_psutil=use_psutil)
 
     # The process can take some time finishing so we should wait up to 5s
     gone, alive = psutil.wait_procs(children, timeout=5)
