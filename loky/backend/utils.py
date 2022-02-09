@@ -13,7 +13,7 @@ except ImportError:
 
 def _kill(pid):
     if sys.platform == "win32":
-        kill_signal = signal.CTRL_BREAK_EVENT
+        kill_signal = signal.SIGTERM
     else:
         kill_signal = signal.SIGKILL
     try:

@@ -4,7 +4,6 @@ import sys
 import shutil
 import tempfile
 from subprocess import check_output
-import subprocess
 
 import pytest
 
