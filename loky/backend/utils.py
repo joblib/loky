@@ -74,14 +74,14 @@ def _kill_process_tree_without_psutil(process):
                 raise
     else:
         try:
-            _kill_process_tree(process.pid)
-        except OSError as e:
+            _recursive_kill_posix(process.pid)
+        except OSError:
             warnings.warn(
                 "Failed to kill subprocesses on this platform. Please install"
                 "psutil: https://github.com/giampaolo/psutil"
             )
             # In case we cannot introspect the children, we fall back to only
-            # kill the main process.
+            # killing the main process.
             process.kill()
     process.join()
 
@@ -102,7 +102,7 @@ def _kill(pid):
             raise
 
 
-def _kill_process_tree(pid):
+def _recursive_kill_posix(pid):
     """Recursively kill the descendants of a process before killing it."""
     try:
         children_pids = subprocess.check_output(
@@ -118,7 +118,7 @@ def _kill_process_tree(pid):
     # Decode the result, split the cpid and remove the trailing line
     for cpid in children_pids.splitlines():
         cpid = int(cpid)
-        _kill_process_tree(cpid)
+        _recursive_kill_posix(cpid)
 
     _kill(pid)
 
