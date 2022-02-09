@@ -18,6 +18,11 @@ from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 from loky.reusable_executor import _ReusablePoolExecutor
 import cloudpickle
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep, check_python_subprocess_call
 from .utils import filter_match
@@ -79,7 +84,6 @@ def c_exit(exitcode=0):
 
 def sleep_then_check_pids_exist(arg):
     """Sleep for some time and the check if all the passed pids exist"""
-    psutil = pytest.importorskip("psutil")
     time, pids = arg
     sleep(time)
     res = True
@@ -90,7 +94,6 @@ def sleep_then_check_pids_exist(arg):
 
 def kill_friend(pid, delay=0):
     """Function that send SIGKILL at process pid"""
-    psutil = pytest.importorskip("psutil")
     sleep(delay)
     try:
         os.kill(pid, SIGKILL)
@@ -340,6 +343,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, n_proc):
         """Test the race conditions in reusable_executor crash handling"""
+        pytest.importorskip("psutil")  # required for kill_friend & co
 
         if (sys.platform == 'win32' and sys.version_info >= (3, 8)
                 and n_proc > 5):
@@ -438,6 +442,8 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
     def test_shutdown_deadlock(self):
         """Test recovery if killed after resize call"""
+        pytest.importorskip("psutil")  # required for kill_friend & co
+
         # Test the executor.shutdown call do not cause deadlock
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))  # start the worker processes
@@ -483,6 +489,8 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 class TestResizeExecutor(ReusableExecutorMixin):
     def test_reusable_executor_resize(self):
         """Test reusable_executor resizing"""
+        # required by sleep_then_check_pids_exist
+        pytest.importorskip("psutil")
 
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))
@@ -540,6 +548,8 @@ class TestResizeExecutor(ReusableExecutorMixin):
 
     def test_kill_after_resize_call(self):
         """Test recovery if killed after resize call"""
+        pytest.importorskip("psutil")  # required for kill_friend & co
+
         # Test the executor resizing called before a kill arrive
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))  # trigger the creation of worker processes

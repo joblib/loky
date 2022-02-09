@@ -4,6 +4,9 @@
   garbage collecting an executor instance when shutting down the
   the Python interpreter (#311).
 
+- Make `shutdown(kill_workers=True)` consistently use the SIGKILL
+  signal on POSIX. Previously a mix of SIGKILL and SIGTERM was issued
+  and could deadlock the shutdown process (#348).
 
 ### 3.0.0 - 2021-09-10
 

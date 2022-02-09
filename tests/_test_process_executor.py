@@ -894,6 +894,7 @@ class ExecutorTest:
             self.executor.submit(id, data).result()
 
     def test_memory_leak_protection(self):
+        pytest.importorskip("psutil")  # cannot work without psutil
         self.executor.shutdown(wait=True)
 
         executor = self.executor_type(1, context=self.context)
