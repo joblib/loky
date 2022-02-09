@@ -4,6 +4,7 @@ import math
 import psutil
 import pytest
 import threading
+from time import sleep
 
 from loky import TimeoutError
 from loky import get_reusable_executor
@@ -143,18 +144,39 @@ class ExecutorMixin:
         # Make sure executor is not broken if it should not be
         executor = getattr(self, 'executor', None)
         if executor is not None:
-            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
-            for mark in getattr(method, "pytestmark", []):
-                if mark.name == "broken_pool":
-                    expect_broken_pool = True
-            is_actually_broken = executor._flags.broken is not None
-            assert is_actually_broken == expect_broken_pool
+            try:
+                # old pytest markers:
+                expect_broken_pool = hasattr(method, "broken_pool")
+                # new pytest markers:
+                for mark in getattr(method, "pytestmark", []):
+                    if mark.name == "broken_pool":
+                        expect_broken_pool = True
 
-            t_start = time.time()
-            executor.shutdown(wait=True, kill_workers=True)
-            dt = time.time() - t_start
-            assert dt < 10, "Executor took too long to shutdown"
-        _check_subprocesses_number(executor, 0)
+                is_actually_broken = executor._flags.broken is not None
+                if expect_broken_pool:
+                    for _ in range(10):
+                        # The executor manager thread can take some time to
+                        # mark the executor broken.
+                        is_actually_broken = executor._flags.broken is not None
+                        if is_actually_broken:
+                            break
+                        sleep(0.1)
+                    else:
+                        raise AssertionError(
+                            "The executor was not flagged broken at the end of "
+                            f" {method.__qualname__} as expected."
+                        )
+                else:
+                    # Check that the executor is not broken right away to avoid
+                    # wasting CI time. False negative should be very rare.
+                    assert not is_actually_broken
+            finally:
+                # Always shutdown the executor, broken or not.
+                t_start = time.time()
+                executor.shutdown(wait=True, kill_workers=True)
+                dt = time.time() - t_start
+                assert dt < 10, "Executor took too long to shutdown"
+                _check_subprocesses_number(executor, 0)
 
     def _prime_executor(self):
         # Make sure that the executor is ready to do work before running the
