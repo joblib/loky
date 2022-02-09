@@ -12,10 +12,9 @@ except ImportError:
 
 
 def _kill(pid):
-    if sys.platform == "win32":
-        kill_signal = signal.SIGTERM
-    else:
-        kill_signal = signal.SIGKILL
+    # Not all systems (e.g. Windows) have a SIGKILL, but the C specification
+    # requires a SIGTERM signal.
+    kill_signal = getattr(signal, 'SIGKILL', signal.SIGTERM)
     try:
         os.kill(pid, kill_signal)
     except OSError as e:
