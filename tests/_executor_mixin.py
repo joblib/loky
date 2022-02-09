@@ -152,7 +152,6 @@ class ExecutorMixin:
                     if mark.name == "broken_pool":
                         expect_broken_pool = True
 
-                is_actually_broken = executor._flags.broken is not None
                 if expect_broken_pool:
                     for _ in range(10):
                         # The executor manager thread can take some time to
@@ -169,6 +168,7 @@ class ExecutorMixin:
                 else:
                     # Check that the executor is not broken right away to avoid
                     # wasting CI time. False negative should be very rare.
+                    is_actually_broken = executor._flags.broken is not None
                     assert not is_actually_broken
             finally:
                 # Always shutdown the executor, broken or not.
