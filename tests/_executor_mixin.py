@@ -171,9 +171,11 @@ class ExecutorMixin:
                     is_actually_broken = executor._flags.broken is not None
                     assert not is_actually_broken
             finally:
-                # Always shutdown the executor, broken or not.
+                # Always shutdown the executor, with SIGKILL if the executor
+                # is actually broken.
+                kill_workers = executor._flags.broken is not None
                 t_start = time.time()
-                executor.shutdown(wait=True, kill_workers=True)
+                executor.shutdown(wait=True, kill_workers=kill_workers)
                 dt = time.time() - t_start
                 assert dt < 10, "Executor took too long to shutdown"
                 _check_subprocesses_number(executor, 0)

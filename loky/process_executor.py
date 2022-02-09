@@ -84,7 +84,7 @@ from .backend import get_context
 from .backend.context import cpu_count
 from .backend.queues import Queue, SimpleQueue
 from .backend.reduction import set_loky_pickler, get_loky_pickler_name
-from .backend.utils import recursive_terminate, get_exitcodes_terminated_worker
+from .backend.utils import recursive_kill, get_exitcodes_terminated_worker
 from .initializers import _prepare_initializer
 
 
@@ -763,7 +763,7 @@ class _ExecutorManagerThread(threading.Thread):
             _, p = self.processes.popitem()
             mp.util.debug(f"terminate process {p.name}, reason: {reason}")
             try:
-                recursive_terminate(p)
+                recursive_kill(p)
             except ProcessLookupError:  # pragma: no cover
                 pass
 
