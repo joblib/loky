@@ -2,7 +2,6 @@ import os
 import sys
 import gc
 import ctypes
-import psutil
 import pytest
 import warnings
 import threading
@@ -80,6 +79,7 @@ def c_exit(exitcode=0):
 
 def sleep_then_check_pids_exist(arg):
     """Sleep for some time and the check if all the passed pids exist"""
+    psutil = pytest.importorskip("psutil")
     time, pids = arg
     sleep(time)
     res = True
@@ -90,6 +90,7 @@ def sleep_then_check_pids_exist(arg):
 
 def kill_friend(pid, delay=0):
     """Function that send SIGKILL at process pid"""
+    psutil = pytest.importorskip("psutil")
     sleep(delay)
     try:
         os.kill(pid, SIGKILL)

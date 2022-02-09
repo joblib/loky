@@ -1,11 +1,9 @@
 import os
 import sys
 import time
-import psutil
 import pytest
 import signal
 import pickle
-import platform
 import socket
 import multiprocessing as mp
 from multiprocessing.connection import wait
@@ -694,6 +692,7 @@ def _run_nested_delayed(depth, delay, event):
 
 @pytest.mark.parametrize("use_psutil", [True, False])
 def test_kill_process_tree(use_psutil):
+    psutil = pytest.importorskip("psutil")
     event = ctx_loky.Event()
     p = ctx_loky.Process(target=_run_nested_delayed, args=(4, 1000, event))
     p.start()
