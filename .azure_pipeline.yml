@@ -39,7 +39,7 @@ jobs:
       linux-python-py39-high-memory:
         imageName: "ubuntu-20.04"
         python.version: "3.9"
-        tox.env: py37
+        tox.env: py39
         RUN_MEMORY: "true"
       linux-py38:
         imageName: "ubuntu-20.04"
