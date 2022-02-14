@@ -1,13 +1,21 @@
 import sys
 import time
 import math
-import psutil
 import pytest
 import threading
+from time import sleep
 
 from loky import TimeoutError
 from loky import get_reusable_executor
 from loky.backend import get_context
+
+
+try:
+    import psutil
+    psutil_exceptions = (psutil.NoSuchProcess, psutil.AccessDenied)
+except ImportError:
+    psutil = None
+    psutil_exceptions = ()
 
 
 # Set a large timeout as it should only be reached in case of deadlocks
@@ -36,7 +44,7 @@ def _direct_children_with_cmdline(p):
                 # when the process is being terminated by the OS.
                 continue
             children_with_cmdline.append((c, cmdline))
-        except (OSError, psutil.NoSuchProcess, psutil.AccessDenied):
+        except (OSError,) + psutil_exceptions:
             # These errors indicate that the process has terminated while
             # we were processing the info. Just discard it.
             pass
@@ -59,6 +67,10 @@ def _running_children_with_cmdline(p):
 
 def _check_subprocesses_number(executor, expected_process_number=None,
                                expected_max_process_number=None, patience=100):
+    if not psutil:
+        # psutil is not installed, we cannot check the number of subprocesses
+        return
+
     # Wait for terminating processes to disappear
     children_cmdlines = _running_children_with_cmdline(psutil.Process())
     pids_cmdlines = [(c.pid, cmdline) for c, cmdline in children_cmdlines]
@@ -143,18 +155,41 @@ class ExecutorMixin:
         # Make sure executor is not broken if it should not be
         executor = getattr(self, 'executor', None)
         if executor is not None:
-            expect_broken_pool = hasattr(method, "broken_pool")  # old pytest
-            for mark in getattr(method, "pytestmark", []):
-                if mark.name == "broken_pool":
-                    expect_broken_pool = True
-            is_actually_broken = executor._flags.broken is not None
-            assert is_actually_broken == expect_broken_pool
+            try:
+                # old pytest markers:
+                expect_broken_pool = hasattr(method, "broken_pool")
+                # new pytest markers:
+                for mark in getattr(method, "pytestmark", []):
+                    if mark.name == "broken_pool":
+                        expect_broken_pool = True
 
-            t_start = time.time()
-            executor.shutdown(wait=True, kill_workers=True)
-            dt = time.time() - t_start
-            assert dt < 10, "Executor took too long to shutdown"
-        _check_subprocesses_number(executor, 0)
+                if expect_broken_pool:
+                    for _ in range(10):
+                        # The executor manager thread can take some time to
+                        # mark the executor broken.
+                        is_actually_broken = executor._flags.broken is not None
+                        if is_actually_broken:
+                            break
+                        sleep(0.1)
+                    else:
+                        raise AssertionError(
+                            "The executor was not flagged broken at the end of "
+                            f" {method.__qualname__} as expected."
+                        )
+                else:
+                    # Check that the executor is not broken right away to avoid
+                    # wasting CI time. False negative should be very rare.
+                    is_actually_broken = executor._flags.broken is not None
+                    assert not is_actually_broken
+            finally:
+                # Always shutdown the executor, with SIGKILL if the executor
+                # is actually broken.
+                kill_workers = executor._flags.broken is not None
+                t_start = time.time()
+                executor.shutdown(wait=True, kill_workers=kill_workers)
+                dt = time.time() - t_start
+                assert dt < 10, "Executor took too long to shutdown"
+                _check_subprocesses_number(executor, 0)
 
     def _prime_executor(self):
         # Make sure that the executor is ready to do work before running the
@@ -166,6 +201,9 @@ class ExecutorMixin:
 
     @classmethod
     def check_no_running_workers(cls, patience=5, sleep_duration=0.01):
+        if psutil is None:
+            return
+
         deadline = time.time() + patience
 
         while time.time() <= deadline:
