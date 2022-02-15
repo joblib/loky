@@ -215,8 +215,11 @@ class ExecutorShutdownTest:
             assert result == expected
 
         # Once all pending jobs have completed the executor and threads should
-        # terminate automatically.
-        self.check_no_running_workers(patience=2)
+        # terminate automatically. Note that the effictive time for Python
+        # process to completely shutdown can vary a lot especially on loaded CI
+        # machines with and the atexit callbacks that writes test coverage data
+        # to disk. Let's be patient.
+        self.check_no_running_workers(patience=5)
         assert executor_flags.shutdown, processes
         assert not executor_flags.broken, processes
 
@@ -272,9 +275,10 @@ class ExecutorShutdownTest:
         # The executor flag should have been set at this point.
         assert executor_flags.broken, processes
 
-        # Once all pending jobs have completed the executor and threads should
-        # terminate automatically.
-        self.check_no_running_workers(patience=2)
+        # Since the executor is broken, all workers should be SIGKILLed on
+        # POSIX or terminated one Windows. Usually this should be fast but
+        # let's be patient just in case the CI is overloaded.
+        self.check_no_running_workers(patience=5)
 
     def test_context_manager_shutdown(self):
         with self.executor_type(max_workers=5, context=self.context) as e:
