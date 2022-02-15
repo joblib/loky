@@ -215,7 +215,7 @@ class ExecutorShutdownTest:
             assert result == expected
 
         # Once all pending jobs have completed the executor and threads should
-        # terminate automatically. Note that the effictive time for Python
+        # terminate automatically. Note that the effective time for a Python
         # process to completely shutdown can vary a lot especially on loaded CI
         # machines with and the atexit callbacks that writes test coverage data
         # to disk. Let's be patient.
@@ -803,7 +803,7 @@ class ExecutorTest:
                 pass
 
             # Check that all workers shutdown (via timeout) when waiting a bit:
-            # note that the effictive time for Python process to completely
+            # note that the effective time for a Python process to completely
             # shutdown can vary a lot especially on loaded CI machines with and
             # the atexit callbacks that writes test coverage data to disk.
             # Let's be patient.
