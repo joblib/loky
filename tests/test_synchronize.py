@@ -48,7 +48,7 @@ def assert_sem_value_equal(sem, value):
 
 
 def assert_timing_almost_equal(t1, t2=0):
-    assert abs(t1 - t2) < 1e-1
+    assert abs(t1 - t2) < 2e-1
 
 
 class TestLock:
