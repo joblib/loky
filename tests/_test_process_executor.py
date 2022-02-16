@@ -723,11 +723,12 @@ class ExecutorTest:
             assert list(map_future_2) == [sqrt(i) for i in range(40)]
             for i, f in enumerate(submit_futures):
                 if i % 2 == 1 or not f.cancelled():
-                    assert f.result(timeout=10) is None
+                    assert f.result(timeout=30.) is None
             results[thread_idx] = 'ok'
-        except Exception:
+        except Exception as e:
             # Ensure that py.test can report the content of the exception
-            results[thread_idx] = traceback.format_exc()
+            # by raising it in the main test thread
+            results[thread_idx] = e
 
     def test_thread_safety(self):
         # Check that our process-pool executor can be shared to schedule work
@@ -741,8 +742,9 @@ class ExecutorTest:
         for t in threads:
             t.join()
         for result in results:
-            if result != "ok":
-                raise AssertionError(result)
+            if isinstance(result, Exception):
+                raise result
+            assert result == "ok"
 
     @classmethod
     def return_inputs(cls, *args):
