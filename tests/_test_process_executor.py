@@ -703,11 +703,11 @@ class ExecutorTest:
     # backported from the Python 3 concurrent.futures package.
     #
 
-    def _test_thread_safety(self, thread_idx, results):
+    def _test_thread_safety(self, thread_idx, results, timeout=30.):
         try:
             # submit a mix of very simple tasks with map and submit,
             # cancel some of them and check the results
-            map_future_1 = self.executor.map(sqrt, range(40), timeout=10)
+            map_future_1 = self.executor.map(sqrt, range(40), timeout=timeout)
             if thread_idx % 2 == 0:
                 # Make it more likely for scheduling threads to overtake one
                 # another
@@ -717,13 +717,13 @@ class ExecutorTest:
             for i, f in enumerate(submit_futures):
                 if i % 2 == 0:
                     f.cancel()
-            map_future_2 = self.executor.map(sqrt, range(40), timeout=10)
+            map_future_2 = self.executor.map(sqrt, range(40), timeout=timeout)
 
             assert list(map_future_1) == [sqrt(x) for x in range(40)]
             assert list(map_future_2) == [sqrt(i) for i in range(40)]
             for i, f in enumerate(submit_futures):
                 if i % 2 == 1 or not f.cancelled():
-                    assert f.result(timeout=30.) is None
+                    assert f.result(timeout=timeout) is None
             results[thread_idx] = 'ok'
         except Exception as e:
             # Ensure that py.test can report the content of the exception
