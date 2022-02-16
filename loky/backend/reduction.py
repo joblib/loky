@@ -14,12 +14,13 @@ import functools
 import types
 import sys
 import os
-from multiprocessing import util
-from pickle import HIGHEST_PROTOCOL
 
+from multiprocessing import util
+from pickle import loads, HIGHEST_PROTOCOL
 
 ###############################################################################
 # Enable custom pickling in Loky.
+
 _dispatch_table = {}
 
 
@@ -156,19 +157,28 @@ def set_loky_pickler(loky_pickler=None):
             if hasattr(self, "dispatch_table"):
                 # Force a copy that we will update without mutating the
                 # any class level defined dispatch_table.
-                base_dt = dict(self.dispatch_table)
+                loky_dt = dict(self.dispatch_table)
             else:
                 # Use standard reducers as bases
-                base_dt = copyreg.dispatch_table.copy()
+                loky_dt = copyreg.dispatch_table.copy()
 
-            # Register loky specific reducers, including custom reducers
-            loky_dt = {**base_dt, **_dispatch_table, **reducers}
+            # Register loky specific reducers
+            loky_dt.update(_dispatch_table)
 
             # Set the new dispatch table, taking care of the fact that we
             # need to use the member_descriptor when we inherit from a
             # subclass of the C implementation of the Pickler base class
             # with an class level dispatch_table attribute.
             self._set_dispatch_table(loky_dt)
+
+            # Register the reducers
+            for type, reduce_func in reducers.items():
+                self.register(type, reduce_func)
+
+        def register(self, type, reduce_func):
+            """Attach a reducer function to a given type in the dispatch table.
+            """
+            self.dispatch_table[type] = reduce_func
 
     _LokyPickler = CustomizablePickler
     _loky_pickler_name = loky_pickler
@@ -202,4 +212,8 @@ def dumps(obj, reducers=None, protocol=None):
     return buf.getbuffer()
 
 
-__all__ = ["dump", "dumps", "register", "set_loky_pickler"]
+__all__ = ["dump", "dumps", "loads", "register", "set_loky_pickler"]
+
+if sys.platform == "win32":
+    from multiprocessing.reduction import duplicate
+    __all__ += ["duplicate"]
