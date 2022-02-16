@@ -216,8 +216,11 @@ class ExecutorShutdownTest:
             assert result == expected
 
         # Once all pending jobs have completed the executor and threads should
-        # terminate automatically.
-        self.check_no_running_workers(patience=2)
+        # terminate automatically. Note that the effective time for a Python
+        # process to completely shutdown can vary a lot especially on loaded CI
+        # machines with and the atexit callbacks that writes test coverage data
+        # to disk. Let's be patient.
+        self.check_no_running_workers(patience=5)
         assert executor_flags.shutdown, processes
         assert not executor_flags.broken, processes
 
@@ -273,9 +276,10 @@ class ExecutorShutdownTest:
         # The executor flag should have been set at this point.
         assert executor_flags.broken, processes
 
-        # Once all pending jobs have completed the executor and threads should
-        # terminate automatically.
-        self.check_no_running_workers(patience=2)
+        # Since the executor is broken, all workers should be SIGKILLed on
+        # POSIX or terminated one Windows. Usually this should be fast but
+        # let's be patient just in case the CI is overloaded.
+        self.check_no_running_workers(patience=5)
 
     def test_context_manager_shutdown(self):
         with self.executor_type(max_workers=5, context=self.context) as e:
@@ -396,7 +400,7 @@ class ExecutorShutdownTest:
         assert stdout.strip() == "apple"
 
     @classmethod
-    def _test_recursive_kill(cls, depth):
+    def _test_shutdown_and_kill_workers(cls, depth):
         executor = cls.executor_type(
             max_workers=2, context=cls.context,
             initializer=_executor_mixin.initializer_event,
@@ -408,11 +412,11 @@ class ExecutorShutdownTest:
             executor.submit(sleep_and_return, 30, 42).result()
             executor.shutdown()
         else:
-            f = executor.submit(cls._test_recursive_kill, depth + 1)
+            f = executor.submit(cls._test_shutdown_and_kill_workers, depth + 1)
             f.result()
 
-    def test_recursive_kill(self):
-        f = self.executor.submit(self._test_recursive_kill, 1)
+    def test_shutdown_and_kill_workers(self):
+        f = self.executor.submit(self._test_shutdown_and_kill_workers, 1)
         # Wait for the nested executors to be started
         _executor_mixin._test_event.wait()
 
@@ -703,11 +707,11 @@ class ExecutorTest:
     # backported from the Python 3 concurrent.futures package.
     #
 
-    def _test_thread_safety(self, thread_idx, results):
+    def _test_thread_safety(self, thread_idx, results, timeout=30.):
         try:
             # submit a mix of very simple tasks with map and submit,
             # cancel some of them and check the results
-            map_future_1 = self.executor.map(sqrt, range(40), timeout=10)
+            map_future_1 = self.executor.map(sqrt, range(40), timeout=timeout)
             if thread_idx % 2 == 0:
                 # Make it more likely for scheduling threads to overtake one
                 # another
@@ -717,17 +721,18 @@ class ExecutorTest:
             for i, f in enumerate(submit_futures):
                 if i % 2 == 0:
                     f.cancel()
-            map_future_2 = self.executor.map(sqrt, range(40), timeout=10)
+            map_future_2 = self.executor.map(sqrt, range(40), timeout=timeout)
 
             assert list(map_future_1) == [sqrt(x) for x in range(40)]
             assert list(map_future_2) == [sqrt(i) for i in range(40)]
             for i, f in enumerate(submit_futures):
                 if i % 2 == 1 or not f.cancelled():
-                    assert f.result(timeout=10) is None
+                    assert f.result(timeout=timeout) is None
             results[thread_idx] = 'ok'
-        except Exception:
+        except Exception as e:
             # Ensure that py.test can report the content of the exception
-            results[thread_idx] = traceback.format_exc()
+            # by raising it in the main test thread
+            results[thread_idx] = e
 
     def test_thread_safety(self):
         # Check that our process-pool executor can be shared to schedule work
@@ -741,8 +746,9 @@ class ExecutorTest:
         for t in threads:
             t.join()
         for result in results:
-            if result != "ok":
-                raise AssertionError(result)
+            if isinstance(result, Exception):
+                raise result
+            assert result == "ok"
 
     @classmethod
     def return_inputs(cls, *args):
@@ -803,7 +809,7 @@ class ExecutorTest:
                 pass
 
             # Check that all workers shutdown (via timeout) when waiting a bit:
-            # note that the effictive time for Python process to completely
+            # note that the effective time for a Python process to completely
             # shutdown can vary a lot especially on loaded CI machines with and
             # the atexit callbacks that writes test coverage data to disk.
             # Let's be patient.
@@ -900,6 +906,7 @@ class ExecutorTest:
             self.executor.submit(id, data).result()
 
     def test_memory_leak_protection(self):
+        pytest.importorskip("psutil")  # cannot work without psutil
         self.executor.shutdown(wait=True)
 
         executor = self.executor_type(1, context=self.context)
