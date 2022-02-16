@@ -15,7 +15,7 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     which python
     git clone https://github.com/joblib/joblib.git src_joblib
     cd src_joblib
-    pip install pytest
+    pip install "pytest<7.0"  # Need to update remove occurrences of pytest.warns(None)
     pip install threadpoolctl  # required by some joblib tests
 
     pip install -e .
