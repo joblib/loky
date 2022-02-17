@@ -24,7 +24,6 @@ def resource_unlink(name, rtype):
 def create_resource(rtype):
     if rtype == "folder":
         return mkdtemp(dir=os.getcwd())
-
     elif rtype == "semlock":
         name = f"test-loky-{os.getpid()}-{next(_rand_name)}"
         _SemLock(1, 1, 1, name, False)
@@ -156,7 +155,8 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
         if (stderr_regex is not None and
                 not re.search(stderr_regex, stderr)):
             raise ValueError(
-                f"Unexpected stderr: {stderr_regex!r} does not match:\n{stderr!r}"
+                f"Unexpected stderr: {stderr_regex!r} does not "
+                f"match:\n{stderr!r}"
             )
 
         return stdout, stderr
@@ -219,6 +219,5 @@ def check_python_subprocess_call(code, stdout_regex=None):
 
 def filter_match(match):
     if sys.platform == "win32":
-        return
-
+        return None
     return match

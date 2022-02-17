@@ -75,7 +75,7 @@ class TestTimeoutExecutor:
         executor._result_queue = result_queue
 
         with pytest.warns(UserWarning,
-                          match=r'^A worker stopped while some jobs'):
+                          match='^A worker stopped while some jobs'):
             for _ in range(5):
                 # Trigger worker spawn for lazy executor implementations
                 for _ in executor.map(id, range(8)):
@@ -92,7 +92,7 @@ class TestTimeoutExecutor:
         appropriate amount of workers to move one and not get stalled.
         """
         with pytest.warns(UserWarning,
-                          match=r'^A worker stopped while some jobs'):
+                          match='^A worker stopped while some jobs'):
             for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1),
                                    (0.001, .1)]:
                 executor = get_reusable_executor(max_workers=2,

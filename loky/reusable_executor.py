@@ -206,7 +206,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
 
             self._adjust_process_count()
             processes = list(self._processes.values())
-            while not all([p.is_alive() for p in processes]):
+            while not all(p.is_alive() for p in processes):
                 time.sleep(1e-3)
 
     def _wait_job_completion(self):
@@ -228,4 +228,6 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         # As this executor can be resized, use a large queue size to avoid
         # underestimating capacity and introducing overhead
         queue_size = 2 * cpu_count() + EXTRA_QUEUED_CALLS
-        super()._setup_queues(job_reducers, result_reducers, queue_size=queue_size)
+        super()._setup_queues(
+            job_reducers, result_reducers, queue_size=queue_size
+        )

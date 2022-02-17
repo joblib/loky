@@ -1,16 +1,14 @@
 import os
 import sys
+import msvcrt
+import _winapi
 from pickle import load
 from multiprocessing import process, util
 from multiprocessing.context import get_spawning_popen, set_spawning_popen
-
-from . import spawn
-from . import reduction
-
-import msvcrt
-import _winapi
 from multiprocessing.popen_spawn_win32 import Popen as _Popen
 from multiprocessing.reduction import duplicate
+
+from . import reduction, spawn
 
 
 __all__ = ['Popen']
@@ -18,10 +16,6 @@ __all__ = ['Popen']
 #
 #
 #
-
-TERMINATE = 0x10000
-WINEXE = (sys.platform == 'win32' and getattr(sys, 'frozen', False))
-WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
 
 
 def _path_eq(p1, p2):
@@ -59,8 +53,7 @@ class Popen(_Popen):
         python_exe = spawn.get_executable()
 
         # copy the environment variables to set in the child process
-        child_env = os.environ.copy()
-        child_env.update(process_obj.env)
+        child_env = {**os.environ, **process_obj.env}
 
         # bpo-35797: When running in a venv, we bypass the redirect
         # executor and launch our base Python.
@@ -80,7 +73,7 @@ class Popen(_Popen):
                     # the cleaner multiprocessing.reduction.steal_handle should
                     # be used instead.
                     inherit = True
-                    hp, ht, pid, tid = _winapi.CreateProcess(
+                    hp, ht, pid, _ = _winapi.CreateProcess(
                         python_exe, cmd,
                         None, None, inherit, 0,
                         child_env, None, None)

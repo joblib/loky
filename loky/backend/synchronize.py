@@ -16,8 +16,7 @@ import tempfile
 import threading
 import _multiprocessing
 from time import time as _time
-from multiprocessing import process
-from multiprocessing import util
+from multiprocessing import process, util
 from multiprocessing.context import assert_spawning
 
 from . import resource_tracker
@@ -31,7 +30,7 @@ __all__ = [
 try:
     from _multiprocessing import SemLock as _SemLock
     from _multiprocessing import sem_unlink
-except (ImportError):
+except ImportError:
     raise ImportError("This platform lacks a functioning sem_open" +
                       " implementation, therefore, the required" +
                       " synchronization primitives needed will not" +
@@ -41,7 +40,7 @@ except (ImportError):
 # Constants
 #
 
-RECURSIVE_MUTEX, SEMAPHORE = list(range(2))
+RECURSIVE_MUTEX, SEMAPHORE = range(2)
 SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 
 
@@ -182,7 +181,7 @@ class Lock(SemLock):
             if self._semlock._is_mine():
                 name = process.current_process().name
                 if threading.current_thread().name != 'MainThread':
-                    name += '|' + threading.current_thread().name
+                    name = f'{name}|{threading.current_thread().name}'
             elif self._semlock._get_value() == 1:
                 name = 'None'
             elif self._semlock._count() > 0:
@@ -208,7 +207,7 @@ class RLock(SemLock):
             if self._semlock._is_mine():
                 name = process.current_process().name
                 if threading.current_thread().name != 'MainThread':
-                    name += '|' + threading.current_thread().name
+                    name = f'{name}|{threading.current_thread().name}'
                 count = self._semlock._count()
             elif self._semlock._get_value() == 1:
                 name, count = 'None', 0

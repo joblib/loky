@@ -10,7 +10,7 @@ packages = find_packages(exclude=['tests', 'tests._openmp', 'benchmark'])
 # Function to parse __version__ in `loky`
 def find_version():
     here = os.path.abspath(os.path.dirname(__file__))
-    with open(os.path.join(here, 'loky', '__init__.py'), 'r') as fp:
+    with open(os.path.join(here, 'loky', '__init__.py')) as fp:
         version_file = fp.read()
     version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
                               version_file, re.M)
@@ -83,5 +83,5 @@ setup(
     platforms='any',
     python_requires='>=3.7',
     install_requires=['cloudpickle'],
-    tests_require=['pytest', 'psutil'],
+    tests_require=['packaging', 'pytest', 'psutil'],
 )

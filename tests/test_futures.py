@@ -1,4 +1,3 @@
-import sys
 import time
 import pytest
 import threading
@@ -7,6 +6,7 @@ from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
                                       CANCELLED_AND_NOTIFIED, FINISHED)
 
 from loky._base import Future
+
 from .utils import captured_stderr
 
 

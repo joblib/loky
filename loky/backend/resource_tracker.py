@@ -52,8 +52,8 @@ from . import spawn
 
 if sys.platform == "win32":
     import _winapi
-    from multiprocessing.reduction import duplicate
     import msvcrt
+    from multiprocessing.reduction import duplicate
 
 
 __all__ = ['ensure_running', 'register', 'unregister']
@@ -185,11 +185,11 @@ class ResourceTracker:
         self._send("MAYBE_UNLINK", name, rtype)
 
     def _send(self, cmd, name, rtype):
-        msg = f'{cmd}:{name}:{rtype}\n'.encode('ascii')
         if len(name) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
             # bytes are atomic, and that PIPE_BUF >= 512
             raise ValueError('name too long')
+        msg = f'{cmd}:{name}:{rtype}\n'.encode('ascii')
         nbytes = os.write(self._fd, msg)
         assert nbytes == len(msg)
 
@@ -223,7 +223,7 @@ def main(fd, verbose=0):
     if verbose:
         util.debug("Main resource tracker is running")
 
-    registry = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
+    registry = {rtype: {} for rtype in _CLEANUP_FUNCS.keys()}
     try:
         # keep track of registered/unregistered resources
         if sys.platform == "win32":
@@ -275,7 +275,8 @@ def main(fd, verbose=0):
                         if verbose:
                             util.debug(
                                 "[ResourceTracker] decremented refcount of "
-                                f"{rtype} {name} (current {registry[rtype][name]})"
+                                f"{rtype} {name} "
+                                f"(current {registry[rtype][name]})"
                             )
 
                         if registry[rtype][name] == 0:
@@ -283,7 +284,7 @@ def main(fd, verbose=0):
                             try:
                                 if verbose:
                                     util.debug(
-                                            f"[ResourceTracker] unlink {name}"
+                                        f"[ResourceTracker] unlink {name}"
                                     )
                                 _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
@@ -358,7 +359,7 @@ def spawnv_passfds(path, args, passfds):
     else:
         cmd = ' '.join(f'"{x}"' for x in args)
         try:
-            hp, ht, pid, tid = _winapi.CreateProcess(
+            _, ht, pid, _ = _winapi.CreateProcess(
                 path, cmd, None, None, True, 0, None, None, None)
             _winapi.CloseHandle(ht)
         except BaseException:

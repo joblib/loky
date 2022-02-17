@@ -292,7 +292,7 @@ class TestCondition:
         try:
             state.get_value()
         except NotImplementedError:
-            pytest.skip(msg="`sem_get_value not implemented")
+            pytest.skip("`sem_get_value not implemented")
 
         p = loky_context.Process(target=self._test_waitfor_f,
                                  args=(cond, state))

@@ -21,8 +21,11 @@ from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
                                       CANCELLED_AND_NOTIFIED, FINISHED)
 
 import loky
-from loky.process_executor import LokyRecursionError
-from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
+from loky.process_executor import (
+    LokyRecursionError,
+    ShutdownExecutorError,
+    TerminatedWorkerError,
+)
 from loky._base import Future
 
 from . import _executor_mixin
@@ -114,11 +117,9 @@ class ExecutorShutdownTest:
         # Free resources to avoid random timeout in CI
         self.executor.shutdown(wait=True, kill_workers=True)
 
-        tempdir = tempfile.mkdtemp(prefix='loky_')
-
-        executor_type=self.executor_type.__name__
-        start_method=self.context.get_start_method()
-        tempdir=tempdir.replace("\\", "/")
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
+        tempdir = tempfile.mkdtemp(prefix='loky_').replace("\\", "/")
         try:
             n_jobs = 4
             code = f"""if True:
@@ -140,7 +141,7 @@ class ExecutorShutdownTest:
                 # shutdown main Python interpreter while letting the worker
                 # processes finish in the background.
             """
-            stdout, stderr = check_subprocess_call(
+            _, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
             _assert_no_error(stderr)
@@ -152,7 +153,7 @@ class ExecutorShutdownTest:
 
             # Apparently files can take some time to appear under windows
             # on AppVeyor
-            for retry_idx in range(20):
+            for _ in range(20):
                 filenames = sorted(os.listdir(tempdir))
                 if len(filenames) != len(expected_filenames):
                     time.sleep(1)
@@ -266,7 +267,7 @@ class ExecutorShutdownTest:
 
         # The crashing job should be executed after the non-failing jobs
         # have completed. The crash should be detected.
-        match = filter_match(r"SIGSEGV")
+        match = filter_match("SIGSEGV")
         with pytest.raises(TerminatedWorkerError, match=match):
             crash_result.result()
 
@@ -346,7 +347,7 @@ class ExecutorShutdownTest:
 
         # Make sure the results were all computed before the executor
         # resources were freed.
-        assert all([f.result() == v for f, v in zip(res, range(-5, 5))])
+        assert [f.result() for f in res] == list(range(-5, 5))
 
     def test_shutdown_deadlock_pickle(self):
         # Test that the pool calling shutdown with wait=False does not cause
@@ -379,8 +380,8 @@ class ExecutorShutdownTest:
 
         See https://bugs.python.org/issue39205.
         """
-        executor_type=self.executor_type.__name__
-        start_method=self.context.get_start_method()
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
         code = f"""if True:
             from loky.process_executor import {executor_type}
             from loky.backend import get_context
@@ -492,7 +493,10 @@ class WaitTests:
                                           future1, future2],
                                          return_when=futures.FIRST_EXCEPTION)
 
-        assert {SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE, future1} == finished
+        assert (
+            {SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE, future1} ==
+            finished
+        )
         assert {CANCELLED_FUTURE, future2} == pending
 
     def test_first_exception_one_already_failed(self):
@@ -658,7 +662,7 @@ class ExecutorTest:
         # Get one of the processes, and terminate (kill) it
         p = next(iter(self.executor._processes.values()))
         p.terminate()
-        match = filter_match(r"SIGTERM")
+        match = filter_match("SIGTERM")
         with pytest.raises(TerminatedWorkerError, match=match):
             future.result()
         # Submitting other jobs fails as well.
@@ -883,7 +887,8 @@ class ExecutorTest:
                         reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
         sys.version_info < (3, 8),
-        reason="Python version does not support pickling objects of size > 2 ** 31GB")
+        reason="Python version does not support pickling objects of size > 2 ** 31GB"
+    )
     def test_no_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
         self.executor.submit(id, data).result()
@@ -893,7 +898,8 @@ class ExecutorTest:
                         reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
         sys.version_info >= (3, 8),
-        reason="Python version supports pickling objects of size > 2 ** 31GB")
+        reason="Python version supports pickling objects of size > 2 ** 31GB"
+    )
     def test_expected_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
         with pytest.raises(RuntimeError):
@@ -967,7 +973,9 @@ class ExecutorTest:
 
         # Total run time should be 3s which is way over the 1s cooldown
         # period between two consecutive memory checks in the worker.
-        futures = [executor.submit(_create_cyclic_reference) for _ in range(300)]
+        futures = [
+            executor.submit(_create_cyclic_reference) for _ in range(300)
+        ]
 
         executor.shutdown(wait=True)
 
@@ -990,14 +998,13 @@ class ExecutorTest:
 
     @staticmethod
     def _test_child_env(var_name):
-        import os
         return os.environ.get(var_name, "unset")
 
     def test_child_env_executor(self):
         # Test that for loky context, setting argument env correctly overwrite
         # the environment of the child process.
         if self.context.get_start_method() != 'loky':
-            pytest.skip(msg="Only work with loky context")
+            pytest.skip("Only work with loky context")
 
         var_name = "loky_child_env_executor"
         var_value = "variable set"

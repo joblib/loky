@@ -10,11 +10,6 @@
 # Copyright 2009 Brian Quinlan. All Rights Reserved.
 # Licensed to PSF under a Contributor Agreement.
 
-import sys
-import time
-import logging
-import threading
-import collections
 from concurrent.futures import Future as _BaseFuture
 from concurrent.futures._base import LOGGER
 

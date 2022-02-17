@@ -13,10 +13,12 @@ import errno
 import weakref
 import threading
 from multiprocessing import util
-from multiprocessing.queues import Full
-from multiprocessing.queues import _sentinel
-from multiprocessing.queues import Queue as mp_Queue
-from multiprocessing.queues import SimpleQueue as mp_SimpleQueue
+from multiprocessing.queues import (
+    Full,
+    Queue as mp_Queue,
+    SimpleQueue as mp_SimpleQueue,
+    _sentinel,
+)
 from multiprocessing.context import assert_spawning
 
 from .reduction import dumps

@@ -136,7 +136,7 @@ def get_exitcodes_terminated_worker(processes):
     # the terminated worker.
     exitcodes = [p.exitcode for p in list(processes.values())
                  if p.exitcode is not None]
-    while len(exitcodes) == 0 and patience > 0:
+    while not exitcodes and patience > 0:
         patience -= 1
         exitcodes = [p.exitcode for p in list(processes.values())
                      if p.exitcode is not None]

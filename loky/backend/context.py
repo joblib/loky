@@ -19,7 +19,6 @@ import multiprocessing as mp
 from multiprocessing import get_context as mp_get_context
 from multiprocessing.context import BaseContext
 
-
 from .process import LokyProcess, LokyInitMainProcess
 
 START_METHODS = ['loky', 'loky_init_main', 'spawn']
@@ -37,20 +36,18 @@ def get_context(method=None):
     # Try to overload the default context
     method = method or _DEFAULT_START_METHOD or "loky"
     if method == "fork":
-        # If 'fork' is explicitly requested, warn user about potential
-        # issues.
+        # If 'fork' is explicitly requested, warn user about potential issues.
         warnings.warn("`fork` start method should not be used with "
                       "`loky` as it does not respect POSIX. Try using "
                       "`spawn` or `loky` instead.", UserWarning)
     try:
-        context = mp_get_context(method)
+        return mp_get_context(method)
     except ValueError:
         raise ValueError(
             f"Unknown context '{method}'. Value should be in "
             f"{START_METHODS}."
         )
 
-    return context
 
 def set_start_method(method, force=False):
     global _DEFAULT_START_METHOD
@@ -87,38 +84,38 @@ def cpu_count(only_physical_cores=False):
     any other way such as: process affinity, restricting CFS scheduler policy
     or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
     cores is not found, return the number of logical cores.
- 
+
     It is also always larger or equal to 1.
     """
-    os_cpu_count = os.cpu_count()
+    # Note: os.cpu_count() is allowed to return None in its docstring
+    os_cpu_count = os.cpu_count() or 1
 
     cpu_count_user = _cpu_count_user(os_cpu_count)
-    aggregate_cpu_count = min(os_cpu_count, cpu_count_user)
+    aggregate_cpu_count = max(min(os_cpu_count, cpu_count_user), 1)
 
-    if only_physical_cores:
-        cpu_count_physical, exception = _count_physical_cores()
-        if cpu_count_user < os_cpu_count:
-            # Respect user setting
-            cpu_count = max(cpu_count_user, 1)
-        elif cpu_count_physical == "not found":
-            # Fallback to default behavior
-            if exception is not None:
-                # warns only the first time
-                warnings.warn(
-                    "Could not find the number of physical cores for the "
-                    "following reason:\n" + str(exception) + "\n"
-                    "Returning the number of logical cores instead. You can "
-                    "silence this warning by setting LOKY_MAX_CPU_COUNT to "
-                    "the number of cores you want to use.")
-                traceback.print_tb(exception.__traceback__)
+    if not only_physical_cores:
+        return aggregate_cpu_count
 
-            cpu_count = max(aggregate_cpu_count, 1)
-        else:
-            return cpu_count_physical
-    else:
-        cpu_count = max(aggregate_cpu_count, 1)
+    if cpu_count_user < os_cpu_count:
+        # Respect user setting
+        return max(cpu_count_user, 1)
 
-    return cpu_count
+    cpu_count_physical, exception = _count_physical_cores()
+    if cpu_count_physical != "not found":
+        return cpu_count_physical
+
+    # Fallback to default behavior
+    if exception is not None:
+        # warns only the first time
+        warnings.warn(
+            "Could not find the number of physical cores for the "
+            f"following reason:\n{exception}\n"
+            "Returning the number of logical cores instead. You can "
+            "silence this warning by setting LOKY_MAX_CPU_COUNT to "
+            "the number of cores you want to use.")
+        traceback.print_tb(exception.__traceback__)
+
+    return aggregate_cpu_count
 
 
 def _cpu_count_user(os_cpu_count):
@@ -137,9 +134,9 @@ def _cpu_count_user(os_cpu_count):
     cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
     cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
     if os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
-        with open(cfs_quota_fname, 'r') as fh:
+        with open(cfs_quota_fname) as fh:
             cfs_quota_us = int(fh.read())
-        with open(cfs_period_fname, 'r') as fh:
+        with open(cfs_period_fname) as fh:
             cfs_period_us = int(fh.read())
 
         if cfs_quota_us > 0 and cfs_period_us > 0:
@@ -170,13 +167,13 @@ def _count_physical_cores():
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
-                "lscpu --parse=core".split(" "), capture_output=True, text=True)
+                "lscpu --parse=core".split(), capture_output=True, text=True)
             cpu_info = cpu_info.stdout.splitlines()
             cpu_info = {line for line in cpu_info if not line.startswith("#")}
             cpu_count_physical = len(cpu_info)
         elif sys.platform == "win32":
             cpu_info = subprocess.run(
-                "wmic CPU Get NumberOfCores /Format:csv".split(" "),
+                "wmic CPU Get NumberOfCores /Format:csv".split(),
                 capture_output=True, text=True)
             cpu_info = cpu_info.stdout.splitlines()
             cpu_info = [l.split(",")[1] for l in cpu_info
@@ -184,13 +181,12 @@ def _count_physical_cores():
             cpu_count_physical = sum(map(int, cpu_info))
         elif sys.platform == "darwin":
             cpu_info = subprocess.run(
-                "sysctl -n hw.physicalcpu".split(" "), capture_output=True, text=True)
+                "sysctl -n hw.physicalcpu".split(),
+                capture_output=True, text=True)
             cpu_info = cpu_info.stdout
             cpu_count_physical = int(cpu_info)
         else:
-            raise NotImplementedError(
-                f"unsupported platform: {sys.platform}"
-            )
+            raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
         # if cpu_count_physical < 1, we did not find a valid value
         if cpu_count_physical < 1:
@@ -277,7 +273,7 @@ class LokyInitMainContext(LokyContext):
     Process = LokyInitMainProcess
 
 
-"""Register loky context so it works with multiprocessing.get_context"""
+# Register loky context so it works with multiprocessing.get_context
 ctx_loky = LokyContext()
 mp.context._concrete_contexts['loky'] = ctx_loky
 mp.context._concrete_contexts['loky_init_main'] = LokyInitMainContext()

@@ -3,6 +3,7 @@ import os
 import sys
 import shutil
 import tempfile
+import warnings
 from subprocess import check_output
 
 import pytest
@@ -103,11 +104,9 @@ def test_only_physical_cores_error():
     if _cpu_count_user(cpu_count_mp) < cpu_count_mp:
         pytest.skip()
 
-    start_dir = os.path.abspath('.')
-
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Write bad lscpu program
-        lscpu_path = tmp_dir + '/lscpu'
+        lscpu_path = f'{tmp_dir}/lscpu'
         with open(lscpu_path, 'w') as f:
             f.write("#!/bin/sh\n"
                     "exit(1)")
@@ -115,7 +114,7 @@ def test_only_physical_cores_error():
 
         try:
             old_path = os.environ['PATH']
-            os.environ['PATH'] = tmp_dir + ":" + old_path
+            os.environ['PATH'] = f'{tmp_dir}:{old_path}'
 
             # clear the cache otherwise the warning is not triggered
             import loky.backend.context
@@ -126,9 +125,9 @@ def test_only_physical_cores_error():
                 cpu_count(only_physical_cores=True)
 
             # Should not warn the second time
-            with pytest.warns(None) as record:
+            with warnings.catch_warnings():
+                warnings.simplefilter('error')
                 cpu_count(only_physical_cores=True)
-                assert not record
 
         finally:
             os.environ['PATH'] = old_path

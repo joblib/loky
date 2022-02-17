@@ -4,9 +4,9 @@ import pytest
 import io
 from pickle import loads
 from tempfile import mkstemp
+
 from loky import set_loky_pickler
 from loky.backend.reduction import get_loky_pickler
-
 
 from .utils import check_subprocess_call
 
@@ -67,13 +67,13 @@ class TestCloudpickleWrapper:
             with open(filename, mode='w') as f:
                 f.write(code)
             cmd += [filename]
-            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+            check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
 
             # Makes sure that if LOKY_PICKLER is set to default pickle, the
             # tasks are not wrapped with cloudpickle and it is not possible
             # using functions from the main module.
             env = {'LOKY_PICKLER': 'pickle'}
-            with pytest.raises(ValueError, match=r'A task has failed to un-s'):
+            with pytest.raises(ValueError, match='A task has failed to un-s'):
                 check_subprocess_call(cmd, timeout=10, env=env)
         finally:
             os.unlink(filename)
@@ -110,7 +110,7 @@ class TestCloudpickleWrapper:
             with open(filename, mode='w') as f:
                 f.write(code)
             cmd += [filename]
-            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+            check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
         finally:
             os.unlink(filename)
 
@@ -167,7 +167,7 @@ class TestCloudpickleWrapper:
             cmd += [filename]
 
             env = {'LOKY_PICKLER': 'pickle'}
-            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10, env=env)
+            check_subprocess_call(cmd, stdout_regex='ok', timeout=10, env=env)
         finally:
             os.unlink(filename)
 
@@ -248,21 +248,21 @@ class TestCloudpickleWrapper:
                 f.write(code)
             cmd += [filename]
             if loky_pickler == "'pickle'":
-                match = r"(Can't get|has no) attribute 'test_func'"
+                match = "(Can't get|has no) attribute 'test_func'"
                 with pytest.raises(ValueError, match=match):
                     check_subprocess_call(cmd, timeout=10)
             else:
-                check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+                check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
         finally:
             os.unlink(filename)
 
     def test_set_loky_pickler_failures(self):
         # Check that `set_loky_pickler` fails when a non-existing module is
         # required.
-        with pytest.raises(ImportError, match=r"loky_pickler to 'no_module'"):
+        with pytest.raises(ImportError, match="loky_pickler to 'no_module'"):
             set_loky_pickler("no_module")
 
         # The module passed to `set_loky_pickler` should have a Pickler
         # attribute.
-        with pytest.raises(AttributeError, match=r"loky_pickler to 'os'"):
+        with pytest.raises(AttributeError, match="loky_pickler to 'os'"):
             set_loky_pickler("os")

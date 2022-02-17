@@ -1,11 +1,9 @@
 from loky import process_executor
 from loky.backend import get_context
-from ._executor_mixin import ExecutorMixin
 
-from ._test_process_executor import WaitTests
-from ._test_process_executor import ExecutorTest
-from ._test_process_executor import AsCompletedTests
-from ._test_process_executor import ExecutorShutdownTest
+from ._executor_mixin import ExecutorMixin
+from ._test_process_executor import (AsCompletedTests, ExecutorShutdownTest,
+                                     ExecutorTest, WaitTests)
 
 
 class ProcessPoolLokyMixin(ExecutorMixin):

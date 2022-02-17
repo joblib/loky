@@ -116,8 +116,7 @@ class TestResourceTracker:
                 sys.stdout.flush()
             time.sleep(10)
         '''
-        env = os.environ.copy()
-        env['PYTHONPATH'] = os.path.dirname(__file__)
+        env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
         p = subprocess.Popen([sys.executable, '-c', cmd],
                              stderr=subprocess.PIPE,
                              stdout=subprocess.PIPE,
@@ -143,7 +142,7 @@ class TestResourceTracker:
         p.stderr.close()
         p.stdout.close()
 
-        expected = (f'resource_tracker: There appear to be 2 leaked {rtype}')
+        expected = f'resource_tracker: There appear to be 2 leaked {rtype}'
         assert re.search(expected, err) is not None
 
         # resource 1 is still registered, but was destroyed externally: the

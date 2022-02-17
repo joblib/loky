@@ -13,11 +13,11 @@ from loky.backend import get_context
 from loky.backend.context import START_METHODS
 from loky.backend.utils import kill_process_tree
 
-from .utils import TimingWrapper, check_subprocess_call
-from .utils import with_parallel_sum, _run_openmp_parallel_sum
-
+from .utils import (TimingWrapper, check_subprocess_call, with_parallel_sum,
+                    _run_openmp_parallel_sum)
 
 if not hasattr(socket, "socketpair"):
+
     def socketpair():
         s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -25,7 +25,7 @@ if not hasattr(socket, "socketpair"):
         s1.bind((socket.gethostname(), 8080))
         s1.listen(1)
         s2.connect((socket.gethostname(), 8080))
-        conn, addr = s1.accept()
+        conn, _ = s1.accept()
         return conn, s2
 
     socket.socketpair = socketpair
@@ -74,10 +74,9 @@ class TestLokyBackend:
         assert current.is_alive()
         assert not current.daemon
         assert isinstance(authkey, bytes)
-        assert len(authkey) > 0
+        assert authkey
         assert current.ident == os.getpid()
         assert current.exitcode is None
-
 
     def test_daemon_argument(self):
 
@@ -415,18 +414,15 @@ class TestLokyBackend:
         p.start()
         assert isinstance(p.sentinel, int)
         assert not wait([p.sentinel], timeout=0.0)
-        assert wait([p.sentinel], timeout=5), (p.exitcode)
+        assert wait([p.sentinel], timeout=5), p.exitcode
         expected_code = 15 if sys.platform == 'win32' else -15
         p.join()  # force refresh of p.exitcode
         assert p.exitcode == expected_code
 
     @classmethod
-    def _high_number_Pipe(cls):
+    def _high_number_pipe(cls):
         """Create a Pipe with 2 high numbered file descriptors"""
-        fds = []
-        for _ in range(50):
-            r, w = os.pipe()
-            fds += [r, w]
+        fds = [fd for _ in range(50) for fd in os.pipe()]
         r, w = cls.Pipe(duplex=False)
         for fd in fds:
             os.close(fd)
@@ -459,9 +455,7 @@ class TestLokyBackend:
         import subprocess
         try:
             out = subprocess.check_output(
-                f"lsof -a -Fftn -p {pid} -d ^txt,^cwd,^rtd".split(),
-                text=True,
-            )
+                f"lsof -a -Fftn -p {pid} -d ^txt,^cwd,^rtd".split(), text=True)
             lines = out.splitlines()[1:]
         except (FileNotFoundError, OSError):
             print("lsof does not exist on this platform. Skip open files"
@@ -528,7 +522,7 @@ class TestLokyBackend:
 
         # TODO generate high numbered mp.Pipe directly
         # -> can be used on windows
-        r, w = self._high_number_Pipe()
+        r, w = self._high_number_pipe()
 
         tmp_fname = "/tmp/foobar" if sys.platform != "win32" else ".foobar"
         with open(tmp_fname, "w"):
@@ -604,7 +598,7 @@ class TestLokyBackend:
                 cmd += [filename]
             else:
                 cmd += ["-c", code]
-            check_subprocess_call(cmd, stdout_regex=r'ok', timeout=10)
+            check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
         finally:
             if run_file:
                 os.unlink(filename)
@@ -667,7 +661,7 @@ class TestLokyBackend:
             with open(filename, mode='w') as f:
                 f.write(code)
             check_subprocess_call([sys.executable, filename],
-                                  stdout_regex=r'ok', timeout=10)
+                                  stdout_regex='ok', timeout=10)
         finally:
             os.unlink(filename)
 

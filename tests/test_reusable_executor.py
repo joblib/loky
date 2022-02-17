@@ -8,7 +8,9 @@ import threading
 from time import sleep
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
-from distutils.version import LooseVersion
+
+import cloudpickle
+from packaging.version import Version
 
 import loky
 from loky import cpu_count
@@ -16,7 +18,6 @@ from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 from loky.reusable_executor import _ReusablePoolExecutor
-import cloudpickle
 
 try:
     import psutil
@@ -27,7 +28,7 @@ from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep, check_python_subprocess_call
 from .utils import filter_match
 
-cloudpickle_version = LooseVersion(cloudpickle.__version__)
+cloudpickle_version = Version(cloudpickle.__version__)
 
 # Compat windows
 if sys.platform == "win32":
@@ -209,27 +210,27 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         (id, (ExitAtPickle(),), PicklingError, None),
         (id, (ErrorAtPickle(),), PicklingError, None),
         # Check problem occuring while unpickling a task on workers
-        (id, (ExitAtUnpickle(),), BrokenProcessPool, r"SystemExit"),
+        (id, (ExitAtUnpickle(),), BrokenProcessPool, "SystemExit"),
         (id, (CExitAtUnpickle(),), TerminatedWorkerError, r"EXIT\(0\)"),
-        (id, (ErrorAtUnpickle(),), BrokenProcessPool, r"UnpicklingError"),
-        (id, (CrashAtUnpickle(),), TerminatedWorkerError, r"SIGSEGV"),
+        (id, (ErrorAtUnpickle(),), BrokenProcessPool, "UnpicklingError"),
+        (id, (CrashAtUnpickle(),), TerminatedWorkerError, "SIGSEGV"),
         # Check problem occuring during function execution on workers
-        (crash, (), TerminatedWorkerError, r"SIGSEGV"),
+        (crash, (), TerminatedWorkerError, "SIGSEGV"),
         (exit, (), SystemExit, None),
         (c_exit, (), TerminatedWorkerError, r"EXIT\(0\)"),
         (raise_error, (RuntimeError,), RuntimeError, None),
         # Check problem occuring while pickling a task result
         # on workers
-        (return_instance, (CrashAtPickle,), TerminatedWorkerError, r"SIGSEGV"),
+        (return_instance, (CrashAtPickle,), TerminatedWorkerError, "SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
         (return_instance, (CExitAtPickle,), TerminatedWorkerError,
          r"EXIT\(0\)"),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
-        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, r"SystemExit"),
+        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, "SystemExit"),
         (return_instance, (ErrorAtUnpickle,), BrokenProcessPool,
-         r"UnpicklingError"),
+         "UnpicklingError"),
     ]
 
     @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
@@ -332,7 +333,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # in broken state:
         sleep(.5)
         with pytest.raises(TerminatedWorkerError,
-                           match=filter_match(r"SIGKILL")):
+                           match=filter_match("SIGKILL")):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -366,7 +367,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                             for j in range(2 * n_proc)])
         assert all(res)
         with pytest.raises(TerminatedWorkerError,
-                           match=filter_match(r"SIGKILL")):
+                           match=filter_match("SIGKILL")):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -468,7 +469,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         assert f2.result() == 42
 
     @pytest.mark.parametrize("bad_object, match", [
-        (CrashAtGCInWorker, r"SIGSEGV"), (CExitAtGCInWorker, r"EXIT\(0\)")])
+        (CrashAtGCInWorker, "SIGSEGV"), (CExitAtGCInWorker, r"EXIT\(0\)")])
     def test_call_item_gc_crash_or_exit(self, bad_object, match):
         executor = get_reusable_executor(max_workers=1)
         bad_object = bad_object()
@@ -515,7 +516,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
 
         # Requesting the same number of process should not impact the executor
         # nor kill the processed
-        old_pid = next(iter((executor._processes.keys())))
+        old_pid = next(iter(executor._processes.keys()))
         unchanged_executor = get_reusable_executor(max_workers=1, timeout=None)
         assert len(unchanged_executor._processes) == 1
         assert unchanged_executor is executor
@@ -625,7 +626,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             e.submit(id, 42).result()
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
 
     def test_reused_flag(self):
         executor, _ = _ReusablePoolExecutor.get_reusable_executor(
@@ -641,8 +642,8 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         )
         assert not reused
 
-    @pytest.mark.xfail(cloudpickle_version >= LooseVersion("0.5.4") and
-                       cloudpickle_version <= LooseVersion("0.7.0"),
+    @pytest.mark.xfail(cloudpickle_version >= Version("0.5.4") and
+                       cloudpickle_version <= Version("0.7.0"),
                        reason="Known issue in cloudpickle")
     # https://github.com/cloudpipe/cloudpickle/pull/240
     def test_interactively_defined_nested_functions(self):
@@ -677,7 +678,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
 
     def test_interactively_defined_recursive_functions(self):
         # Check that it's possible to call a recursive function defined
@@ -708,7 +709,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
 
     def test_compat_with_concurrent_futures_exception(self):
         # It should be possible to use a loky process pool executor as a dropin
@@ -744,7 +745,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         else:
             # Break the shared executor before launching the threads:
             with pytest.raises(TerminatedWorkerError,
-                               match=filter_match(r"SIGSEGV")):
+                               match=filter_match("SIGSEGV")):
                 executor = get_reusable_executor(reuse=False)
                 executor.submit(return_instance, CrashAtPickle).result()
 
@@ -769,7 +770,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         output_collector = []
         threads = [threading.Thread(
             target=helper_func, args=(output_collector, w),
-            name=f'test_thread_{i:02d}_max_workers_{w}')
+            name=f'test_thread_{i:02d}_max_workers_{w:d}')
             for i, w in enumerate(max_workers)]
 
         with warnings.catch_warnings(record=True):

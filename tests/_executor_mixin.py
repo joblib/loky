@@ -5,8 +5,7 @@ import pytest
 import threading
 from time import sleep
 
-from loky import TimeoutError
-from loky import get_reusable_executor
+from loky import TimeoutError, get_reusable_executor
 from loky.backend import get_context
 
 
@@ -63,7 +62,7 @@ def _running_children_with_cmdline(p):
     forkservers = [c for c, cmdline in all_children
                    if 'multiprocessing.forkserver' in cmdline]
     for fs in forkservers:
-        workers.extend(_direct_children_with_cmdline(fs))
+        workers += _direct_children_with_cmdline(fs)
     return workers
 
 

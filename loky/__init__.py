@@ -4,14 +4,14 @@ It provides a robust and dynamic implementation os the
 hide the pool management under the hood.
 """
 from concurrent.futures import (
-    Executor,
-    wait,
-    TimeoutError,
-    CancelledError,
-    as_completed,
     ALL_COMPLETED,
     FIRST_COMPLETED,
     FIRST_EXCEPTION,
+    CancelledError,
+    Executor,
+    TimeoutError,
+    as_completed,
+    wait,
 )
 
 from ._base import Future

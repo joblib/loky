@@ -78,7 +78,6 @@ from concurrent.futures._base import LOGGER
 from concurrent.futures.process import BrokenProcessPool as _BPPException
 from multiprocessing.connection import wait
 
-
 from ._base import Future
 from .backend import get_context
 from .backend.context import cpu_count
@@ -280,6 +279,7 @@ class _CallItem:
             f"CallItem({self.work_id}, {self.fn}, {self.args}, {self.kwargs})"
         )
 
+
 class _SafeQueue(Queue):
     """Safe Queue set exception to the future object linked to a job"""
     def __init__(self, max_size=0, ctx=None, pending_work_items=None,
@@ -460,7 +460,7 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         else:
             # if psutil is not installed, trigger gc.collect events
             # regularly to limit potential memory leaks due to reference cycles
-            if ((_last_memory_leak_check is None) or
+            if (_last_memory_leak_check is None or
                     (time() - _last_memory_leak_check >
                      _MEMORY_LEAK_CHECK_DELAY)):
                 gc.collect()
@@ -725,7 +725,7 @@ class _ExecutorManagerThread(threading.Thread):
         self.executor_flags.flag_as_broken(bpe)
 
         # Mark pending tasks as failed.
-        for work_id, work_item in self.pending_work_items.items():
+        for work_item in self.pending_work_items.values():
             work_item.future.set_exception(bpe)
             # Delete references to object. See issue16284
             del work_item

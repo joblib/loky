@@ -70,7 +70,7 @@ def get_preparation_data(name, init_main_module=True):
     # Make sure to pass the information if the multiprocessing logger is active
     if util._logger is not None:
         d['log_level'] = util._logger.getEffectiveLevel()
-        if len(util._logger.handlers) > 0:
+        if util._logger.handlers:
             h = util._logger.handlers[0]
             d['log_fmt'] = h.formatter._fmt
 
@@ -122,8 +122,6 @@ def get_preparation_data(name, init_main_module=True):
                         process.ORIGINAL_DIR is not None):
                     main_path = os.path.join(process.ORIGINAL_DIR, main_path)
                 d['init_main_from_path'] = os.path.normpath(main_path)
-                # Compat for python2.7
-                d['main_path'] = d['init_main_from_path']
 
     return d
 
@@ -242,10 +240,3 @@ def _fixup_main_from_path(main_path):
                                   run_name="__mp_main__")
     main_module.__dict__.update(main_content)
     sys.modules['__main__'] = sys.modules['__mp_main__'] = main_module
-
-
-def import_main_path(main_path):
-    '''
-    Set sys.modules['__main__'] to module at main_path
-    '''
-    _fixup_main_from_path(main_path)
