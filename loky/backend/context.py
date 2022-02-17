@@ -1,6 +1,5 @@
 ###############################################################################
-# Basic context management with LokyContext and  provides
-# compat for UNIX 2.7 and 3.3
+# Basic context management with LokyContext
 #
 # author: Thomas Moreau and Olivier Grisel
 #
@@ -8,6 +7,7 @@
 #  * Create a context ensuring loky uses only objects that are compatible
 #  * Add LokyContext to the list of context of multiprocessing so loky can be
 #    used with multiprocessing.set_start_method
+#  * Implement a CFS-aware amd physical-core aware cpu_count function.
 #
 import os
 import sys
@@ -246,7 +246,8 @@ class LokyContext(BaseContext):
 
     if sys.platform != "win32":
         """For Unix platform, use our custom implementation of synchronize
-        relying on ctypes to interface with pthread semaphores.
+        ensuring that we use the loky.backend.resource_tracker to clean-up
+        the semaphores in case of a worker crash.
         """
         def Semaphore(self, value=1):
             """Returns a semaphore object"""

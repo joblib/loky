@@ -5,10 +5,12 @@
 #
 # adapted from multiprocessing/synchronize.py (17/02/2017)
 #  * Remove ctx argument for compatibility reason
-#  * Implementation of Condition/Event are necessary for compatibility
-#    with python2.7/3.3, Barrier should be reimplemented to for those
-#    version (but it is not used in loky).
+#  * Registers a cleanup function with the loky resource_tracker to remove the
+#    semaphore when the process dies instead.
 #
+# TODO: investigate which Python version is required to be able to use
+# multiprocessing.resource_tracker and therefore multiprocessing.synchronize
+# instead of a loky-specific fork.
 
 import os
 import sys
