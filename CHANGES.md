@@ -3,7 +3,7 @@
 - Fix loky.cpu_count() to properly detect the number of allowed CPUs
   based on the /sys/fs/cgroup/cpu.max file when present. This
   makes it possible to respect docker/cgroup CFS quotas even when
-  /sys/fs/cgroup/cpu/cpu.cfs_quota_us is not present.
+  /sys/fs/cgroup/cpu/cpu.cfs_quota_us is not present (#355).
 
 - Fix an exception that could be raised in an auxiliary thread when
   garbage collecting an executor instance when shutting down the
