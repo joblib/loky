@@ -153,7 +153,7 @@ def _cpu_count_user(os_cpu_count):
         cfs_quota_us = int(cfs_quota_us)
         cfs_period_us = int(cfs_period_us)
         if cfs_quota_us > 0 and cfs_period_us > 0:
-            cpu_count_cfs = math.ceil(int(cfs_quota_us) / int(cfs_period_us))
+            cpu_count_cfs = math.ceil(cfs_quota_us / cfs_period_us)
         else:
             # Meaningless quota config: just ignore (should never happen)
             cpu_count_cfs = os_cpu_count
