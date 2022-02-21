@@ -82,7 +82,7 @@ def test_cpu_count_cfs_limit():
     # We mount the loky source as /loky inside the container,
     # so it can be imported when running commands under /
 
-    # If tell docker to configure the CFS schedule to use 0.5 CPU, loky will
+    # Tell docker to configure the CFS schedule to use 0.5 CPU, loky will
     # always detect 1 CPU because it rounds up to the next integer.
     res_500_mCPU = int(check_output(
         f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.7 "
