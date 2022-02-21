@@ -73,7 +73,7 @@ def test_cpu_count_cfs_limit():
 
     docker_bin = shutil.which('docker')
     if docker_bin is None:
-        raise pytest.skip()
+        raise pytest.skip("docker is required to run this test")
 
     loky_module_path = os.path.abspath(os.path.dirname(loky.__file__))
     loky_project_path = os.path.abspath(os.path.join(loky_module_path, os.pardir))
@@ -81,14 +81,35 @@ def test_cpu_count_cfs_limit():
     # The following will always run using the Python 3.7 docker image.
     # We mount the loky source as /loky inside the container,
     # so it can be imported when running commands under /
-    res = check_output(
+
+    # If tell docker to configure the CFS schedule to use 0.5 CPU, loky will
+    # always detect 1 CPU because it rounds up to the next integer.
+    res_500_mCPU = int(check_output(
         f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.7 "
         f"/bin/bash -c 'pip install --quiet -e /loky ; "
         f"python -c \"{cpu_count_cmd.format(args='')}\"'",
         shell=True, text=True
-    )
+    ).strip())
+    assert res_500_mCPU == 1
 
-    assert res.strip() == '1'
+    # Limiting to 1.5 CPUs can lead to 1 if there is only 1 CPU on the machine or
+    # 2 if there are 2 CPU or more.
+    res_1500_mCPU = int(check_output(
+        f"{docker_bin} run --rm --cpus 1.5 -v {loky_project_path}:/loky python:3.7 "
+        f"/bin/bash -c 'pip install --quiet -e /loky ; "
+        f"python -c \"{cpu_count_cmd.format(args='')}\"'",
+        shell=True, text=True
+    ).strip())
+    assert res_1500_mCPU in (1, 2)
+
+    # By default there is no limit: use all available CPUs.
+    res_default = int(check_output(
+        f"{docker_bin} run --rm -v {loky_project_path}:/loky python:3.7 "
+        f"/bin/bash -c 'pip install --quiet -e /loky ; "
+        f"python -c \"{cpu_count_cmd.format(args='')}\"'",
+        shell=True, text=True
+    ).strip())
+    assert res_default >= res_1500_mCPU
 
 
 def test_only_physical_cores_error():
