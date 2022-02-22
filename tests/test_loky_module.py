@@ -64,7 +64,7 @@ def test_cpu_count_affinity():
     assert res_physical.strip() == '1'
 
 
-def test_cpu_count_cfs_limit():
+def test_cpu_count_cgroup_limit():
     if sys.platform == "win32":
         pytest.skip()
 
@@ -82,7 +82,7 @@ def test_cpu_count_cfs_limit():
     # We mount the loky source as /loky inside the container,
     # so it can be imported when running commands under /
 
-    # Tell docker to configure the CFS schedule to use 0.5 CPU, loky will
+    # Tell docker to configure the Cgroup quota to use 0.5 CPU, loky will
     # always detect 1 CPU because it rounds up to the next integer.
     res_500_mCPU = int(check_output(
         f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.7 "
@@ -93,7 +93,7 @@ def test_cpu_count_cfs_limit():
     assert res_500_mCPU == 1
 
     # Limiting to 1.5 CPUs can lead to 1 if there is only 1 CPU on the machine or
-    # 2 if there are 2 CPU or more.
+    # 2 if there are 2 CPUs or more.
     res_1500_mCPU = int(check_output(
         f"{docker_bin} run --rm --cpus 1.5 -v {loky_project_path}:/loky python:3.7 "
         f"/bin/bash -c 'pip install --quiet -e /loky ; "
