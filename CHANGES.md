@@ -1,9 +1,9 @@
 ### 3.1.0 - XXXX-XX-XX
 
-- Fix loky.cpu_count() to properly detect the number of allowed CPUs
-  based on the /sys/fs/cgroup/cpu.max file when present. This
-  makes it possible to respect docker/cgroup CFS quotas even when
-  /sys/fs/cgroup/cpu/cpu.cfs_quota_us is not present (#355).
+- Fix loky.cpu_count() to properly detect the number of allowed CPUs based on
+  the /sys/fs/cgroup/cpu.max file on newest Linux versions with cgroup v2.
+  Fall-back to the /sys/fs/cgroup/cpu/cpu.cfs_quota_us file to keep on
+  supporting Linux versions that use cgroup v1 (#355 and #358).
 
 - Fix an exception that could be raised in an auxiliary thread when
   garbage collecting an executor instance when shutting down the
