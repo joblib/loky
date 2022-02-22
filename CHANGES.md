@@ -1,4 +1,4 @@
-### 3.1.0 - XXXX-XX-XX
+### 3.1.0 - 2022-02-17
 
 - Fix loky.cpu_count() to properly detect the number of allowed CPUs based on
   the /sys/fs/cgroup/cpu.max file on newest Linux versions with cgroup v2.
@@ -12,6 +12,9 @@
 - Make `shutdown(kill_workers=True)` consistently use the SIGKILL
   signal on POSIX. Previously a mix of SIGKILL and SIGTERM was issued
   and could deadlock the shutdown process (#348 and #357).
+
+- Big code clean-up to drop support for older Python versions.
+  Python 3.7 or later is now required. (#304)
 
 ### 3.0.0 - 2021-09-10
 
