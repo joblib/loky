@@ -57,7 +57,7 @@ def _kill_process_tree_without_psutil(process):
             _windows_taskkill_process_tree(process.pid)
         else:
             _posix_recursive_kill(process.pid)
-    except Exception:
+    except Exception:  # pragma: no cover
         details = traceback.format_exc()
         warnings.warn(
             "Failed to kill subprocesses on this platform. Please install"
@@ -85,7 +85,7 @@ def _windows_taskkill_process_tree(pid):
         if e.returncode not in [128, 255]:
             # Let's raise to let the caller log the error details in a
             # warning and only kill the root process.
-            raise
+            raise  # pragma: no cover
 
 
 def _kill(pid):
@@ -101,7 +101,7 @@ def _kill(pid):
         # is already terminated, else, raise the error and let the top
         # level function raise a warning and retry to kill the process.
         if e.errno != errno.ESRCH:
-            raise
+            raise  # pragma: no cover
 
 
 def _posix_recursive_kill(pid):
@@ -115,7 +115,7 @@ def _posix_recursive_kill(pid):
         if e.returncode == 1:
             children_pids = ''
         else:
-            raise
+            raise  # pragma: no cover
 
     # Decode the result, split the cpid and remove the trailing line
     for cpid in children_pids.splitlines():
