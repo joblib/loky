@@ -1,4 +1,4 @@
-### 3.1.0 - 2022-02-17
+### 3.1.0 - 2022-02-22
 
 - Fix loky.cpu_count() to properly detect the number of allowed CPUs based on
   the /sys/fs/cgroup/cpu.max file on newest Linux versions with cgroup v2.
