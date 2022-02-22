@@ -73,7 +73,7 @@ def cpu_count(only_physical_cores=False):
        ``multiprocessing.cpu_count``;
      * the CPU affinity settings of the current process
        (available on some Unix systems);
-     * CFS scheduler CPU bandwidth limit (available on Linux only, typically
+     * Cgroup CPU bandwidth limit (available on Linux only, typically
        set by docker and similar container orchestration systems);
      * the value of the LOKY_MAX_CPU_COUNT environment variable if defined.
     and is given as the minimum of these constraints.
@@ -81,7 +81,7 @@ def cpu_count(only_physical_cores=False):
     If ``only_physical_cores`` is True, return the number of physical cores
     instead of the number of logical cores (hyperthreading / SMT). Note that
     this option is not enforced if the number of usable cores is controlled in
-    any other way such as: process affinity, restricting CFS scheduler policy
+    any other way such as: process affinity, Cgroup restricted CPU bandwidth
     or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
     cores is not found, return the number of logical cores.
 
@@ -118,6 +118,42 @@ def cpu_count(only_physical_cores=False):
     return aggregate_cpu_count
 
 
+def _cpu_count_cgroup(os_cpu_count):
+    # Cgroup CPU bandwidth limit available in Linux since 2.6 kernel
+    cpu_max_fname = "/sys/fs/cgroup/cpu.max"
+    cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
+    cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
+    if os.path.exists(cpu_max_fname):
+        # cgroup v2
+        # https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
+        with open(cpu_max_fname) as fh:
+            cpu_quota_us, cpu_period_us = fh.read().strip().split()
+    elif os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
+        # cgroup v1
+        # https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
+        with open(cfs_quota_fname) as fh:
+            cpu_quota_us = fh.read().strip()
+        with open(cfs_period_fname) as fh:
+            cpu_period_us = fh.read().strip()
+    else:
+        # No Cgroup CPU bandwidth limit (e.g. non-Linux platform)
+        cpu_quota_us = "max"
+        cpu_period_us = 100_000  # unused, for consistency with default values
+
+    if cpu_quota_us == "max":
+        # No active Cgroup quota on a Cgroup-capable platform
+        return os_cpu_count
+    else:
+        cpu_quota_us = int(cpu_quota_us)
+        cpu_period_us = int(cpu_period_us)
+        if cpu_quota_us > 0 and cpu_period_us > 0:
+            return math.ceil(cpu_quota_us / cpu_period_us)
+        else:  # pragma: no cover
+            # Setting a negative cpu_quota_us value is a valid way to disable
+            # cgroup CPU bandwith limits
+            return os_cpu_count
+
+
 def _cpu_count_user(os_cpu_count):
     """Number of user defined available CPUs"""
     # Number of available CPUs given affinity settings
@@ -128,40 +164,12 @@ def _cpu_count_user(os_cpu_count):
         except NotImplementedError:
             pass
 
-    # CFS scheduler CPU bandwidth limit
-    # available in Linux since 2.6 kernel
-    cpu_max_fname = "/sys/fs/cgroup/cpu.max"
-    cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
-    cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
-    if os.path.exists(cpu_max_fname):
-        with open(cpu_max_fname) as fh:
-            cfs_quota_us, cfs_period_us = fh.read().strip().split()
-    elif os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
-        with open(cfs_quota_fname) as fh:
-            cfs_quota_us = fh.read().strip()
-        with open(cfs_period_fname) as fh:
-            cfs_period_us = fh.read().strip()
-    else:
-        # No CFS scheduler CPU bandwidth limit (non-Linux or not enabled)
-        cfs_quota_us = "max"
-        cfs_period_us = 100_000  # unused, for consistency.
-
-    if cfs_quota_us == "max":
-        # No active CFS quota on a CFS-enabled platform
-        cpu_count_cfs = os_cpu_count
-    else:
-        cfs_quota_us = int(cfs_quota_us)
-        cfs_period_us = int(cfs_period_us)
-        if cfs_quota_us > 0 and cfs_period_us > 0:
-            cpu_count_cfs = math.ceil(cfs_quota_us / cfs_period_us)
-        else:
-            # Meaningless quota config: just ignore (should never happen)
-            cpu_count_cfs = os_cpu_count
+    cpu_count_cgroup = _cpu_count_cgroup(os_cpu_count)
 
     # User defined soft-limit passed as a loky specific environment variable.
     cpu_count_loky = int(os.environ.get('LOKY_MAX_CPU_COUNT', os_cpu_count))
 
-    return min(cpu_count_affinity, cpu_count_cfs, cpu_count_loky)
+    return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
 
 def _count_physical_cores():
