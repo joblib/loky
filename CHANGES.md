@@ -11,7 +11,7 @@
 
 - Make `shutdown(kill_workers=True)` consistently use the SIGKILL
   signal on POSIX. Previously a mix of SIGKILL and SIGTERM was issued
-  and could deadlock the shutdown process (#348).
+  and could deadlock the shutdown process (#348 and #357).
 
 ### 3.0.0 - 2021-09-10
 
