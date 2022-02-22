@@ -6,9 +6,13 @@
 #
 # adapted from multiprocessing/semaphore_tracker.py  (17/02/2017)
 #  * include custom spawnv_passfds to start the process
-#  * use custom unlink from our own SemLock implementation
 #  * add some VERBOSE logging
 #
+# TODO: multiprocessing.resource_tracker was contributed to Python 3.8 so
+# once loky drops support for Python 3.7 it might be possible to stop
+# maintaining this loky-specific fork. As a consequence, it might also be
+# possible to stop maintaining the loky.backend.synchronize fork of
+# multiprocessing.synchronize.
 
 #
 # On Unix we run a server process which keeps track of unlinked

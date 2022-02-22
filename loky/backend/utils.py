@@ -5,6 +5,7 @@ import errno
 import signal
 import warnings
 import subprocess
+import traceback
 try:
     import psutil
 except ImportError:
@@ -51,39 +52,40 @@ def _kill_process_tree_with_psutil(process):
 
 def _kill_process_tree_without_psutil(process):
     """Terminate a process and its descendants."""
-    if sys.platform == "win32":
-        # On windows, the taskkill function with option `/T` terminate a given
-        # process pid and its children.
-        try:
-            subprocess.check_output(
-                ["taskkill", "/F", "/T", "/PID", str(process.pid)], stderr=None
-            )
-        except subprocess.CalledProcessError as e:
-            # In Windows, taskkill returns 1 for permission denied and 128, 255
-            # for no process found.
-            if e.returncode == 1:
-                # Try to terminate the process without its descendants if
-                # taskkill was denied permission. If this fails too, with an
-                # error different from process not found, let the top level
-                # function raise a warning and retry to kill the process.
-                process.terminate()
-            elif e.returncode in [128, 255]:
-                # Process not found: ignore.
-                pass
-            else:
-                raise
-    else:
-        try:
-            _recursive_kill_posix(process.pid)
-        except OSError:
-            warnings.warn(
-                "Failed to kill subprocesses on this platform. Please install"
-                "psutil: https://github.com/giampaolo/psutil"
-            )
-            # In case we cannot introspect the children, we fall back to only
-            # killing the main process.
-            process.kill()
+    try:
+        if sys.platform == "win32":
+            _windows_taskkill_process_tree(process.pid)
+        else:
+            _posix_recursive_kill(process.pid)
+    except Exception:  # pragma: no cover
+        details = traceback.format_exc()
+        warnings.warn(
+            "Failed to kill subprocesses on this platform. Please install"
+            "psutil: https://github.com/giampaolo/psutil\n"
+            f"Details:\n{details}"
+        )
+        # In case we cannot introspect or kill the descendants, we fall back to
+        # only killing the main process.
+        #
+        # Note: on Windows, process.kill() is an alias for process.terminate()
+        # which in turns calls the Win32 API function TerminateProcess().
+        process.kill()
     process.join()
+
+
+def _windows_taskkill_process_tree(pid):
+    # On windows, the taskkill function with option `/T` terminate a given
+    # process pid and its children.
+    try:
+        subprocess.check_output(
+            ["taskkill", "/F", "/T", "/PID", str(pid)], stderr=None
+        )
+    except subprocess.CalledProcessError as e:
+        # In Windows, taskkill returns 128, 255 for no process found.
+        if e.returncode not in [128, 255]:
+            # Let's raise to let the caller log the error details in a
+            # warning and only kill the root process.
+            raise  # pragma: no cover
 
 
 def _kill(pid):
@@ -99,10 +101,10 @@ def _kill(pid):
         # is already terminated, else, raise the error and let the top
         # level function raise a warning and retry to kill the process.
         if e.errno != errno.ESRCH:
-            raise
+            raise  # pragma: no cover
 
 
-def _recursive_kill_posix(pid):
+def _posix_recursive_kill(pid):
     """Recursively kill the descendants of a process before killing it."""
     try:
         children_pids = subprocess.check_output(
@@ -113,12 +115,12 @@ def _recursive_kill_posix(pid):
         if e.returncode == 1:
             children_pids = ''
         else:
-            raise
+            raise  # pragma: no cover
 
     # Decode the result, split the cpid and remove the trailing line
     for cpid in children_pids.splitlines():
         cpid = int(cpid)
-        _recursive_kill_posix(cpid)
+        _posix_recursive_kill(cpid)
 
     _kill(pid)
 

@@ -4,7 +4,6 @@
 # author: Thomas Moreau and Olivier Grisel
 #
 # adapted from concurrent/futures/process_pool_executor.py (17/02/2017)
-#  * Backport for python2.7/3.3,
 #  * Add an extra management thread to detect executor_manager_thread failures,
 #  * Improve the shutdown process to avoid deadlocks,
 #  * Add timeout for workers,
