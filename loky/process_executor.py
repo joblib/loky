@@ -360,8 +360,8 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             to by the worker.
         initializer: A callable initializer, or None
         initargs: A tuple of args for the initializer
-        process_management_lock: A ctx.Lock avoiding worker timeout while some
-            workers are being spawned.
+        processes_management_lock: A ctx.Lock avoiding worker timeout while
+            some workers are being spawned.
         timeout: maximum time to wait for a new item in the call_queue. If that
             time is expired, the worker will shutdown.
         worker_exit_lock: Lock to avoid flagging the executor as broken on
