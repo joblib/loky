@@ -411,9 +411,12 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
         if call_item is None:
             # Notify queue management thread about clean worker shutdown
             result_queue.put(pid)
-            with worker_exit_lock:
+            is_clean = worker_exit_lock.acquire(True, timeout=timeout)
+            if is_clean:
                 mp.util.debug('Exited cleanly')
-                return
+            else:
+                mp.util.debug('Main process did not release worker_exit')
+            return
         try:
             r = call_item()
         except BaseException as e:
