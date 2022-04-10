@@ -493,17 +493,17 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # and sigkill itself.
         code = """if True:
         import os
-        import subprocess
 
         import loky
+        import psutil
 
         parent_pid = os.getpid()
-        with loky.get_reusable_executor(timeout=5, kill_workers=True) as p:
+        with loky.get_reusable_executor(timeout=1, kill_workers=True) as p:
             list(p.map(lambda x: x, range(100)))
             for pid in p._processes.keys():
                 print(f'worker_pid:{pid}')
             print(f'parent_pid:{parent_pid}')
-            subprocess.check_call(f'kill -9 {parent_pid}', shell=True)
+            psutil.Process(os.getpid()).kill()
         """
         with NamedTemporaryFile(mode='w', suffix="_joblib.py",
                                 delete=True) as f:
