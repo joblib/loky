@@ -409,9 +409,9 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             mp.util.debug('Exiting with code 1')
             sys.exit(1)
         if call_item is None:
-            # Notify queue management thread about clean worker shutdown
+            # Notify queue management thread about worker shutdown
             result_queue.put(pid)
-            is_clean = worker_exit_lock.acquire(True, timeout=timeout)
+            is_clean = worker_exit_lock.acquire(True, timeout=30)
             if is_clean:
                 mp.util.debug('Exited cleanly')
             else:
