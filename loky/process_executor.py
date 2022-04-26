@@ -360,8 +360,8 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             to by the worker.
         initializer: A callable initializer, or None
         initargs: A tuple of args for the initializer
-        process_management_lock: A ctx.Lock avoiding worker timeout while some
-            workers are being spawned.
+        processes_management_lock: A ctx.Lock avoiding worker timeout while
+            some workers are being spawned.
         timeout: maximum time to wait for a new item in the call_queue. If that
             time is expired, the worker will shutdown.
         worker_exit_lock: Lock to avoid flagging the executor as broken on
@@ -409,11 +409,14 @@ def _process_worker(call_queue, result_queue, initializer, initargs,
             mp.util.debug('Exiting with code 1')
             sys.exit(1)
         if call_item is None:
-            # Notify queue management thread about clean worker shutdown
+            # Notify queue management thread about worker shutdown
             result_queue.put(pid)
-            with worker_exit_lock:
+            is_clean = worker_exit_lock.acquire(True, timeout=30)
+            if is_clean:
                 mp.util.debug('Exited cleanly')
-                return
+            else:
+                mp.util.debug('Main process did not release worker_exit')
+            return
         try:
             r = call_item()
         except BaseException as e:

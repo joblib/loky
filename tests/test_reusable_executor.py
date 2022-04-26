@@ -1,7 +1,9 @@
 import os
+import subprocess
 import sys
 import gc
 import ctypes
+from tempfile import NamedTemporaryFile
 import pytest
 import warnings
 import threading
@@ -485,6 +487,47 @@ class TestTerminateExecutor(ReusableExecutorMixin):
             executor.submit(gc.collect).result()
             for _ in executor.map(sleep, [.1] * 100):
                 pass
+
+    def test_sigkill_shutdown_leaks_workers(self):
+        # Create a parent process which will report its workers pids
+        # and sigkill itself.
+        code = """if True:
+        import os
+
+        import loky
+        import psutil
+
+        parent_pid = os.getpid()
+        with loky.get_reusable_executor(timeout=1, kill_workers=True) as p:
+            list(p.map(lambda x: x, range(100)))
+            for pid in p._processes.keys():
+                print(f'worker_pid:{pid}')
+            print(f'parent_pid:{parent_pid}')
+            psutil.Process(os.getpid()).kill()
+        """
+        with NamedTemporaryFile(mode='w', suffix="_joblib.py",
+                                delete=True) as f:
+            f.write(code)
+            f.flush()
+            cmd = [sys.executable, f.name]
+            out = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=60
+            )
+            running_workers = []
+            for line in out.stdout.split('\n'):
+                if line.startswith('worker_pid'):
+                    worker_pid = int(line.split(':')[1])
+                    try:
+                        psutil.Process(worker_pid)
+                        running_workers.append(worker_pid)
+                    except psutil.NoSuchProcess:
+                        pass
+            assert not len(running_workers), (
+                f'There are running workers left: {running_workers}')
 
 
 class TestResizeExecutor(ReusableExecutorMixin):
