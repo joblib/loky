@@ -515,6 +515,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                timeout=60
             )
             running_workers = []
             for line in out.stdout.split('\n'):
