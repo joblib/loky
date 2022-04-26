@@ -55,8 +55,8 @@ not happening.
 
 .. rubric:: Footnotes
 
-.. [#periodically_fn] every 1 second. This constant is define in :code:`loky.process_executor._MEMORY_LEAK_CHECK_DELAY`
-.. [#psutil_unusual_fn] an increase of 100MB compared to a reference, which is defined as the residual memory usage of the worker after it completed its first task
+.. [#periodically_fn] every 1 second. This constant is defined in :code:`loky.process_executor._MEMORY_LEAK_CHECK_DELAY`
+.. [#psutil_unusual_fn] an increase of 300MB compared to a reference, which is defined as the residual memory usage of the worker after it completed its first task. This constant is defined in :code:`loky.process_executor._MAX_MEMORY_LEAK_SIZE`
 
 
 
