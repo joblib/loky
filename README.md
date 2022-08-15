@@ -46,7 +46,7 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     processes. This library intends to fix those possible deadlocks and
     send back meaningful errors. Note that the implementation of
     `concurrent.futures.ProcessPoolExecutor` that comes with Python 3.7+
-    is as robust as the executor from loky but the later also works for
+    is as robust as the executor from loky but the latter also works for
     older versions of Python.
 
 
