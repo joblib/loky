@@ -805,7 +805,7 @@ class _ExecutorManagerThread(threading.Thread):
                 except queue.Full as e:
                     if cooldown_time > 10.0:
                         raise e
-                    mp.util.warning(
+                    mp.util.info(
                         "full call_queue prevented to send all sentinels at "
                         "once, waiting..."
                     )
