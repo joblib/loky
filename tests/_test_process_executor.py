@@ -12,6 +12,7 @@ import tempfile
 import traceback
 import threading
 import faulthandler
+import warnings
 from math import sqrt
 from pickle import PicklingError
 from threading import Thread
@@ -804,9 +805,15 @@ class ExecutorTest:
             self.skipTest(str(e))
 
         for _ in range(5):
-            # Trigger worker spawn for lazy executor implementations
-            for _ in self.executor.map(id, range(8)):
-                pass
+            with warnings.catch_warnings():
+                # It's ok to get a warning about the worker interrupted by the
+                # short timeout while tasks are pending in the queue on
+                # overloaded CI hosts.
+                warnings.simplefilter('ignore', category=UserWarning)
+
+                # Trigger worker spawn for lazy executor implementations
+                for _ in self.executor.map(id, range(8)):
+                    pass
 
             # Check that all workers shutdown (via timeout) when waiting a bit:
             # note that the effective time for a Python process to completely
