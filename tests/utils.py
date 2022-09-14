@@ -204,7 +204,7 @@ except ImportError:
     _run_openmp_parallel_sum = None
 
 
-def check_python_subprocess_call(code, stdout_regex=None):
+def check_python_subprocess_call(code, stdout_regex=None, timeout=10):
     cmd = [sys.executable]
     try:
         fid, filename = mkstemp(suffix="_joblib.py")
@@ -212,7 +212,7 @@ def check_python_subprocess_call(code, stdout_regex=None):
         with open(filename, mode='w') as f:
             f.write(code)
         cmd += [filename]
-        check_subprocess_call(cmd, stdout_regex=stdout_regex, timeout=10)
+        check_subprocess_call(cmd, stdout_regex=stdout_regex, timeout=timeout)
     finally:
         os.unlink(filename)
 
