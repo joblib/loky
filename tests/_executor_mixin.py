@@ -238,6 +238,10 @@ class ReusableExecutorMixin:
         # There can be less than 2 workers because of the worker timeout
         _check_subprocesses_number(executor, expected_max_process_number=2)
 
+        # Check that there no other running subprocesses beyond the workers
+        # of the reusable executor.
+        _check_subprocesses_number(executor=None, expected_max_process_number=2)
+
     def teardown_method(self, method):
         """Make sure the executor can be recovered after the tests"""
         executor = get_reusable_executor(max_workers=2)
