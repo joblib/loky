@@ -754,6 +754,50 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         """
         check_python_subprocess_call(code, stdout_regex="ok")
 
+    def test_no_deadlock_on_nested_reusable_exector(self):
+        # Non-regression test for a deadlock that occurred when the main
+        # process was waiting for level 1 children processes to terminate while
+        # they had reusable executors still managing level 2 worker processes
+        # waiting for more work to arrive (untill their long worker timeout).
+        # https://github.com/joblib/loky/issues/363
+        code = """if True:
+            from loky import get_reusable_executor
+            import logging
+            import multiprocessing as mp
+            from time import sleep
+            import faulthandler
+
+            def enable_mp_logging():
+                # Enable verbose logging for nested loky executor and workers in
+                # order to make this test easier to debug in case of failure.
+                log = mp.util.log_to_stderr(logging.DEBUG)
+                log.handlers[0].setFormatter(logging.Formatter(
+                    '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
+                return log
+
+            def inner_parallel_func(j):
+                sleep(0.1)  # to avoid termination of parent before all workers
+                mp.util.debug(f"inner_parallel_func({j}) done")
+
+                # If this test fails, uncommenting the following line will
+                # help to debug the issue:
+                # faulthandler.dump_traceback_later(10, exit=True)
+                return j ** 2
+
+            def outer_parallel_func(i):
+                executor = get_reusable_executor(max_workers=2)
+                list(executor.map(inner_parallel_func, range(2)))
+                enable_mp_logging()
+                mp.util.debug(f"outer_parallel_func({i}) done")
+
+            enable_mp_logging()
+
+            executor = get_reusable_executor(max_workers=2)
+            list(executor.map(outer_parallel_func, range(2)))
+            print("ok")
+        """
+        check_python_subprocess_call(code, stdout_regex="ok", timeout=30)
+
     def test_compat_with_concurrent_futures_exception(self):
         # It should be possible to use a loky process pool executor as a dropin
         # replacement for a ProcessPoolExecutor, including when catching

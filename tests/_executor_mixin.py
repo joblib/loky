@@ -66,7 +66,7 @@ def _running_children_with_cmdline(p):
     return workers
 
 
-def _check_subprocesses_number(executor, expected_process_number=None,
+def _check_subprocesses_number(executor=None, expected_process_number=None,
                                expected_max_process_number=None, patience=100):
     if not psutil:
         # psutil is not installed, we cannot check the number of subprocesses
@@ -244,6 +244,10 @@ class ReusableExecutorMixin:
         assert executor.submit(math.sqrt, 1).result() == 1
         # There can be less than 2 workers because of the worker timeout
         _check_subprocesses_number(executor, expected_max_process_number=2)
+
+        # Check that there no other running subprocesses beyond the workers
+        # of the reusable executor.
+        _check_subprocesses_number(executor=None, expected_max_process_number=2)
 
     @classmethod
     def teardown_class(cls):
