@@ -85,7 +85,7 @@ def test_cpu_count_cgroup_limit():
     # Tell docker to configure the Cgroup quota to use 0.5 CPU, loky will
     # always detect 1 CPU because it rounds up to the next integer.
     res_500_mCPU = int(check_output(
-        f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.7 "
+        f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.10 "
         f"/bin/bash -c 'pip install --quiet -e /loky ; "
         f"python -c \"{cpu_count_cmd.format(args='')}\"'",
         shell=True, text=True
@@ -95,7 +95,7 @@ def test_cpu_count_cgroup_limit():
     # Limiting to 1.5 CPUs can lead to 1 if there is only 1 CPU on the machine or
     # 2 if there are 2 CPUs or more.
     res_1500_mCPU = int(check_output(
-        f"{docker_bin} run --rm --cpus 1.5 -v {loky_project_path}:/loky python:3.7 "
+        f"{docker_bin} run --rm --cpus 1.5 -v {loky_project_path}:/loky python:3.10 "
         f"/bin/bash -c 'pip install --quiet -e /loky ; "
         f"python -c \"{cpu_count_cmd.format(args='')}\"'",
         shell=True, text=True
@@ -104,7 +104,7 @@ def test_cpu_count_cgroup_limit():
 
     # By default there is no limit: use all available CPUs.
     res_default = int(check_output(
-        f"{docker_bin} run --rm -v {loky_project_path}:/loky python:3.7 "
+        f"{docker_bin} run --rm -v {loky_project_path}:/loky python:3.10 "
         f"/bin/bash -c 'pip install --quiet -e /loky ; "
         f"python -c \"{cpu_count_cmd.format(args='')}\"'",
         shell=True, text=True
