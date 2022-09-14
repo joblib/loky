@@ -103,7 +103,7 @@ class TestTimeoutExecutor:
                     id, [SlowlyPickling(delay)] * n_tasks))
                 assert len(results) == n_tasks
 
-    def test_worker_timeout_shutdown_deadlock(self):
+    def test_worker_timeout_shutdown_no_deadlock(self):
         """Check that worker timeout don't cause deadlock when shutting down.
         """
         with warnings.catch_warnings(record=True) as record:
@@ -116,8 +116,8 @@ class TestTimeoutExecutor:
                 f = e.submit(id, SlowlyPickling(1))
         f.result()
 
-        # The warning detection is unreliable on pypy
-        if not hasattr(sys, "pypy_version_info"):
-            assert record, "No warnings was emitted."
-            msg = record[0].message.args[0]
+        # We can expect to observe warnings related to worker timeout while
+        # there are still pending tasks but this should not cause a deadlock.
+        for w in record:
+            msg = w.message.args[0]
             assert 'A worker stopped while some jobs' in msg
