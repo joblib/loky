@@ -393,7 +393,12 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                          chunksize=4)
 
     def test_queue_full_deadlock(self):
-        executor = get_reusable_executor(max_workers=1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            # Ignore any UserWarning about the executor being resized
+            executor = get_reusable_executor(max_workers=1)
+            executor.submit(id, 42)
+
         fs_fail = [executor.submit(do_nothing, ErrorAtPickle(True))
                    for _ in range(100)]
         fs = [executor.submit(do_nothing, ErrorAtPickle(False))
