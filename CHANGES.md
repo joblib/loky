@@ -1,3 +1,8 @@
+### 3.2.0 - 2022-09-14
+
+- Fix leaked processes and deadlock when the Python interpreter exits
+  after a using nested calls to `get_reusable_executor` (#363).
+
 ### 3.1.0 - 2022-02-22
 
 - Fix loky.cpu_count() to properly detect the number of allowed CPUs based on
