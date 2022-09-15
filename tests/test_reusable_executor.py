@@ -923,3 +923,32 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=4)
         for x in executor.map(self._test_initializer, delay=.1):
             assert x == 'uninitialized'
+
+    # XXX: not sure if #369 has been fixed or not. Let's not make it XFAIL
+    # for now to see if it is still flaky on CI.
+    # @pytest.mark.xfail(reason="https://github.com/joblib/loky/issues/369")
+    def test_error_in_nested_call_keeps_resource_tracker_silent(self):
+        # Safety smoke test: test that nested parallel calls don't yield noisy
+        # resource_tracker outputs when the grandchild errors out.
+        cmd = '''if 1:
+            from loky import get_reusable_executor
+
+
+            def raise_error(i):
+                raise ValueError
+
+
+            def nested_loop(f):
+                executor = get_reusable_executor(max_workers=2)
+                list(executor.map(f, range(10))
+
+
+            executor = get_reusable_executor(max_workers=2)
+            list(executor.map(nested_loop, [raise_error])
+        '''
+        p = subprocess.Popen([sys.executable, '-c', cmd],
+                            stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        p.wait()
+        out, err = p.communicate()
+        assert p.returncode == 1, out.decode()
+        assert b"resource_tracker" not in err, err.decode()
