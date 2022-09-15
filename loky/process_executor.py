@@ -678,9 +678,12 @@ class _ExecutorManagerThread(threading.Thread):
             with self.processes_management_lock:
                 p = self.processes.pop(result_item, None)
 
-            # p can be None is the executor is concurrently shutting down.
+            # p can be None if the executor is concurrently shutting down.
             if p is not None:
                 p._worker_exit_lock.release()
+                mp.util.debug(
+                    f"joining {p.name} when processing {p.pid} as result_item"
+                )
                 p.join()
                 del p
 
@@ -837,15 +840,23 @@ class _ExecutorManagerThread(threading.Thread):
             self.thread_wakeup.close()
 
         # If .join() is not called on the created processes then
-        # some ctx.Queue methods may deadlock on Mac OS X.
-        active_processes = list(self.processes.values())
-        mp.util.debug(f"joining {len(active_processes)} processes")
-        for p in active_processes:
-            mp.util.debug(f"joining process {p.name}")
-            p.join()
+        # some ctx.Queue methods may deadlock on macOS.
+        with self.processes_management_lock:
+            mp.util.debug(f"joining {len(self.processes)} processes")
+            n_joined_processes = 0
+            while True:
+                try:
+                    pid, p = self.processes.popitem()
+                    mp.util.debug(f"joining process {p.name} with pid {pid}")
+                    p.join()
+                    n_joined_processes += 1
+                except KeyError:
+                    break
 
-        mp.util.debug("executor management thread clean shutdown of worker "
-                      f"processes: {active_processes}")
+            mp.util.debug(
+                "executor management thread clean shutdown of "
+                f"{n_joined_processes} workers"
+            )
 
     def get_n_children_alive(self):
         # This is an upper bound on the number of children alive.

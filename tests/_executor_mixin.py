@@ -52,7 +52,7 @@ def _direct_children_with_cmdline(p):
     return children_with_cmdline
 
 
-def _running_children_with_cmdline(p):
+def _running_children_pids_with_cmdline(p):
     all_children = _direct_children_with_cmdline(p)
     workers = [(c, cmdline) for c, cmdline in all_children
                if ('semaphore_tracker' not in cmdline and
@@ -63,47 +63,44 @@ def _running_children_with_cmdline(p):
                    if 'multiprocessing.forkserver' in cmdline]
     for fs in forkservers:
         workers += _direct_children_with_cmdline(fs)
-    return workers
+    return [(w.pid, cmdline) for w, cmdline in workers]
 
 
 def _check_subprocesses_number(executor=None, expected_process_number=None,
-                               expected_max_process_number=None, patience=100):
+                               expected_max_process_number=None, patience=10):
     if not psutil:
         # psutil is not installed, we cannot check the number of subprocesses
         return
 
-    # Wait for terminating processes to disappear
-    children_cmdlines = _running_children_with_cmdline(psutil.Process())
-    pids_cmdlines = [(c.pid, cmdline) for c, cmdline in children_cmdlines]
-    children_pids = {pid for pid, _ in pids_cmdlines}
-    if executor is not None:
-        worker_pids = set(executor._processes.keys())
-    else:
-        # Bypass pids checks when executor has been garbage
-        # collected
-        worker_pids = children_pids
-    if expected_process_number is not None:
+    for trial_idx in range(patience):
         try:
-            assert len(children_pids) == expected_process_number, pids_cmdlines
-            assert len(worker_pids) == expected_process_number, pids_cmdlines
-            assert worker_pids == children_pids, pids_cmdlines
-        except AssertionError:
-            if expected_process_number != 0:
-                raise
-            # there is a race condition with the /proc/<pid>/ system clean up
-            # and our utilization of psutil. The Process is considered alive by
-            # psutil even though it have been terminated. Wait for the system
-            # clean up in this case.
-            for _ in range(patience):
-                if not _running_children_with_cmdline(psutil.Process()):
-                    break
-                time.sleep(.1)
+            # Wait for terminating processes to disappear
+            pids_cmdlines = _running_children_pids_with_cmdline(psutil.Process())
+            children_pids = {pid for pid, _ in pids_cmdlines}
+            if executor is not None:
+                worker_pids = set(executor._processes.keys())
+                # Consistency check: all workers should be in the children list
+                assert worker_pids.issubset(children_pids)
             else:
-                raise
+                # Bypass pids checks when executor has been garbage collected
+                worker_pids = children_pids
+            if expected_process_number is not None:
+                assert len(children_pids) == expected_process_number, pids_cmdlines
+                assert len(worker_pids) == expected_process_number, pids_cmdlines
 
-    if expected_max_process_number is not None:
-        assert len(children_pids) <= expected_max_process_number, pids_cmdlines
-        assert len(worker_pids) <= expected_max_process_number, pids_cmdlines
+            if expected_max_process_number is not None:
+                assert len(children_pids) <= expected_max_process_number, pids_cmdlines
+                assert len(worker_pids) <= expected_max_process_number, pids_cmdlines
+
+            return
+        except AssertionError as e:
+            # Sometimes executor._processes or psutil seems to report
+            # out-of-sync information. Let's wait a bit an try again later to see if:
+            # - worker_pids is consistent with the psutil children list
+            # - the number of children is consistent with the expected (max) number
+            if trial_idx == patience - 1:
+                raise e
+            sleep(0.1)
 
 
 def _check_executor_started(executor):
@@ -212,7 +209,7 @@ class ExecutorMixin:
         while time.time() <= deadline:
             time.sleep(sleep_duration)
             p = psutil.Process()
-            workers = _running_children_with_cmdline(p)
+            workers = _running_children_pids_with_cmdline(p)
             if not workers:
                 return
 
