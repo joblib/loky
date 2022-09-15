@@ -924,7 +924,9 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         for x in executor.map(self._test_initializer, delay=.1):
             assert x == 'uninitialized'
 
-    @pytest.mark.xfail(reason="https://github.com/joblib/loky/issues/369")
+    # XXX: not sure if #369 has been fixed or not. Let's not make it XFAIL
+    # for now to see if it is still flaky on CI.
+    # @pytest.mark.xfail(reason="https://github.com/joblib/loky/issues/369")
     def test_error_in_nested_call_keeps_resource_tracker_silent(self):
         # Safety smoke test: test that nested parallel calls don't yield noisy
         # resource_tracker outputs when the grandchild errors out.

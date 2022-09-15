@@ -1,6 +1,8 @@
 ### 3.3.0 - in development
 
-- TODO
+- Fix worker management logic in `get_reusable_executor` to ensure
+  the number of started worker process actually correspond to `max_workers`
+  when existing process concurrently time out (#370).
 
 ### 3.2.0 - 2022-09-14
 

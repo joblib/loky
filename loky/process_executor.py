@@ -702,7 +702,8 @@ class _ExecutorManagerThread(threading.Thread):
                         "executor. This can be caused by a too short worker "
                         "timeout or by a memory leak.", UserWarning
                     )
-                    executor._adjust_process_count()
+                    with executor._processes_management_lock:
+                        executor._adjust_process_count()
                     executor = None
         else:
             # Received a _ResultItem so mark the future as completed.
@@ -1093,7 +1094,7 @@ class ProcessPoolExecutor(Executor):
                         _python_exit)
 
     def _adjust_process_count(self):
-        for _ in range(len(self._processes), self._max_workers):
+        while len(self._processes) < self._max_workers:
             worker_exit_lock = self._context.BoundedSemaphore(1)
             args = (self._call_queue, self._result_queue, self._initializer,
                     self._initargs, self._processes_management_lock,
@@ -1109,7 +1110,10 @@ class ProcessPoolExecutor(Executor):
             p._worker_exit_lock = worker_exit_lock
             p.start()
             self._processes[p.pid] = p
-        mp.util.debug(f'Adjust process count : {self._processes}')
+        mp.util.debug(
+            f"Adjusted process count to {self._max_workers}: "
+            f"{[(p.name, pid) for pid, p in self._processes.items()]}"
+        )
 
     def _ensure_executor_running(self):
         """ensures all workers and management thread are running
