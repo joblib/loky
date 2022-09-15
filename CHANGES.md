@@ -1,4 +1,4 @@
-### 3.3.0 - in development
+### 3.3.0 - 2022-09-15
 
 - Fix worker management logic in `get_reusable_executor` to ensure
   the number of started worker process actually correspond to `max_workers`
