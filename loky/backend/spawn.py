@@ -244,7 +244,7 @@ def _fixup_main_from_path(main_path):
     sys.modules['__main__'] = sys.modules['__mp_main__'] = main_module
 
 
-def main(fd, process_name):
+def main(fd, process_name=None):
     fd = int(fd)
     if sys.platform == "win32":
         fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
