@@ -2,8 +2,7 @@ import os
 import sys
 import msvcrt
 import _winapi
-from pickle import load
-from multiprocessing import process, util
+from multiprocessing import util
 from multiprocessing.context import get_spawning_popen, set_spawning_popen
 from multiprocessing.popen_spawn_win32 import Popen as _Popen
 from multiprocessing.reduction import duplicate
@@ -47,10 +46,9 @@ class Popen(_Popen):
         rhandle = duplicate(msvcrt.get_osfhandle(rfd), inheritable=True)
         os.close(rfd)
 
-        cmd = get_command_line(parent_pid=os.getpid(), pipe_handle=rhandle)
+        cmd = spawn.get_command_line(fd=rhandle)
+        python_exe = cmd[0]
         cmd = ' '.join(f'"{x}"' for x in cmd)
-
-        python_exe = spawn.get_executable()
 
         # copy the environment variables to set in the child process
         child_env = {**os.environ, **process_obj.env}
@@ -76,7 +74,8 @@ class Popen(_Popen):
                     hp, ht, pid, _ = _winapi.CreateProcess(
                         python_exe, cmd,
                         None, None, inherit, 0,
-                        child_env, None, None)
+                        child_env, None, None
+                    )
                     _winapi.CloseHandle(ht)
                 except BaseException:
                     _winapi.CloseHandle(rhandle)
@@ -108,49 +107,3 @@ class Popen(_Popen):
     def duplicate_for_child(self, handle):
         assert self is get_spawning_popen()
         return duplicate(handle, self.sentinel)
-
-
-def get_command_line(pipe_handle, **kwds):
-    '''
-    Returns prefix of command line used for spawning a child process
-    '''
-    if getattr(sys, 'frozen', False):
-        return [sys.executable, '--multiprocessing-fork', pipe_handle]
-    else:
-        prog = 'from loky.backend.popen_loky_win32 import main; main()'
-        opts = util._args_from_interpreter_flags()
-        return [spawn.get_executable(), *opts,
-                '-c', prog, '--multiprocessing-fork', pipe_handle]
-
-
-def is_forking(argv):
-    '''
-    Return whether commandline indicates we are forking
-    '''
-    if len(argv) >= 2 and argv[1] == '--multiprocessing-fork':
-        assert len(argv) == 3
-        return True
-    else:
-        return False
-
-
-def main():
-    '''
-    Run code specified by data received over pipe
-    '''
-    assert is_forking(sys.argv)
-
-    handle = int(sys.argv[-1])
-    fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
-    from_parent = os.fdopen(fd, 'rb')
-
-    process.current_process()._inheriting = True
-    preparation_data = load(from_parent)
-    spawn.prepare(preparation_data)
-    self = load(from_parent)
-    process.current_process()._inheriting = False
-
-    from_parent.close()
-
-    exitcode = self._bootstrap()
-    sys.exit(exitcode)

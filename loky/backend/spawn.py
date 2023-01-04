@@ -10,6 +10,8 @@ import os
 import sys
 import runpy
 import types
+import pickle
+import importlib
 from multiprocessing import process, util
 
 
@@ -240,3 +242,68 @@ def _fixup_main_from_path(main_path):
                                   run_name="__mp_main__")
     main_module.__dict__.update(main_content)
     sys.modules['__main__'] = sys.modules['__mp_main__'] = main_module
+
+
+def main(fd, process_name):
+    fd = int(fd)
+    if sys.platform == "win32":
+        fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
+
+    exitcode = 1
+    try:
+        with os.fdopen(fd, 'rb') as from_parent:
+            process.current_process()._inheriting = True
+            try:
+                prep_data = pickle.load(from_parent)
+                prepare(prep_data)
+                process_obj = pickle.load(from_parent)
+            finally:
+                del process.current_process()._inheriting
+
+        exitcode = process_obj._bootstrap()
+    except Exception:
+        print('\n\n' + '-' * 80)
+        print(f'{process_name} failed with traceback: ')
+        print('-' * 80)
+        import traceback
+        print(traceback.format_exc())
+        print('\n' + '-' * 80)
+    finally:
+        if from_parent is not None:
+            from_parent.close()
+
+        sys.exit(exitcode)
+
+
+def get_command_line(main_prog=main, **kwargs):
+    '''
+    Returns prefix of command line used for spawning a child process
+    '''
+
+    if getattr(sys, 'frozen', False):
+        list_kwargs = [f'{k}={v}' for k, v in kwargs.items()]
+        argv = [
+            sys.executable, '--multiprocessing-fork', main_prog.__module__,
+            *list_kwargs
+        ]
+    else:
+        list_kwargs = [f'{k}="{v}"' for k, v in kwargs.items()]
+        prog = (
+            f'from {main_prog.__module__} import main; '
+            f'main({", ".join(list_kwargs)})'
+        )
+        opts = util._args_from_interpreter_flags()
+        argv = [get_executable(), *opts, '-c', prog]
+    return argv
+
+
+def freeze_support():
+    if len(sys.argv) >= 2 and sys.argv[1] == "--multiprocessing-fork":
+        module_main = sys.argv[2]
+        main = importlib.import_module(module_main).main
+        kwargs = {}
+        for p in sys.argv[3:]:
+            k, v = p.split("=")
+            kwargs[k] = v
+        exitcode = main(**kwargs)
+        sys.exit(exitcode)

@@ -6,9 +6,8 @@
 import os
 import sys
 import signal
-import pickle
 from io import BytesIO
-from multiprocessing import util, process
+from multiprocessing import util
 from multiprocessing.connection import wait
 from multiprocessing.context import set_spawning_popen
 
@@ -96,7 +95,8 @@ class Popen:
         try:
             prep_data = spawn.get_preparation_data(
                 process_obj._name,
-                getattr(process_obj, "init_main_module", True))
+                getattr(process_obj, "init_main_module", True)
+            )
             reduction.dump(prep_data, fp)
             reduction.dump(process_obj, fp)
 
@@ -106,15 +106,13 @@ class Popen:
         try:
             parent_r, child_w = os.pipe()
             child_r, parent_w = os.pipe()
-            # for fd in self._fds:
-            #     _mk_inheritable(fd)
 
-            cmd_python = [sys.executable]
-            cmd_python += ['-m', self.__module__]
-            cmd_python += ['--process-name', str(process_obj.name)]
-            cmd_python += ['--pipe', str(reduction._mk_inheritable(child_r))]
+            reduction._mk_inheritable(child_r)
             reduction._mk_inheritable(child_w)
             reduction._mk_inheritable(tracker_fd)
+            cmd_python = spawn.get_command_line(
+                fd=child_r, process_name=process_obj.name
+            )
             self._fds += [child_r, child_w, tracker_fd]
             if sys.version_info >= (3, 8) and os.name == 'posix':
                 mp_tracker_fd = prep_data['mp_tracker_args']['fd']
@@ -143,40 +141,3 @@ class Popen:
     @staticmethod
     def thread_is_spawning():
         return True
-
-
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser('Command line parser')
-    parser.add_argument('--pipe', type=int, required=True,
-                        help='File handle for the pipe')
-    parser.add_argument('--process-name', type=str, default=None,
-                        help='Identifier for debugging purpose')
-
-    args = parser.parse_args()
-
-    info = {}
-    exitcode = 1
-    try:
-        with os.fdopen(args.pipe, 'rb') as from_parent:
-            process.current_process()._inheriting = True
-            try:
-                prep_data = pickle.load(from_parent)
-                spawn.prepare(prep_data)
-                process_obj = pickle.load(from_parent)
-            finally:
-                del process.current_process()._inheriting
-
-        exitcode = process_obj._bootstrap()
-    except Exception:
-        print('\n\n' + '-' * 80)
-        print(f'{args.process_name} failed with traceback: ')
-        print('-' * 80)
-        import traceback
-        print(traceback.format_exc())
-        print('\n' + '-' * 80)
-    finally:
-        if from_parent is not None:
-            from_parent.close()
-
-        sys.exit(exitcode)

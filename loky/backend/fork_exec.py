@@ -37,6 +37,6 @@ def fork_exec(cmd, keep_fds, env=None):
     pid = os.fork()
     if pid == 0:  # pragma: no cover
         close_fds(keep_fds)
-        os.execve(sys.executable, cmd, child_env)
+        os.execve(cmd[0], cmd, child_env)
     else:
         return pid

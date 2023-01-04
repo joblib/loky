@@ -49,8 +49,8 @@ import sys
 import signal
 import warnings
 import threading
-from _multiprocessing import sem_unlink
 from multiprocessing import util
+from _multiprocessing import sem_unlink
 
 from . import spawn
 
@@ -130,13 +130,13 @@ class ResourceTracker:
                 os.close(r)
                 r = _r
 
-            cmd = f'from {main.__module__} import main; main({r}, {VERBOSE})'
             try:
                 fds_to_pass.append(r)
                 # process will out live us, so no need to wait on pid
-                exe = spawn.get_executable()
-                args = [exe, *util._args_from_interpreter_flags(), '-c', cmd]
-                util.debug(f"launching resource tracker: {args}")
+                cmd = spawn.get_command_line(
+                    main_prog=main, fd=r, verbose=int(VERBOSE)
+                )
+                util.debug(f"launching resource tracker: {cmd}")
                 # bpo-33613: Register a signal mask that will block the
                 # signals.  This signal mask will be inherited by the child
                 # that is going to be spawned and will protect the child from a
@@ -147,7 +147,7 @@ class ResourceTracker:
                     if _HAVE_SIGMASK:
                         signal.pthread_sigmask(signal.SIG_BLOCK,
                                                _IGNORED_SIGNALS)
-                    pid = spawnv_passfds(exe, args, fds_to_pass)
+                    pid = spawnv_passfds(cmd, fds_to_pass)
                 finally:
                     if _HAVE_SIGMASK:
                         signal.pthread_sigmask(signal.SIG_UNBLOCK,
@@ -208,6 +208,11 @@ getfd = _resource_tracker.getfd
 
 def main(fd, verbose=0):
     '''Run resource tracker.'''
+    # Mak sure the arguments have the right type as theyr are
+    # passed as strings through the command line.
+    fd = int(fd)
+    verbose = int(verbose)
+
     # protect the process from ^C and "killall python" etc
     if verbose:
         util.log_to_stderr(level=util.DEBUG)
@@ -271,8 +276,8 @@ def main(fd, verbose=0):
                         del registry[rtype][name]
                         if verbose:
                             util.debug(
-                                f"[ResourceTracker] unregister {name} {rtype}: "
-                                f"registry({len(registry)})"
+                                f"[ResourceTracker] unregister {name} {rtype}:"
+                                f" registry({len(registry)})"
                             )
                     elif cmd == 'MAYBE_UNLINK':
                         registry[rtype][name] -= 1
@@ -348,7 +353,7 @@ def main(fd, verbose=0):
 # Start a program with only specified fds kept open
 #
 
-def spawnv_passfds(path, args, passfds):
+def spawnv_passfds(cmd, passfds):
     passfds = sorted(passfds)
     if sys.platform != "win32":
         errpipe_read, errpipe_write = os.pipe()
@@ -356,15 +361,16 @@ def spawnv_passfds(path, args, passfds):
             from .reduction import _mk_inheritable
             from .fork_exec import fork_exec
             _pass = [_mk_inheritable(fd) for fd in passfds]
-            return fork_exec(args, _pass)
+            return fork_exec(cmd, _pass)
         finally:
             os.close(errpipe_read)
             os.close(errpipe_write)
     else:
-        cmd = ' '.join(f'"{x}"' for x in args)
+        exe = cmd[0]
+        cmd = ' '.join(f'"{x}"' for x in cmd)
         try:
             _, ht, pid, _ = _winapi.CreateProcess(
-                path, cmd, None, None, True, 0, None, None, None)
+                exe, cmd, None, None, True, 0, None, None, None)
             _winapi.CloseHandle(ht)
         except BaseException:
             pass
