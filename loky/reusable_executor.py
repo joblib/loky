@@ -73,7 +73,7 @@ def get_reusable_executor(max_workers=None, context=None, timeout=10,
 
     The environment variable in the child process are a copy of the values in
     the main process. One can provide a dict ``{ENV: VAL}`` where ``ENV`` and
-    ``VAR`` are string literals to overwrite the environment variable ``ENV``
+    ``VAL`` are string literals to overwrite the environment variable ``ENV``
     in the child processes to value ``VAL``. The environment variables are set
     in the children before any module is loaded. This only works with with the
     ``loky`` context.
