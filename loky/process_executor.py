@@ -219,6 +219,7 @@ class _RemoteTraceback(Exception):
     def __str__(self):
         return self.tb
 
+
 # Do not inherit from BaseException to mirror
 # concurrent.futures.process._ExceptionWithTraceback
 class _ExceptionWithTraceback:
