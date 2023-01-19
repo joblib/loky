@@ -89,17 +89,6 @@ except ImportError:
     _BPPException = RuntimeError
 
 
-# Compatibility for python2.7
-if sys.version_info[0] == 2:
-    ProcessLookupError = OSError
-    _ExceptionWithTracebackParent = BaseException
-else:
-    # In Python 3's concurrent.futures module, _ExceptionWithTraceback
-    # does not subclass BaseException anymore. Let's do the same in
-    # in loky.
-    _ExceptionWithTracebackParent = object
-
-
 # Mechanism to prevent infinite process spawning. When a worker of a
 # ProcessPoolExecutor nested in MAX_DEPTH Executor tries to create a new
 # Executor, a LokyRecursionError is raised
@@ -235,8 +224,9 @@ class _RemoteTraceback(Exception):
     def __str__(self):
         return self.tb
 
-
-class _ExceptionWithTraceback(_ExceptionWithTracebackParent):
+# Do not inherit from BaseException to mirror
+# concurrent.futures.process._ExceptionWithTraceback
+class _ExceptionWithTraceback:
 
     def __init__(self, exc):
         tb = getattr(exc, "__traceback__", None)
