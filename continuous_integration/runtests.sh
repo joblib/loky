@@ -15,7 +15,7 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     which python
     git clone https://github.com/joblib/joblib.git src_joblib
     cd src_joblib
-    pip install pytest
+    pip install "pytest<7.0"  # Need to update remove occurrences of pytest.warns(None)
     pip install threadpoolctl  # required by some joblib tests
 
     pip install -e .
@@ -27,7 +27,7 @@ else
     # Make sure that we have the python docker image cached locally to avoid
     # a timeout in a test that needs it.
     if [ "$(which docker)" != "" ] && [ "$(uname)" = "Linux" ]; then
-        docker pull python:3.6
+        docker pull python:3.10
     fi
 
     # Run the tests and collect trace coverage data both in the subprocesses

@@ -1,15 +1,18 @@
 import os
+import subprocess
 import sys
 import gc
 import ctypes
-import psutil
+from tempfile import NamedTemporaryFile
 import pytest
 import warnings
 import threading
 from time import sleep
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
-from distutils.version import LooseVersion
+
+import cloudpickle
+from packaging.version import Version
 
 import loky
 from loky import cpu_count
@@ -17,13 +20,17 @@ from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 from loky.reusable_executor import _ReusablePoolExecutor
-import cloudpickle
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 from ._executor_mixin import ReusableExecutorMixin
 from .utils import TimingWrapper, id_sleep, check_python_subprocess_call
 from .utils import filter_match
 
-cloudpickle_version = LooseVersion(cloudpickle.__version__)
+cloudpickle_version = Version(cloudpickle.__version__)
 
 # Compat windows
 if sys.platform == "win32":
@@ -32,7 +39,7 @@ if sys.platform == "win32":
 else:
     from signal import SIGKILL
     from ctypes.util import find_library
-    libc = ctypes.CDLL(find_library("libc"))
+    libc = ctypes.CDLL(find_library("c"))
 
 
 try:
@@ -40,32 +47,26 @@ try:
 except ImportError:
     np = None
 
-# Backward compat for python2 cPickle module
-PICKLING_ERRORS = (PicklingError,)
-try:
-    import cPickle
-    PICKLING_ERRORS += (cPickle.PicklingError,)
-except ImportError:
-    pass
-
 
 def clean_warning_registry():
     """Safe way to reset warnings."""
     warnings.resetwarnings()
     reg = "__warningregistry__"
-    for mod_name, mod in list(sys.modules.items()):
+    for mod in list(sys.modules.values()):
         if hasattr(mod, reg):
             getattr(mod, reg).clear()
 
 
 def wait_dead(worker, n_tries=1000, delay=0.001):
     """Wait for process pid to die"""
-    for i in range(n_tries):
+    for _ in range(n_tries):
         if worker.exitcode is not None:
             return
         sleep(delay)
-    raise RuntimeError("Process %d failed to die for at least %0.3fs" %
-                       (worker.pid, delay * n_tries))
+    raise RuntimeError(
+        f"Process {worker.pid} failed to die for at least "
+        f"{delay * n_tries:0.3f}s"
+    )
 
 
 def crash():
@@ -84,9 +85,8 @@ def c_exit(exitcode=0):
     libc.exit(exitcode)
 
 
-def check_pids_exist_then_sleep(arg):
-    """Sleep for some time before returning
-    and check if all the passed pid exist"""
+def sleep_then_check_pids_exist(arg):
+    """Sleep for some time and the check if all the passed pids exist"""
     time, pids = arg
     sleep(time)
     res = True
@@ -104,7 +104,7 @@ def kill_friend(pid, delay=0):
         if psutil.pid_exists(pid):
             util.debug("Fail to kill an alive process?!?")
             raise e
-        util.debug("process {} was already dead".format(pid))
+        util.debug(f"process {pid} was already dead")
 
 
 def raise_error(etype=UnpicklingError, message=None):
@@ -133,43 +133,43 @@ def do_nothing(arg):
     return True
 
 
-class CrashAtPickle(object):
+class CrashAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         crash()
 
 
-class CrashAtUnpickle(object):
+class CrashAtUnpickle:
     """Bad object that triggers a segfault at unpickling time."""
     def __reduce__(self):
         return crash, ()
 
 
-class ExitAtPickle(object):
+class ExitAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         exit()
 
 
-class ExitAtUnpickle(object):
+class ExitAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
         return exit, ()
 
 
-class CExitAtPickle(object):
+class CExitAtPickle:
     """Bad object that triggers a segfault at pickling time."""
     def __reduce__(self):
         c_exit()
 
 
-class CExitAtUnpickle(object):
+class CExitAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __reduce__(self):
         return c_exit, ()
 
 
-class ErrorAtPickle(object):
+class ErrorAtPickle:
     """Bad object that raises an error at pickling time."""
     def __init__(self, fail=True):
         self.fail = fail
@@ -181,7 +181,7 @@ class ErrorAtPickle(object):
             return id, (42, )
 
 
-class ErrorAtUnpickle(object):
+class ErrorAtUnpickle:
     """Bad object that triggers a process exit at unpickling time."""
     def __init__(self, etype=UnpicklingError, message='the error message'):
         self.etype = etype
@@ -191,14 +191,14 @@ class ErrorAtUnpickle(object):
         return raise_error, (self.etype, self.message)
 
 
-class CrashAtGCInWorker(object):
+class CrashAtGCInWorker:
     """Bad object that triggers a segfault at call item GC time"""
     def __del__(self):
         if current_process().name != "MainProcess":
             crash()
 
 
-class CExitAtGCInWorker(object):
+class CExitAtGCInWorker:
     """Exit worker at call item GC time"""
     def __del__(self):
         if current_process().name != "MainProcess":
@@ -212,26 +212,27 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         (id, (ExitAtPickle(),), PicklingError, None),
         (id, (ErrorAtPickle(),), PicklingError, None),
         # Check problem occuring while unpickling a task on workers
-        (id, (ExitAtUnpickle(),), BrokenProcessPool, r"SystemExit"),
+        (id, (ExitAtUnpickle(),), BrokenProcessPool, "SystemExit"),
         (id, (CExitAtUnpickle(),), TerminatedWorkerError, r"EXIT\(0\)"),
-        (id, (ErrorAtUnpickle(),), BrokenProcessPool, r"UnpicklingError"),
-        (id, (CrashAtUnpickle(),), TerminatedWorkerError, r"SIGSEGV"),
+        (id, (ErrorAtUnpickle(),), BrokenProcessPool, "UnpicklingError"),
+        (id, (CrashAtUnpickle(),), TerminatedWorkerError, "SIGSEGV"),
         # Check problem occuring during function execution on workers
-        (crash, (), TerminatedWorkerError, r"SIGSEGV"),
+        (crash, (), TerminatedWorkerError, "SIGSEGV"),
         (exit, (), SystemExit, None),
         (c_exit, (), TerminatedWorkerError, r"EXIT\(0\)"),
         (raise_error, (RuntimeError,), RuntimeError, None),
         # Check problem occuring while pickling a task result
         # on workers
-        (return_instance, (CrashAtPickle,), TerminatedWorkerError, r"SIGSEGV"),
+        (return_instance, (CrashAtPickle,), TerminatedWorkerError, "SIGSEGV"),
         (return_instance, (ExitAtPickle,), SystemExit, None),
-        (return_instance, (CExitAtPickle,), TerminatedWorkerError, r"EXIT\(0\)"),
+        (return_instance, (CExitAtPickle,), TerminatedWorkerError,
+         r"EXIT\(0\)"),
         (return_instance, (ErrorAtPickle,), PicklingError, None),
         # Check problem occuring while unpickling a task in
         # the result_handler thread
-        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, r"SystemExit"),
+        (return_instance, (ExitAtUnpickle,), BrokenProcessPool, "SystemExit"),
         (return_instance, (ErrorAtUnpickle,), BrokenProcessPool,
-         r"UnpicklingError"),
+         "UnpicklingError"),
     ]
 
     @pytest.mark.parametrize("func, args, expected_err, match", crash_cases)
@@ -334,7 +335,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         # in broken state:
         sleep(.5)
         with pytest.raises(TerminatedWorkerError,
-                           match=filter_match(r"SIGKILL")):
+                           match=filter_match("SIGKILL")):
             executor.submit(id_sleep, 42, 0.1).result()
 
         # the get_reusable_executor factory should be able to create a new
@@ -345,6 +346,17 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
     @pytest.mark.parametrize("n_proc", [1, 2, 5, 13])
     def test_crash_races(self, n_proc):
         """Test the race conditions in reusable_executor crash handling"""
+        pytest.importorskip("psutil")  # required for kill_friend & co
+
+        if (sys.platform == 'win32' and sys.version_info >= (3, 8)
+                and n_proc > 5):
+            pytest.skip(
+                "On win32, the paging size can be too small to import numpy "
+                "multiple times in the sub-processes (imported when loading "
+                "this file). Skipping while no better solution is found. See "
+                "https://github.com/joblib/loky/issues/279 for more details."
+            )
+
         # Test for external crash signal comming from neighbor
         # with various race setup
         executor = get_reusable_executor(max_workers=n_proc, timeout=None)
@@ -352,12 +364,12 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         pids = list(executor._processes.keys())
         assert len(pids) == n_proc
         assert None not in pids
-        res = executor.map(check_pids_exist_then_sleep,
+        res = executor.map(sleep_then_check_pids_exist,
                            [(.0001 * (j // 2), pids)
                             for j in range(2 * n_proc)])
-        assert all(list(res))
+        assert all(res)
         with pytest.raises(TerminatedWorkerError,
-                           match=filter_match(r"SIGKILL")):
+                           match=filter_match("SIGKILL")):
             res = executor.map(kill_friend, pids[::-1])
             list(res)
 
@@ -381,11 +393,16 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
                          chunksize=4)
 
     def test_queue_full_deadlock(self):
-        executor = get_reusable_executor(max_workers=1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            # Ignore any UserWarning about the executor being resized
+            executor = get_reusable_executor(max_workers=1)
+            executor.submit(id, 42)
+
         fs_fail = [executor.submit(do_nothing, ErrorAtPickle(True))
-                   for i in range(100)]
+                   for _ in range(100)]
         fs = [executor.submit(do_nothing, ErrorAtPickle(False))
-              for i in range(100)]
+              for _ in range(100)]
         with pytest.raises(PicklingError):
             fs_fail[99].result()
         assert fs[99].result()
@@ -433,6 +450,8 @@ class TestTerminateExecutor(ReusableExecutorMixin):
 
     def test_shutdown_deadlock(self):
         """Test recovery if killed after resize call"""
+        pytest.importorskip("psutil")  # required for kill_friend & co
+
         # Test the executor.shutdown call do not cause deadlock
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))  # start the worker processes
@@ -457,7 +476,7 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         assert f2.result() == 42
 
     @pytest.mark.parametrize("bad_object, match", [
-        (CrashAtGCInWorker, r"SIGSEGV"), (CExitAtGCInWorker, r"EXIT\(0\)")])
+        (CrashAtGCInWorker, "SIGSEGV"), (CExitAtGCInWorker, r"EXIT\(0\)")])
     def test_call_item_gc_crash_or_exit(self, bad_object, match):
         executor = get_reusable_executor(max_workers=1)
         bad_object = bad_object()
@@ -471,13 +490,56 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # when processing subsequently dispatched tasks:
         with pytest.raises(TerminatedWorkerError, match=filter_match(match)):
             executor.submit(gc.collect).result()
-            for r in executor.map(sleep, [.1] * 100):
+            for _ in executor.map(sleep, [.1] * 100):
                 pass
+
+    def test_sigkill_shutdown_leaks_workers(self):
+        # Create a parent process which will report its workers pids
+        # and sigkill itself.
+        code = """if True:
+        import os
+
+        import loky
+        import psutil
+
+        parent_pid = os.getpid()
+        with loky.get_reusable_executor(timeout=1, kill_workers=True) as p:
+            list(p.map(lambda x: x, range(100)))
+            for pid in p._processes.keys():
+                print(f'worker_pid:{pid}')
+            print(f'parent_pid:{parent_pid}')
+            psutil.Process(os.getpid()).kill()
+        """
+        with NamedTemporaryFile(mode='w', suffix="_joblib.py",
+                                delete=True) as f:
+            f.write(code)
+            f.flush()
+            cmd = [sys.executable, f.name]
+            out = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=60
+            )
+            running_workers = []
+            for line in out.stdout.split('\n'):
+                if line.startswith('worker_pid'):
+                    worker_pid = int(line.split(':')[1])
+                    try:
+                        psutil.Process(worker_pid)
+                        running_workers.append(worker_pid)
+                    except psutil.NoSuchProcess:
+                        pass
+            assert not len(running_workers), (
+                f'There are running workers left: {running_workers}')
 
 
 class TestResizeExecutor(ReusableExecutorMixin):
     def test_reusable_executor_resize(self):
         """Test reusable_executor resizing"""
+        # required by sleep_then_check_pids_exist
+        pytest.importorskip("psutil")
 
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))
@@ -486,7 +548,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
         # the old one as it is still in a good shape. The resize should not
         # occur while there are on going works.
         pids = list(executor._processes.keys())
-        res1 = executor.submit(check_pids_exist_then_sleep, (.3, pids))
+        res1 = executor.submit(sleep_then_check_pids_exist, (.3, pids))
         clean_warning_registry()
         with warnings.catch_warnings(record=True) as w:
             # Cause all warnings to always be triggered.
@@ -502,7 +564,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
 
         # Requesting the same number of process should not impact the executor
         # nor kill the processed
-        old_pid = next(iter((executor._processes.keys())))
+        old_pid = next(iter(executor._processes.keys()))
         unchanged_executor = get_reusable_executor(max_workers=1, timeout=None)
         assert len(unchanged_executor._processes) == 1
         assert unchanged_executor is executor
@@ -535,6 +597,8 @@ class TestResizeExecutor(ReusableExecutorMixin):
 
     def test_kill_after_resize_call(self):
         """Test recovery if killed after resize call"""
+        pytest.importorskip("psutil")  # required for kill_friend & co
+
         # Test the executor resizing called before a kill arrive
         executor = get_reusable_executor(max_workers=2, timeout=None)
         executor.map(id, range(2))  # trigger the creation of worker processes
@@ -584,8 +648,6 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             executor._resize(max_workers=None)
 
     @pytest.mark.skipif(sys.platform == "win32", reason="No fork on windows")
-    @pytest.mark.skipif(sys.version_info <= (3, 4),
-                        reason="No context before 3.4")
     def test_invalid_context(self):
         """Raise error on invalid context"""
 
@@ -612,7 +674,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             e.submit(id, 42).result()
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
 
     def test_reused_flag(self):
         executor, _ = _ReusablePoolExecutor.get_reusable_executor(
@@ -628,8 +690,8 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         )
         assert not reused
 
-    @pytest.mark.xfail(cloudpickle_version >= LooseVersion("0.5.4") and
-                       cloudpickle_version <= LooseVersion("0.7.0"),
+    @pytest.mark.xfail(cloudpickle_version >= Version("0.5.4") and
+                       cloudpickle_version <= Version("0.7.0"),
                        reason="Known issue in cloudpickle")
     # https://github.com/cloudpipe/cloudpickle/pull/240
     def test_interactively_defined_nested_functions(self):
@@ -664,7 +726,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
 
     def test_interactively_defined_recursive_functions(self):
         # Check that it's possible to call a recursive function defined
@@ -695,7 +757,51 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
             print("ok")
         """
-        check_python_subprocess_call(code, stdout_regex=r"ok")
+        check_python_subprocess_call(code, stdout_regex="ok")
+
+    def test_no_deadlock_on_nested_reusable_exector(self):
+        # Non-regression test for a deadlock that occurred when the main
+        # process was waiting for level 1 children processes to terminate while
+        # they had reusable executors still managing level 2 worker processes
+        # waiting for more work to arrive (untill their long worker timeout).
+        # https://github.com/joblib/loky/issues/363
+        code = """if True:
+            from loky import get_reusable_executor
+            import logging
+            import multiprocessing as mp
+            from time import sleep
+            import faulthandler
+
+            def enable_mp_logging():
+                # Enable verbose logging for nested loky executor and workers in
+                # order to make this test easier to debug in case of failure.
+                log = mp.util.log_to_stderr(logging.DEBUG)
+                log.handlers[0].setFormatter(logging.Formatter(
+                    '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
+                return log
+
+            def inner_parallel_func(j):
+                sleep(0.1)  # to avoid termination of parent before all workers
+                mp.util.debug(f"inner_parallel_func({j}) done")
+
+                # If this test fails, uncommenting the following line will
+                # help to debug the issue:
+                # faulthandler.dump_traceback_later(10, exit=True)
+                return j ** 2
+
+            def outer_parallel_func(i):
+                executor = get_reusable_executor(max_workers=2)
+                list(executor.map(inner_parallel_func, range(2)))
+                enable_mp_logging()
+                mp.util.debug(f"outer_parallel_func({i}) done")
+
+            enable_mp_logging()
+
+            executor = get_reusable_executor(max_workers=2)
+            list(executor.map(outer_parallel_func, range(2)))
+            print("ok")
+        """
+        check_python_subprocess_call(code, stdout_regex="ok", timeout=30)
 
     def test_compat_with_concurrent_futures_exception(self):
         # It should be possible to use a loky process pool executor as a dropin
@@ -712,7 +818,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         # Ensure that loky.Future are compatible with concurrent.futures
         # (see #155)
         assert isinstance(f, concurrent.futures.Future)
-        (done, running) = concurrent.futures.wait([f], timeout=15)
+        _, running = concurrent.futures.wait([f], timeout=15)
         assert len(running) == 0
 
     thread_configurations = [
@@ -731,7 +837,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         else:
             # Break the shared executor before launching the threads:
             with pytest.raises(TerminatedWorkerError,
-                               match=filter_match(r"SIGSEGV")):
+                               match=filter_match("SIGSEGV")):
                 executor = get_reusable_executor(reuse=False)
                 executor.submit(return_instance, CrashAtPickle).result()
 
@@ -740,7 +846,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             with warnings.catch_warnings():  # ignore resize warnings
                 warnings.simplefilter("always")
                 executor = get_reusable_executor(max_workers=max_workers)
-                for i in range(n_outer_steps):
+                for _ in range(n_outer_steps):
                     results = executor.map(
                         lambda x: x ** 2, range(n_inner_steps))
                     expected_result = [x ** 2 for x in range(n_inner_steps)]
@@ -756,7 +862,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         output_collector = []
         threads = [threading.Thread(
             target=helper_func, args=(output_collector, w),
-            name='test_thread_%02d_max_workers_%d' % (i, w))
+            name=f'test_thread_{i:02d}_max_workers_{w:d}')
             for i, w in enumerate(max_workers)]
 
         with warnings.catch_warnings(record=True):
@@ -817,3 +923,32 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         executor = get_reusable_executor(max_workers=4)
         for x in executor.map(self._test_initializer, delay=.1):
             assert x == 'uninitialized'
+
+    # XXX: not sure if #369 has been fixed or not. Let's not make it XFAIL
+    # for now to see if it is still flaky on CI.
+    # @pytest.mark.xfail(reason="https://github.com/joblib/loky/issues/369")
+    def test_error_in_nested_call_keeps_resource_tracker_silent(self):
+        # Safety smoke test: test that nested parallel calls don't yield noisy
+        # resource_tracker outputs when the grandchild errors out.
+        cmd = '''if 1:
+            from loky import get_reusable_executor
+
+
+            def raise_error(i):
+                raise ValueError
+
+
+            def nested_loop(f):
+                executor = get_reusable_executor(max_workers=2)
+                list(executor.map(f, range(10))
+
+
+            executor = get_reusable_executor(max_workers=2)
+            list(executor.map(nested_loop, [raise_error])
+        '''
+        p = subprocess.Popen([sys.executable, '-c', cmd],
+                            stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        p.wait()
+        out, err = p.communicate()
+        assert p.returncode == 1, out.decode()
+        assert b"resource_tracker" not in err, err.decode()

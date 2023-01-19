@@ -1,20 +1,3 @@
-from __future__ import print_function
-try:
-    import test.support
-
-    # Skip tests if _multiprocessing wasn't built.
-    test.support.import_module('_multiprocessing')
-    # Skip tests if sem_open implementation is broken.
-    test.support.import_module('multiprocessing.synchronize')
-    # import threading after _multiprocessing to raise a more revelant error
-    # message: "No module named _multiprocessing" if multiprocessing is not
-    # compiled without thread support.
-    test.support.import_module('threading')
-except ImportError:
-    pass
-
-
-# from test.support.script_helper import assert_python_ok
 from loky import process_executor
 
 import os
@@ -29,24 +12,26 @@ import tempfile
 import traceback
 import threading
 import faulthandler
+import warnings
 from math import sqrt
+from pickle import PicklingError
 from threading import Thread
 from collections import defaultdict
+from concurrent import futures
+from concurrent.futures._base import (PENDING, RUNNING, CANCELLED,
+                                      CANCELLED_AND_NOTIFIED, FINISHED)
 
-from loky.process_executor import LokyRecursionError
-from loky.process_executor import ShutdownExecutorError, TerminatedWorkerError
-from loky._base import (PENDING, RUNNING, CANCELLED, CANCELLED_AND_NOTIFIED,
-                        FINISHED, Future)
+import loky
+from loky.process_executor import (
+    LokyRecursionError,
+    ShutdownExecutorError,
+    TerminatedWorkerError,
+)
+from loky._base import Future
 
 from . import _executor_mixin
 from .utils import id_sleep, check_subprocess_call, filter_match
-from .test_reusable_executor import ErrorAtPickle, ExitAtPickle
-from .test_reusable_executor import PICKLING_ERRORS, c_exit
-
-if sys.version_info[:2] < (3, 3):
-    import loky._base as futures
-else:
-    from concurrent import futures
+from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
 
 
 IS_PYPY = hasattr(sys, "pypy_version_info")
@@ -85,19 +70,31 @@ def sleep_and_return(delay, x):
 
 def sleep_and_write(t, filename, msg):
     time.sleep(t)
-    with open(filename, 'wb') as f:
-        f.write(str(msg).encode('utf-8'))
+    with open(filename, 'w') as f:
+        f.write(str(msg))
 
 
-class MyObject(object):
+class MyObject:
     def __init__(self, value=0):
         self.value = value
 
     def __repr__(self):
-        return "MyObject({})".format(self.value)
+        return f"MyObject({self.value})"
 
     def my_method(self):
         pass
+
+
+def _assert_no_error(stderr):
+    if sys.platform == "darwin":
+        # On macOS, ignore UserWarning related to their broken semaphore
+        # implementation.
+        stderr = "\n".join(
+            line
+            for line in stderr.splitlines()
+            if "increase its maximal value" not in line
+        )
+    assert len(stderr) == 0, stderr
 
 
 class ExecutorShutdownTest:
@@ -121,10 +118,12 @@ class ExecutorShutdownTest:
         # Free resources to avoid random timeout in CI
         self.executor.shutdown(wait=True, kill_workers=True)
 
-        tempdir = tempfile.mkdtemp(prefix='loky_')
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
+        tempdir = tempfile.mkdtemp(prefix='loky_').replace("\\", "/")
         try:
             n_jobs = 4
-            code = """if True:
+            code = f"""if True:
                 from loky.process_executor import {executor_type}
                 from loky.backend import get_context
                 from tests._test_process_executor import sleep_and_write
@@ -134,7 +133,7 @@ class ExecutorShutdownTest:
                 e.submit(id, 42).result()
 
                 task_ids = list(range(2 * {n_jobs}))
-                filenames = ['{tempdir}/task_{{:02}}.log'.format(i)
+                filenames = [f'{tempdir}/task_{{i:02}}.log'
                              for i in task_ids]
                 e.map(sleep_and_write, [0.1] * 2 * {n_jobs},
                       filenames, task_ids)
@@ -143,27 +142,19 @@ class ExecutorShutdownTest:
                 # shutdown main Python interpreter while letting the worker
                 # processes finish in the background.
             """
-            code = code.format(executor_type=self.executor_type.__name__,
-                               start_method=self.context.get_start_method(),
-                               n_jobs=n_jobs,
-                               tempdir=tempdir.replace("\\", "/"))
-            stdout, stderr = check_subprocess_call(
+            _, stderr = check_subprocess_call(
                 [sys.executable, "-c", code], timeout=55)
 
-            # On OSX, remove UserWarning for broken semaphores
-            if sys.platform == "darwin":
-                stderr = [e for e in stderr.strip().split("\n")
-                          if "increase its maximal value" not in e]
-            assert len(stderr) == 0 or stderr[0] == ''
+            _assert_no_error(stderr)
 
             # The workers should have completed their work before the main
             # process exits:
-            expected_filenames = ['task_%02d.log' % i
+            expected_filenames = [f'task_{i:02d}.log'
                                   for i in range(2 * n_jobs)]
 
             # Apparently files can take some time to appear under windows
             # on AppVeyor
-            for retry_idx in range(20):
+            for _ in range(20):
                 filenames = sorted(os.listdir(tempdir))
                 if len(filenames) != len(expected_filenames):
                     time.sleep(1)
@@ -226,8 +217,11 @@ class ExecutorShutdownTest:
             assert result == expected
 
         # Once all pending jobs have completed the executor and threads should
-        # terminate automatically.
-        self.check_no_running_workers(patience=2)
+        # terminate automatically. Note that the effective time for a Python
+        # process to completely shutdown can vary a lot especially on loaded CI
+        # machines with and the atexit callbacks that writes test coverage data
+        # to disk. Let's be patient.
+        self.check_no_running_workers(patience=5)
         assert executor_flags.shutdown, processes
         assert not executor_flags.broken, processes
 
@@ -274,7 +268,7 @@ class ExecutorShutdownTest:
 
         # The crashing job should be executed after the non-failing jobs
         # have completed. The crash should be detected.
-        match = filter_match(r"SIGSEGV", self.context.get_start_method())
+        match = filter_match("SIGSEGV")
         with pytest.raises(TerminatedWorkerError, match=match):
             crash_result.result()
 
@@ -283,9 +277,10 @@ class ExecutorShutdownTest:
         # The executor flag should have been set at this point.
         assert executor_flags.broken, processes
 
-        # Once all pending jobs have completed the executor and threads should
-        # terminate automatically.
-        self.check_no_running_workers(patience=2)
+        # Since the executor is broken, all workers should be SIGKILLed on
+        # POSIX or terminated one Windows. Usually this should be fast but
+        # let's be patient just in case the CI is overloaded.
+        self.check_no_running_workers(patience=5)
 
     def test_context_manager_shutdown(self):
         with self.executor_type(max_workers=5, context=self.context) as e:
@@ -353,7 +348,7 @@ class ExecutorShutdownTest:
 
         # Make sure the results were all computed before the executor
         # resources were freed.
-        assert all([f.result() == v for f, v in zip(res, range(-5, 5))])
+        assert [f.result() for f in res] == list(range(-5, 5))
 
     def test_shutdown_deadlock_pickle(self):
         # Test that the pool calling shutdown with wait=False does not cause
@@ -374,7 +369,7 @@ class ExecutorShutdownTest:
             # without waiting
             f = executor.submit(id, ErrorAtPickle())
             executor.shutdown(wait=False)
-            with pytest.raises(PICKLING_ERRORS):
+            with pytest.raises(PicklingError):
                 f.result()
 
         # Make sure the executor is eventually shutdown and do not leave
@@ -386,7 +381,9 @@ class ExecutorShutdownTest:
 
         See https://bugs.python.org/issue39205.
         """
-        code = """if True:
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
+        code = f"""if True:
             from loky.process_executor import {executor_type}
             from loky.backend import get_context
             from tests._test_process_executor import sleep_and_print
@@ -397,20 +394,14 @@ class ExecutorShutdownTest:
             e.submit(sleep_and_print, 1.0, "apple")
             e.shutdown(wait=False)
         """
-        code = code.format(executor_type=self.executor_type.__name__,
-                           start_method=self.context.get_start_method())
         stdout, stderr = check_subprocess_call(
-                [sys.executable, "-c", code], timeout=55)
+            [sys.executable, "-c", code], timeout=55)
 
-        # On OSX, remove UserWarning for broken semaphores
-        if sys.platform == "darwin":
-            stderr = [e for e in stderr.strip().split("\n")
-                      if "increase its maximal value" not in e]
-        assert len(stderr) == 0 or stderr[0] == ''
+        _assert_no_error(stderr)
         assert stdout.strip() == "apple"
 
     @classmethod
-    def _test_recursive_kill(cls, depth):
+    def _test_shutdown_and_kill_workers(cls, depth):
         executor = cls.executor_type(
             max_workers=2, context=cls.context,
             initializer=_executor_mixin.initializer_event,
@@ -422,18 +413,11 @@ class ExecutorShutdownTest:
             executor.submit(sleep_and_return, 30, 42).result()
             executor.shutdown()
         else:
-            f = executor.submit(cls._test_recursive_kill, depth + 1)
+            f = executor.submit(cls._test_shutdown_and_kill_workers, depth + 1)
             f.result()
 
-    def test_recursive_kill(self):
-        if (self.context.get_start_method() == 'forkserver' and
-                sys.version_info < (3, 7)):
-            # Before python3.7, the forserver was shared with the child
-            # processes so there is no way to detect the children of a given
-            # process for recursive_kill. This break the test.
-            pytest.skip("Need python3.7+")
-
-        f = self.executor.submit(self._test_recursive_kill, 1)
+    def test_shutdown_and_kill_workers(self):
+        f = self.executor.submit(self._test_shutdown_and_kill_workers, 1)
         # Wait for the nested executors to be started
         _executor_mixin._test_event.wait()
 
@@ -459,8 +443,8 @@ class WaitTests:
         done, not_done = futures.wait([CANCELLED_FUTURE, future1, future2],
                                       return_when=futures.FIRST_COMPLETED)
 
-        assert set([future1]) == done
-        assert set([CANCELLED_FUTURE, future2]) == not_done
+        assert {future1} == done
+        assert {CANCELLED_FUTURE, future2} == not_done
 
     def test_first_completed_some_already_completed(self):
         future1 = self.executor.submit(time.sleep, 1.5)
@@ -469,9 +453,8 @@ class WaitTests:
                                           SUCCESSFUL_FUTURE, future1],
                                          return_when=futures.FIRST_COMPLETED)
 
-        assert (set([CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE]) ==
-                finished)
-        assert set([future1]) == pending
+        assert {CANCELLED_AND_NOTIFIED_FUTURE, SUCCESSFUL_FUTURE} == finished
+        assert {future1} == pending
 
     @classmethod
     def wait_and_raise(cls, t):
@@ -497,8 +480,8 @@ class WaitTests:
 
         assert _executor_mixin._test_event.is_set()
 
-        assert set([future1, future2]) == finished
-        assert set([future3]) == pending
+        assert {future1, future2} == finished
+        assert {future3} == pending
 
         _executor_mixin._test_event.clear()
 
@@ -511,9 +494,11 @@ class WaitTests:
                                           future1, future2],
                                          return_when=futures.FIRST_EXCEPTION)
 
-        assert set([SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
-                    future1]) == finished
-        assert set([CANCELLED_FUTURE, future2]) == pending
+        assert (
+            {SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE, future1} ==
+            finished
+        )
+        assert {CANCELLED_FUTURE, future2} == pending
 
     def test_first_exception_one_already_failed(self):
         future1 = self.executor.submit(time.sleep, 2)
@@ -521,8 +506,8 @@ class WaitTests:
         finished, pending = futures.wait([EXCEPTION_FUTURE, future1],
                                          return_when=futures.FIRST_EXCEPTION)
 
-        assert set([EXCEPTION_FUTURE]) == finished
-        assert set([future1]) == pending
+        assert {EXCEPTION_FUTURE} == finished
+        assert {future1} == pending
 
     def test_all_completed(self):
         future1 = self.executor.submit(divmod, 2, 0)
@@ -533,9 +518,9 @@ class WaitTests:
                                           future1, future2],
                                          return_when=futures.ALL_COMPLETED)
 
-        assert set([SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
-                    EXCEPTION_FUTURE, future1, future2]) == finished
-        assert set() == pending
+        assert {SUCCESSFUL_FUTURE, CANCELLED_AND_NOTIFIED_FUTURE,
+                EXCEPTION_FUTURE, future1, future2} == finished
+        assert not pending
 
     def test_timeout(self):
         # Make sure the executor has already started to avoid timeout happening
@@ -553,9 +538,9 @@ class WaitTests:
                                          timeout=.1,
                                          return_when=futures.ALL_COMPLETED)
 
-        assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
-                    SUCCESSFUL_FUTURE, future1]) == finished
-        assert set([future2]) == pending
+        assert {CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
+                SUCCESSFUL_FUTURE, future1} == finished
+        assert {future2} == pending
 
         _executor_mixin._test_event.set()
         assert future2.result(timeout=10)
@@ -572,8 +557,8 @@ class AsCompletedTests:
                                               EXCEPTION_FUTURE,
                                               SUCCESSFUL_FUTURE,
                                               future1, future2]))
-        assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
-                    SUCCESSFUL_FUTURE, future1, future2]) == completed
+        assert {CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
+                SUCCESSFUL_FUTURE, future1, future2} == completed
 
     def test_zero_timeout(self):
         future1 = self.executor.submit(time.sleep, 2)
@@ -587,14 +572,14 @@ class AsCompletedTests:
                     timeout=0):
                 completed_futures.add(future)
 
-        assert set([CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
-                    SUCCESSFUL_FUTURE]) == completed_futures
+        assert {CANCELLED_AND_NOTIFIED_FUTURE, EXCEPTION_FUTURE,
+                SUCCESSFUL_FUTURE} == completed_futures
 
     def test_duplicate_futures(self):
         # Issue 20367. Duplicate futures should not raise exceptions or give
         # duplicate responses.
         future1 = self.executor.submit(time.sleep, .1)
-        completed = [f for f in futures.as_completed([future1, future1])]
+        completed = list(futures.as_completed([future1, future1]))
         assert len(completed) == 1
 
 
@@ -610,7 +595,7 @@ class ExecutorTest:
         assert 16 == future.result()
 
     def test_map(self):
-        assert list(self.executor.map(pow, range(10), range(10))) ==\
+        assert list(self.executor.map(pow, range(10), range(10))) == \
             list(map(pow, range(10), range(10)))
 
     def test_map_exception(self):
@@ -650,13 +635,13 @@ class ExecutorTest:
         # https://bugs.python.org/issue39492
         my_object = MyObject()
         collect = threading.Event()
-        _ = weakref.ref(my_object, lambda obj: collect.set())  # noqa
+        _ref = weakref.ref(my_object, lambda obj: collect.set())  # noqa
         # Deliberately discarding the future.
         self.executor.submit(my_object.my_method)
         del my_object
 
         collected = False
-        for i in range(5):
+        for _ in range(5):
             if IS_PYPY:
                 gc.collect()
             collected = collect.wait(timeout=1.0)
@@ -678,7 +663,7 @@ class ExecutorTest:
         # Get one of the processes, and terminate (kill) it
         p = next(iter(self.executor._processes.values()))
         p.terminate()
-        match = filter_match(r"SIGTERM", self.context.get_start_method())
+        match = filter_match("SIGTERM")
         with pytest.raises(TerminatedWorkerError, match=match):
             future.result()
         # Submitting other jobs fails as well.
@@ -712,13 +697,7 @@ class ExecutorTest:
 
         exc = cm.value
         assert type(exc) is RuntimeError
-        if sys.version_info > (3,):
-            assert exc.args == (123,)
-        else:
-            assert exc.args[0].startswith("123")
-            # Makes sure that the cause of the RuntimeError is properly
-            # reported in the error message.
-            assert "raise RuntimeError(123)  # some comment" in exc.args[0]
+        assert exc.args == (123,)
 
         cause = exc.__cause__
         assert type(cause) is process_executor._RemoteTraceback
@@ -729,47 +708,48 @@ class ExecutorTest:
     # backported from the Python 3 concurrent.futures package.
     #
 
-    def _test_thread_safety(self, thread_idx, results):
+    def _test_thread_safety(self, thread_idx, results, timeout=30.):
         try:
             # submit a mix of very simple tasks with map and submit,
             # cancel some of them and check the results
-            map_future_1 = self.executor.map(sqrt, range(40), timeout=10)
+            map_future_1 = self.executor.map(sqrt, range(40), timeout=timeout)
             if thread_idx % 2 == 0:
                 # Make it more likely for scheduling threads to overtake one
                 # another
                 time.sleep(0.001)
             submit_futures = [self.executor.submit(time.sleep, 0.0001)
-                              for i in range(20)]
+                              for _ in range(20)]
             for i, f in enumerate(submit_futures):
                 if i % 2 == 0:
                     f.cancel()
-            map_future_2 = self.executor.map(sqrt, range(40), timeout=10)
+            map_future_2 = self.executor.map(sqrt, range(40), timeout=timeout)
 
             assert list(map_future_1) == [sqrt(x) for x in range(40)]
             assert list(map_future_2) == [sqrt(i) for i in range(40)]
             for i, f in enumerate(submit_futures):
                 if i % 2 == 1 or not f.cancelled():
-                    assert f.result(timeout=10) is None
+                    assert f.result(timeout=timeout) is None
             results[thread_idx] = 'ok'
-        except Exception:
+        except Exception as e:
             # Ensure that py.test can report the content of the exception
-            results[thread_idx] = traceback.format_exc()
+            # by raising it in the main test thread
+            results[thread_idx] = e
 
     def test_thread_safety(self):
         # Check that our process-pool executor can be shared to schedule work
         # by concurrent threads
-        threads = []
         results = [None] * 10
-        for i in range(len(results)):
-            threads.append(Thread(target=self._test_thread_safety,
-                                  args=(i, results)))
+        threads = [Thread(target=self._test_thread_safety, args=(i, results))
+                   for i in range(len(results))]
+
         for t in threads:
             t.start()
         for t in threads:
             t.join()
         for result in results:
-            if result != "ok":
-                raise AssertionError(result)
+            if isinstance(result, Exception):
+                raise result
+            assert result == "ok"
 
     @classmethod
     def return_inputs(cls, *args):
@@ -806,8 +786,9 @@ class ExecutorTest:
                 # the recursive callback chains have completed successfully
                 break
             elif patience < 0:
-                raise AssertionError("callback submit chains stalled at: %r"
-                                     % collected)
+                raise AssertionError(
+                    f"callback submit chains stalled at: {collected!r}"
+                )
             else:
                 patience -= 1
                 time.sleep(0.01)
@@ -823,13 +804,19 @@ class ExecutorTest:
         except NotImplementedError as e:
             self.skipTest(str(e))
 
-        for i in range(5):
-            # Trigger worker spawn for lazy executor implementations
-            for result in self.executor.map(id, range(8)):
-                pass
+        for _ in range(5):
+            with warnings.catch_warnings():
+                # It's ok to get a warning about the worker interrupted by the
+                # short timeout while tasks are pending in the queue on
+                # overloaded CI hosts.
+                warnings.simplefilter('ignore', category=UserWarning)
+
+                # Trigger worker spawn for lazy executor implementations
+                for _ in self.executor.map(id, range(8)):
+                    pass
 
             # Check that all workers shutdown (via timeout) when waiting a bit:
-            # note that the effictive time for Python process to completely
+            # note that the effective time for a Python process to completely
             # shutdown can vary a lot especially on loaded CI machines with and
             # the atexit callbacks that writes test coverage data to disk.
             # Let's be patient.
@@ -903,23 +890,30 @@ class ExecutorTest:
                                  ctx=self.context)
 
     @pytest.mark.high_memory
+    @pytest.mark.skipif(sys.maxsize < 2 ** 32,
+                        reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
-            sys.version_info[:2] < (3, 8),
-            reason="These Pythons cannot pickle objects of size > 2 ** 31GB")
+        sys.version_info < (3, 8),
+        reason="Python version does not support pickling objects of size > 2 ** 31GB"
+    )
     def test_no_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
         self.executor.submit(id, data).result()
 
     @pytest.mark.high_memory
+    @pytest.mark.skipif(sys.maxsize < 2 ** 32,
+                        reason="Test requires a 64 bit version of Python")
     @pytest.mark.skipif(
-            sys.version_info[:2] >= (3, 8),
-            reason="These Pythons can pickle objects of size > 2 ** 31GB")
+        sys.version_info >= (3, 8),
+        reason="Python version supports pickling objects of size > 2 ** 31GB"
+    )
     def test_expected_failure_on_large_data_send(self):
         data = b'\x00' * int(2.2e9)
         with pytest.raises(RuntimeError):
             self.executor.submit(id, data).result()
 
     def test_memory_leak_protection(self):
+        pytest.importorskip("psutil")  # cannot work without psutil
         self.executor.shutdown(wait=True)
 
         executor = self.executor_type(1, context=self.context)
@@ -942,11 +936,9 @@ class ExecutorTest:
             return os.getpid(), leaked_size
 
         with pytest.warns(UserWarning, match='memory leak'):
-            futures = []
-            for i in range(300):
-                # Total run time should be 3s which is way over the 1s cooldown
-                # period between two consecutive memory checks in the worker.
-                futures.append(executor.submit(_leak_some_memory))
+            # Total run time should be 3s which is way over the 1s cooldown
+            # period between two consecutive memory checks in the worker.
+            futures = [executor.submit(_leak_some_memory) for _ in range(300)]
 
             executor.shutdown(wait=True)
             results = [f.result() for f in futures]
@@ -986,11 +978,11 @@ class ExecutorTest:
             os._loky_cyclic_weakrefs.append(weakref.ref(a))
             return sum(1 for r in os._loky_cyclic_weakrefs if r() is not None)
 
-        futures = []
-        for i in range(300):
-            # Total run time should be 3s which is way over the 1s cooldown
-            # period between two consecutive memory checks in the worker.
-            futures.append(executor.submit(_create_cyclic_reference))
+        # Total run time should be 3s which is way over the 1s cooldown
+        # period between two consecutive memory checks in the worker.
+        futures = [
+            executor.submit(_create_cyclic_reference) for _ in range(300)
+        ]
 
         executor.shutdown(wait=True)
 
@@ -1003,7 +995,7 @@ class ExecutorTest:
         # When a child process is abruptly terminated, the whole pool gets
         # "broken".
         print(self.context.get_start_method())
-        match = filter_match(r"EXIT\(42\)", self.context.get_start_method())
+        match = filter_match(r"EXIT\(42\)")
         future = self.executor.submit(c_exit, 42)
         with pytest.raises(TerminatedWorkerError, match=match):
             future.result()
@@ -1013,14 +1005,13 @@ class ExecutorTest:
 
     @staticmethod
     def _test_child_env(var_name):
-        import os
         return os.environ.get(var_name, "unset")
 
     def test_child_env_executor(self):
         # Test that for loky context, setting argument env correctly overwrite
         # the environment of the child process.
         if self.context.get_start_method() != 'loky':
-            pytest.skip(msg="Only work with loky context")
+            pytest.skip("Only work with loky context")
 
         var_name = "loky_child_env_executor"
         var_value = "variable set"
@@ -1030,3 +1021,75 @@ class ExecutorTest:
         assert var_child == var_value
 
         executor.shutdown(wait=True)
+
+    def test_viztracer_profiler(self):
+        # Check that viztracer profiler is initialzed in workers when
+        # installed.
+        viztracer = pytest.importorskip("viztracer")
+
+        def check_viztracer_active():
+            tracer = viztracer.get_tracer()
+            if tracer is None:
+                return False
+            return tracer.enable
+
+        active_in_main_process = check_viztracer_active()
+        with self.executor_type(1, context=self.context) as e:
+            active_in_child_process = e.submit(check_viztracer_active).result()
+        assert active_in_main_process == active_in_child_process
+
+        if not active_in_main_process:
+            tracer = viztracer.VizTracer()
+            try:
+                tracer.start()
+                with self.executor_type(1, context=self.context) as e:
+                    assert e.submit(check_viztracer_active).result()
+            finally:
+                tracer.stop()
+
+            # Once the tracer has been stopped, should be no side effect on
+            # workers started in new executors.
+            with self.executor_type(1, context=self.context) as e:
+                assert not e.submit(check_viztracer_active).result()
+
+    def test_viztracer_profiler_with_custom_init(self):
+        # Check that viztracer profiler is initialzed in workers when
+        # installed.
+        viztracer = pytest.importorskip("viztracer")
+
+        # Make sure the auto-viztracer initialization works even when
+        # the call pass their own init.
+
+        def check_viztracer_active_and_custom_init():
+            assert loky._custom_global_var == 42
+            tracer = viztracer.get_tracer()
+            if tracer is None:
+                return False
+            return tracer.enable
+
+        existing_tracer = viztracer.get_tracer()
+        if existing_tracer is not None and existing_tracer.enable:
+            pytest.skip("Cannot run this test if viztracer is active")
+
+        tracer = viztracer.VizTracer()
+        try:
+            tracer.start()
+            with self.executor_type(
+                1,
+                context=self.context,
+                initializer=_custom_initializer
+            ) as e:
+                assert e.submit(
+                    check_viztracer_active_and_custom_init
+                ).result()
+        finally:
+            tracer.stop()
+
+
+def _custom_initializer():
+    """_custom_initializer is module function to be picklable
+
+    This is necessary for executor implementations that do not
+    use cloudpickle to pickle the initializer.
+    """
+    loky._custom_global_var = 42

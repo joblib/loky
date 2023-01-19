@@ -16,7 +16,7 @@ To avoid this limitation, :mod:`loky` relies on |cloudpickle| when it is present
 There are three ways to temper with the serialization in :mod:`loky`:
 
 - Using the arguments :code:`job_reducers` and :code:`result_reducers`, it is possible to register custom reducers for the serialization process.
-- Setting the variable :code:`LOKY_PICKLER` to an available and valid serialization module. This module must present a valid :code:`Pickler` object. Setting the environment variable :code:`LOKY_PICKER=cloudpickle` will force :mod:`loky` to serialize everything with |cloudpickle| instead of just serializing the object detected to be in the :code:`__main__` module.
+- Setting the variable :code:`LOKY_PICKLER` to an available and valid serialization module. This module must present a valid :code:`Pickler` object. Setting the environment variable :code:`LOKY_PICKLER=cloudpickle` will force :mod:`loky` to serialize everything with |cloudpickle| instead of just serializing the object detected to be in the :code:`__main__` module.
 - Finally, it is possible to wrap an unpicklable object using the :code:`loky.wrap_non_picklable_objects` decorator. In this case, all other objects are serialized as in the default behavior and the wrapped object is pickled through |cloudpickle|.
 
 The benefits and drawbacks of each method are highlighted in this example_.
@@ -29,7 +29,7 @@ Processes start methods in :mod:`loky`
 --------------------------------------
 
 The API in :mod:`loky` provides a :func:`set_start_method` function to set the default  :code:`start_method`, which controls the way :class:`Process` are started. The available methods are {:code:`'loky'`, :code:`'loky_int_main'`, :code:`'spawn'`}. On unix, the start methods {:code:`'fork'`, :code:`'forkserver'`} are also available.
-Note that :mod:`loky` isnot compatible with :func:`multiprocessing.set_start_method` function. The default start method needs to be set with the provided function to ensure a proper behavior.
+Note that :mod:`loky` is not compatible with :func:`multiprocessing.set_start_method` function. The default start method needs to be set with the provided function to ensure a proper behavior.
 
 
 Protection against memory leaks
@@ -55,8 +55,8 @@ not happening.
 
 .. rubric:: Footnotes
 
-.. [#periodically_fn] every 1 second. This constant is define in :code:`loky.process_executor._MEMORY_LEAK_CHECK_DELAY`
-.. [#psutil_unusual_fn] an increase of 100MB compared to a reference, which is defined as the residual memory usage of the worker after it completed its first task
+.. [#periodically_fn] every 1 second. This constant is defined in :code:`loky.process_executor._MEMORY_LEAK_CHECK_DELAY`
+.. [#psutil_unusual_fn] an increase of 300MB compared to a reference, which is defined as the residual memory usage of the worker after it completed its first task. This constant is defined in :code:`loky.process_executor._MAX_MEMORY_LEAK_SIZE`
 
 
 

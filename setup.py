@@ -10,7 +10,7 @@ packages = find_packages(exclude=['tests', 'tests._openmp', 'benchmark'])
 # Function to parse __version__ in `loky`
 def find_version():
     here = os.path.abspath(os.path.dirname(__file__))
-    with open(os.path.join(here, 'loky', '__init__.py'), 'r') as fp:
+    with open(os.path.join(here, 'loky', '__init__.py')) as fp:
         version_file = fp.read()
     version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
                               version_file, re.M)
@@ -55,7 +55,7 @@ setup(
     version=find_version(),
     description=("A robust implementation of "
                  "concurrent.futures.ProcessPoolExecutor"),
-    long_description=open('README.md', 'rb').read().decode('utf-8'),
+    long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     url='https://github.com/joblib/loky/',
     author='Thomas Moreau',
@@ -70,18 +70,18 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Topic :: Scientific/Engineering',
         'Topic :: Utilities',
         'Topic :: Software Development :: Libraries',
     ],
     cmdclass=cmdclass,
     platforms='any',
+    python_requires='>=3.7',
     install_requires=['cloudpickle'],
-    tests_require=['pytest', 'psutil'],
+    tests_require=['packaging', 'pytest', 'psutil'],
 )

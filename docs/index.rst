@@ -4,3 +4,7 @@
    contain the root `toctree` directive.
 
 .. include:: ../README.rst
+
+.. toctree::
+   auto_examples/index
+   API
