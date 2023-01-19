@@ -1094,13 +1094,15 @@ class ExecutorTest:
             tblib_pickling_support.install()
             raise ValueError(error_message)
 
-        pe = self.executor_type(max_workers=2)
-        f = pe.submit(raise_value_error)
+        executor = self.executor_type(max_workers=2)
+        f = executor.submit(raise_value_error)
         try:
             f.result()
         except ValueError as e:
             assert e.__cause__ is not None
             assert error_message in str(e.__cause__)
+
+        executor.shutdown(wait=True)
 
 
 def _custom_initializer():
