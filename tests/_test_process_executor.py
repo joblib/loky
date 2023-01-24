@@ -1113,4 +1113,3 @@ def _custom_initializer():
     """
     loky._custom_global_var = 42
 
-
