@@ -1,6 +1,7 @@
 ### 3.4.0 - in development
 
-- TODO
+- Fix exception `__cause__` not being propagated with
+  `tblib.pickling_support.install()` (#255).
 
 ### 3.3.0 - 2022-09-15
 

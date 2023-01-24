@@ -1085,6 +1085,26 @@ class ExecutorTest:
         finally:
             tracer.stop()
 
+    def test_exception_cause_with_tblib(self):
+        "Ensure tampering with exception pickling do not break __cause__ propagation"
+        tblib_pickling_support = pytest.importorskip('tblib.pickling_support')
+
+        error_message = "This is the error message"
+
+        def raise_value_error():
+            tblib_pickling_support.install()
+            raise ValueError(error_message)
+
+        executor = self.executor_type(max_workers=2)
+        f = executor.submit(raise_value_error)
+        try:
+            f.result()
+        except ValueError as e:
+            assert e.__cause__ is not None
+            assert error_message in str(e.__cause__)
+
+        executor.shutdown(wait=True)
+
 
 def _custom_initializer():
     """_custom_initializer is module function to be picklable
@@ -1093,3 +1113,4 @@ def _custom_initializer():
     use cloudpickle to pickle the initializer.
     """
     loky._custom_global_var = 42
+
