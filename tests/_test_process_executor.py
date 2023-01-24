@@ -1086,7 +1086,7 @@ class ExecutorTest:
             tracer.stop()
 
     def test_exception_cause_with_tblib(self):
-        "Ensure tempering with exception pickling do not break __cause__ propagation"
+        "Ensure tampering with exception pickling do not break __cause__ propagation"
         tblib_pickling_support = pytest.importorskip('tblib.pickling_support')
 
         error_message = "This is the error message"
