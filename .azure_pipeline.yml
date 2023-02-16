@@ -25,6 +25,7 @@ jobs:
         imageName: "ubuntu-20.04"
         python.version: "pypy3"
         tox.env: pypy3
+        LOKY_MAX_CPU_COUNT: "2"
 
       linux-py310:
         imageName: "ubuntu-20.04"
