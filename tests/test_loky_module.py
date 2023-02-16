@@ -7,7 +7,6 @@ import warnings
 from subprocess import check_output
 
 import pytest
-import psutil
 
 import loky
 from loky import cpu_count
@@ -66,6 +65,7 @@ def test_cpu_count_os_sched_getaffinity():
 
 
 def test_cpu_count_psutil_affinity():
+    psutil = pytest.importorskip("psutil")
     p = psutil.Process()
     if not hasattr(p, "cpu_affinity"):
         pytest.skip("psutil does not provide cpu_affinity on this platform")
