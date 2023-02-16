@@ -7,6 +7,7 @@ import warnings
 from subprocess import check_output
 
 import pytest
+import psutil
 
 import loky
 from loky import cpu_count
@@ -37,7 +38,7 @@ cpu_count_cmd = ("from loky.backend.context import cpu_count;"
                  "print(cpu_count({args}))")
 
 
-def test_cpu_count_affinity():
+def test_cpu_count_os_sched_getaffinity():
     if not hasattr(os, 'sched_getaffinity') or not hasattr(shutil, 'which'):
         pytest.skip()
 
@@ -62,6 +63,21 @@ def test_cpu_count_affinity():
 
     assert res.strip() == '1'
     assert res_physical.strip() == '1'
+
+
+def test_cpu_count_psutil_affinity():
+    p = psutil.Process()
+    if not hasattr(p, "cpu_affinity"):
+        pytest.skip("psutil does not provide cpu_affinity on this platform")
+
+    original_affinity = p.cpu_affinity()
+    assert cpu_count() <= len(original_affinity)
+    try:
+        new_affinity = original_affinity[:1]
+        p.cpu_affinity(new_affinity)
+        assert cpu_count() == 1
+    finally:
+        p.cpu_affinity(original_affinity)
 
 
 def test_cpu_count_cgroup_limit():

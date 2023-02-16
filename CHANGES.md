@@ -3,6 +3,11 @@
 - Fix exception `__cause__` not being propagated with
   `tblib.pickling_support.install()` (#255).
 
+- Fix handling of CPU affinity on Linux and PyPy by using `psutil`'s
+  `cpu_affinity`. As a side effect, this also makes it possible to take CPU
+  affinity constraints into account on Windows when `psutil` is installed
+  (#381).
+
 ### 3.3.0 - 2022-09-15
 
 - Fix worker management logic in `get_reusable_executor` to ensure
