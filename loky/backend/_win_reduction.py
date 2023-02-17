@@ -23,8 +23,8 @@ class DupHandle:
         proc = _winapi.OpenProcess(_winapi.PROCESS_DUP_HANDLE, False, pid)
         try:
             self._handle = _winapi.DuplicateHandle(
-                _winapi.GetCurrentProcess(),
-                handle, proc, access, False, 0)
+                _winapi.GetCurrentProcess(), handle, proc, access, False, 0
+            )
         finally:
             _winapi.CloseHandle(proc)
         self._access = access
@@ -34,12 +34,18 @@ class DupHandle:
         # retrieve handle from process which currently owns it
         if self._pid == os.getpid():
             return self._handle
-        proc = _winapi.OpenProcess(_winapi.PROCESS_DUP_HANDLE, False,
-                                   self._pid)
+        proc = _winapi.OpenProcess(
+            _winapi.PROCESS_DUP_HANDLE, False, self._pid
+        )
         try:
             return _winapi.DuplicateHandle(
-                proc, self._handle, _winapi.GetCurrentProcess(),
-                self._access, False, _winapi.DUPLICATE_CLOSE_SOURCE)
+                proc,
+                self._handle,
+                _winapi.GetCurrentProcess(),
+                self._access,
+                False,
+                _winapi.DUPLICATE_CLOSE_SOURCE,
+            )
         finally:
             _winapi.CloseHandle(proc)
 
@@ -50,8 +56,9 @@ def rebuild_pipe_connection(dh, readable, writable):
 
 
 def reduce_pipe_connection(conn):
-    access = ((_winapi.FILE_GENERIC_READ if conn.readable else 0) |
-              (_winapi.FILE_GENERIC_WRITE if conn.writable else 0))
+    access = (_winapi.FILE_GENERIC_READ if conn.readable else 0) | (
+        _winapi.FILE_GENERIC_WRITE if conn.writable else 0
+    )
     dh = DupHandle(conn.fileno(), access)
     return rebuild_pipe_connection, (dh, conn.readable, conn.writable)
 

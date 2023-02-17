@@ -21,9 +21,9 @@ from multiprocessing.context import BaseContext
 
 from .process import LokyProcess, LokyInitMainProcess
 
-START_METHODS = ['loky', 'loky_init_main', 'spawn']
-if sys.platform != 'win32':
-    START_METHODS += ['fork', 'forkserver']
+START_METHODS = ["loky", "loky_init_main", "spawn"]
+if sys.platform != "win32":
+    START_METHODS += ["fork", "forkserver"]
 
 _DEFAULT_START_METHOD = None
 
@@ -37,9 +37,12 @@ def get_context(method=None):
     method = method or _DEFAULT_START_METHOD or "loky"
     if method == "fork":
         # If 'fork' is explicitly requested, warn user about potential issues.
-        warnings.warn("`fork` start method should not be used with "
-                      "`loky` as it does not respect POSIX. Try using "
-                      "`spawn` or `loky` instead.", UserWarning)
+        warnings.warn(
+            "`fork` start method should not be used with "
+            "`loky` as it does not respect POSIX. Try using "
+            "`spawn` or `loky` instead.",
+            UserWarning,
+        )
     try:
         return mp_get_context(method)
     except ValueError:
@@ -52,7 +55,7 @@ def get_context(method=None):
 def set_start_method(method, force=False):
     global _DEFAULT_START_METHOD
     if _DEFAULT_START_METHOD is not None and not force:
-        raise RuntimeError('context has already been set')
+        raise RuntimeError("context has already been set")
     assert method is None or method in START_METHODS, (
         f"'{method}' is not a valid start_method. It should be in "
         f"{START_METHODS}"
@@ -112,7 +115,8 @@ def cpu_count(only_physical_cores=False):
             f"following reason:\n{exception}\n"
             "Returning the number of logical cores instead. You can "
             "silence this warning by setting LOKY_MAX_CPU_COUNT to "
-            "the number of cores you want to use.")
+            "the number of cores you want to use."
+        )
         traceback.print_tb(exception.__traceback__)
 
     return aggregate_cpu_count
@@ -156,7 +160,7 @@ def _cpu_count_cgroup(os_cpu_count):
 
 def _cpu_count_affinity(os_cpu_count):
     # Number of available CPUs given affinity settings
-    if hasattr(os, 'sched_getaffinity'):
+    if hasattr(os, "sched_getaffinity"):
         try:
             return len(os.sched_getaffinity(0))
         except NotImplementedError:
@@ -174,7 +178,7 @@ def _cpu_count_affinity(os_cpu_count):
     except ImportError:  # pragma: no cover
         if (
             sys.platform == "linux"
-            and os.environ.get('LOKY_MAX_CPU_COUNT') is None
+            and os.environ.get("LOKY_MAX_CPU_COUNT") is None
         ):
             # PyPy does not implement os.sched_getaffinity on Linux which
             # can cause severe oversubscription problems. Better warn the
@@ -197,7 +201,7 @@ def _cpu_count_user(os_cpu_count):
     cpu_count_cgroup = _cpu_count_cgroup(os_cpu_count)
 
     # User defined soft-limit passed as a loky specific environment variable.
-    cpu_count_loky = int(os.environ.get('LOKY_MAX_CPU_COUNT', os_cpu_count))
+    cpu_count_loky = int(os.environ.get("LOKY_MAX_CPU_COUNT", os_cpu_count))
 
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
@@ -221,22 +225,30 @@ def _count_physical_cores():
     try:
         if sys.platform == "linux":
             cpu_info = subprocess.run(
-                "lscpu --parse=core".split(), capture_output=True, text=True)
+                "lscpu --parse=core".split(), capture_output=True, text=True
+            )
             cpu_info = cpu_info.stdout.splitlines()
             cpu_info = {line for line in cpu_info if not line.startswith("#")}
             cpu_count_physical = len(cpu_info)
         elif sys.platform == "win32":
             cpu_info = subprocess.run(
                 "wmic CPU Get NumberOfCores /Format:csv".split(),
-                capture_output=True, text=True)
+                capture_output=True,
+                text=True,
+            )
             cpu_info = cpu_info.stdout.splitlines()
-            cpu_info = [l.split(",")[1] for l in cpu_info
-                        if (l and l != "Node,NumberOfCores")]
+            cpu_info = [
+                l.split(",")[1]
+                for l in cpu_info
+                if (l and l != "Node,NumberOfCores")
+            ]
             cpu_count_physical = sum(map(int, cpu_info))
         elif sys.platform == "darwin":
             cpu_info = subprocess.run(
                 "sysctl -n hw.physicalcpu".split(),
-                capture_output=True, text=True)
+                capture_output=True,
+                text=True,
+            )
             cpu_info = cpu_info.stdout
             cpu_count_physical = int(cpu_info)
         else:
@@ -244,8 +256,7 @@ def _count_physical_cores():
 
         # if cpu_count_physical < 1, we did not find a valid value
         if cpu_count_physical < 1:
-            raise ValueError(
-                f"found {cpu_count_physical} physical cores < 1")
+            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
 
     except Exception as e:
         exception = e
@@ -259,19 +270,21 @@ def _count_physical_cores():
 
 class LokyContext(BaseContext):
     """Context relying on the LokyProcess."""
-    _name = 'loky'
+
+    _name = "loky"
     Process = LokyProcess
     cpu_count = staticmethod(cpu_count)
 
     def Queue(self, maxsize=0, reducers=None):
-        '''Returns a queue object'''
+        """Returns a queue object"""
         from .queues import Queue
-        return Queue(maxsize, reducers=reducers,
-                     ctx=self.get_context())
+
+        return Queue(maxsize, reducers=reducers, ctx=self.get_context())
 
     def SimpleQueue(self, reducers=None):
-        '''Returns a queue object'''
+        """Returns a queue object"""
         from .queues import SimpleQueue
+
         return SimpleQueue(reducers=reducers, ctx=self.get_context())
 
     if sys.platform != "win32":
@@ -279,34 +292,41 @@ class LokyContext(BaseContext):
         ensuring that we use the loky.backend.resource_tracker to clean-up
         the semaphores in case of a worker crash.
         """
+
         def Semaphore(self, value=1):
             """Returns a semaphore object"""
             from .synchronize import Semaphore
+
             return Semaphore(value=value)
 
         def BoundedSemaphore(self, value):
             """Returns a bounded semaphore object"""
             from .synchronize import BoundedSemaphore
+
             return BoundedSemaphore(value)
 
         def Lock(self):
             """Returns a lock object"""
             from .synchronize import Lock
+
             return Lock()
 
         def RLock(self):
             """Returns a recurrent lock object"""
             from .synchronize import RLock
+
             return RLock()
 
         def Condition(self, lock=None):
             """Returns a condition object"""
             from .synchronize import Condition
+
             return Condition(lock)
 
         def Event(self):
             """Returns an event object"""
             from .synchronize import Event
+
             return Event()
 
 
@@ -324,11 +344,12 @@ class LokyInitMainContext(LokyContext):
     For more details, see the end of the following section of python doc
     https://docs.python.org/3/library/multiprocessing.html#multiprocessing-programming
     """
-    _name = 'loky_init_main'
+
+    _name = "loky_init_main"
     Process = LokyInitMainProcess
 
 
 # Register loky context so it works with multiprocessing.get_context
 ctx_loky = LokyContext()
-mp.context._concrete_contexts['loky'] = ctx_loky
-mp.context._concrete_contexts['loky_init_main'] = LokyInitMainContext()
+mp.context._concrete_contexts["loky"] = ctx_loky
+mp.context._concrete_contexts["loky_init_main"] = LokyInitMainContext()
