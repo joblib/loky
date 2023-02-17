@@ -1199,6 +1199,7 @@ class ProcessPoolExecutor(Executor):
 
         if executor_manager_thread is not None and wait:
             executor_manager_thread.join()
+            _threads_wakeups.pop(executor_manager_thread, None)
 
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
