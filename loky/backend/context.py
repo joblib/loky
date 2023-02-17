@@ -187,8 +187,7 @@ def _cpu_count_affinity(os_cpu_count):
 
     # This can happen for platforms that do not implement any kind of CPU
     # infinity such as macOS-based platforms.
-    raise ValueError
-    # return os_cpu_count
+    return os_cpu_count
 
 
 def _cpu_count_user(os_cpu_count):
