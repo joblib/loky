@@ -40,9 +40,9 @@ try:
 except ImportError:
     raise ImportError(
         "This platform lacks a functioning sem_open"
-        + " implementation, therefore, the required"
-        + " synchronization primitives needed will not"
-        + " function, see issue 3770."
+        " implementation, therefore, the required"
+        " synchronization primitives needed will not"
+        " function, see issue 3770."
     )
 
 #
