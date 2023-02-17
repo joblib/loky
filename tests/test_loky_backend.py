@@ -13,8 +13,12 @@ from loky.backend import get_context
 from loky.backend.context import START_METHODS
 from loky.backend.utils import kill_process_tree
 
-from .utils import (TimingWrapper, check_subprocess_call, with_parallel_sum,
-                    _run_openmp_parallel_sum)
+from .utils import (
+    TimingWrapper,
+    check_subprocess_call,
+    with_parallel_sum,
+    _run_openmp_parallel_sum,
+)
 
 if not hasattr(socket, "socketpair"):
 
@@ -32,10 +36,11 @@ if not hasattr(socket, "socketpair"):
 
 DELTA = 0.1
 ctx_loky = get_context("loky")
-HAVE_SEND_HANDLE = (sys.platform == "win32" or
-                    (hasattr(socket, 'CMSG_LEN') and
-                     hasattr(socket, 'SCM_RIGHTS') and
-                     hasattr(socket.socket, 'sendmsg')))
+HAVE_SEND_HANDLE = sys.platform == "win32" or (
+    hasattr(socket, "CMSG_LEN")
+    and hasattr(socket, "SCM_RIGHTS")
+    and hasattr(socket.socket, "sendmsg")
+)
 HAVE_FROM_FD = hasattr(socket, "fromfd")
 
 
@@ -61,8 +66,7 @@ class TestLokyBackend:
 
     @classmethod
     def teardown_class(cls):
-        """Clean up the test environment from any remaining subprocesses.
-        """
+        """Clean up the test environment from any remaining subprocesses."""
         for child_process in cls.active_children():
             kill_process_tree(child_process)
 
@@ -101,13 +105,12 @@ class TestLokyBackend:
 
     @pytest.mark.parametrize("context_name", ["loky", "loky_init_main"])
     def test_process(self, context_name):
-        """behavior of Process variables and functional connection objects
-        """
+        """behavior of Process variables and functional connection objects"""
         q = self.Queue()
         sq = self.SimpleQueue()
         args = (q, sq, 1, 2)
-        kwargs = {'hello': 23, 'bye': 2.54}
-        name = 'TestLokyProcess'
+        kwargs = {"hello": 23, "bye": 2.54}
+        name = "TestLokyProcess"
         ctx = get_context(context_name)
         p = ctx.Process(
             target=self._test_process, args=args, kwargs=kwargs, name=name
@@ -172,7 +175,7 @@ class TestLokyBackend:
 
         client.settimeout(5)
 
-        msg = b'42'
+        msg = b"42"
         client.send(msg)
         assert client.recv(2) == msg
 
@@ -182,9 +185,11 @@ class TestLokyBackend:
         client.close()
         server.close()
 
-    @pytest.mark.skipif(not HAVE_SEND_HANDLE or not HAVE_FROM_FD,
-                        reason="This system cannot send handle between process"
-                        ". Connections object should be shared at spawning.")
+    @pytest.mark.skipif(
+        not HAVE_SEND_HANDLE or not HAVE_FROM_FD,
+        reason="This system cannot send handle between process"
+        ". Connections object should be shared at spawning.",
+    )
     def test_socket_queue(self):
         """sockets can be pickled in a queue and are able to send/recv"""
         q = self.SimpleQueue()
@@ -195,7 +200,7 @@ class TestLokyBackend:
         server, client = socket.socketpair()
         q.put(server)
 
-        msg = b'42'
+        msg = b"42"
         client.settimeout(5)
         client.send(msg)
         assert client.recv(2) == msg
@@ -210,11 +215,12 @@ class TestLokyBackend:
         """connections can be pickled at spawn and are able to send/recv"""
         parent_connection, child_connection = self.Pipe(duplex=True)
 
-        p = self.Process(target=self._test_connection,
-                         args=(child_connection,))
+        p = self.Process(
+            target=self._test_connection, args=(child_connection,)
+        )
         p.start()
 
-        msg = b'42'
+        msg = b"42"
         parent_connection.send(msg)
         assert parent_connection.recv() == msg
 
@@ -223,9 +229,11 @@ class TestLokyBackend:
         parent_connection.close()
         child_connection.close()
 
-    @pytest.mark.skipif(not HAVE_SEND_HANDLE,
-                        reason="This system cannot send handle between. "
-                        "Connections object should be shared at spawning.")
+    @pytest.mark.skipif(
+        not HAVE_SEND_HANDLE,
+        reason="This system cannot send handle between. "
+        "Connections object should be shared at spawning.",
+    )
     def test_connection_queue(self):
         """connections can be pickled in a queue and are able to send/recv"""
         q = self.SimpleQueue()
@@ -235,7 +243,7 @@ class TestLokyBackend:
         parent_connection, child_connection = self.Pipe(duplex=True)
         q.put(child_connection)
 
-        msg = b'42'
+        msg = b"42"
         parent_connection.send(msg)
         assert parent_connection.recv() == msg
 
@@ -246,18 +254,19 @@ class TestLokyBackend:
 
     @staticmethod
     def _test_child_env(key, queue):
-        queue.put(os.environ.get(key, 'not set'))
+        queue.put(os.environ.get(key, "not set"))
 
     def test_child_env_process(self):
-        key = 'loky_child_env_process'
-        value = 'loky works'
+        key = "loky_child_env_process"
+        value = "loky works"
         out_queue = self.SimpleQueue()
         try:
             # Test that the environment variable is correctly copied in the
             # child process.
             os.environ[key] = value
-            p = self.Process(target=self._test_child_env,
-                             args=(key, out_queue))
+            p = self.Process(
+                target=self._test_child_env, args=(key, out_queue)
+            )
             p.start()
             child_var = out_queue.get()
             p.join()
@@ -266,9 +275,12 @@ class TestLokyBackend:
 
             # Test that the environment variable is correctly overwritted by
             # using the `env` argument in Process.
-            new_value = 'loky rocks'
-            p = self.Process(target=self._test_child_env,
-                             args=(key, out_queue), env={key: new_value})
+            new_value = "loky rocks"
+            p = self.Process(
+                target=self._test_child_env,
+                args=(key, out_queue),
+                env={key: new_value},
+            )
             p.start()
             child_var = out_queue.get()
             p.join()
@@ -312,11 +324,12 @@ class TestLokyBackend:
         p.terminate()
 
         MAX_JOIN_TIME = 10
-        if hasattr(signal, 'alarm'):
+        if hasattr(signal, "alarm"):
             # On the Gentoo buildbot waitpid() often seems to block forever.
             # We use alarm() to interrupt it if it blocks for too long.
             def handler(*args):
-                raise RuntimeError(f'join took too long: {p}')
+                raise RuntimeError(f"join took too long: {p}")
+
             old_handler = signal.signal(signal.SIGALRM, handler)
             try:
                 signal.alarm(MAX_JOIN_TIME)
@@ -374,15 +387,7 @@ class TestLokyBackend:
             a = rconn.recv()
             result.append(a)
 
-        expected = [
-            [],
-            [0],
-            [0, 0],
-            [0, 1],
-            [1],
-            [1, 0],
-            [1, 1]
-        ]
+        expected = [[], [0], [0, 0], [0, 1], [1], [1, 0], [1, 1]]
         assert result == expected
 
     @classmethod
@@ -404,7 +409,8 @@ class TestLokyBackend:
     @classmethod
     def _test_wait_sentinel(cls):
         from signal import SIGTERM
-        time.sleep(.1)
+
+        time.sleep(0.1)
         os.kill(os.getpid(), SIGTERM)
 
     def test_wait_sentinel(self):
@@ -415,7 +421,7 @@ class TestLokyBackend:
         assert isinstance(p.sentinel, int)
         assert not wait([p.sentinel], timeout=0.0)
         assert wait([p.sentinel], timeout=5), p.exitcode
-        expected_code = 15 if sys.platform == 'win32' else -15
+        expected_code = 15 if sys.platform == "win32" else -15
         p.join()  # force refresh of p.exitcode
         assert p.exitcode == expected_code
 
@@ -439,8 +445,14 @@ class TestLokyBackend:
         w: int
             fileno of the writable end of the Pipe, it should be closed
         """
-        to_clean_up = [cls.Semaphore(0), cls.BoundedSemaphore(1),  # noqa: F841
-                       cls.Lock(), cls.RLock(), cls.Condition(), cls.Event()]
+        to_clean_up = [
+            cls.Semaphore(0),
+            cls.BoundedSemaphore(1),  # noqa: F841
+            cls.Lock(),
+            cls.RLock(),
+            cls.Condition(),
+            cls.Event(),
+        ]
         started.set()
         assert conn.recv_bytes() == b"foo"
         with pytest.raises(OSError):
@@ -453,13 +465,17 @@ class TestLokyBackend:
         Return a list of open named semaphores
         """
         import subprocess
+
         try:
             out = subprocess.check_output(
-                f"lsof -a -Fftn -p {pid} -d ^txt,^cwd,^rtd".split(), text=True)
+                f"lsof -a -Fftn -p {pid} -d ^txt,^cwd,^rtd".split(), text=True
+            )
             lines = out.splitlines()[1:]
         except (FileNotFoundError, OSError):
-            print("lsof does not exist on this platform. Skip open files"
-                  "check.")
+            print(
+                "lsof does not exist on this platform. Skip open files"
+                "check."
+            )
             return []
 
         n_pipe = 0
@@ -468,26 +484,26 @@ class TestLokyBackend:
 
             # Check if fd is a standard IO file. For python 3.x stdin
             # should be closed.
-            is_std = (fd in ["f1", "f2"])
+            is_std = fd in ["f1", "f2"]
 
             # Check if fd is a pipe
-            is_pipe = (t in ["tPIPE", "tFIFO"])
+            is_pipe = t in ["tPIPE", "tFIFO"]
             n_pipe += is_pipe
 
             # Check if fd is open for the rng. This can happen on different
             # plateform and depending of the python version.
-            is_rng = (name == "n/dev/urandom")
+            is_rng = name == "n/dev/urandom"
 
             # Check if fd is a semaphore or an open library. Store all the
             # named semaphore
-            is_mem = (fd in ["fmem", "fDEL"])
+            is_mem = fd in ["fmem", "fDEL"]
             if sys.platform == "darwin":
                 is_mem |= "n/loky-" in name
             if is_mem and "n/dev/shm/sem." in name:
                 named_sem += [name[1:]]
 
             # no other files should be opened at this stage in the process
-            assert (is_pipe or is_std or is_rng or is_mem)
+            assert is_pipe or is_std or is_rng or is_mem
 
         # there should be:
         # - one pipe for communication with main process
@@ -495,12 +511,14 @@ class TestLokyBackend:
         # - the Connection pipe
         # - additionally, on posix + Python 3.8: multiprocessing's
         #   resource_tracker pipe
-        if sys.version_info >= (3, 8) and os.name == 'posix':
+        if sys.version_info >= (3, 8) and os.name == "posix":
             n_expected_pipes = 4
         else:
             n_expected_pipes = 3
-        msg = ("Some pipes were not properly closed during the child process "
-               "setup.")
+        msg = (
+            "Some pipes were not properly closed during the child process "
+            "setup."
+        )
         assert n_pipe == n_expected_pipes, msg
 
         # assert that the writable part of the Pipe (not passed to child),
@@ -528,8 +546,10 @@ class TestLokyBackend:
         with open(tmp_fname, "w"):
             # Process creating semaphore and pipes before stopping
             started, stop = self.Event(), self.Event()
-            p = self.Process(target=self._test_sync_object_handling,
-                             args=(started, stop, r, w.fileno()))
+            p = self.Process(
+                target=self._test_sync_object_handling,
+                args=(started, stop, r, w.fileno()),
+            )
             named_sem = []
             try:
 
@@ -557,7 +577,8 @@ class TestLokyBackend:
                         if pid not in sem:
                             assert not os.path.exists(sem), (
                                 "Some named semaphore are not properly cleaned"
-                                " up")
+                                " up"
+                            )
 
                 assert p.exitcode == 0
 
@@ -578,49 +599,54 @@ class TestLokyBackend:
         # when using -c option, we don't need the safeguard if __name__ ..
         # and thus test LokyProcess without the extra argument. For running
         # a script, it is necessary to use init_main_module=False.
-        code = '\n'.join([
-            'from loky.backend.process import LokyProcess',
-            'p = LokyProcess(target=id, args=(1,), ',
-            f'                init_main_module={not run_file})',
-            'p.start()',
-            'p.join()',
-            'msg = "LokyProcess failed to load without safeguard"',
-            'assert p.exitcode == 0, msg',
-            'print("ok")'
-        ])
+        code = "\n".join(
+            [
+                "from loky.backend.process import LokyProcess",
+                "p = LokyProcess(target=id, args=(1,), ",
+                f"                init_main_module={not run_file})",
+                "p.start()",
+                "p.join()",
+                'msg = "LokyProcess failed to load without safeguard"',
+                "assert p.exitcode == 0, msg",
+                'print("ok")',
+            ]
+        )
         cmd = [sys.executable]
         try:
             if run_file:
                 fid, filename = mkstemp(suffix="_joblib.py")
                 os.close(fid)
-                with open(filename, mode='w') as f:
+                with open(filename, mode="w") as f:
                     f.write(code)
                 cmd += [filename]
             else:
                 cmd += ["-c", code]
-            check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
+            check_subprocess_call(cmd, stdout_regex="ok", timeout=10)
         finally:
             if run_file:
                 os.unlink(filename)
 
     def test_interactively_define_process_fail_main(self):
         # check that the default behavior of the LokyProcess is correct
-        code = '\n'.join([
-            'from loky.backend.process import LokyProcess',
-            'p = LokyProcess(target=id, args=(1,),',
-            '                init_main_module=True)',
-            'p.start()',
-            'p.join()',
-            'msg = "LokyProcess succeed without safeguards"',
-            'assert p.exitcode != 0, msg'
-        ])
+        code = "\n".join(
+            [
+                "from loky.backend.process import LokyProcess",
+                "p = LokyProcess(target=id, args=(1,),",
+                "                init_main_module=True)",
+                "p.start()",
+                "p.join()",
+                'msg = "LokyProcess succeed without safeguards"',
+                "assert p.exitcode != 0, msg",
+            ]
+        )
         fid, filename = mkstemp(suffix="_joblib.py")
         os.close(fid)
         try:
-            with open(filename, mode='w') as f:
+            with open(filename, mode="w") as f:
                 f.write(code)
-            stdout, stderr = check_subprocess_call([sys.executable, filename],
-                                                   timeout=10)
+            stdout, stderr = check_subprocess_call(
+                [sys.executable, filename], timeout=10
+            )
             if sys.platform == "win32":
                 assert "RuntimeError:" in stderr
             else:
@@ -644,24 +670,27 @@ class TestLokyBackend:
 
     def test_interactive_contex_no_main(self):
         # Ensure that loky context is working properly
-        code = '\n'.join([
-            'from loky.backend import get_context',
-            'ctx = get_context()',
-            'assert ctx.get_start_method() == "loky"',
-            'p = ctx.Process(target=id, args=(1,))',
-            'p.start()',
-            'p.join()',
-            'msg = "loky context failed to load without safeguard"',
-            'assert p.exitcode == 0, msg',
-            'print("ok")'
-        ])
+        code = "\n".join(
+            [
+                "from loky.backend import get_context",
+                "ctx = get_context()",
+                'assert ctx.get_start_method() == "loky"',
+                "p = ctx.Process(target=id, args=(1,))",
+                "p.start()",
+                "p.join()",
+                'msg = "loky context failed to load without safeguard"',
+                "assert p.exitcode == 0, msg",
+                'print("ok")',
+            ]
+        )
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='w') as f:
+            with open(filename, mode="w") as f:
                 f.write(code)
-            check_subprocess_call([sys.executable, filename],
-                                  stdout_regex='ok', timeout=10)
+            check_subprocess_call(
+                [sys.executable, filename], stdout_regex="ok", timeout=10
+            )
         finally:
             os.unlink(filename)
 
@@ -674,8 +703,9 @@ def wait_for_handle(handle, timeout):
 
 def _run_nested_delayed(depth, delay, event):
     if depth > 0:
-        p = ctx_loky.Process(target=_run_nested_delayed,
-                             args=(depth - 1, delay, event))
+        p = ctx_loky.Process(
+            target=_run_nested_delayed, args=(depth - 1, delay, event)
+        )
         p.start()
         p.join()
     else:
@@ -694,8 +724,10 @@ def test_kill_process_tree(use_psutil):
     # Wait for all the processes to be launched
     if not event.wait(30):
         kill_process_tree(p, use_psutil=use_psutil)
-        raise RuntimeError("test_kill_process_tree was not able to launch "
-                           "all nested processes.")
+        raise RuntimeError(
+            "test_kill_process_tree was not able to launch "
+            "all nested processes."
+        )
 
     children = psutil.Process(pid=p.pid).children(recursive=True)
     kill_process_tree(p, use_psutil=use_psutil)
@@ -710,7 +742,7 @@ def _test_default_subcontext(queue):
     queue.put(mp.get_start_method())
 
 
-@pytest.mark.parametrize('method', START_METHODS)
+@pytest.mark.parametrize("method", START_METHODS)
 def test_default_subcontext(method):
     code = f"""if True:
         import sys

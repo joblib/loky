@@ -14,6 +14,7 @@ from loky.backend.reduction import dumps
 
 class SlowlyPickling:
     """Simulate slowly pickling object, e.g. large numpy array or dict"""
+
     def __init__(self, delay=1):
         self.delay = delay
 
@@ -23,7 +24,7 @@ class SlowlyPickling:
 
 
 class DelayedSimpleQueue(SimpleQueue):
-    def __init__(self, reducers=None, ctx=None, delay=.1):
+    def __init__(self, reducers=None, ctx=None, delay=0.1):
         super().__init__(reducers=reducers, ctx=ctx)
         self.out_queue = SimpleQueue(ctx=ctx)
         self._inner_reader = self._reader
@@ -35,9 +36,13 @@ class DelayedSimpleQueue(SimpleQueue):
     def _start_thread(self, delay):
         self._thread = threading.Thread(
             target=DelayedSimpleQueue._feed,
-            args=(self._rlock, self._inner_reader, self.out_queue._writer,
-                  delay),
-            name='QueueDeFeederThread'
+            args=(
+                self._rlock,
+                self._inner_reader,
+                self.out_queue._writer,
+                delay,
+            ),
+            name="QueueDeFeederThread",
         )
         self._thread.daemon = True
 
@@ -67,15 +72,17 @@ class DelayedSimpleQueue(SimpleQueue):
 
 class TestTimeoutExecutor:
     def test_worker_timeout_mock(self):
-        timeout = .001
+        timeout = 0.001
         context = get_context()
         executor = ProcessPoolExecutor(
-            max_workers=4, context=context, timeout=timeout)
-        result_queue = DelayedSimpleQueue(ctx=context, delay=.001)
+            max_workers=4, context=context, timeout=timeout
+        )
+        result_queue = DelayedSimpleQueue(ctx=context, delay=0.001)
         executor._result_queue = result_queue
 
-        with pytest.warns(UserWarning,
-                          match='^A worker stopped while some jobs'):
+        with pytest.warns(
+            UserWarning, match="^A worker stopped while some jobs"
+        ):
             for _ in range(5):
                 # Trigger worker spawn for lazy executor implementations
                 for _ in executor.map(id, range(8)):
@@ -91,23 +98,29 @@ class TestTimeoutExecutor:
         pickling large arguments, the executor should ensure that there is an
         appropriate amount of workers to move one and not get stalled.
         """
-        with pytest.warns(UserWarning,
-                          match='^A worker stopped while some jobs'):
-            for timeout, delay in [(0.01, 0.02), (0.01, 0.1), (0.1, 0.1),
-                                   (0.001, .1)]:
-                executor = get_reusable_executor(max_workers=2,
-                                                 timeout=timeout)
+        with pytest.warns(
+            UserWarning, match="^A worker stopped while some jobs"
+        ):
+            for timeout, delay in [
+                (0.01, 0.02),
+                (0.01, 0.1),
+                (0.1, 0.1),
+                (0.001, 0.1),
+            ]:
+                executor = get_reusable_executor(
+                    max_workers=2, timeout=timeout
+                )
                 # First make sure the executor is started
                 executor.submit(id, 42).result()
-                results = list(executor.map(
-                    id, [SlowlyPickling(delay)] * n_tasks))
+                results = list(
+                    executor.map(id, [SlowlyPickling(delay)] * n_tasks)
+                )
                 assert len(results) == n_tasks
 
     def test_worker_timeout_shutdown_no_deadlock(self):
-        """Check that worker timeout don't cause deadlock when shutting down.
-        """
+        """Check that worker timeout don't cause deadlock when shutting down."""
         with warnings.catch_warnings(record=True) as record:
-            with get_reusable_executor(max_workers=2, timeout=.001) as e:
+            with get_reusable_executor(max_workers=2, timeout=0.001) as e:
                 # First make sure the executor is started
                 e.submit(id, 42).result()
 
@@ -120,4 +133,4 @@ class TestTimeoutExecutor:
         # there are still pending tasks but this should not cause a deadlock.
         for w in record:
             msg = w.message.args[0]
-            assert 'A worker stopped while some jobs' in msg
+            assert "A worker stopped while some jobs" in msg

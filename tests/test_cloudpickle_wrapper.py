@@ -12,7 +12,6 @@ from .utils import check_subprocess_call
 
 
 class TestCloudpickleWrapper:
-
     def test_isolated_pickler_dispatch_tables(self):
         class A:
             pass
@@ -21,11 +20,9 @@ class TestCloudpickleWrapper:
             pass
 
         iob1 = io.BytesIO()
-        p1 = get_loky_pickler()(iob1,
-                                reducers={A: lambda obj: (int, (42,))})
+        p1 = get_loky_pickler()(iob1, reducers={A: lambda obj: (int, (42,))})
         iob2 = io.BytesIO()
-        p2 = get_loky_pickler()(iob2,
-                                reducers={B: lambda obj: (int, (42,))})
+        p2 = get_loky_pickler()(iob2, reducers={B: lambda obj: (int, (42,))})
 
         assert p1.dispatch_table is not p2.dispatch_table
 
@@ -64,16 +61,16 @@ class TestCloudpickleWrapper:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='w') as f:
+            with open(filename, mode="w") as f:
                 f.write(code)
             cmd += [filename]
-            check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
+            check_subprocess_call(cmd, stdout_regex="ok", timeout=10)
 
             # Makes sure that if LOKY_PICKLER is set to default pickle, the
             # tasks are not wrapped with cloudpickle and it is not possible
             # using functions from the main module.
-            env = {'LOKY_PICKLER': 'pickle'}
-            with pytest.raises(ValueError, match='A task has failed to un-s'):
+            env = {"LOKY_PICKLER": "pickle"}
+            with pytest.raises(ValueError, match="A task has failed to un-s"):
                 check_subprocess_call(cmd, timeout=10, env=env)
         finally:
             os.unlink(filename)
@@ -107,10 +104,10 @@ class TestCloudpickleWrapper:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='w') as f:
+            with open(filename, mode="w") as f:
                 f.write(code)
             cmd += [filename]
-            check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
+            check_subprocess_call(cmd, stdout_regex="ok", timeout=10)
         finally:
             os.unlink(filename)
 
@@ -162,17 +159,18 @@ class TestCloudpickleWrapper:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='w') as f:
+            with open(filename, mode="w") as f:
                 f.write(code)
             cmd += [filename]
 
-            env = {'LOKY_PICKLER': 'pickle'}
-            check_subprocess_call(cmd, stdout_regex='ok', timeout=10, env=env)
+            env = {"LOKY_PICKLER": "pickle"}
+            check_subprocess_call(cmd, stdout_regex="ok", timeout=10, env=env)
         finally:
             os.unlink(filename)
 
-    @pytest.mark.parametrize('loky_pickler',
-                             [None, "''", "'cloudpickle'", "'pickle'"])
+    @pytest.mark.parametrize(
+        "loky_pickler", [None, "''", "'cloudpickle'", "'pickle'"]
+    )
     def test_set_loky_pickler(self, loky_pickler):
         # Test that the function set_loky_pickler correctly changes the pickler
         # used in loky.
@@ -244,7 +242,7 @@ class TestCloudpickleWrapper:
         try:
             fid, filename = mkstemp(suffix="_joblib.py")
             os.close(fid)
-            with open(filename, mode='w') as f:
+            with open(filename, mode="w") as f:
                 f.write(code)
             cmd += [filename]
             if loky_pickler == "'pickle'":
@@ -252,7 +250,7 @@ class TestCloudpickleWrapper:
                 with pytest.raises(ValueError, match=match):
                     check_subprocess_call(cmd, timeout=10)
             else:
-                check_subprocess_call(cmd, stdout_regex='ok', timeout=10)
+                check_subprocess_call(cmd, stdout_regex="ok", timeout=10)
         finally:
             os.unlink(filename)
 
