@@ -55,6 +55,7 @@ def captured_output(stream_name):
     """Return a context manager used by captured_stdout/stdin/stderr
     that temporarily replaces the sys stream *stream_name* with a StringIO."""
     import io
+
     orig_stdout = getattr(sys, stream_name)
     s = io.StringIO()
 
@@ -68,9 +69,9 @@ def captured_output(stream_name):
 def captured_stderr():
     """Capture the output of sys.stderr:
 
-       with captured_stderr() as stderr:
-           print("hello", file=sys.stderr)
-       self.assertEqual(stderr.getvalue(), "hello\\n")
+    with captured_stderr() as stderr:
+        print("hello", file=sys.stderr)
+    self.assertEqual(stderr.getvalue(), "hello\\n")
     """
     return captured_output("stderr")
 
@@ -79,8 +80,8 @@ def captured_stderr():
 # Wrapper
 #
 
-class TimingWrapper:
 
+class TimingWrapper:
     def __init__(self, func):
         self.func = func
         self.elapsed = None
@@ -107,14 +108,16 @@ class TimingWrapper:
 # helper functions
 #
 
+
 def id_sleep(x, delay=0):
     """sleep for delay seconds and return its first argument"""
     time.sleep(delay)
     return x
 
 
-def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
-                          stderr_regex=None, env=None):
+def check_subprocess_call(
+    cmd, timeout=1, stdout_regex=None, stderr_regex=None, env=None
+):
     """Runs a command in a subprocess with timeout in seconds.
 
     Also checks returncode is zero, stdout if stdout_regex is set, and
@@ -123,8 +126,9 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
     if env is not None:
         env = {**os.environ, **env}
 
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, env=env, text=True)
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, text=True
+    )
 
     def kill_process():
         warnings.warn(f"Timeout running {cmd}")
@@ -137,23 +141,23 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 
         if proc.returncode == -9:
             message = (
-                f'Subprocess timeout after {timeout}s.\nStdout:\n{stdout}\n'
-                f'Stderr:\n{stderr}')
+                f"Subprocess timeout after {timeout}s.\nStdout:\n{stdout}\n"
+                f"Stderr:\n{stderr}"
+            )
             raise TimeoutError(message)
         elif proc.returncode != 0:
             message = (
-                f'Non-zero return code: {proc.returncode}.\nStdout:\n{stdout}'
-                f'\nStderr:\n{stderr}')
+                f"Non-zero return code: {proc.returncode}.\nStdout:\n{stdout}"
+                f"\nStderr:\n{stderr}"
+            )
             raise ValueError(message)
 
-        if (stdout_regex is not None and
-                not re.search(stdout_regex, stdout)):
+        if stdout_regex is not None and not re.search(stdout_regex, stdout):
             raise ValueError(
                 f"Unexpected stdout: {stdout_regex!r} does not match:"
                 f"\n{stdout!r}"
             )
-        if (stderr_regex is not None and
-                not re.search(stderr_regex, stderr)):
+        if stderr_regex is not None and not re.search(stderr_regex, stderr):
             raise ValueError(
                 f"Unexpected stderr: {stderr_regex!r} does not "
                 f"match:\n{stderr!r}"
@@ -168,6 +172,7 @@ def check_subprocess_call(cmd, timeout=1, stdout_regex=None,
 def skip_func(msg):
     def test_func(*args, **kwargs):
         pytest.skip(msg)
+
     return test_func
 
 
@@ -180,9 +185,10 @@ try:
         return func
 
 except ImportError:
+
     def with_numpy(func):
         """A decorator to skip tests requiring numpy."""
-        return skip_func('Test require numpy')
+        return skip_func("Test require numpy")
 
 
 # A decorator to run tests only when numpy is available
@@ -197,9 +203,10 @@ try:
         return parallel_sum(*args)
 
 except ImportError:
+
     def with_parallel_sum(func):
         """A decorator to skip tests if parallel_sum is not compiled."""
-        return skip_func('Test requires parallel_sum to be compiled')
+        return skip_func("Test requires parallel_sum to be compiled")
 
     _run_openmp_parallel_sum = None
 
@@ -209,7 +216,7 @@ def check_python_subprocess_call(code, stdout_regex=None, timeout=10):
     try:
         fid, filename = mkstemp(suffix="_joblib.py")
         os.close(fid)
-        with open(filename, mode='w') as f:
+        with open(filename, mode="w") as f:
             f.write(code)
         cmd += [filename]
         check_subprocess_call(cmd, stdout_regex=stdout_regex, timeout=timeout)

@@ -66,7 +66,7 @@ print(f"With cloudpickle serialization: {time.time() - t_start:.3f}s")
 # Now set the `loky_pickler` to use the pickle serialization from stdlib. Here,
 # we do not pass the desired function ``call_function`` as it is not picklable
 # but it is replaced by ``id`` for demonstration purposes.
-set_loky_pickler('pickle')
+set_loky_pickler("pickle")
 t_start = time.time()
 executor = get_reusable_executor(max_workers=1)
 executor.submit(id, large_list).result()
@@ -96,6 +96,7 @@ except Exception:
 # cause many issues with functions but can have side effects with object
 # instances.
 #
+
 
 @wrap_non_picklable_objects
 def func_async_wrapped(i, *args):

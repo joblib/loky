@@ -11,6 +11,7 @@ from loky.backend import get_context
 
 try:
     import psutil
+
     psutil_exceptions = (psutil.NoSuchProcess, psutil.AccessDenied)
 except ImportError:
     psutil = None
@@ -54,20 +55,32 @@ def _direct_children_with_cmdline(p):
 
 def _running_children_pids_with_cmdline(p):
     all_children = _direct_children_with_cmdline(p)
-    workers = [(c, cmdline) for c, cmdline in all_children
-               if ('semaphore_tracker' not in cmdline and
-                   'resource_tracker' not in cmdline and
-                   'multiprocessing.forkserver' not in cmdline)]
+    workers = [
+        (c, cmdline)
+        for c, cmdline in all_children
+        if (
+            "semaphore_tracker" not in cmdline
+            and "resource_tracker" not in cmdline
+            and "multiprocessing.forkserver" not in cmdline
+        )
+    ]
 
-    forkservers = [c for c, cmdline in all_children
-                   if 'multiprocessing.forkserver' in cmdline]
+    forkservers = [
+        c
+        for c, cmdline in all_children
+        if "multiprocessing.forkserver" in cmdline
+    ]
     for fs in forkservers:
         workers += _direct_children_with_cmdline(fs)
     return [(w.pid, cmdline) for w, cmdline in workers]
 
 
-def _check_subprocesses_number(executor=None, expected_process_number=None,
-                               expected_max_process_number=None, patience=10):
+def _check_subprocesses_number(
+    executor=None,
+    expected_process_number=None,
+    expected_max_process_number=None,
+    patience=10,
+):
     if not psutil:
         # psutil is not installed, we cannot check the number of subprocesses
         return
@@ -75,7 +88,9 @@ def _check_subprocesses_number(executor=None, expected_process_number=None,
     for trial_idx in range(patience):
         try:
             # Wait for terminating processes to disappear
-            pids_cmdlines = _running_children_pids_with_cmdline(psutil.Process())
+            pids_cmdlines = _running_children_pids_with_cmdline(
+                psutil.Process()
+            )
             children_pids = {pid for pid, _ in pids_cmdlines}
             if executor is not None:
                 worker_pids = set(executor._processes.keys())
@@ -85,12 +100,20 @@ def _check_subprocesses_number(executor=None, expected_process_number=None,
                 # Bypass pids checks when executor has been garbage collected
                 worker_pids = children_pids
             if expected_process_number is not None:
-                assert len(children_pids) == expected_process_number, pids_cmdlines
-                assert len(worker_pids) == expected_process_number, pids_cmdlines
+                assert (
+                    len(children_pids) == expected_process_number
+                ), pids_cmdlines
+                assert (
+                    len(worker_pids) == expected_process_number
+                ), pids_cmdlines
 
             if expected_max_process_number is not None:
-                assert len(children_pids) <= expected_max_process_number, pids_cmdlines
-                assert len(worker_pids) <= expected_max_process_number, pids_cmdlines
+                assert (
+                    len(children_pids) <= expected_max_process_number
+                ), pids_cmdlines
+                assert (
+                    len(worker_pids) <= expected_max_process_number
+                ), pids_cmdlines
 
             return
         except AssertionError as e:
@@ -109,11 +132,16 @@ def _check_executor_started(executor):
     try:
         res.result(timeout=TIMEOUT)
     except TimeoutError:
-        print('\n' * 3, res.done(), executor._call_queue.empty(),
-              executor._result_queue.empty())
+        print(
+            "\n" * 3,
+            res.done(),
+            executor._call_queue.empty(),
+            executor._result_queue.empty(),
+        )
         print(executor._processes)
         print(threading.enumerate())
         from faulthandler import dump_traceback
+
         dump_traceback()
         executor.submit(dump_traceback).result(TIMEOUT)
         raise RuntimeError("Executor took too long to run basic task.")
@@ -144,8 +172,11 @@ class ExecutorMixin:
         assert _test_event is not None
         try:
             self.executor = self.executor_type(
-                max_workers=self.worker_count, context=self.context,
-                initializer=initializer_event, initargs=(_test_event,))
+                max_workers=self.worker_count,
+                context=self.context,
+                initializer=initializer_event,
+                initargs=(_test_event,),
+            )
         except NotImplementedError as e:
             self.skipTest(str(e))
         _check_executor_started(self.executor)
@@ -153,7 +184,7 @@ class ExecutorMixin:
 
     def teardown_method(self, method):
         # Make sure executor is not broken if it should not be
-        executor = getattr(self, 'executor', None)
+        executor = getattr(self, "executor", None)
         if executor is not None:
             try:
                 # old pytest markers:
@@ -194,8 +225,10 @@ class ExecutorMixin:
     def _prime_executor(self):
         # Make sure that the executor is ready to do work before running the
         # tests. This should reduce the probability of timeouts in the tests.
-        futures = [self.executor.submit(time.sleep, 0.1)
-                   for _ in range(self.worker_count)]
+        futures = [
+            self.executor.submit(time.sleep, 0.1)
+            for _ in range(self.worker_count)
+        ]
         for f in futures:
             f.result()
 
@@ -217,16 +250,15 @@ class ExecutorMixin:
         # raise error.
         print("Remaining worker processes command lines:", file=sys.stderr)
         for w, cmdline in workers:
-            print(w.pid, w.status(), end='\n', file=sys.stderr)
-            print(cmdline, end='\n\n', file=sys.stderr)
+            print(w.pid, w.status(), end="\n", file=sys.stderr)
+            print(cmdline, end="\n\n", file=sys.stderr)
         raise AssertionError(
-            f'Expected no more running worker processes but got {len(workers)}'
-            f' after waiting {patience:0.3f}s.'
+            f"Expected no more running worker processes but got {len(workers)}"
+            f" after waiting {patience:0.3f}s."
         )
 
 
 class ReusableExecutorMixin:
-
     def setup_method(self, method):
         default_start_method = get_context().get_start_method()
         assert default_start_method == "loky", default_start_method
@@ -237,7 +269,9 @@ class ReusableExecutorMixin:
 
         # Check that there no other running subprocesses beyond the workers
         # of the reusable executor.
-        _check_subprocesses_number(executor=None, expected_max_process_number=2)
+        _check_subprocesses_number(
+            executor=None, expected_max_process_number=2
+        )
 
     def teardown_method(self, method):
         """Make sure the executor can be recovered after the tests"""
@@ -248,7 +282,9 @@ class ReusableExecutorMixin:
 
         # Check that there no other running subprocesses beyond the workers
         # of the reusable executor.
-        _check_subprocesses_number(executor=None, expected_max_process_number=2)
+        _check_subprocesses_number(
+            executor=None, expected_max_process_number=2
+        )
 
     @classmethod
     def teardown_class(cls):

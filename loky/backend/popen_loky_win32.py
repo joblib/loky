@@ -11,7 +11,7 @@ from multiprocessing.reduction import duplicate
 from . import reduction, spawn
 
 
-__all__ = ['Popen']
+__all__ = ["Popen"]
 
 #
 #
@@ -22,8 +22,9 @@ def _path_eq(p1, p2):
     return p1 == p2 or os.path.normcase(p1) == os.path.normcase(p2)
 
 
-WINENV = (hasattr(sys, "_base_executable")
-          and not _path_eq(sys.executable, sys._base_executable))
+WINENV = hasattr(sys, "_base_executable") and not _path_eq(
+    sys.executable, sys._base_executable
+)
 
 #
 # We define a Popen class similar to the one from subprocess, but
@@ -32,14 +33,16 @@ WINENV = (hasattr(sys, "_base_executable")
 
 
 class Popen(_Popen):
-    '''
+    """
     Start a subprocess to run the code of a process object
-    '''
-    method = 'loky'
+    """
+
+    method = "loky"
 
     def __init__(self, process_obj):
         prep_data = spawn.get_preparation_data(
-            process_obj._name, getattr(process_obj, "init_main_module", True))
+            process_obj._name, getattr(process_obj, "init_main_module", True)
+        )
 
         # read end of pipe will be "stolen" by the child process
         # -- see spawn_main() in spawn.py.
@@ -48,7 +51,7 @@ class Popen(_Popen):
         os.close(rfd)
 
         cmd = get_command_line(parent_pid=os.getpid(), pipe_handle=rhandle)
-        cmd = ' '.join(f'"{x}"' for x in cmd)
+        cmd = " ".join(f'"{x}"' for x in cmd)
 
         python_exe = spawn.get_executable()
 
@@ -62,7 +65,7 @@ class Popen(_Popen):
             child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
         try:
-            with open(wfd, 'wb') as to_child:
+            with open(wfd, "wb") as to_child:
                 # start process
                 try:
                     # This flag allows to pass inheritable handles from the
@@ -74,9 +77,16 @@ class Popen(_Popen):
                     # be used instead.
                     inherit = True
                     hp, ht, pid, _ = _winapi.CreateProcess(
-                        python_exe, cmd,
-                        None, None, inherit, 0,
-                        child_env, None, None)
+                        python_exe,
+                        cmd,
+                        None,
+                        None,
+                        inherit,
+                        0,
+                        child_env,
+                        None,
+                        None,
+                    )
                     _winapi.CloseHandle(ht)
                 except BaseException:
                     _winapi.CloseHandle(rhandle)
@@ -111,23 +121,25 @@ class Popen(_Popen):
 
 
 def get_command_line(pipe_handle, **kwds):
-    '''
-    Returns prefix of command line used for spawning a child process
-    '''
-    if getattr(sys, 'frozen', False):
-        return [sys.executable, '--multiprocessing-fork', pipe_handle]
+    """Returns prefix of command line used for spawning a child process."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--multiprocessing-fork", pipe_handle]
     else:
-        prog = 'from loky.backend.popen_loky_win32 import main; main()'
+        prog = "from loky.backend.popen_loky_win32 import main; main()"
         opts = util._args_from_interpreter_flags()
-        return [spawn.get_executable(), *opts,
-                '-c', prog, '--multiprocessing-fork', pipe_handle]
+        return [
+            spawn.get_executable(),
+            *opts,
+            "-c",
+            prog,
+            "--multiprocessing-fork",
+            pipe_handle,
+        ]
 
 
 def is_forking(argv):
-    '''
-    Return whether commandline indicates we are forking
-    '''
-    if len(argv) >= 2 and argv[1] == '--multiprocessing-fork':
+    """Return whether commandline indicates we are forking."""
+    if len(argv) >= 2 and argv[1] == "--multiprocessing-fork":
         assert len(argv) == 3
         return True
     else:
@@ -135,14 +147,12 @@ def is_forking(argv):
 
 
 def main():
-    '''
-    Run code specified by data received over pipe
-    '''
+    """Run code specified by data received over pipe."""
     assert is_forking(sys.argv)
 
     handle = int(sys.argv[-1])
     fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
-    from_parent = os.fdopen(fd, 'rb')
+    from_parent = os.fdopen(fd, "rb")
 
     process.current_process()._inheriting = True
     preparation_data = load(from_parent)
