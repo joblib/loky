@@ -154,15 +154,45 @@ def _cpu_count_cgroup(os_cpu_count):
             return os_cpu_count
 
 
-def _cpu_count_user(os_cpu_count):
-    """Number of user defined available CPUs"""
+def _cpu_count_affinity(os_cpu_count):
     # Number of available CPUs given affinity settings
-    cpu_count_affinity = os_cpu_count
     if hasattr(os, 'sched_getaffinity'):
         try:
-            cpu_count_affinity = len(os.sched_getaffinity(0))
+            return len(os.sched_getaffinity(0))
         except NotImplementedError:
             pass
+
+    # On PyPy and possibly other platforms, os.sched_getaffinity does not exist
+    # or raises NotImplementedError, let's try with the psutil if installed.
+    try:
+        import psutil
+
+        p = psutil.Process()
+        if hasattr(p, "cpu_affinity"):
+            return len(p.cpu_affinity())
+
+    except ImportError:  # pragma: no cover
+        if (
+            sys.platform == "linux"
+            and os.environ.get('LOKY_MAX_CPU_COUNT') is None
+        ):
+            # PyPy does not implement os.sched_getaffinity on Linux which
+            # can cause severe oversubscription problems. Better warn the
+            # user in this particularly pathological case which can wreck
+            # havoc, typically on CI workers.
+            warnings.warn(
+                "Failed to inspect CPU affinity constraints on this system. "
+                "Please install psutil or explictly set LOKY_MAX_CPU_COUNT."
+            )
+
+    # This can happen for platforms that do not implement any kind of CPU
+    # infinity such as macOS-based platforms.
+    return os_cpu_count
+
+
+def _cpu_count_user(os_cpu_count):
+    """Number of user defined available CPUs"""
+    cpu_count_affinity = _cpu_count_affinity(os_cpu_count)
 
     cpu_count_cgroup = _cpu_count_cgroup(os_cpu_count)
 
