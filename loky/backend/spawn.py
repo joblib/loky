@@ -57,9 +57,7 @@ def _check_not_importing_main():
 
 
 def get_preparation_data(name, init_main_module=True):
-    """
-    Return info about parent needed by child to unpickle process object
-    """
+    """Return info about parent needed by child to unpickle process object."""
     _check_not_importing_main()
     d = dict(
         log_to_stderr=util._log_to_stderr,
@@ -145,9 +143,7 @@ old_main_modules = []
 
 
 def prepare(data):
-    """
-    Try to get current process ready to unpickle process object
-    """
+    """Try to get current process ready to unpickle process object."""
     if "name" in data:
         process.current_process().name = data["name"]
 
