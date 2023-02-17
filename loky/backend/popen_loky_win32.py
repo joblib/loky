@@ -121,9 +121,7 @@ class Popen(_Popen):
 
 
 def get_command_line(pipe_handle, **kwds):
-    """
-    Returns prefix of command line used for spawning a child process
-    """
+    """Returns prefix of command line used for spawning a child process."""
     if getattr(sys, "frozen", False):
         return [sys.executable, "--multiprocessing-fork", pipe_handle]
     else:
@@ -140,9 +138,7 @@ def get_command_line(pipe_handle, **kwds):
 
 
 def is_forking(argv):
-    """
-    Return whether commandline indicates we are forking
-    """
+    """Return whether commandline indicates we are forking."""
     if len(argv) >= 2 and argv[1] == "--multiprocessing-fork":
         assert len(argv) == 3
         return True
@@ -151,9 +147,7 @@ def is_forking(argv):
 
 
 def main():
-    """
-    Run code specified by data received over pipe
-    """
+    """Run code specified by data received over pipe."""
     assert is_forking(sys.argv)
 
     handle = int(sys.argv[-1])
