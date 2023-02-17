@@ -38,7 +38,8 @@ def _check_not_importing_main():
     if getattr(process.current_process(), "_inheriting", False):
         raise RuntimeError(
             textwrap.dedent(
-                """An attempt has been made to start a new process before the
+                """\
+            An attempt has been made to start a new process before the
             current process has finished its bootstrapping phase.
 
             This probably means that you are not using fork to start your
