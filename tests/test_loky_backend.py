@@ -647,10 +647,8 @@ class TestLokyBackend:
             stdout, stderr = check_subprocess_call(
                 [sys.executable, filename], timeout=10
             )
-            if sys.platform == "win32":
-                assert "RuntimeError:" in stderr
-            else:
-                assert "RuntimeError:" in stdout
+            all_outputs = f"stdout:\n{stdout}\nstderr:\n{stderr}"
+            assert "RuntimeError:" in all_outputs, all_outputs
         finally:
             os.unlink(filename)
 
