@@ -194,8 +194,12 @@ def _python_exit():
     for _, (shutdown_lock, thread_wakeup) in items:
         with shutdown_lock:
             thread_wakeup.wakeup()
-    for thread, _ in items:
-        thread.join()
+    for thread, (shutdown_lock, _) in items:
+        # This locks is to prevent situations where an executor is gc'ed in one
+        # thread while the atexit finalizer is running in another thread. This
+        # can happen when joblib is used in pypy for instance.
+        with shutdown_lock:
+            thread.join()
 
 
 # With the fork context, _thread_wakeups is propagated to children.
@@ -971,7 +975,7 @@ def _check_max_depth(context):
 
 
 class LokyRecursionError(RuntimeError):
-    """Raised when a process try to spawn too many levels of nested processes."""
+    "Raised when a process try to spawn too many levels of nested processes."
 
 
 class BrokenProcessPool(_BPPException):
@@ -1269,8 +1273,9 @@ class ProcessPoolExecutor(Executor):
                 self._executor_manager_thread_wakeup.wakeup()
 
         if executor_manager_thread is not None and wait:
-            executor_manager_thread.join()
-            _threads_wakeups.pop(executor_manager_thread, None)
+            with self._shutdown_lock:
+                executor_manager_thread.join()
+                _threads_wakeups.pop(executor_manager_thread, None)
 
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
