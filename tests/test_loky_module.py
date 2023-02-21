@@ -253,5 +253,5 @@ def test_freeze_support_with_pyinstaller(tmpdir):
     frozen_loky = tmpdir / "frozen_loky"
     assert frozen_loky.exists()
 
-    frozen_result = check_output(frozen_loky, text=True)
+    frozen_result = check_output([frozen_loky], text=True)
     assert frozen_result == non_frozen_result
