@@ -292,12 +292,11 @@ def main(fd, process_name=None):
 def get_command_line(main_prog=main, **kwargs):
     """
     Returns a command line used for spawning a child process.
-    
     This command provides supports for frozen executables and
     only works with main_prog named main.
     """
 
-    assert main_prog.__name__ == 'main'
+    assert main_prog.__name__ == "main"
 
     if getattr(sys, "frozen", False):
         # For frozen executables, add flag '--multiprocessin-fork' to notify,
@@ -325,7 +324,6 @@ def get_command_line(main_prog=main, **kwargs):
 
 def freeze_support():
     """Run code for the child workers when necessary.
-    
     This helper allows the frozen executable to call the code for the child
     workers when not in the main process.
     It should be called right after the beginning of the programme, to
