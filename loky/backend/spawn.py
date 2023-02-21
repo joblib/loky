@@ -257,6 +257,7 @@ def _fixup_main_from_path(main_path):
 
 
 def main(fd, process_name=None):
+    # arguments are passed as strings, convert them back to int.
     fd = int(fd)
     if sys.platform == "win32":
         fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
@@ -290,10 +291,18 @@ def main(fd, process_name=None):
 
 def get_command_line(main_prog=main, **kwargs):
     """
-    Returns prefix of command line used for spawning a child process
+    Returns a command line used for spawning a child process.
+    
+    This command provides supports for frozen executables and
+    only works with main_prog named main.
     """
 
+    assert main_prog.__name__ == 'main'
+
     if getattr(sys, "frozen", False):
+        # For frozen executables, add flag '--multiprocessin-fork' to notify,
+        # the `freeze_support` function and pass the arguments as 'key=value'
+        # so they can be used to call main.
         list_kwargs = [f"{k}={v}" for k, v in kwargs.items()]
         argv = [
             sys.executable,
@@ -302,6 +311,8 @@ def get_command_line(main_prog=main, **kwargs):
             *list_kwargs,
         ]
     else:
+        # For non-frozen executables, directly call `main_prog` with
+        # the arguments passed as strings.
         list_kwargs = [f'{k}="{v}"' for k, v in kwargs.items()]
         prog = (
             f"from {main_prog.__module__} import main; "
@@ -313,6 +324,13 @@ def get_command_line(main_prog=main, **kwargs):
 
 
 def freeze_support():
+    """Run code for the child workers when necessary.
+    
+    This helper allows the frozen executable to call the code for the child
+    workers when not in the main process.
+    It should be called right after the beginning of the programme, to
+    avoid recursive process spawning.
+    """
     if len(sys.argv) >= 2 and sys.argv[1] == "--multiprocessing-fork":
         module_main = sys.argv[2]
         main = importlib.import_module(module_main).main
