@@ -13,7 +13,9 @@ import textwrap
 import types
 import pickle
 import importlib
+
 from multiprocessing import process, util
+from multiprocessing import freeze_support as _freeze_support_mp
 
 
 if sys.platform != "win32":
@@ -320,3 +322,4 @@ def freeze_support():
             kwargs[k] = v
         exitcode = main(**kwargs)
         sys.exit(exitcode)
+    _freeze_support_mp()
