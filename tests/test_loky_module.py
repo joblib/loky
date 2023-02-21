@@ -233,14 +233,26 @@ def test_freeze_support_with_pyinstaller(tmpdir):
     python_source_path = tmpdir / "frozen_loky.py"
     python_source_path.write_text(frozen_source_code, encoding="utf-8")
 
-    original_cwd = os.getcwd()
-    try:
-        os.chdir(tmpdir)
-        check_call([pyinstaller, python_source_path])
-        result = check_output(
-            [tmpdir / "dist" / "frozen_loky" / "frozen_loky"], text=True
-        ).strip()
-    finally:
-        os.chdir(original_cwd)
+    # Run the Python script directly:
+    non_frozen_result = check_output(
+        [sys.executable, python_source_path],
+        text=True,
+    )
 
-    assert result == "285"
+    # Call pyinstaller to generate the frozen_loky executable.
+    check_call(
+        [
+            pyinstaller,
+            "--onefile",
+            "--distpath",
+            tmpdir,
+            "--specpath",
+            tmpdir,
+            python_source_path,
+        ]
+    )
+    frozen_loky = tmpdir / "frozen_loky"
+    assert frozen_loky.exists()
+
+    frozen_result = check_output(frozen_loky, text=True)
+    assert frozen_result == non_frozen_result
