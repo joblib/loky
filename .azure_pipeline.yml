@@ -1,4 +1,20 @@
 jobs:
+- job: linting
+  displayName: Linting
+  pool:
+    vmImage: ubuntu-20.04
+  steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.9'
+    - bash: |
+        # Include pytest compatibility with mypy
+        pip install black==22.3
+      displayName: Install linters
+    - bash: |
+        black --check --diff .
+      displayName: Run black
+
 - job: 'test_loky'
   strategy:
     matrix:

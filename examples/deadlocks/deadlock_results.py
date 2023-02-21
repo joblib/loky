@@ -23,14 +23,16 @@ class ObjectWithPickleError:
     """Triggers a RuntimeError when sending job to the workers"""
 
     def __reduce__(self):
-        return raise_error, (UnpicklingError, )
+        return raise_error, (UnpicklingError,)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--use-stdlib', action="store_true",
-                        help='Use concurrent.futures.ProcessPoolExecutor'
-                             ' instead of loky')
+    parser.add_argument(
+        "--use-stdlib",
+        action="store_true",
+        help="Use concurrent.futures.ProcessPoolExecutor" " instead of loky",
+    )
     args = parser.parse_args()
     if args.use_stdlib:
         from concurrent.futures import ProcessPoolExecutor

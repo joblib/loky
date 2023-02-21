@@ -1,6 +1,10 @@
 ### 3.4.0 - in development
 
-- TODO
+- Fix exception `__cause__` not being propagated with
+  `tblib.pickling_support.install()` (#255).
+
+- Fix handling of CPU affinity  by using `psutil`'s `cpu_affinity` on platforms
+  that do not implement `os.sched_getaffinity`, such as PyPy (#381).
 
 ### 3.3.0 - 2022-09-15
 

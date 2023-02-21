@@ -28,12 +28,10 @@ __all__ = [
     "ALL_COMPLETED",
     "FIRST_COMPLETED",
     "FIRST_EXCEPTION",
-
     # Classes
     "Executor",
     "Future",
     "ProcessPoolExecutor",
-
     # Functions
     "as_completed",
     "cpu_count",
@@ -42,7 +40,6 @@ __all__ = [
     "set_loky_pickler",
     "wait",
     "wrap_non_picklable_objects",
-
     # Errors
     "BrokenProcessPool",
     "CancelledError",
@@ -50,4 +47,4 @@ __all__ = [
 ]
 
 
-__version__ = '3.4.0.dev0'
+__version__ = "3.4.0.dev0"

@@ -10,7 +10,7 @@ from multiprocessing.reduction import duplicate
 from . import reduction, spawn
 
 
-__all__ = ['Popen']
+__all__ = ["Popen"]
 
 #
 #
@@ -21,8 +21,9 @@ def _path_eq(p1, p2):
     return p1 == p2 or os.path.normcase(p1) == os.path.normcase(p2)
 
 
-WINENV = (hasattr(sys, "_base_executable")
-          and not _path_eq(sys.executable, sys._base_executable))
+WINENV = hasattr(sys, "_base_executable") and not _path_eq(
+    sys.executable, sys._base_executable
+)
 
 #
 # We define a Popen class similar to the one from subprocess, but
@@ -31,14 +32,16 @@ WINENV = (hasattr(sys, "_base_executable")
 
 
 class Popen(_Popen):
-    '''
+    """
     Start a subprocess to run the code of a process object
-    '''
-    method = 'loky'
+    """
+
+    method = "loky"
 
     def __init__(self, process_obj):
         prep_data = spawn.get_preparation_data(
-            process_obj._name, getattr(process_obj, "init_main_module", True))
+            process_obj._name, getattr(process_obj, "init_main_module", True)
+        )
 
         # read end of pipe will be "stolen" by the child process
         # -- see spawn_main() in spawn.py.
@@ -48,7 +51,7 @@ class Popen(_Popen):
 
         cmd = spawn.get_command_line(fd=rhandle)
         python_exe = cmd[0]
-        cmd = ' '.join(f'"{x}"' for x in cmd)
+        cmd = " ".join(f'"{x}"' for x in cmd)
 
         # copy the environment variables to set in the child process
         child_env = {**os.environ, **process_obj.env}
@@ -60,7 +63,7 @@ class Popen(_Popen):
             child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
         try:
-            with open(wfd, 'wb') as to_child:
+            with open(wfd, "wb") as to_child:
                 # start process
                 try:
                     # This flag allows to pass inheritable handles from the
@@ -72,9 +75,15 @@ class Popen(_Popen):
                     # be used instead.
                     inherit = True
                     hp, ht, pid, _ = _winapi.CreateProcess(
-                        python_exe, cmd,
-                        None, None, inherit, 0,
-                        child_env, None, None
+                        python_exe,
+                        cmd,
+                        None,
+                        None,
+                        inherit,
+                        0,
+                        child_env,
+                        None,
+                        None,
                     )
                     _winapi.CloseHandle(ht)
                 except BaseException:

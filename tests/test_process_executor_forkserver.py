@@ -12,26 +12,30 @@ if sys.platform != "win32" and not hasattr(sys, "pypy_version_info"):
         AsCompletedTests,
         ExecutorShutdownTest,
         ExecutorTest,
-        WaitTests
+        WaitTests,
     )
 
     class ProcessPoolForkserverMixin(ExecutorMixin):
         executor_type = process_executor.ProcessPoolExecutor
-        context = get_context('forkserver')
+        context = get_context("forkserver")
 
-    class TestsProcessPoolForkserverShutdown(ProcessPoolForkserverMixin,
-                                             ExecutorShutdownTest):
+    class TestsProcessPoolForkserverShutdown(
+        ProcessPoolForkserverMixin, ExecutorShutdownTest
+    ):
         def _prime_executor(self):
             pass
 
-    class TestsProcessPoolForkserverWait(ProcessPoolForkserverMixin,
-                                         WaitTests):
+    class TestsProcessPoolForkserverWait(
+        ProcessPoolForkserverMixin, WaitTests
+    ):
         pass
 
-    class TestsProcessPoolForkserverAsCompleted(ProcessPoolForkserverMixin,
-                                                AsCompletedTests):
+    class TestsProcessPoolForkserverAsCompleted(
+        ProcessPoolForkserverMixin, AsCompletedTests
+    ):
         pass
 
-    class TestsProcessPoolForkserverExecutor(ProcessPoolForkserverMixin,
-                                             ExecutorTest):
+    class TestsProcessPoolForkserverExecutor(
+        ProcessPoolForkserverMixin, ExecutorTest
+    ):
         pass

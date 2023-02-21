@@ -14,12 +14,13 @@ from multiprocessing.context import set_spawning_popen
 from . import reduction, resource_tracker, spawn
 
 
-__all__ = ['Popen']
+__all__ = ["Popen"]
 
 
 #
 # Wrapper for an fd used while launching a process
 #
+
 
 class _DupFd:
     def __init__(self, fd):
@@ -33,8 +34,9 @@ class _DupFd:
 # Start child process using subprocess.Popen
 #
 
+
 class Popen:
-    method = 'loky'
+    method = "loky"
     DupFd = _DupFd
 
     def __init__(self, process_obj):
@@ -87,7 +89,6 @@ class Popen:
                     raise
 
     def _launch(self, process_obj):
-
         tracker_fd = resource_tracker._resource_tracker.getfd()
 
         fp = BytesIO()
@@ -95,7 +96,7 @@ class Popen:
         try:
             prep_data = spawn.get_preparation_data(
                 process_obj._name,
-                getattr(process_obj, "init_main_module", True)
+                getattr(process_obj, "init_main_module", True),
             )
             reduction.dump(prep_data, fp)
             reduction.dump(process_obj, fp)
@@ -114,21 +115,22 @@ class Popen:
                 fd=child_r, process_name=process_obj.name
             )
             self._fds += [child_r, child_w, tracker_fd]
-            if sys.version_info >= (3, 8) and os.name == 'posix':
-                mp_tracker_fd = prep_data['mp_tracker_args']['fd']
+            if sys.version_info >= (3, 8) and os.name == "posix":
+                mp_tracker_fd = prep_data["mp_tracker_args"]["fd"]
                 self.duplicate_for_child(mp_tracker_fd)
 
             from .fork_exec import fork_exec
+
             pid = fork_exec(cmd_python, self._fds, env=process_obj.env)
             util.debug(
                 f"launched python with pid {pid} and cmd:\n{cmd_python}"
             )
             self.sentinel = parent_r
 
-            method = 'getbuffer'
+            method = "getbuffer"
             if not hasattr(fp, method):
-                method = 'getvalue'
-            with os.fdopen(parent_w, 'wb') as f:
+                method = "getvalue"
+            with os.fdopen(parent_w, "wb") as f:
                 f.write(getattr(fp, method)())
             self.pid = pid
         finally:

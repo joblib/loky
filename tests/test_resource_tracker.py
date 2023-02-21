@@ -28,7 +28,6 @@ def get_rtracker_pid():
 
 
 class TestResourceTracker:
-
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
     def test_resource_utils(self, rtype):
         # Check that the resouce utils work as expected in the main process
@@ -50,7 +49,7 @@ class TestResourceTracker:
         # Register a resource in the parent process, and un-register it in the
         # child process. If the two processes do not share the same
         # resource_tracker, a cache KeyError should be printed in stderr.
-        cmd = '''if 1:
+        cmd = """if 1:
         import os, sys
 
         from loky import ProcessPoolExecutor
@@ -76,11 +75,13 @@ class TestResourceTracker:
         e = ProcessPoolExecutor(1)
         e.submit(maybe_unlink, filename, "file").result()
         e.shutdown()
-        '''
+        """
         try:
-            p = subprocess.run([sys.executable, '-E', '-c', cmd],
-                               capture_output=True,
-                               text=True)
+            p = subprocess.run(
+                [sys.executable, "-E", "-c", cmd],
+                capture_output=True,
+                text=True,
+            )
             filename = p.stdout.strip()
 
             pattern = f"decremented refcount of file {filename}"
@@ -102,7 +103,7 @@ class TestResourceTracker:
         if (sys.platform == "win32") and rtype == "semlock":
             pytest.skip("no semlock on windows")
 
-        cmd = f'''if 1:
+        cmd = f"""if 1:
             import time, os, tempfile, sys
             from loky.backend import resource_tracker
             from utils import create_resource
@@ -115,13 +116,15 @@ class TestResourceTracker:
                 sys.stdout.write(f"{{rname}}\\n")
                 sys.stdout.flush()
             time.sleep(10)
-        '''
-        env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
-        p = subprocess.Popen([sys.executable, '-c', cmd],
-                             stderr=subprocess.PIPE,
-                             stdout=subprocess.PIPE,
-                             env=env,
-                             text=True)
+        """
+        env = {**os.environ, "PYTHONPATH": os.path.dirname(__file__)}
+        p = subprocess.Popen(
+            [sys.executable, "-c", cmd],
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            env=env,
+            text=True,
+        )
         name1 = p.stdout.readline().rstrip()
         name2 = p.stdout.readline().rstrip()
 
@@ -142,13 +145,13 @@ class TestResourceTracker:
         p.stderr.close()
         p.stdout.close()
 
-        expected = f'resource_tracker: There appear to be 2 leaked {rtype}'
+        expected = f"resource_tracker: There appear to be 2 leaked {rtype}"
         assert re.search(expected, err) is not None
 
         # resource 1 is still registered, but was destroyed externally: the
         # tracker is expected to complain.
         if sys.platform == "win32":
-            errno_map = {'file': 2, 'folder': 3}
+            errno_map = {"file": 2, "folder": 3}
             expected = (
                 f"resource_tracker: {re.escape(name1)}: "
                 f"(WindowsError\\(({errno_map[rtype]})|FileNotFoundError)"
@@ -165,7 +168,7 @@ class TestResourceTracker:
         if sys.platform == "win32" and rtype == "semlock":
             pytest.skip("no semlock on windows")
 
-        cmd = f'''if 1:
+        cmd = f"""if 1:
         import os
         import tempfile
         import time
@@ -208,18 +211,19 @@ class TestResourceTracker:
             except NameError:
                 # "name" is not defined because create_resource has failed
                 pass
-        '''
+        """
 
-        env = {**os.environ, 'PYTHONPATH': os.path.dirname(__file__)}
-        p = subprocess.run([sys.executable, '-c', cmd],
-                           capture_output=True,
-                           env=env)
+        env = {**os.environ, "PYTHONPATH": os.path.dirname(__file__)}
+        p = subprocess.run(
+            [sys.executable, "-c", cmd], capture_output=True, env=env
+        )
         assert p.returncode == 0, p.stderr
 
     def check_resource_tracker_death(self, signum, should_die):
         # bpo-31310: if the semaphore tracker process has died, it should
         # be restarted implicitly.
         from loky.backend.resource_tracker import _resource_tracker
+
         pid = _resource_tracker._pid
         if pid is not None:
             os.kill(pid, signal.SIGKILL)
@@ -238,7 +242,8 @@ class TestResourceTracker:
 
             # remove unrelated MacOS warning messages first
             warnings.filterwarnings(
-                "ignore", message='semaphore are broken on OSX')
+                "ignore", message="semaphore are broken on OSX"
+            )
 
             sem = ctx.Semaphore()
             sem.acquire()
@@ -254,32 +259,38 @@ class TestResourceTracker:
                 the_warn = all_warn[0]
                 assert issubclass(the_warn.category, UserWarning)
                 assert "resource_tracker: process died" in str(
-                    the_warn.message)
+                    the_warn.message
+                )
             else:
                 assert len(all_warn) == 0
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="Limited signal support on Windows")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Limited signal support on Windows"
+    )
     def test_resource_tracker_sigint(self):
         # Catchable signal (ignored by resource tracker)
         self.check_resource_tracker_death(signal.SIGINT, False)
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="Limited signal support on Windows")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Limited signal support on Windows"
+    )
     def test_resource_tracker_sigterm(self):
         # Catchable signal (ignored by resource tracker)
         self.check_resource_tracker_death(signal.SIGTERM, False)
 
-    @pytest.mark.skipif(sys.platform == "win32",
-                        reason="Limited signal support on Windows")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Limited signal support on Windows"
+    )
     def test_resource_tracker_sigkill(self):
         # Uncatchable signal.
         self.check_resource_tracker_death(signal.SIGKILL, True)
 
-    @pytest.mark.skipif(sys.version_info < (3, 8),
-                        reason="SharedMemory introduced in Python 3.8")
+    @pytest.mark.skipif(
+        sys.version_info < (3, 8),
+        reason="SharedMemory introduced in Python 3.8",
+    )
     def test_loky_process_inherit_multiprocessing_resource_tracker(self):
-        cmd = '''if 1:
+        cmd = """if 1:
         from loky import get_reusable_executor
         from multiprocessing.shared_memory import SharedMemory
         from multiprocessing.resource_tracker import (
@@ -310,8 +321,9 @@ class TestResourceTracker:
             shm = SharedMemory(create=True, size=10)
             f = executor.submit(shm.unlink).result()
 
-        '''
-        p = subprocess.run([sys.executable, '-c', cmd],
-                           capture_output=True, text=True)
+        """
+        p = subprocess.run(
+            [sys.executable, "-c", cmd], capture_output=True, text=True
+        )
         assert not p.stdout
         assert not p.stderr
