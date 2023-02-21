@@ -984,7 +984,7 @@ def _check_max_depth(context):
 
 
 class LokyRecursionError(RuntimeError):
-    "Raised when a process try to spawn too many levels of nested processes."
+    """A process tries to spawn too many levels of nested processes."""
 
 
 class BrokenProcessPool(_BPPException):
