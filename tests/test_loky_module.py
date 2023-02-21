@@ -227,7 +227,6 @@ def test_freeze_support_with_pyinstaller(tmpdir):
             loky.freeze_support()
             e = loky.get_reusable_executor(max_workers=2)
             print(sum(e.map(lambda x: x ** 2, range(10))))
-
         """
     )
     python_source_path = tmpdir / "frozen_loky.py"
