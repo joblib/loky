@@ -208,7 +208,7 @@ getfd = _resource_tracker.getfd
 
 def main(fd, verbose=0):
     """Run resource tracker."""
-    # Mak sure the arguments have the right type as theyr are
+    # Make sure the arguments have the right type as they are
     # passed as strings through the command line.
     fd = int(fd)
     verbose = int(verbose)
