@@ -178,24 +178,37 @@ class _ExecutorFlags:
 # The atexit hooks are registered when starting the first ProcessPoolExecutor
 # to avoid import having an effect on the interpreter.
 
-_threads_wakeups = weakref.WeakKeyDictionary()
 _global_shutdown = False
+_global_shutdown_lock = threading.Lock()
+_threads_wakeups = weakref.WeakKeyDictionary()
 
 
 def _python_exit():
     global _global_shutdown
     _global_shutdown = True
+
+    # Materialize the list of items to avoid error due to iterating over
+    # changing size dictionary.
     items = list(_threads_wakeups.items())
     if len(items) > 0:
         mp.util.debug(
-            "Interpreter shutting down. Waking up "
-            f"executor_manager_thread {items}"
+            "Interpreter shutting down. Waking up {len(items)}"
+            f"executor_manager_thread:\n{items}"
         )
+
+    # Wake up the executor_manager_thread's so they can detect the interpreter
+    # is shutting down and exit.
     for _, (shutdown_lock, thread_wakeup) in items:
         with shutdown_lock:
             thread_wakeup.wakeup()
+
+    # Collect the executor_manager_thread's to make sure we exit cleanly.
     for thread, _ in items:
-        thread.join()
+        # This locks is to prevent situations where an executor is gc'ed in one
+        # thread while the atexit finalizer is running in another thread. This
+        # can happen when joblib is used in pypy for instance.
+        with _global_shutdown_lock:
+            thread.join()
 
 
 # With the fork context, _thread_wakeups is propagated to children.
@@ -971,7 +984,7 @@ def _check_max_depth(context):
 
 
 class LokyRecursionError(RuntimeError):
-    """Raised when a process try to spawn too many levels of nested processes."""
+    """A process tries to spawn too many levels of nested processes."""
 
 
 class BrokenProcessPool(_BPPException):
@@ -1269,8 +1282,11 @@ class ProcessPoolExecutor(Executor):
                 self._executor_manager_thread_wakeup.wakeup()
 
         if executor_manager_thread is not None and wait:
-            executor_manager_thread.join()
-            _threads_wakeups.pop(executor_manager_thread, None)
+            # This locks avoids concurrent join if the interpreter
+            # is shutting down.
+            with _global_shutdown_lock:
+                executor_manager_thread.join()
+                _threads_wakeups.pop(executor_manager_thread, None)
 
         # To reduce the risk of opening too many files, remove references to
         # objects that use file descriptors.
