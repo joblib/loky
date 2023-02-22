@@ -250,7 +250,10 @@ def test_freeze_support_with_pyinstaller(tmpdir):
             python_source_path,
         ]
     )
-    frozen_loky = tmpdir / "frozen_loky"
+    if sys.platform == "win32":
+        frozen_loky = tmpdir / "frozen_loky.exe"
+    else:
+        frozen_loky = tmpdir / "frozen_loky"
     assert frozen_loky.exists()
 
     frozen_result = check_output([frozen_loky], text=True)
