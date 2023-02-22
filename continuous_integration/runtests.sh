@@ -23,7 +23,7 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     cp "$BUILD_SOURCESDIRECTORY"/continuous_integration/copy_loky.sh $JOBLIB/externals
     (cd $JOBLIB/externals && bash copy_loky.sh "$BUILD_SOURCESDIRECTORY")
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
-if [ "$PYINSTALLER_TESTS" = "true" ]; then
+elif [ "$PYINSTALLER_TESTS" = "true" ]; then
     python -m venv venv/
     source ./venv/bin/activate
     which python
