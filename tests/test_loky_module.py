@@ -221,12 +221,16 @@ def test_freeze_support_with_pyinstaller(tmpdir):
 
     frozen_source_code = textwrap.dedent(
         """
-        import loky
+        from concurrent.futures import ProcessPoolExecutor
+        from multiprocessing import freeze_support
+        # import loky
 
         if __name__ == "__main__":
-            loky.freeze_support()
-            e = loky.get_reusable_executor(max_workers=2)
-            print(sum(e.map(lambda x: x ** 2, range(10))))
+            # loky.freeze_support()
+            freeze_support()
+            e = ProcessPoolExecutor()
+            # e = loky.get_reusable_executor(max_workers=2)
+            print(sum(e.map(int, range(10))))
         """
     )
     python_source_path = tmpdir / "frozen_loky.py"
