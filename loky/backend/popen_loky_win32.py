@@ -91,7 +91,7 @@ class Popen(_Popen):
                         None,
                         inherit,
                         0,
-                        env,
+                        child_env,
                         None,
                         None,
                     )
