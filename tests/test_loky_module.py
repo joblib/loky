@@ -225,8 +225,7 @@ def test_freeze_support_with_pyinstaller(tmpdir):
 
         if __name__ == "__main__":
             loky.freeze_support()
-            e = loky.ProcessPoolExecutor()
-            # e = loky.get_reusable_executor(max_workers=2)
+            e = loky.get_reusable_executor(max_workers=2)
             print(sum(e.map(int, range(10))))
         """
     )
