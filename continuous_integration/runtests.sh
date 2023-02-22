@@ -27,8 +27,8 @@ elif [ "$PYINSTALLER_TESTS" = "true" ]; then
     python -m venv venv/
     source ./venv/bin/activate
     which python
-    pip install pytest pytest-timeout psutil pyinstaller
-    pip install -e .
+    pip install pytest pytest-timeout psutil coverage pyinstaller
+    pip install .
     python -c "import loky; print('loky.cpu_count():', loky.cpu_count())"
     python -c "import os; print('os.cpu_count():', os.cpu_count())"
     export COVERAGE_PROCESS_START=`pwd`/.coveragerc
