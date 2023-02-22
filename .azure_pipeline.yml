@@ -109,3 +109,51 @@ jobs:
         curl -s https://codecov.io/bash | bash
       displayName: 'Upload to codecov'
       condition: and(succeeded(), ne(variables['joblib.tests'], 'true'))
+
+
+- job: 'test_frozen_loky'
+  strategy:
+    matrix:
+
+      windows-py310:
+        imageName: windows-latest
+        python.version: "3.10"
+      macos-py310:
+        imageName: "macos-latest"
+        python.version: "3.10"
+      linux-py310:
+        imageName: "ubuntu-latest"
+        python.version: "3.10"
+  pool:
+    vmImage: $(imageName)
+  variables:
+    JUNITXML: 'test-data.xml'
+    PYINSTALLER_TESTS: "true"
+  steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(python.version)'
+      displayName: 'Use Python $(python.version)'
+
+    # azure-pipelines unpredictably switches between Git\bin\bash and
+    # Git\usr\bin\bash when running a bash script inside Windows environments.
+    # The latter may use wrong bash commands, resulting in errors when codecov
+    # tries to upload the coverage results.
+    - bash: echo "##vso[task.prependpath]C:/Program Files/Git/bin"
+      displayName: 'Override Git bash shell for Windows'
+      condition: eq(variables['Agent.OS'], 'Windows_NT')
+
+    - script: |
+        bash continuous_integration/runtests.sh
+      displayName: 'Test loky with PyInstaller'
+
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFiles: '$(JUNITXML)'
+      displayName: 'Publish Test Results'
+      condition: succeededOrFailed()
+
+    - bash: |
+        curl -s https://codecov.io/bash | bash
+      displayName: 'Upload to codecov'
+      condition: and(succeeded(), ne(variables['joblib.tests'], 'true'))
