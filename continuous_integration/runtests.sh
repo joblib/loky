@@ -25,7 +25,11 @@ if [ "$JOBLIB_TESTS" = "true" ]; then
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 elif [ "$PYINSTALLER_TESTS" = "true" ]; then
     python -m venv venv/
-    source ./venv/bin/activate
+    if [ -d "./venv/Scripts" ]; then
+        source ./venv/Scripts/activate
+    else
+        source ./venv/bin/activate
+    fi
     which python
     pip install pytest pytest-timeout psutil coverage pyinstaller
     pip install .
