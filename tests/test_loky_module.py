@@ -221,7 +221,8 @@ def test_freeze_support_with_pyinstaller(tmpdir):
 
     frozen_source_code = textwrap.dedent(
         """
-        from concurrent.futures import ProcessPoolExecutor
+        # from concurrent.futures import ProcessPoolExecutor
+        from loky import ProcessPoolExecutor
         from multiprocessing import freeze_support
         # import loky
 
