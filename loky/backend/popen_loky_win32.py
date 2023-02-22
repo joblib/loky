@@ -43,24 +43,34 @@ class Popen(_Popen):
             process_obj._name, getattr(process_obj, "init_main_module", True)
         )
 
-        # read end of pipe will be "stolen" by the child process
+        # read end of pipe will be duplicated by the child process
         # -- see spawn_main() in spawn.py.
-        rfd, wfd = os.pipe()
-        rhandle = duplicate(msvcrt.get_osfhandle(rfd), inheritable=True)
-        os.close(rfd)
+        #
+        # bpo-33929: Previously, the read end of pipe was "stolen" by the child
+        # process, but it leaked a handle if the child process had been
+        # terminated before it could steal the handle from the parent process.
+        rhandle, whandle = _winapi.CreatePipe(None, 0)
+        wfd = msvcrt.open_osfhandle(whandle, 0)
+        cmd = spawn.get_command_line(parent_pid=os.getpid(),
+                                     pipe_handle=rhandle)
 
-        cmd = spawn.get_command_line(fd=rhandle)
-        python_exe = cmd[0]
-        cmd = " ".join(f'"{x}"' for x in cmd)
-
-        # copy the environment variables to set in the child process
-        child_env = {**os.environ, **process_obj.env}
+        python_exe = spawn.get_executable()
 
         # bpo-35797: When running in a venv, we bypass the redirect
         # executor and launch our base Python.
         if WINENV and _path_eq(python_exe, sys.executable):
-            python_exe = sys._base_executable
-            child_env["__PYVENV_LAUNCHER__"] = sys.executable
+            cmd[0] = python_exe = sys._base_executable
+            env = os.environ.copy()
+            env["__PYVENV_LAUNCHER__"] = sys.executable
+        else:
+            env = None
+
+        cmd = ' '.join('"%s"' % x for x in cmd)
+
+        # XXX: remove debug logs
+        util.debug(f"{WINENV = }")
+        util.debug(f"{python_exe = }")
+        util.debug(f"{sys.executable = }")
 
         try:
             with open(wfd, "wb") as to_child:
