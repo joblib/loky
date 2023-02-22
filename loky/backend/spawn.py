@@ -304,7 +304,7 @@ def get_command_line(main_prog=main, **kwargs):
         # so they can be used to call main.
         list_kwargs = [f"{k}={v}" for k, v in kwargs.items()]
         argv = [
-            sys.executable,
+            get_executable(),
             "--multiprocessing-fork",
             main_prog.__module__,
             *list_kwargs,
