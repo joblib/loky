@@ -25,6 +25,11 @@ WINENV = hasattr(sys, "_base_executable") and not _path_eq(
     sys.executable, sys._base_executable
 )
 
+
+def _close_handles(*handles):
+    for handle in handles:
+        _winapi.CloseHandle(handle)
+
 #
 # We define a Popen class similar to the one from subprocess, but
 # whose constructor takes a process object as its argument.
@@ -95,7 +100,11 @@ class Popen(_Popen):
                 self.returncode = None
                 self._handle = hp
                 self.sentinel = int(hp)
-                util.Finalize(self, _winapi.CloseHandle, (self.sentinel,))
+                self.finalizer = util.Finalize(
+                    self,
+                    _close_handles,
+                    (self.sentinel, int(rhandle))
+                )
 
                 # send information to child
                 set_spawning_popen(self)

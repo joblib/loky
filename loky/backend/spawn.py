@@ -305,7 +305,7 @@ def get_command_line(main_prog=main, **kwargs):
         list_kwargs = [f"{k}={v}" for k, v in kwargs.items()]
         argv = [
             sys.executable,
-            "--multiprocessing-fork",
+            "--loky-fork",
             main_prog.__module__,
             *list_kwargs,
         ]
@@ -329,7 +329,7 @@ def freeze_support():
     It should be called right after the beginning of the programme, to
     avoid recursive process spawning.
     """
-    if len(sys.argv) >= 2 and sys.argv[1] == "--multiprocessing-fork":
+    if len(sys.argv) >= 2 and sys.argv[1] == "--loky-fork":
         module_main = sys.argv[2]
         main = importlib.import_module(module_main).main
         kwargs = {}
