@@ -53,10 +53,11 @@ except ImportError:
 def clean_warning_registry():
     """Safe way to reset warnings."""
     warnings.resetwarnings()
-    reg = "__warningregistry__"
+    registry_name = "__warningregistry__"
     for mod in list(sys.modules.values()):
-        if hasattr(mod, reg):
-            getattr(mod, reg).clear()
+        warning_registry = getattr(mod, registry_name, None)
+        if warning_registry is not None:
+            warning_registry.clear()
 
 
 def wait_dead(worker, n_tries=1000, delay=0.001):
