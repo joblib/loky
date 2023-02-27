@@ -59,7 +59,6 @@ SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 
 
 class SemLock:
-
     _rand = tempfile._RandomNameSequence()
 
     def __init__(self, kind, value, maxvalue, name=None):

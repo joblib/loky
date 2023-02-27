@@ -192,7 +192,6 @@ class ExecutorShutdownTest:
             p.join()
 
     def test_processes_terminate_on_executor_gc(self):
-
         results = self.executor.map(sleep_and_return, [0.1] * 10, range(10))
         assert len(self.executor._processes) == self.worker_count
         processes = self.executor._processes

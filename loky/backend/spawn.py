@@ -259,7 +259,7 @@ def _fixup_main_from_path(main_path):
 def main(pipe_handle, parent_pid, process_name=None):
     # arguments are passed as strings, convert them back to int.
     pipe_handle, parent_pid = int(pipe_handle), int(parent_pid)
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         import msvcrt
         import _winapi
 
@@ -267,7 +267,7 @@ def main(pipe_handle, parent_pid, process_name=None):
             source_process = _winapi.OpenProcess(
                 _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE,
                 False,
-                parent_pid
+                parent_pid,
             )
         else:
             source_process = None
@@ -294,7 +294,7 @@ def main(pipe_handle, parent_pid, process_name=None):
 
 
 def _main(fd, parent_sentinel):
-    with os.fdopen(fd, 'rb', closefd=True) as from_parent:
+    with os.fdopen(fd, "rb", closefd=True) as from_parent:
         process.current_process()._inheriting = True
         try:
             preparation_data = pickle.load(from_parent)

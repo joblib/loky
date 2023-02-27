@@ -146,7 +146,6 @@ class _ExecutorFlags:
     """
 
     def __init__(self, shutdown_lock):
-
         self.shutdown = False
         self.broken = None
         self.kill_workers = False
@@ -246,7 +245,6 @@ def _rebuild_exc(exc, tb):
 
 
 class _WorkItem:
-
     __slots__ = ["future", "fn", "args", "kwargs"]
 
     def __init__(self, future, fn, args, kwargs):
@@ -1004,7 +1002,6 @@ class ShutdownExecutorError(RuntimeError):
 
 
 class ProcessPoolExecutor(Executor):
-
     _at_exit = None
 
     def __init__(

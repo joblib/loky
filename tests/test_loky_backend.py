@@ -71,7 +71,6 @@ class TestLokyBackend:
             kill_process_tree(child_process)
 
     def test_current(self):
-
         current = self.current_process()
         authkey = current.authkey
 
@@ -83,7 +82,6 @@ class TestLokyBackend:
         assert current.exitcode is None
 
     def test_daemon_argument(self):
-
         # By default uses the current process's daemon flag.
         proc0 = self.Process(target=self._test_process)
         assert proc0.daemon == self.current_process().daemon
@@ -296,7 +294,6 @@ class TestLokyBackend:
         time.sleep(100)
 
     def test_terminate(self):
-
         manager = self.Manager()
         event = manager.Event()
 
@@ -481,7 +478,6 @@ class TestLokyBackend:
         n_pipe = 0
         named_sem = []
         for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
-
             # Check if fd is a standard IO file. For python 3.x stdin
             # should be closed.
             is_std = fd in ["f1", "f2"]
@@ -553,7 +549,6 @@ class TestLokyBackend:
             )
             named_sem = []
             try:
-
                 p.start()
                 assert started.wait(5), "The process took too long to start"
                 r.close()

@@ -29,12 +29,14 @@ class _DupFd:
     def detach(self):
         return self.fd
 
+
 #
 # Backward compat for pypy and python<=3.7
 #
 
 
 if not hasattr(util, "close_fds"):
+
     def _close_fds(*fds):
         for fd in fds:
             os.close(fd)
@@ -126,7 +128,7 @@ class Popen:
             cmd_python = spawn.get_command_line(
                 pipe_handle=child_r,
                 parent_pid=os.getpid(),
-                process_name=process_obj.name
+                process_name=process_obj.name,
             )
             self._fds += [child_r, child_w, tracker_fd]
             if sys.version_info >= (3, 8) and os.name == "posix":

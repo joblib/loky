@@ -219,7 +219,6 @@ class CExitAtGCInWorker:
 
 
 class TestExecutorDeadLock(ReusableExecutorMixin):
-
     crash_cases = [
         # Check problem occuring while pickling a task in
         (id, (ExitAtPickle(),), PicklingError, None),
