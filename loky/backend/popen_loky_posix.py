@@ -29,6 +29,18 @@ class _DupFd:
     def detach(self):
         return self.fd
 
+#
+# Backward compat for pypy and python<=3.7
+#
+
+
+if not hasattr(util, "close_fds"):
+    def _close_fds(*fds):
+        for fd in fds:
+            os.close(fd)
+
+    util.close_fds = _close_fds()
+
 
 #
 # Start child process using subprocess.Popen
