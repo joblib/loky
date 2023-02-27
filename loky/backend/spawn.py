@@ -282,9 +282,7 @@ def main(pipe_handle, parent_pid, process_name=None):
         handle, parent_sentinel = duplicate_in_child_process(
             pipe_handle, parent_pid
         )
-        fd = os.open(
-            msvcrt.open_osfhandle(handle, os.O_RDONLY), os.O_BINARY, mode="wb"
-        )
+        fd = os.fdopen(msvcrt.open_osfhandle(handle, os.O_RDONLY), mode="rb")
     else:
         fd = pipe_handle
         parent_sentinel = os.dup(pipe_handle)

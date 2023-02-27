@@ -118,9 +118,7 @@ class ResourceTracker:
 
             if sys.platform == "win32":
                 r, whandle = _winapi.CreatePipe(None, 0)
-                w = os.open(
-                    msvcrt.open_osfhandle(whandle, 0), os.O_BINARY, mode="wb"
-                )
+                w = os.fdopen(msvcrt.open_osfhandle(whandle, 0), mode="wb")
                 fds_to_pass = [r]
             else:
                 r, w = os.pipe()
