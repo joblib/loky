@@ -3,9 +3,9 @@ import sys
 import msvcrt
 import _winapi
 from multiprocessing import util
-from multiprocessing.context import get_spawning_popen, set_spawning_popen
+from multiprocessing.context import set_spawning_popen
+from multiprocessing.popen_spawn_win32 import _close_handles
 from multiprocessing.popen_spawn_win32 import Popen as _Popen
-from multiprocessing.reduction import duplicate
 
 from . import reduction, spawn
 
@@ -25,12 +25,6 @@ WINENV = hasattr(sys, "_base_executable") and not _path_eq(
     sys.executable, sys._base_executable
 )
 
-
-def _close_handles(*handles):
-    for handle in handles:
-        _winapi.CloseHandle(handle)
-
-
 #
 # We define a Popen class similar to the one from subprocess, but
 # whose constructor takes a process object as its argument.
@@ -49,13 +43,18 @@ class Popen(_Popen):
             process_obj._name, getattr(process_obj, "init_main_module", True)
         )
 
-        # read end of pipe will be "stolen" by the child process
+        # read end of pipe will be duplicated by the child process
         # -- see spawn_main() in spawn.py.
-        rfd, wfd = os.pipe()
-        rhandle = duplicate(msvcrt.get_osfhandle(rfd), inheritable=True)
-        os.close(rfd)
+        #
+        # bpo-33929: Previously, the read end of pipe was "stolen" by the child
+        # process, but it leaked a handle if the child process had been
+        # terminated before it could steal the handle from the parent process.
+        rhandle, whandle = _winapi.CreatePipe(None, 0)
+        wfd = msvcrt.open_osfhandle(whandle, 0)
 
-        cmd = spawn.get_command_line(fd=rhandle)
+        cmd = spawn.get_command_line(
+            pipe_handle=rhandle, parent_pid=os.getpid()
+        )
         python_exe = cmd[0]
         cmd = " ".join(f'"{x}"' for x in cmd)
 
@@ -69,23 +68,15 @@ class Popen(_Popen):
             child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
         try:
-            with open(wfd, "wb") as to_child:
+            with open(wfd, "wb", closefd=True) as to_child:
                 # start process
                 try:
-                    # This flag allows to pass inheritable handles from the
-                    # parent to the child process in a python2-3 compatible way
-                    # (see
-                    # https://github.com/tomMoral/loky/pull/204#discussion_r290719629
-                    # for more detail). When support for Python 2 is dropped,
-                    # the cleaner multiprocessing.reduction.steal_handle should
-                    # be used instead.
-                    inherit = True
                     hp, ht, pid, _ = _winapi.CreateProcess(
                         python_exe,
                         cmd,
                         None,
                         None,
-                        inherit,
+                        False,
                         0,
                         child_env,
                         None,
@@ -120,7 +111,3 @@ class Popen(_Popen):
             util.debug(
                 f"While starting {process_obj._name}, ignored a IOError 22"
             )
-
-    def duplicate_for_child(self, handle):
-        assert self is get_spawning_popen()
-        return duplicate(handle, self.sentinel)

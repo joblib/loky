@@ -509,10 +509,11 @@ class TestLokyBackend:
         # - one pipe for communication with main process
         # - loky's resource_tracker pipe
         # - the Connection pipe
+        # - the pipe used for the parent_sentinel
         # - additionally, on posix + Python 3.8: multiprocessing's
         #   resource_tracker pipe
-        if sys.version_info >= (3, 8) and os.name == "posix":
-            n_expected_pipes = 4
+        if sys.version_info >= (3, 8):
+            n_expected_pipes = 5 if os.name == "posix" else 4
         else:
             n_expected_pipes = 3
         msg = (

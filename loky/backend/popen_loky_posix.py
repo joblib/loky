@@ -112,7 +112,9 @@ class Popen:
             reduction._mk_inheritable(child_w)
             reduction._mk_inheritable(tracker_fd)
             cmd_python = spawn.get_command_line(
-                fd=child_r, process_name=process_obj.name
+                pipe_handle=child_r,
+                parent_pid=os.getpid(),
+                process_name=process_obj.name
             )
             self._fds += [child_r, child_w, tracker_fd]
             if sys.version_info >= (3, 8) and os.name == "posix":
@@ -130,12 +132,16 @@ class Popen:
             method = "getbuffer"
             if not hasattr(fp, method):
                 method = "getvalue"
-            with os.fdopen(parent_w, "wb") as f:
+            with os.fdopen(parent_w, "wb", closefd=False) as f:
                 f.write(getattr(fp, method)())
             self.pid = pid
         finally:
-            if parent_r is not None:
-                util.Finalize(self, os.close, (parent_r,))
+            fds_to_close = []
+            for fd in (parent_r, parent_w):
+                if fd is not None:
+                    fds_to_close.append(fd)
+            self.finalizer = util.Finalize(self, util.close_fds, fds_to_close)
+
             for fd in (child_r, child_w):
                 if fd is not None:
                     os.close(fd)

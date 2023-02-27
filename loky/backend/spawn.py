@@ -256,24 +256,31 @@ def _fixup_main_from_path(main_path):
     sys.modules["__main__"] = sys.modules["__mp_main__"] = main_module
 
 
-def main(fd, process_name=None):
+def main(pipe_handle, parent_pid, process_name=None):
     # arguments are passed as strings, convert them back to int.
-    fd = int(fd)
-    if sys.platform == "win32":
-        fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
+    pipe_handle, parent_pid = int(pipe_handle), int(parent_pid)
+    if sys.platform == 'win32':
+        import msvcrt
+        import _winapi
+
+        if parent_pid is not None:
+            source_process = _winapi.OpenProcess(
+                _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE,
+                False,
+                parent_pid
+            )
+        else:
+            source_process = None
+        new_handle = duplicate(pipe_handle, source_process=source_process)
+        fd = msvcrt.open_osfhandle(new_handle, os.O_RDONLY)
+        parent_sentinel = source_process
+    else:
+        fd = pipe_handle
+        parent_sentinel = os.dup(pipe_handle)
 
     exitcode = 1
     try:
-        with os.fdopen(fd, "rb") as from_parent:
-            process.current_process()._inheriting = True
-            try:
-                prep_data = pickle.load(from_parent)
-                prepare(prep_data)
-                process_obj = pickle.load(from_parent)
-            finally:
-                del process.current_process()._inheriting
-
-        exitcode = process_obj._bootstrap()
+        exitcode = _main(fd, parent_sentinel=parent_sentinel)
     except Exception:
         print("\n\n" + "-" * 80)
         print(f"{process_name} failed with traceback: ")
@@ -283,10 +290,19 @@ def main(fd, process_name=None):
         print(traceback.format_exc())
         print("\n" + "-" * 80)
     finally:
-        if from_parent is not None:
-            from_parent.close()
-
         sys.exit(exitcode)
+
+
+def _main(fd, parent_sentinel):
+    with os.fdopen(fd, 'rb', closefd=True) as from_parent:
+        process.current_process()._inheriting = True
+        try:
+            preparation_data = pickle.load(from_parent)
+            prepare(preparation_data)
+            self = pickle.load(from_parent)
+        finally:
+            del process.current_process()._inheriting
+    return self._bootstrap(parent_sentinel)
 
 
 def get_command_line(main_prog=main, **kwargs):
