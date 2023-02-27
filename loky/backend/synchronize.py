@@ -125,7 +125,7 @@ class SemLock:
         context.assert_spawning(self)
         sl = self._semlock
         h = sl.handle
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             h = context.get_spawning_popen().duplicate_for_child(sl.handle)
         else:
             h = sl.handle

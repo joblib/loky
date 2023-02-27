@@ -30,6 +30,7 @@ def _close_handles(*handles):
     for handle in handles:
         _winapi.CloseHandle(handle)
 
+
 #
 # We define a Popen class similar to the one from subprocess, but
 # whose constructor takes a process object as its argument.
@@ -101,9 +102,7 @@ class Popen(_Popen):
                 self._handle = hp
                 self.sentinel = int(hp)
                 self.finalizer = util.Finalize(
-                    self,
-                    _close_handles,
-                    (self.sentinel, int(rhandle))
+                    self, _close_handles, (self.sentinel, int(rhandle))
                 )
 
                 # send information to child
