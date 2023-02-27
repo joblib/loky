@@ -122,6 +122,8 @@ class SemLock:
         return self._semlock.release()
 
     def __getstate__(self):
+        if sys.platform == 'win32':
+            raise RuntimeError("Should only be used on posix platforms.")
         assert_spawning(self)
         sl = self._semlock
         h = sl.handle
