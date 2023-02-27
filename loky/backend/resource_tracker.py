@@ -57,6 +57,7 @@ from . import spawn
 if sys.platform == "win32":
     import _winapi
     import msvcrt
+    from .spawn import duplicate
     from .spawn import duplicate_in_child_process
 
 
@@ -119,7 +120,9 @@ class ResourceTracker:
             r, w = os.pipe()
             fds_to_pass = [r]
             if sys.platform == "win32":
-                r = msvcrt.get_osfhandle(r)
+                _r = duplicate(msvcrt.get_osfhandle(r))
+                os.close(r)
+                r = _r
             else:
                 try:
                     fds_to_pass.append(sys.stderr.fileno())
@@ -213,10 +216,17 @@ def main(pipe_handle, parent_pid, verbose=0):
     pipe_handle, parent_pid = int(pipe_handle), int(parent_pid)
     verbose = int(verbose)
     if sys.platform == "win32":
-        handle, parent_sentinel = duplicate_in_child_process(
-            pipe_handle, parent_pid
-        )
-        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+        try:
+            handle, parent_sentinel = duplicate_in_child_process(
+                pipe_handle, parent_pid
+            )
+            fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+        except BaseException:
+            print("ERRORRR")
+            import traceback
+
+            traceback.print_exc()
+            raise
     else:
         fd = pipe_handle
 
@@ -394,5 +404,9 @@ def spawnv_passfds(cmd, passfds):
             _winapi.CloseHandle(ht)
         except BaseException:
             _winapi.CloseHandle(passfds[0])
+
+            import traceback
+
+            traceback.print_exc()
             pass
         return pid
