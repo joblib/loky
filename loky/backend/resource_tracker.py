@@ -116,13 +116,11 @@ class ResourceTracker:
                     "leak."
                 )
 
+            r, w = os.pipe()
+            fds_to_pass = [r]
             if sys.platform == "win32":
-                r, whandle = _winapi.CreatePipe(None, 0)
-                w = msvcrt.open_osfhandle(whandle, 0)
-                fds_to_pass = [r]
+                r = msvcrt.get_osfhandle(r)
             else:
-                r, w = os.pipe()
-                fds_to_pass = [r]
                 try:
                     fds_to_pass.append(sys.stderr.fileno())
                 except Exception:
