@@ -28,6 +28,25 @@ else:
     WINEXE = sys.platform == "win32" and getattr(sys, "frozen", False)
     WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
 
+    def duplicate_in_child_process(handle, parent_pid=None):
+        """Duplicate a handle in child process given its parent pid.
+
+        Returns a file descriptor for the handle and the parent process.
+        """
+        import _winapi
+
+        if parent_pid is not None:
+            source_process = _winapi.OpenProcess(
+                _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE,
+                False,
+                parent_pid,
+            )
+        else:
+            source_process = None
+        new_handle = duplicate(handle, source_process=source_process)
+        return new_handle, source_process
+
+
 if WINSERVICE:
     _python_exe = os.path.join(sys.exec_prefix, "python.exe")
 else:
@@ -88,10 +107,8 @@ def get_preparation_data(name, init_main_module=True):
     _resource_tracker.ensure_running()
     d["tracker_args"] = {"pid": _resource_tracker._pid}
     if sys.platform == "win32":
-        child_w = duplicate(
-            msvcrt.get_osfhandle(_resource_tracker._fd), inheritable=True
-        )
-        d["tracker_args"]["fh"] = child_w
+        d["tracker_args"]["parent_pid"] = os.getpid()
+        d["tracker_args"]["fh"] = msvcrt.get_osfhandle(_resource_tracker._fd)
     else:
         d["tracker_args"]["fd"] = _resource_tracker._fd
 
@@ -192,6 +209,8 @@ def prepare(data):
         _resource_tracker._pid = data["tracker_args"]["pid"]
         if sys.platform == "win32":
             handle = data["tracker_args"]["fh"]
+            parent_pid = data["tracker_args"]["parent_pid"]
+            handle, _ = duplicate_in_child_process(handle, parent_pid)
             _resource_tracker._fd = msvcrt.open_osfhandle(handle, 0)
         else:
             _resource_tracker._fd = data["tracker_args"]["fd"]
@@ -260,20 +279,10 @@ def main(pipe_handle, parent_pid, process_name=None):
     # arguments are passed as strings, convert them back to int.
     pipe_handle, parent_pid = int(pipe_handle), int(parent_pid)
     if sys.platform == "win32":
-        import msvcrt
-        import _winapi
-
-        if parent_pid is not None:
-            source_process = _winapi.OpenProcess(
-                _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE,
-                False,
-                parent_pid,
-            )
-        else:
-            source_process = None
-        new_handle = duplicate(pipe_handle, source_process=source_process)
-        fd = msvcrt.open_osfhandle(new_handle, os.O_RDONLY)
-        parent_sentinel = source_process
+        handle, parent_sentinel = duplicate_in_child_process(
+            pipe_handle, parent_pid
+        )
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
     else:
         fd = pipe_handle
         parent_sentinel = os.dup(pipe_handle)
