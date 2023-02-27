@@ -108,9 +108,7 @@ def get_preparation_data(name, init_main_module=True):
     d["tracker_args"] = {"pid": _resource_tracker._pid}
     if sys.platform == "win32":
         d["tracker_args"]["parent_pid"] = os.getpid()
-        d["tracker_args"]["fh"] = msvcrt.get_osfhandle(
-            _resource_tracker._fd.fileno()
-        )
+        d["tracker_args"]["fh"] = msvcrt.get_osfhandle(_resource_tracker._fd)
     else:
         d["tracker_args"]["fd"] = _resource_tracker._fd
 
@@ -284,7 +282,7 @@ def main(pipe_handle, parent_pid, process_name=None):
         handle, parent_sentinel = duplicate_in_child_process(
             pipe_handle, parent_pid
         )
-        fd = os.fdopen(msvcrt.open_osfhandle(handle, os.O_RDONLY), mode="rb")
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
     else:
         fd = pipe_handle
         parent_sentinel = os.dup(pipe_handle)
