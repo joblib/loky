@@ -32,16 +32,15 @@ class _DupFd:
 
 #
 # Backward compat for pypy and python<=3.7
+# XXX: to remove once 3.7 is not supported anymore.
 #
-
-
 if not hasattr(util, "close_fds"):
 
     def _close_fds(*fds):
         for fd in fds:
             os.close(fd)
 
-    util.close_fds = _close_fds()
+    util.close_fds = _close_fds
 
 
 #
