@@ -108,7 +108,9 @@ def get_preparation_data(name, init_main_module=True):
     d["tracker_args"] = {"pid": _resource_tracker._pid}
     if sys.platform == "win32":
         d["tracker_args"]["parent_pid"] = os.getpid()
-        d["tracker_args"]["fh"] = msvcrt.get_osfhandle(_resource_tracker._fd)
+        d["tracker_args"]["fh"] = msvcrt.get_osfhandle(
+            _resource_tracker._fd.fileno()
+        )
     else:
         d["tracker_args"]["fd"] = _resource_tracker._fd
 
