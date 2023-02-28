@@ -120,9 +120,9 @@ class ResourceTracker:
             r, w = os.pipe()
             fds_to_pass = [r]
             if sys.platform == "win32":
-                _r = duplicate(msvcrt.get_osfhandle(r))
+                _r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
                 os.close(r)
-                r = _r
+                fds_to_pass[0] = r = _r
             else:
                 try:
                     fds_to_pass.append(sys.stderr.fileno())
@@ -216,17 +216,10 @@ def main(pipe_handle, parent_pid, verbose=0):
     pipe_handle, parent_pid = int(pipe_handle), int(parent_pid)
     verbose = int(verbose)
     if sys.platform == "win32":
-        try:
-            handle, parent_sentinel = duplicate_in_child_process(
-                pipe_handle, parent_pid
-            )
-            fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
-        except BaseException:
-            print("ERRORRR")
-            import traceback
-
-            traceback.print_exc()
-            raise
+        # handle, parent_sentinel = duplicate_in_child_process(
+        #     pipe_handle, parent_pid
+        # )
+        fd = msvcrt.open_osfhandle(pipe_handle, os.O_RDONLY)
     else:
         fd = pipe_handle
 
@@ -399,14 +392,9 @@ def spawnv_passfds(cmd, passfds):
         cmd = " ".join(f'"{x}"' for x in cmd)
         try:
             _, ht, pid, _ = _winapi.CreateProcess(
-                exe, cmd, None, None, False, 0, None, None, None
+                exe, cmd, None, None, True, 0, None, None, None
             )
             _winapi.CloseHandle(ht)
         except BaseException:
             _winapi.CloseHandle(passfds[0])
-
-            import traceback
-
-            traceback.print_exc()
-            pass
         return pid

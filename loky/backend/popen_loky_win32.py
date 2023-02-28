@@ -68,7 +68,7 @@ class Popen(_Popen):
             child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
         try:
-            with open(wfd, "wb", closefd=True) as to_child:
+            with os.fdopen(wfd, "wb", closefd=True) as to_child:
                 # start process
                 try:
                     hp, ht, pid, _ = _winapi.CreateProcess(
