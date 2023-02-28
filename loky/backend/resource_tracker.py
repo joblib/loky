@@ -117,13 +117,13 @@ class ResourceTracker:
                     "leak."
                 )
 
-            r, w = os.pipe()
-            fds_to_pass = [r]
             if sys.platform == "win32":
-                _r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
-                os.close(r)
-                fds_to_pass[0] = r = _r
+                r, whandle = _winapi.CreatePipe(None, 0)
+                w = msvcrt.open_osfhandle(whandle, 0)
+                fds_to_pass = [r]
             else:
+                r, w = os.pipe()
+                fds_to_pass = [r]
                 try:
                     fds_to_pass.append(sys.stderr.fileno())
                 except Exception:
@@ -162,9 +162,7 @@ class ResourceTracker:
                 self._fd = w
                 self._pid = pid
             finally:
-                if sys.platform == "win32":
-                    _winapi.CloseHandle(r)
-                else:
+                if sys.platform != "win32":
                     os.close(r)
 
     def _check_alive(self):
@@ -216,10 +214,10 @@ def main(pipe_handle, parent_pid, verbose=0):
     pipe_handle, parent_pid = int(pipe_handle), int(parent_pid)
     verbose = int(verbose)
     if sys.platform == "win32":
-        # handle, parent_sentinel = duplicate_in_child_process(
-        #     pipe_handle, parent_pid
-        # )
-        fd = msvcrt.open_osfhandle(pipe_handle, os.O_RDONLY)
+        handle, parent_sentinel = duplicate_in_child_process(
+            pipe_handle, parent_pid
+        )
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
     else:
         fd = pipe_handle
 
@@ -383,7 +381,7 @@ def spawnv_passfds(cmd, passfds):
             from .fork_exec import fork_exec
 
             _pass = [_mk_inheritable(fd) for fd in passfds]
-            return fork_exec(cmd, _pass)
+            return fork_exec(cmd, passfds)
         finally:
             os.close(errpipe_read)
             os.close(errpipe_write)
@@ -392,9 +390,9 @@ def spawnv_passfds(cmd, passfds):
         cmd = " ".join(f'"{x}"' for x in cmd)
         try:
             _, ht, pid, _ = _winapi.CreateProcess(
-                exe, cmd, None, None, True, 0, None, None, None
+                exe, cmd, None, None, False, 0, None, None, None
             )
             _winapi.CloseHandle(ht)
+            return pid
         except BaseException:
             _winapi.CloseHandle(passfds[0])
-        return pid
