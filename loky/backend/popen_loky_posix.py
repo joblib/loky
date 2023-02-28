@@ -61,7 +61,7 @@ class Popen:
 
     def duplicate_for_child(self, fd):
         self._fds.append(fd)
-        return reduction._mk_inheritable(fd)
+        return fd
 
     def poll(self, flag=os.WNOHANG):
         if self.returncode is None:
@@ -121,9 +121,6 @@ class Popen:
             parent_r, child_w = os.pipe()
             child_r, parent_w = os.pipe()
 
-            reduction._mk_inheritable(child_r)
-            reduction._mk_inheritable(child_w)
-            reduction._mk_inheritable(tracker_fd)
             cmd_python = spawn.get_command_line(
                 pipe_handle=child_r,
                 parent_pid=os.getpid(),
@@ -140,14 +137,19 @@ class Popen:
             util.debug(
                 f"launched python with pid {pid} and cmd:\n{cmd_python}"
             )
-            self.sentinel = parent_r
 
+            # Write the preparation data in the queue in a backward compatible
+            # way.
+            # XXX: can this be simplify now that we only support python3.7+
             method = "getbuffer"
             if not hasattr(fp, method):
                 method = "getvalue"
             with os.fdopen(parent_w, "wb", closefd=False) as f:
                 f.write(getattr(fp, method)())
+
+            # Store the process's information
             self.pid = pid
+            self.sentinel = parent_r
         finally:
             fds_to_close = []
             for fd in (parent_r, parent_w):

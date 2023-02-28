@@ -18,6 +18,12 @@ from multiprocessing import process, util
 from multiprocessing import freeze_support as _freeze_support_mp
 
 
+# If set to True, the child process will open a console that can be used to
+# get access to debugger. This is useful for debugging the child process
+# step-by-step.
+OPEN_CONSOLE_FOR_SUBPROCESSES = False
+
+
 if sys.platform != "win32":
     WINEXE = False
     WINSERVICE = False

@@ -2,6 +2,7 @@ import os
 import sys
 import msvcrt
 import _winapi
+
 from multiprocessing import util
 from multiprocessing.context import set_spawning_popen
 from multiprocessing.popen_spawn_win32 import _close_handles
@@ -11,6 +12,11 @@ from . import reduction, spawn
 
 
 __all__ = ["Popen"]
+
+POPEN_FLAG = 0
+if spawn.OPEN_CONSOLE_FOR_SUBPROCESSES:
+    POPEN_FLAG = _winapi.CREATE_NEW_CONSOLE
+
 
 #
 #
@@ -77,7 +83,7 @@ class Popen(_Popen):
                         None,
                         None,
                         False,
-                        0,
+                        POPEN_FLAG,
                         child_env,
                         None,
                         None,

@@ -375,16 +375,9 @@ def spawnv_passfds(cmd, passfds):
     """
     passfds = sorted(passfds)
     if sys.platform != "win32":
-        errpipe_read, errpipe_write = os.pipe()
-        try:
-            from .reduction import _mk_inheritable
-            from .fork_exec import fork_exec
+        from .fork_exec import fork_exec
 
-            _pass = [_mk_inheritable(fd) for fd in passfds]
-            return fork_exec(cmd, passfds)
-        finally:
-            os.close(errpipe_read)
-            os.close(errpipe_write)
+        return fork_exec(cmd, passfds)
     else:
         exe = cmd[0]
         cmd = " ".join(f'"{x}"' for x in cmd)
