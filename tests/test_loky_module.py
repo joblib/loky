@@ -10,7 +10,7 @@ import pytest
 
 import loky
 from loky import cpu_count
-from loky.backend.context import _cpu_count_user
+from loky.backend.context import _cpu_count_user, _MAX_WINDOWS_WORKERS
 
 
 def test_version():
@@ -32,6 +32,11 @@ def test_cpu_count():
     cpus_physical = cpu_count(only_physical_cores=True)
     assert type(cpus_physical) is int
     assert 1 <= cpus_physical <= cpus
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
+def test_windows_max_cpu_count():
+    assert cpu_count() <= _MAX_WINDOWS_WORKERS
 
 
 cpu_count_cmd = (

@@ -79,7 +79,7 @@ from multiprocessing.connection import wait
 
 from ._base import Future
 from .backend import get_context
-from .backend.context import cpu_count
+from .backend.context import cpu_count, _MAX_WINDOWS_WORKERS
 from .backend.queues import Queue, SimpleQueue
 from .backend.reduction import set_loky_pickler, get_loky_pickler_name
 from .backend.utils import kill_process_tree, get_exitcodes_terminated_worker
@@ -1063,6 +1063,16 @@ class ProcessPoolExecutor(Executor):
             if max_workers <= 0:
                 raise ValueError("max_workers must be greater than 0")
             self._max_workers = max_workers
+
+        if (
+            sys.platform == "win32"
+            and self._max_workers > _MAX_WINDOWS_WORKERS
+        ):
+            warnings.warn(
+                f"On Windows, max_workers cannot exceed {_MAX_WINDOWS_WORKERS} "
+                "due to limitations of the operating system."
+            )
+            self._max_workers = _MAX_WINDOWS_WORKERS
 
         if context is None:
             context = get_context()
