@@ -18,13 +18,10 @@ import warnings
 import multiprocessing as mp
 from multiprocessing import get_context as mp_get_context
 from multiprocessing.context import BaseContext
+from concurrent.futures.process import _MAX_WINDOWS_WORKERS
 
 from .process import LokyProcess, LokyInitMainProcess
 
-# Note: we do not directl use concurrent.futures.process._MAX_WINDOWS_WORKERS
-# because it can be 62 on older Python versions which would cause a crash with
-# loky.
-_MAX_WINDOWS_WORKERS = 61
 
 START_METHODS = ["loky", "loky_init_main", "spawn"]
 if sys.platform != "win32":
