@@ -20,6 +20,7 @@ from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 from loky.reusable_executor import _ReusablePoolExecutor
+from loky.backend.context import _MAX_WINDOWS_WORKERS
 
 try:
     import psutil
@@ -1013,3 +1014,32 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         out, err = p.communicate()
         assert p.returncode == 1, out.decode()
         assert b"resource_tracker" not in err, err.decode()
+
+
+def test_no_crash_max_workers_on_windows():
+    # Check that loky's reusable process pool executor does not crash when the
+    # user asks for more workers than the maximum number of workers supported
+    # by the platform.
+    with warnings.catch_warnings(record=True) as record:
+        executor = get_reusable_executor(max_workers=_MAX_WINDOWS_WORKERS + 1)
+        assert executor.submit(lambda: None).result() is None
+    if sys.platform == "win32":
+        assert len(record) == 1
+        assert "max_workers" in str(record[0].message)
+        assert len(executor._processes) == _MAX_WINDOWS_WORKERS
+    else:
+        assert len(record) == 0
+        assert len(executor._processes) == _MAX_WINDOWS_WORKERS + 1
+
+    # Downsizing should never raise a warning.
+    before_downsizing_executor = executor
+    with warnings.catch_warnings(record=True) as record:
+        executor = get_reusable_executor(max_workers=_MAX_WINDOWS_WORKERS)
+        assert executor.submit(lambda: None).result() is None
+
+    # No warning on any OS when max_workers is does not exceed the limit.
+    assert len(record) == 0
+    assert before_downsizing_executor is executor
+    assert len(executor._processes) == _MAX_WINDOWS_WORKERS
+
+    executor.shutdown()

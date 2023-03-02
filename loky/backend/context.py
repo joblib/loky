@@ -21,6 +21,12 @@ from multiprocessing.context import BaseContext
 
 from .process import LokyProcess, LokyInitMainProcess
 
+try:
+    from concurrent.futures.process import _MAX_WINDOWS_WORKERS
+except ImportError:
+    # TODO: Remove backward compatibility with Python 3.7 once we drop support.
+    _MAX_WINDOWS_WORKERS = 61
+
 START_METHODS = ["loky", "loky_init_main", "spawn"]
 if sys.platform != "win32":
     START_METHODS += ["fork", "forkserver"]
@@ -88,10 +94,20 @@ def cpu_count(only_physical_cores=False):
     or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
     cores is not found, return the number of logical cores.
 
+    Note that on Windows, the returned number of CPUs cannot exceed 61, see:
+    https://bugs.python.org/issue26903.
+
     It is also always larger or equal to 1.
     """
     # Note: os.cpu_count() is allowed to return None in its docstring
     os_cpu_count = os.cpu_count() or 1
+    if sys.platform == "win32":
+        # On Windows, attempting to use more than 61 CPUs would result in a
+        # OS-level error. See https://bugs.python.org/issue26903. According to
+        # https://learn.microsoft.com/en-us/windows/win32/procthread/processor-groups
+        # it might be possible to go beyond with a lot of extra work but this
+        # does not look easy.
+        os_cpu_count = min(os_cpu_count, _MAX_WINDOWS_WORKERS)
 
     cpu_count_user = _cpu_count_user(os_cpu_count)
     aggregate_cpu_count = max(min(os_cpu_count, cpu_count_user), 1)
