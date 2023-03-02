@@ -6,6 +6,9 @@
 - Fix handling of CPU affinity  by using `psutil`'s `cpu_affinity` on platforms
   that do not implement `os.sched_getaffinity`, such as PyPy (#381).
 
+- Fix crash when using `max_workers > 61` on Windows. Loky will no longer
+  attempt to use more than 61 workers on that platform. (#390).
+
 ### 3.3.0 - 2022-09-15
 
 - Fix worker management logic in `get_reusable_executor` to ensure
