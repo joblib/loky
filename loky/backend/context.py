@@ -21,11 +21,10 @@ from multiprocessing.context import BaseContext
 
 from .process import LokyProcess, LokyInitMainProcess
 
-try:
-    from concurrent.futures.process import _MAX_WINDOWS_WORKERS
-except ImportError:
-    # TODO: Remove backward compatibility with Python 3.7 once we drop support.
-    _MAX_WINDOWS_WORKERS = 61
+# Note: we do not directl use concurrent.futures.process._MAX_WINDOWS_WORKERS
+# because it can be 62 on older Python versions which would cause a crash with
+# loky.
+_MAX_WINDOWS_WORKERS = 61
 
 START_METHODS = ["loky", "loky_init_main", "spawn"]
 if sys.platform != "win32":
