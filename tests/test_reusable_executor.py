@@ -1016,12 +1016,6 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         assert b"resource_tracker" not in err, err.decode()
 
 
-# TODO: remove this test when we drop support for Python 3.7 which should be
-# the case before we release loky 3.4.0.
-# Life is too short to debug this on Python 3.7.
-@pytest.mark.skipif(
-    sys.version_info < (3, 8), reason="Still crashes on Python 3.7"
-)
 def test_no_crash_max_workers_on_windows():
     # Check that loky's reusable process pool executor does not crash when the
     # user asks for more workers than the maximum number of workers supported
