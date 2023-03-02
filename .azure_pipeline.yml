@@ -23,7 +23,7 @@ jobs:
         imageName: windows-latest
         python.version: "3.11"
         tox.env: py311
-      windows-py37:
+      windows-py38:
         imageName: windows-latest
         python.version: "3.8"
         tox.env: py38
@@ -32,7 +32,7 @@ jobs:
         imageName: "macos-latest"
         python.version: "3.11"
         tox.env: py311
-      macos-py37:
+      macos-py38:
         imageName: "macos-latest"
         python.version: "3.8"
         tox.env: py38
