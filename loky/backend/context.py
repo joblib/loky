@@ -94,7 +94,8 @@ def cpu_count(only_physical_cores=False):
     or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
     cores is not found, return the number of logical cores.
 
-    Note that on Windows, the returned number of CPUs cannot exceed 61, see:
+    Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
+    Python < 3.10), see:
     https://bugs.python.org/issue26903.
 
     It is also always larger or equal to 1.

@@ -7,7 +7,8 @@
   that do not implement `os.sched_getaffinity`, such as PyPy (#381).
 
 - Fix crash when using `max_workers > 61` on Windows. Loky will no longer
-  attempt to use more than 61 workers on that platform. (#390).
+  attempt to use more than 61 workers on that platform (or 60 depending on the
+  Python version). (#390).
 
 ### 3.3.0 - 2022-09-15
 
