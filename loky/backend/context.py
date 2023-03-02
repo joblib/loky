@@ -23,7 +23,7 @@ from concurrent.futures.process import _MAX_WINDOWS_WORKERS
 from .process import LokyProcess, LokyInitMainProcess
 
 # Apparently, on older Python versions, loky cannot work 61 workers on Windows
-# but instead 60.
+# but instead 60: ¯\_(ツ)_/¯
 if sys.version_info < (3, 10):
     _MAX_WINDOWS_WORKERS = _MAX_WINDOWS_WORKERS - 1
 

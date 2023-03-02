@@ -1070,7 +1070,7 @@ class ProcessPoolExecutor(Executor):
         ):
             warnings.warn(
                 f"On Windows, max_workers cannot exceed {_MAX_WINDOWS_WORKERS} "
-                "due to limitations in the Windows operating system."
+                "due to limitations of the operating system."
             )
             self._max_workers = _MAX_WINDOWS_WORKERS
 
