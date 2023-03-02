@@ -221,7 +221,6 @@ class CExitAtGCInWorker:
 
 
 class TestExecutorDeadLock(ReusableExecutorMixin):
-
     crash_cases = [
         # Check problem occuring while pickling a task in
         (id, (ExitAtPickle(),), PicklingError, None),
@@ -1020,8 +1019,15 @@ def test_no_crash_max_workers_on_windows():
     # Check that loky's reusable process pool executor does not crash when the
     # user asks for more workers than the maximum number of workers supported
     # by the platform.
+
+    # Note: on overloaded CI hosts, spawning many processes can take a long
+    # time. We need to increase the timeout to avoid spurious failures when
+    # making assertions on `len(executor._processes)`.
+    idle_worker_timeout = 10 * 60
     with warnings.catch_warnings(record=True) as record:
-        executor = get_reusable_executor(max_workers=_MAX_WINDOWS_WORKERS + 1)
+        executor = get_reusable_executor(
+            max_workers=_MAX_WINDOWS_WORKERS + 1, timeout=idle_worker_timeout
+        )
         assert executor.submit(lambda: None).result() is None
     if sys.platform == "win32":
         assert len(record) == 1
@@ -1034,7 +1040,9 @@ def test_no_crash_max_workers_on_windows():
     # Downsizing should never raise a warning.
     before_downsizing_executor = executor
     with warnings.catch_warnings(record=True) as record:
-        executor = get_reusable_executor(max_workers=_MAX_WINDOWS_WORKERS)
+        executor = get_reusable_executor(
+            max_workers=_MAX_WINDOWS_WORKERS, timeout=idle_worker_timeout
+        )
         assert executor.submit(lambda: None).result() is None
 
     # No warning on any OS when max_workers is does not exceed the limit.
