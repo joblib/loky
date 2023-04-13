@@ -123,7 +123,13 @@ class Popen(_Popen):
 
     def duplicate_for_child(self, handle):
         assert self is get_spawning_popen()
-        return duplicate(handle, self.sentinel)
+        try:
+            return duplicate(handle, self.sentinel)
+        except OSError as e:
+            raise OSError(
+                f"failed to duplicate handle={handle} "
+                f"(or sentinel={self.sentinel}) for child process"
+            ) from e
 
 
 def get_command_line(pipe_handle, **kwds):
