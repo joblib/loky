@@ -717,8 +717,6 @@ def _run_nested_delayed(depth, delay, event):
 @pytest.mark.parametrize("use_psutil", [True, False])
 def test_kill_process_tree(use_psutil):
     psutil = pytest.importorskip("psutil")
-    # DEBUG: try with the regular spawn context
-    ctx_loky = get_context("spawn")
     event = ctx_loky.Event()
     p = ctx_loky.Process(target=_run_nested_delayed, args=(4, 1000, event))
     p.start()
