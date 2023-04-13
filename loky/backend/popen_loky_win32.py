@@ -109,6 +109,12 @@ class Popen(_Popen):
         except IOError as exc:
             # IOError 22 happens when the launched subprocess terminated before
             # wfd.close is called. Thus we can safely ignore it.
+            import traceback
+
+            tb = traceback.format_exception(
+                type(exc), exc, getattr(exc, "__traceback__", None)
+            )
+            util.debug("error in Popen.__init__:" + "".join(tb))
             if exc.errno != 22:
                 raise
             util.debug(
