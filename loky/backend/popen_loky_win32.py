@@ -114,7 +114,7 @@ class Popen(_Popen):
             tb = traceback.format_exception(
                 type(exc), exc, getattr(exc, "__traceback__", None)
             )
-            util.debug("error in Popen.__init__:" + "".join(tb))
+            util.debug("error in Popen.__init__:\n" + "".join(tb))
             if exc.errno != 22:
                 raise
             util.debug(
@@ -154,19 +154,30 @@ def is_forking(argv):
 
 def main():
     """Run code specified by data received over pipe."""
-    assert is_forking(sys.argv)
+    try:
+        assert is_forking(sys.argv)
 
-    handle = int(sys.argv[-1])
-    fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
-    from_parent = os.fdopen(fd, "rb")
+        handle = int(sys.argv[-1])
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+        from_parent = os.fdopen(fd, "rb")
 
-    process.current_process()._inheriting = True
-    preparation_data = load(from_parent)
-    spawn.prepare(preparation_data)
-    self = load(from_parent)
-    process.current_process()._inheriting = False
+        process.current_process()._inheriting = True
+        preparation_data = load(from_parent)
+        spawn.prepare(preparation_data)
+        self = load(from_parent)
+        process.current_process()._inheriting = False
 
-    from_parent.close()
+        from_parent.close()
 
-    exitcode = self._bootstrap()
-    sys.exit(exitcode)
+        exitcode = self._bootstrap()
+        sys.exit(exitcode)
+    except BaseException as exc:
+        # Wrap the exception in a call to util.debug to log the
+        # process name of the failed subprocess.
+        import traceback
+
+        tb = traceback.format_exception(
+            type(exc), exc, getattr(exc, "__traceback__", None)
+        )
+        util.debug("error in main:\n" + "".join(tb))
+        raise
