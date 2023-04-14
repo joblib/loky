@@ -2,7 +2,7 @@ jobs:
 - job: linting
   displayName: Linting
   pool:
-    vmImage: ubuntu-20.04
+    vmImage: ubuntu-latest
   steps:
     - task: UsePythonVersion@0
       inputs:
@@ -19,46 +19,46 @@ jobs:
   strategy:
     matrix:
 
-      windows-py310:
+      windows-py311:
         imageName: windows-latest
-        python.version: "3.10"
-        tox.env: py310
-      windows-py37:
+        python.version: "3.11"
+        tox.env: py311
+      windows-py38:
         imageName: windows-latest
         python.version: "3.8"
         tox.env: py38
 
-      macos-py310:
+      macos-py311:
         imageName: "macos-latest"
-        python.version: "3.10"
-        tox.env: py310
-      macos-py37:
+        python.version: "3.11"
+        tox.env: py311
+      macos-py38:
         imageName: "macos-latest"
-        python.version: "3.7"
-        tox.env: py37
+        python.version: "3.8"
+        tox.env: py38
 
       linux-pypy3:
-        imageName: "ubuntu-20.04"
+        imageName: "ubuntu-latest"
         python.version: "pypy3"
         tox.env: pypy3
         LOKY_MAX_CPU_COUNT: "2"
 
-      linux-py310:
-        imageName: "ubuntu-20.04"
-        python.version: "3.10"
-        tox.env: py310
+      linux-py311:
+        imageName: "ubuntu-latest"
+        python.version: "3.11"
+        tox.env: py311
       linux-py39-joblib-tests:
-        imageName: "ubuntu-20.04"
+        imageName: "ubuntu-latest"
         python.version: "3.9"
         tox.env: "py39"
         joblib.tests: "true"
       linux-python-py39-high-memory:
-        imageName: "ubuntu-20.04"
+        imageName: "ubuntu-latest"
         python.version: "3.9"
         tox.env: py39
         RUN_MEMORY: "true"
       linux-py38:
-        imageName: "ubuntu-20.04"
+        imageName: "ubuntu-latest"
         python.version: "3.8"
         tox.env: py38
 

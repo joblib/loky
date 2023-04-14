@@ -12,7 +12,6 @@ from multiprocessing.reduction import _reduce_socket
 
 from .reduction import register
 
-
 # register reduction for win32 communication objects
 register(socket.socket, _reduce_socket)
 register(connection.Connection, connection.reduce_connection)

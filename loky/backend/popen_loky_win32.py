@@ -31,6 +31,12 @@ WINENV = hasattr(sys, "_base_executable") and not _path_eq(
     sys.executable, sys._base_executable
 )
 
+
+def _close_handles(*handles):
+    for handle in handles:
+        _winapi.CloseHandle(handle)
+
+
 #
 # We define a Popen class similar to the one from subprocess, but
 # whose constructor takes a process object as its argument.
@@ -39,7 +45,15 @@ WINENV = hasattr(sys, "_base_executable") and not _path_eq(
 
 class Popen(_Popen):
     """
-    Start a subprocess to run the code of a process object
+    Start a subprocess to run the code of a process object.
+
+    We differ from cpython implementation with the way we handle environment
+    variables, in order to be able to modify then in the child processes before
+    importing any library, in order to control the number of threads in C-level
+    threadpools.
+
+    We also use the loky preparation data, in particular to handle main_module
+    inits and the loky resource tracker.
     """
 
     method = "loky"
@@ -70,50 +84,44 @@ class Popen(_Popen):
         # bpo-35797: When running in a venv, we bypass the redirect
         # executor and launch our base Python.
         if WINENV and _path_eq(python_exe, sys.executable):
-            python_exe = sys._base_executable
+            cmd[0] = python_exe = sys._base_executable
             child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
-        try:
-            with os.fdopen(wfd, "wb", closefd=True) as to_child:
-                # start process
-                try:
-                    hp, ht, pid, _ = _winapi.CreateProcess(
-                        python_exe,
-                        cmd,
-                        None,
-                        None,
-                        False,
-                        POPEN_FLAG,
-                        child_env,
-                        None,
-                        None,
-                    )
-                    _winapi.CloseHandle(ht)
-                except BaseException:
-                    _winapi.CloseHandle(rhandle)
-                    raise
 
-                # set attributes of self
-                self.pid = pid
-                self.returncode = None
-                self._handle = hp
-                self.sentinel = int(hp)
-                self.finalizer = util.Finalize(
-                    self, _close_handles, (self.sentinel, int(rhandle))
+        cmd = " ".join(f'"{x}"' for x in cmd)
+
+        with open(wfd, "wb") as to_child:
+            # start process
+            try:
+                hp, ht, pid, _ = _winapi.CreateProcess(
+                    python_exe,
+                    cmd,
+                    None,
+                    None,
+                    False,
+                    0,
+                    child_env,
+                    None,
+                    None,
                 )
-
-                # send information to child
-                set_spawning_popen(self)
-                try:
-                    reduction.dump(prep_data, to_child)
-                    reduction.dump(process_obj, to_child)
-                finally:
-                    set_spawning_popen(None)
-        except IOError as exc:
-            # IOError 22 happens when the launched subprocess terminated before
-            # wfd.close is called. Thus we can safely ignore it.
-            if exc.errno != 22:
+                _winapi.CloseHandle(ht)
+            except BaseException:
+                _winapi.CloseHandle(rhandle)
                 raise
-            util.debug(
-                f"While starting {process_obj._name}, ignored a IOError 22"
+
+            # set attributes of self
+            self.pid = pid
+            self.returncode = None
+            self._handle = hp
+            self.sentinel = int(hp)
+            self.finalizer = util.Finalize(
+                self, _close_handles, (self.sentinel, int(rhandle))
             )
+
+            # send information to child
+            set_spawning_popen(self)
+            try:
+                reduction.dump(prep_data, to_child)
+                reduction.dump(process_obj, to_child)
+            finally:
+                set_spawning_popen(None)
