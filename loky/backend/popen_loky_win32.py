@@ -76,7 +76,6 @@ class Popen(_Popen):
             pipe_handle=rhandle, parent_pid=os.getpid()
         )
         python_exe = cmd[0]
-        cmd = " ".join(f'"{x}"' for x in cmd)
 
         # copy the environment variables to set in the child process
         child_env = {**os.environ, **process_obj.env}
@@ -87,9 +86,7 @@ class Popen(_Popen):
             cmd[0] = python_exe = sys._base_executable
             child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
-
         cmd = " ".join(f'"{x}"' for x in cmd)
-
         with open(wfd, "wb") as to_child:
             # start process
             try:
