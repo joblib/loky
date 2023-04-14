@@ -873,6 +873,10 @@ class _ExecutorManagerThread(threading.Thread):
                             f"\ncall_queue size={self.call_queue._max_size}; "
                             f" full is {self.call_queue.full()}; "
                         )
+                        while v := self.call_queue.get_nowait():
+                            mp.util.info(
+                                f"Got in queue: {v}"
+                            )
                         raise e
                     mp.util.info(
                         "full call_queue prevented to send all sentinels at "
