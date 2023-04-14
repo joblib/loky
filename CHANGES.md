@@ -1,10 +1,13 @@
 ### 3.4.0 - in development
 
 - Fix exception `__cause__` not being propagated with
-  `tblib.pickling_support.install()` (#255).
+  `tblib.pickling_support.install()`. (#255).
 
 - Fix handling of CPU affinity  by using `psutil`'s `cpu_affinity` on platforms
-  that do not implement `os.sched_getaffinity`, such as PyPy (#381).
+  that do not implement `os.sched_getaffinity`, such as PyPy. (#381).
+
+- Make the executor's gc process more thread-safe, in particular for PyPy,
+  where the gc calls can be run in any thread. (#384).
 
 - Fix crash when using `max_workers > 61` on Windows. Loky will no longer
   attempt to use more than 61 workers on that platform (or 60 depending on the
@@ -13,7 +16,7 @@
 - Fix loky compat with python 3.11 for nested calls. (#394).
 
 - Adapt the cooldown strategy when shutingdown an executor with full
-  ``call_queue``. This should accelerate the time taken to shutdown
+  `call_queue`. This should accelerate the time taken to shutdown
   in general, in particular on overloaded machines. (#399).
 
 ### 3.3.0 - 2022-09-15
