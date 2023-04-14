@@ -200,7 +200,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                     else:
                         reason = "arguments have changed"
                     mp.util.debug(
-                        "Creating a new executor with max_workers= "
+                        "Creating a new executor with max_workers="
                         f"{max_workers} as the previous instance cannot be "
                         f"reused ({reason})."
                     )
