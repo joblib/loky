@@ -868,6 +868,9 @@ class _ExecutorManagerThread(threading.Thread):
                     n_sentinels_sent += 1
                 except queue.Full as e:
                     if cooldown_time > 10.0:
+                        mp.util.info(
+                            "failed to send all sentinels and exit with error."
+                        )
                         raise e
                     mp.util.info(
                         "full call_queue prevented to send all sentinels at "
