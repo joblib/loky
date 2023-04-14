@@ -41,10 +41,13 @@ class Popen(_Popen):
     """
     Start a subprocess to run the code of a process object.
 
-    We only differ from cpython implementation with the way we handle
-    environment variables, in order to be able to modify then in the child
-    processes before importing any library, in order to control the number
-    of threads in C-level threadpools.
+    We differ from cpython implementation with the way we handle environment
+    variables, in order to be able to modify then in the child processes before
+    importing any library, in order to control the number of threads in C-level
+    threadpools.
+
+    We also use the loky preparation data, in particular to handle main_module
+    inits and the loky resource tracker.
     """
 
     method = "loky"
@@ -80,13 +83,6 @@ class Popen(_Popen):
         with open(wfd, "wb") as to_child:
             # start process
             try:
-                # This flag allows to pass inheritable handles from the
-                # parent to the child process in a python2-3 compatible way
-                # (see
-                # https://github.com/tomMoral/loky/pull/204#discussion_r290719629
-                # for more detail). When support for Python 2 is dropped,
-                # the cleaner multiprocessing.reduction.steal_handle should
-                # be used instead.
                 hp, ht, pid, _ = _winapi.CreateProcess(
                     python_exe,
                     cmd,
