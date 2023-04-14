@@ -1015,41 +1015,45 @@ class TestExecutorInitializer(ReusableExecutorMixin):
         assert b"resource_tracker" not in err, err.decode()
 
 
-def test_no_crash_max_workers_on_windows(capfd):
+def test_no_crash_max_workers_on_windows():
     # Check that loky's reusable process pool executor does not crash when the
     # user asks for more workers than the maximum number of workers supported
     # by the platform.
 
+    # To make sure we have the proper size for the call_queue, we
+    # shutdown the existing executor.
+    # See https://github.com/joblib/loky#396
+    get_reusable_executor().shutdown()
+
     # Note: on overloaded CI hosts, spawning many processes can take a long
     # time. We need to increase the timeout to avoid spurious failures when
     # making assertions on `len(executor._processes)`.
-    with capfd.disabled():
-        idle_worker_timeout = 10 * 60
-        with warnings.catch_warnings(record=True) as record:
-            executor = get_reusable_executor(
-                max_workers=_MAX_WINDOWS_WORKERS + 1,
-                timeout=idle_worker_timeout,
-            )
-            assert executor.submit(lambda: None).result() is None
-        if sys.platform == "win32":
-            assert len(record) == 1
-            assert "max_workers" in str(record[0].message)
-            assert len(executor._processes) == _MAX_WINDOWS_WORKERS
-        else:
-            assert len(record) == 0
-            assert len(executor._processes) == _MAX_WINDOWS_WORKERS + 1
-
-        # Downsizing should never raise a warning.
-        before_downsizing_executor = executor
-        with warnings.catch_warnings(record=True) as record:
-            executor = get_reusable_executor(
-                max_workers=_MAX_WINDOWS_WORKERS, timeout=idle_worker_timeout
-            )
-            assert executor.submit(lambda: None).result() is None
-
-        # No warning on any OS when max_workers does not exceed the limit.
-        assert len(record) == 0
-        assert before_downsizing_executor is executor
+    idle_worker_timeout = 5 * 60
+    with warnings.catch_warnings(record=True) as record:
+        executor = get_reusable_executor(
+            max_workers=_MAX_WINDOWS_WORKERS + 1,
+            timeout=idle_worker_timeout,
+        )
+        assert executor.submit(lambda: None).result() is None
+    if sys.platform == "win32":
+        assert len(record) == 1
+        assert "max_workers" in str(record[0].message)
         assert len(executor._processes) == _MAX_WINDOWS_WORKERS
+    else:
+        assert len(record) == 0
+        assert len(executor._processes) == _MAX_WINDOWS_WORKERS + 1
 
-        executor.shutdown()
+    # Downsizing should never raise a warning.
+    before_downsizing_executor = executor
+    with warnings.catch_warnings(record=True) as record:
+        executor = get_reusable_executor(
+            max_workers=_MAX_WINDOWS_WORKERS, timeout=idle_worker_timeout
+        )
+        assert executor.submit(lambda: None).result() is None
+
+    # No warning on any OS when max_workers does not exceed the limit.
+    assert len(record) == 0
+    assert before_downsizing_executor is executor
+    assert len(executor._processes) == _MAX_WINDOWS_WORKERS
+
+    executor.shutdown()
