@@ -30,6 +30,7 @@ def _close_handles(*handles):
     for handle in handles:
         _winapi.CloseHandle(handle)
 
+
 #
 # We define a Popen class similar to the one from subprocess, but
 # whose constructor takes a process object as its argument.
@@ -135,7 +136,7 @@ def get_command_line(pipe_handle, parent_pid, **kwds):
             *opts,
             "-c",
             prog,
-            "--multiprocessing-fork"
+            "--multiprocessing-fork",
         ]
 
 
@@ -153,21 +154,21 @@ def main(pipe_handle, parent_pid=None):
 
     if parent_pid is not None:
         source_process = _winapi.OpenProcess(
-            _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE,
-            False, parent_pid
+            _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE, False, parent_pid
         )
     else:
         source_process = None
-    new_handle = reduction.duplicate(pipe_handle,
-                                     source_process=source_process)
+    new_handle = reduction.duplicate(
+        pipe_handle, source_process=source_process
+    )
     fd = msvcrt.open_osfhandle(new_handle, os.O_RDONLY)
     parent_sentinel = source_process
 
-    with os.fdopen(fd, 'rb', closefd=True) as from_parent:
+    with os.fdopen(fd, "rb", closefd=True) as from_parent:
         process.current_process()._inheriting = True
         try:
             preparation_data = load(from_parent)
-            spawn.prepare(preparation_data)
+            spawn.prepare(preparation_data, parent_sentinel)
             self = load(from_parent)
         finally:
             del process.current_process()._inheriting

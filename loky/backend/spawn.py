@@ -84,10 +84,7 @@ def get_preparation_data(name, init_main_module=True):
     _resource_tracker.ensure_running()
     d["tracker_args"] = {"pid": _resource_tracker._pid}
     if sys.platform == "win32":
-        child_w = duplicate(
-            msvcrt.get_osfhandle(_resource_tracker._fd), inheritable=True
-        )
-        d["tracker_args"]["fh"] = child_w
+        d["tracker_args"]["fh"] = msvcrt.get_osfhandle(_resource_tracker._fd)
     else:
         d["tracker_args"]["fd"] = _resource_tracker._fd
 
@@ -142,7 +139,7 @@ def get_preparation_data(name, init_main_module=True):
 old_main_modules = []
 
 
-def prepare(data):
+def prepare(data, parent_sentinel=None):
     """Try to get current process ready to unpickle process object."""
     if "name" in data:
         process.current_process().name = data["name"]
@@ -188,7 +185,8 @@ def prepare(data):
         _resource_tracker._pid = data["tracker_args"]["pid"]
         if sys.platform == "win32":
             handle = data["tracker_args"]["fh"]
-            _resource_tracker._fd = msvcrt.open_osfhandle(handle, 0)
+            handle = duplicate(handle, source_process=parent_sentinel)
+            _resource_tracker._fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
         else:
             _resource_tracker._fd = data["tracker_args"]["fd"]
 
