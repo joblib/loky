@@ -1020,13 +1020,19 @@ def test_no_crash_max_workers_on_windows():
     # user asks for more workers than the maximum number of workers supported
     # by the platform.
 
+    # To make sure we have the proper size for the call_queue, we
+    # shutdown the existing executor.
+    # See https://github.com/joblib/loky#396
+    get_reusable_executor().shutdown()
+
     # Note: on overloaded CI hosts, spawning many processes can take a long
     # time. We need to increase the timeout to avoid spurious failures when
     # making assertions on `len(executor._processes)`.
-    idle_worker_timeout = 10 * 60
+    idle_worker_timeout = 5 * 60
     with warnings.catch_warnings(record=True) as record:
         executor = get_reusable_executor(
-            max_workers=_MAX_WINDOWS_WORKERS + 1, timeout=idle_worker_timeout
+            max_workers=_MAX_WINDOWS_WORKERS + 1,
+            timeout=idle_worker_timeout,
         )
         assert executor.submit(lambda: None).result() is None
     if sys.platform == "win32":

@@ -867,9 +867,11 @@ class _ExecutorManagerThread(threading.Thread):
                     self.call_queue.put_nowait(None)
                     n_sentinels_sent += 1
                 except queue.Full as e:
-                    if cooldown_time > 10.0:
+                    if cooldown_time > 5.0:
                         mp.util.info(
                             "failed to send all sentinels and exit with error."
+                            f"\ncall_queue size={self.call_queue._maxsize}; "
+                            f" full is {self.call_queue.full()}; "
                         )
                         raise e
                     mp.util.info(
@@ -877,7 +879,7 @@ class _ExecutorManagerThread(threading.Thread):
                         "once, waiting..."
                     )
                     sleep(cooldown_time)
-                    cooldown_time *= 2
+                    cooldown_time *= 1.2
                     break
 
         mp.util.debug(f"sent {n_sentinels_sent} sentinels to the call queue")

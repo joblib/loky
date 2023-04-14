@@ -10,6 +10,12 @@
   attempt to use more than 61 workers on that platform (or 60 depending on the
   Python version). (#390).
 
+- Fix loky compat with python 3.11 for nested calls. (#394).
+
+- Adapt the cooldown strategy when shutingdown an executor with full
+  ``call_queue``. This should accelerate the time taken to shutdown
+  in general, in particular on overloaded machines. (#399).
+
 ### 3.3.0 - 2022-09-15
 
 - Fix worker management logic in `get_reusable_executor` to ensure
