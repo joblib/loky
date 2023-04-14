@@ -870,6 +870,8 @@ class _ExecutorManagerThread(threading.Thread):
                     if cooldown_time > 10.0:
                         mp.util.info(
                             "failed to send all sentinels and exit with error."
+                            f"\ncall_queue size={self.call_queue._max_size}; "
+                            f" full is {self.call_queue.full()}; "
                         )
                         raise e
                     mp.util.info(
