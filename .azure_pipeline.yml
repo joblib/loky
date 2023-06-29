@@ -61,10 +61,6 @@ jobs:
         imageName: "ubuntu-latest"
         python.version: "3.8"
         tox.env: py38
-      linux-py37:
-        imageName: "ubuntu-latest"
-        python.version: "3.7"
-        tox.env: py37
 
   pool:
     vmImage: $(imageName)
