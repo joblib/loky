@@ -1,5 +1,7 @@
-### 3.5.0.dev0 - In development
+### 3.4.1 - 2023-06-29
 
+- Fix compatibility with python3.7, which does not define
+  a `_MAX_WINDOWS_WORKERS` constant. (#408)
 
 ### 3.4.0 - 2023-04-14
 
