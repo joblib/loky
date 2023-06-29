@@ -26,6 +26,7 @@ from .process import LokyProcess, LokyInitMainProcess
 # but instead 60: ¯\_(ツ)_/¯
 if sys.version_info >= (3, 8):
     from concurrent.futures.process import _MAX_WINDOWS_WORKERS
+
     if sys.version_info < (3, 10):
         _MAX_WINDOWS_WORKERS = _MAX_WINDOWS_WORKERS - 1
 else:
