@@ -5,6 +5,10 @@ API Reference
 .. automodule:: loky
     :members: get_reusable_executor
 
+.. autoclass:: ProcessPoolExecutor
+    :members:
+    :class-doc-from: init
+
 
 Task & results serialization
 ----------------------------
