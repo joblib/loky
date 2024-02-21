@@ -71,7 +71,6 @@ class TestLokyBackend:
             kill_process_tree(child_process)
 
     def test_current(self):
-
         current = self.current_process()
         authkey = current.authkey
 
@@ -83,7 +82,6 @@ class TestLokyBackend:
         assert current.exitcode is None
 
     def test_daemon_argument(self):
-
         # By default uses the current process's daemon flag.
         proc0 = self.Process(target=self._test_process)
         assert proc0.daemon == self.current_process().daemon
@@ -296,7 +294,6 @@ class TestLokyBackend:
         time.sleep(100)
 
     def test_terminate(self):
-
         manager = self.Manager()
         event = manager.Event()
 
@@ -481,7 +478,6 @@ class TestLokyBackend:
         n_pipe = 0
         named_sem = []
         for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
-
             # Check if fd is a standard IO file. For python 3.x stdin
             # should be closed.
             is_std = fd in ["f1", "f2"]
@@ -509,10 +505,11 @@ class TestLokyBackend:
         # - one pipe for communication with main process
         # - loky's resource_tracker pipe
         # - the Connection pipe
+        # - the pipe used for the parent_sentinel
         # - additionally, on posix + Python 3.8: multiprocessing's
         #   resource_tracker pipe
-        if sys.version_info >= (3, 8) and os.name == "posix":
-            n_expected_pipes = 4
+        if sys.version_info >= (3, 8):
+            n_expected_pipes = 5 if os.name == "posix" else 4
         else:
             n_expected_pipes = 3
         msg = (
@@ -552,7 +549,6 @@ class TestLokyBackend:
             )
             named_sem = []
             try:
-
                 p.start()
                 assert started.wait(5), "The process took too long to start"
                 r.close()
@@ -647,10 +643,8 @@ class TestLokyBackend:
             stdout, stderr = check_subprocess_call(
                 [sys.executable, filename], timeout=10
             )
-            if sys.platform == "win32":
-                assert "RuntimeError:" in stderr
-            else:
-                assert "RuntimeError:" in stdout
+            all_outputs = f"stdout:\n{stdout}\nstderr:\n{stderr}"
+            assert "RuntimeError:" in all_outputs, all_outputs
         finally:
             os.unlink(filename)
 
