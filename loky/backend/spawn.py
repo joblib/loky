@@ -22,7 +22,7 @@ else:
     from multiprocessing.reduction import duplicate
 
     WINEXE = sys.platform == "win32" and getattr(sys, "frozen", False)
-    WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
+    WINSERVICE = sys.executable.lower().endswith("pythonservice.exe") if type(sys.executable)==str else None
 
 if WINSERVICE:
     _python_exe = os.path.join(sys.exec_prefix, "python.exe")
