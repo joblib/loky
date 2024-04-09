@@ -1,7 +1,71 @@
-### 3.0.0 - XXXX-YY-ZZ
+### 3.5.0 - in development
+
+
+### 3.4.1 - 2023-06-29
+
+- Fix compatibility with python3.7, which does not define
+  a `_MAX_WINDOWS_WORKERS` constant. (#408)
+
+### 3.4.0 - 2023-04-14
+
+- Fix exception `__cause__` not being propagated with
+  `tblib.pickling_support.install()`. (#255).
+
+- Fix handling of CPU affinity  by using `psutil`'s `cpu_affinity` on platforms
+  that do not implement `os.sched_getaffinity`, such as PyPy. (#381).
+
+- Make the executor's gc process more thread-safe, in particular for PyPy,
+  where the gc calls can be run in any thread. (#384).
+
+- Fix crash when using `max_workers > 61` on Windows. Loky will no longer
+  attempt to use more than 61 workers on that platform (or 60 depending on the
+  Python version). (#390).
+
+- Fix loky compat with python 3.11 for nested calls. (#394).
+
+- Adapt the cooldown strategy when shutingdown an executor with full
+  `call_queue`. This should accelerate the time taken to shutdown
+  in general, in particular on overloaded machines. (#399).
+
+### 3.3.0 - 2022-09-15
+
+- Fix worker management logic in `get_reusable_executor` to ensure
+  the number of started worker process actually correspond to `max_workers`
+  when existing process concurrently time out (#370).
+
+### 3.2.0 - 2022-09-14
+
+- Fix leaked processes and deadlock when the Python interpreter exits
+  after a using nested calls to `get_reusable_executor` (#363).
+
+- Fix an exception in the SemLock finalizer when the semaphore has been
+  concurrently unlinked (#366).
+
+### 3.1.0 - 2022-02-22
+
+- Fix loky.cpu_count() to properly detect the number of allowed CPUs based on
+  the /sys/fs/cgroup/cpu.max file on newest Linux versions with cgroup v2.
+  Fall-back to the /sys/fs/cgroup/cpu/cpu.cfs_quota_us file to keep on
+  supporting Linux versions that use cgroup v1 (#355 and #358).
+
+- Fix an exception that could be raised in an auxiliary thread when
+  garbage collecting an executor instance when shutting down the
+  the Python interpreter (#311).
+
+- Make `shutdown(kill_workers=True)` consistently use the SIGKILL
+  signal on POSIX. Previously a mix of SIGKILL and SIGTERM was issued
+  and could deadlock the shutdown process (#348 and #357).
+
+- Big code clean-up to drop support for older Python versions.
+  Python 3.7 or later is now required. (#304)
+
+### 3.0.0 - 2021-09-10
 
 - Avoid a NameError when calling the `exit` builtin on Windows when
   loky is executed as part of a frozen Python binary. (#290)
+
+- Make it possible to automatically trace workers when profiling with
+  VizTracer (#299).
 
 ### 2.9.0 - 2020-10-02
 

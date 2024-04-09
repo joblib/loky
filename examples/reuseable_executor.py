@@ -16,31 +16,35 @@ loky._INITIALIZER_STATUS = "uninitialized"
 
 
 def initializer(x):
-    print("[{}] init".format(mp.current_process().name))
+    print(f"[{mp.current_process().name}] init")
     loky._INITIALIZER_STATUS = x
 
 
 def return_initializer_status(delay=0):
     sleep(delay)
 
-    return getattr(loky, '_INITIALIZER_STATUS', 'uninitialized')
+    return getattr(loky, "_INITIALIZER_STATUS", "uninitialized")
 
 
 executor = get_reusable_executor(
-    max_workers=2, initializer=initializer, initargs=('initialized',),
-    context="loky", timeout=1000)
+    max_workers=2,
+    initializer=initializer,
+    initargs=("initialized",),
+    context="loky",
+    timeout=1000,
+)
 
 assert loky._INITIALIZER_STATUS == "uninitialized"
 executor.submit(return_initializer_status).result()
-assert executor.submit(return_initializer_status).result() == 'initialized'
+assert executor.submit(return_initializer_status).result() == "initialized"
 
 # With reuse=True, the executor use the same initializer
 executor = get_reusable_executor(max_workers=4, reuse=True)
-for x in executor.map(return_initializer_status, [.5] * 4):
-    assert x == 'initialized'
+for x in executor.map(return_initializer_status, [0.5] * 4):
+    assert x == "initialized"
 
 # With reuse='auto', the initializer is not used anymore as a new executor
 # is created.
 executor = get_reusable_executor(max_workers=4)
-for x in executor.map(return_initializer_status, [.1] * 4):
-    assert x == 'uninitialized'
+for x in executor.map(return_initializer_status, [0.1] * 4):
+    assert x == "uninitialized"

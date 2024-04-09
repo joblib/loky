@@ -8,6 +8,7 @@ alt="Loky logo" width=96/></a>
 [![Build Status](https://dev.azure.com/joblib/loky/_apis/build/status/joblib.loky?branchName=master)](https://dev.azure.com/joblib/loky/_build/latest?definitionId=2&branchName=master)
 [![Documentation Status](https://readthedocs.org/projects/loky/badge/?version=latest)](https://loky.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/joblib/loky/branch/master/graph/badge.svg)](https://codecov.io/gh/joblib/loky)
+[![DOI](https://zenodo.org/badge/48578152.svg)](https://zenodo.org/badge/latestdoi/48578152)
 
 
 ### Goal
@@ -45,7 +46,7 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     processes. This library intends to fix those possible deadlocks and
     send back meaningful errors. Note that the implementation of
     `concurrent.futures.ProcessPoolExecutor` that comes with Python 3.7+
-    is as robust as the executor from loky but the later also works for
+    is as robust as the executor from loky but the latter also works for
     older versions of Python.
 
 
@@ -80,7 +81,7 @@ from loky import get_reusable_executor
 
 def say_hello(k):
     pid = os.getpid()
-    print("Hello from {} with arg {}".format(pid, k))
+    print(f"Hello from {pid} with arg {k}")
     sleep(.01)
     return pid
 

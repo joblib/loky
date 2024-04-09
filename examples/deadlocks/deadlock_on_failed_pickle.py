@@ -9,7 +9,7 @@ from concurrent.futures is not robust to pickling error (at least in versions
 import argparse
 
 
-class ObjectWithPickleError():
+class ObjectWithPickleError:
     """Triggers a RuntimeError when sending job to the workers"""
 
     def __reduce__(self):
@@ -18,9 +18,11 @@ class ObjectWithPickleError():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--use-stdlib', action="store_true",
-                        help='Use concurrent.futures.ProcessPoolExecutor'
-                             ' instead of loy')
+    parser.add_argument(
+        "--use-stdlib",
+        action="store_true",
+        help="Use concurrent.futures.ProcessPoolExecutor" " instead of loy",
+    )
     args = parser.parse_args()
     if args.use_stdlib:
         from concurrent.futures import ProcessPoolExecutor

@@ -1,4 +1,3 @@
-import sys
 import pytest
 import logging
 import warnings
@@ -6,10 +5,17 @@ from multiprocessing.util import log_to_stderr
 
 
 def pytest_addoption(parser):
-    parser.addoption("--loky-verbosity", type=int, default=logging.DEBUG,
-                     help="log-level: integer, SUBDEBUG(5) - INFO(20)")
-    parser.addoption("--skip-high-memory", action="store_true",
-                     help="skip high-memory test to avoid conflict on CI.")
+    parser.addoption(
+        "--loky-verbosity",
+        type=int,
+        default=logging.DEBUG,
+        help="log-level: integer, SUBDEBUG(5) - INFO(20)",
+    )
+    parser.addoption(
+        "--skip-high-memory",
+        action="store_true",
+        help="skip high-memory test to avoid conflict on CI.",
+    )
 
 
 def log_lvl(request):
@@ -19,13 +25,15 @@ def log_lvl(request):
 
 def pytest_configure(config):
     """Setup multiprocessing logging for loky testing"""
-    if sys.version_info >= (3, 4):
-        logging._levelToName[5] = "SUBDEBUG"
+    logging._levelToName[5] = "SUBDEBUG"
     log = log_to_stderr(config.getoption("--loky-verbosity"))
-    log.handlers[0].setFormatter(logging.Formatter(
-        '[%(levelname)s:%(processName)s:%(threadName)s] %(message)s'))
+    log.handlers[0].setFormatter(
+        logging.Formatter(
+            "[%(levelname)s:%(processName)s:%(threadName)s] %(message)s"
+        )
+    )
 
-    warnings.simplefilter('always')
+    warnings.simplefilter("always")
 
     config.addinivalue_line("markers", "timeout")
     config.addinivalue_line("markers", "broken_pool")
@@ -37,7 +45,8 @@ def pytest_collection_modifyitems(config, items):
         # --skip-high-memory given in cli: skip high-memory tests
         return
     skip_high_memory = pytest.mark.skip(
-        reason="--skip-high-memory option was provided")
+        reason="--skip-high-memory option was provided"
+    )
     for item in items:
         if "high_memory" in item.keywords:
             item.add_marker(skip_high_memory)
