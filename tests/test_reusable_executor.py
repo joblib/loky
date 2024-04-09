@@ -685,10 +685,14 @@ class TestResizeExecutor(ReusableExecutorMixin):
 
     @staticmethod
     def _worker_rank(x):
-        time.sleep(.2)
+        time.sleep(0.2)
         rank, world = get_worker_rank()
-        return dict(pid=os.getpid(), name=mp.current_process().name,
-                    rank=rank, world=world)
+        return dict(
+            pid=os.getpid(),
+            name=mp.current_process().name,
+            rank=rank,
+            world=world,
+        )
 
     def test_workers_rank_resize(self):
 
@@ -703,14 +707,14 @@ class TestResizeExecutor(ReusableExecutorMixin):
                 executor.map(sleep, [0.01] * 6)
                 workers_rank = {}
                 for f in results:
-                    assert f['world'] == size
-                    rank = workers_rank.get(f['pid'], None)
-                    assert rank is None or rank == f['rank']
-                    workers_rank[f['pid']] = f['rank']
-                assert set(workers_rank.values()) == set(range(size)), (
-                    ', '.join('{}: {}'.format(k, v)
-                              for k, v in executor._rank_mapper.items())
+                    assert f["world"] == size
+                    rank = workers_rank.get(f["pid"], None)
+                    assert rank is None or rank == f["rank"]
+                    workers_rank[f["pid"]] = f["rank"]
+                msg = ", ".join(
+                    f"{k}: {v}" for k, v in executor._rank_mapper.items()
                 )
+                assert set(workers_rank.values()) == set(range(size)), msg
 
 
 class TestGetReusableExecutor(ReusableExecutorMixin):

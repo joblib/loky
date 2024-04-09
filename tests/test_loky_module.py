@@ -14,7 +14,6 @@ from loky import get_worker_rank
 from loky.backend.context import _cpu_count_user, _MAX_WINDOWS_WORKERS
 
 
-
 def test_version():
     assert hasattr(
         loky, "__version__"
@@ -60,7 +59,6 @@ def test_cpu_count_os_sched_getaffinity():
         os.sched_getaffinity(0)
     except NotImplementedError:
         pytest.skip()
-
 
     res = check_output(
         [

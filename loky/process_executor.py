@@ -136,12 +136,11 @@ def get_worker_rank():
 
 
 def set_worker_rank(pid, rank_mapper):
-    """Set worker's rank and world size from the process pid and an rank_mapper.
-    """
+    """Set worker's rank and world size from the process pid and an rank_mapper."""
     global _WORKER_RANK, _WORKER_WORLD
     if pid in rank_mapper:
         _WORKER_RANK = rank_mapper[pid]
-        _WORKER_WORLD = rank_mapper['world']
+        _WORKER_WORLD = rank_mapper["world"]
 
 
 class _ThreadWakeup:
@@ -413,7 +412,7 @@ def _process_worker(
     timeout,
     worker_exit_lock,
     current_depth,
-    rank_mapper
+    rank_mapper,
 ):
     """Evaluates calls from call_queue and places the results in result_queue.
 
@@ -486,7 +485,7 @@ def _process_worker(
         if call_item is None:
             # Notify queue management thread about worker shutdown
             result_queue.put(pid)
-            
+
             is_clean = worker_exit_lock.acquire(True, timeout=30)
 
             # Early notify any loky executor running in this worker process
@@ -1064,7 +1063,6 @@ BrokenExecutor = BrokenProcessPool
 
 
 class ShutdownExecutorError(RuntimeError):
-
     """
     Raised when a ProcessPoolExecutor is shutdown while a future was in the
     running or pending state.
@@ -1240,11 +1238,11 @@ class ProcessPoolExecutor(Executor):
     def _adjust_process_count(self):
         # Compute available worker ranks for newly spawned workers
         given_ranks = set(
-            v for k, v in self._rank_mapper.items() if k != 'world'
+            v for k, v in self._rank_mapper.items() if k != "world"
         )
         all_ranks = set(range(self._max_workers))
         available_ranks = all_ranks - given_ranks
-        
+
         while len(self._processes) < self._max_workers:
             worker_exit_lock = self._context.BoundedSemaphore(1)
             rank = available_ranks.pop()
@@ -1277,7 +1275,7 @@ class ProcessPoolExecutor(Executor):
         # They will be passed to the workers when sending the tasks with
         # the CallItem.
         for pid, rank in list(self._rank_mapper.items()):
-            if pid != 'world' and rank >= self._max_workers:
+            if pid != "world" and rank >= self._max_workers:
                 self._rank_mapper[pid] = available_ranks.pop()
         mp.util.debug(
             f"Adjusted process count to {self._max_workers}: "
