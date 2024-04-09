@@ -1,11 +1,13 @@
 from loky import process_executor
 from loky.backend import get_context
-from ._executor_mixin import ExecutorMixin
 
-from ._test_process_executor import WaitTests
-from ._test_process_executor import ExecutorTest
-from ._test_process_executor import AsCompletedTests
-from ._test_process_executor import ExecutorShutdownTest
+from ._executor_mixin import ExecutorMixin
+from ._test_process_executor import (
+    AsCompletedTests,
+    ExecutorShutdownTest,
+    ExecutorTest,
+    WaitTests,
+)
 
 
 class ProcessPoolLokyMixin(ExecutorMixin):
@@ -14,22 +16,18 @@ class ProcessPoolLokyMixin(ExecutorMixin):
     context = get_context("loky")
 
 
-class TestsProcessPoolLokyShutdown(ProcessPoolLokyMixin,
-                                   ExecutorShutdownTest):
+class TestsProcessPoolLokyShutdown(ProcessPoolLokyMixin, ExecutorShutdownTest):
     def _prime_executor(self):
         pass
 
 
-class TestsProcessPoolLokyWait(ProcessPoolLokyMixin,
-                               WaitTests):
+class TestsProcessPoolLokyWait(ProcessPoolLokyMixin, WaitTests):
     pass
 
 
-class TestsProcessPoolLokyAsCompleted(ProcessPoolLokyMixin,
-                                      AsCompletedTests):
+class TestsProcessPoolLokyAsCompleted(ProcessPoolLokyMixin, AsCompletedTests):
     pass
 
 
-class TestsProcessPoolLokyExecutor(ProcessPoolLokyMixin,
-                                   ExecutorTest):
+class TestsProcessPoolLokyExecutor(ProcessPoolLokyMixin, ExecutorTest):
     pass

@@ -19,9 +19,8 @@
 #
 import os
 import sys
-import sphinx_bootstrap_theme
 
-sys.path.insert(0, os.path.abspath('../loky'))
+sys.path.insert(0, os.path.abspath("../loky"))
 
 
 # -- General configuration ------------------------------------------------
@@ -34,30 +33,30 @@ sys.path.insert(0, os.path.abspath('../loky'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.todo',
-    'sphinx.ext.autodoc',
-    'sphinx.ext.viewcode',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.intersphinx',
-    'sphinx_gallery.gen_gallery'
+    "sphinx.ext.todo",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.intersphinx",
+    "sphinx_gallery.gen_gallery",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+source_suffix = ".rst"
 
 # The master toctree document.
-master_doc = 'index'
+master_doc = "index"
 
 # General information about the project.
-project = 'loky'
-copyright = '2017, Thomas Moreau & Olivier Grisel'
-author = 'Thomas Moreau & Olivier Grisel'
+project = "loky"
+copyright = "2017, Thomas Moreau & Olivier Grisel"
+author = "Thomas Moreau & Olivier Grisel"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -65,6 +64,7 @@ author = 'Thomas Moreau & Olivier Grisel'
 #
 # The short X.Y version.
 from loky import __version__ as version  # noqa
+
 # The full version, including alpha/beta/rc tags.
 release = version
 
@@ -78,10 +78,10 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = "sphinx"
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
@@ -91,19 +91,13 @@ todo_include_todos = True
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'bootstrap'
+html_theme = "alabaster"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 html_theme_options = {
-    'navbar_sidebarrel': False,
-    'navbar_links': [
-        ("Examples", "auto_examples/index"),
-        ("API", "API"),
-        ("GitHub", "https://github.com/tommoral/loky", True)
-    ],
-    'bootswatch_theme': "united"
+    "navbar_sidebarrel": False,
 }
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -114,7 +108,7 @@ html_theme_options = {
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
@@ -128,14 +122,14 @@ html_sidebars = {
     #    'relations.html',  # needs 'show_related': True theme option to display
     #    'searchbox.html',
     #    'donate.html',
-   # ]
+    # ]
 }
 
 
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'lokydoc'
+htmlhelp_basename = "lokydoc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -144,15 +138,12 @@ latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
-
     # The font size ('10pt', '11pt' or '12pt').
     #
     # 'pointsize': '10pt',
-
     # Additional stuff for the LaTeX preamble.
     #
     # 'preamble': '',
-
     # Latex figure (float) alignment
     #
     # 'figure_align': 'htbp',
@@ -162,8 +153,13 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'loky.tex', 'loky Documentation',
-     'Thomas Moreau \\& Olivier Grisel', 'manual'),
+    (
+        master_doc,
+        "loky.tex",
+        "loky Documentation",
+        "Thomas Moreau \\& Olivier Grisel",
+        "manual",
+    ),
 ]
 
 
@@ -171,10 +167,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, 'loky', 'loky Documentation',
-     [author], 1)
-]
+man_pages = [(master_doc, "loky", "loky Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -183,34 +176,32 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'loky', 'loky Documentation',
-     author, 'loky', 'One line description of project.',
-     'Miscellaneous'),
+    (
+        master_doc,
+        "loky",
+        "loky Documentation",
+        author,
+        "loky",
+        "One line description of project.",
+        "Miscellaneous",
+    ),
 ]
 
 
 sphinx_gallery_conf = {
     # path to your examples scripts
-    'examples_dirs': '../examples',
+    "examples_dirs": "../examples",
     # path where to save gallery generated examples
-    'gallery_dirs': 'auto_examples',
-    'filename_pattern': '',
-    'ignore_pattern': 'deadlock_',
-    'reference_url': {
-        'loky': None
-    },
-    # 'default_thumb_file': '_static/lock-2.png',
-
+    "gallery_dirs": "auto_examples",
+    "filename_pattern": "",
+    "ignore_pattern": "deadlock_",
+    "reference_url": {"loky": None},
+    "default_thumb_file": "_static/loky_logo.png",
     # directory where function granular galleries are stored
-    'backreferences_dir': 'gen_modules/backreferences',
-
+    "backreferences_dir": "gen_modules/backreferences",
     # Modules for which function level galleries are created.  In
     # this case sphinx_gallery and numpy in a tuple of strings.
-    'doc_module': ('loky')
+    "doc_module": ("loky"),
 }
 
-intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
-
-
-def setup(app):
-    app.add_stylesheet("custom.css")
+intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}

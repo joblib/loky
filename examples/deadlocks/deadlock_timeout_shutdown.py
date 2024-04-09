@@ -13,7 +13,7 @@ from loky.backend import get_context
 
 
 class SlowPickle:
-    def __init__(self, delay=.1):
+    def __init__(self, delay=0.1):
         self.delay = delay
 
     def __reduce__(self):
@@ -24,6 +24,6 @@ class SlowPickle:
 if __name__ == "__main__":
     ctx = get_context("spawn")
     o = SlowPickle()
-    with ProcessPoolExecutor(max_workers=2, timeout=.01, context=ctx) as e:
+    with ProcessPoolExecutor(max_workers=2, timeout=0.01, context=ctx) as e:
         f = e.submit(id, SlowPickle())
     f.result()

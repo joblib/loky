@@ -5,12 +5,12 @@
 import os.path as op
 from distutils.sysconfig import get_python_lib
 
-FILE_CONTENT = u"""\
+FILE_CONTENT = """\
 import coverage; coverage.process_startup()
 """
 
-filename = op.join(get_python_lib(), 'coverage_subprocess.pth')
-with open(filename, 'wb') as f:
-    f.write(FILE_CONTENT.encode('ascii'))
+filename = op.join(get_python_lib(), "coverage_subprocess.pth")
+with open(filename, mode="w") as f:
+    f.write(FILE_CONTENT)
 
-print('Installed subprocess coverage support: %s' % filename)
+print(f"Installed subprocess coverage support: {filename}")
