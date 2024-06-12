@@ -1,0 +1,15 @@
+comment: off
+
+coverage:
+  status:
+    project:
+      default:
+        # Commits pushed to master should not make the overall
+        # project coverage decrease by more than 1%:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        # Be tolerant on slight code coverage diff on PRs to limit
+        # noisy red coverage status on github PRs. The diff coverage
+        target: 85%

@@ -1,0 +1,18 @@
+[run]
+branch = True
+parallel = True
+source =
+    loky
+omit =
+    tests/*
+    setup.py
+
+[report]
+exclude_lines =
+    if self.debug:
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    except Exception
+    def __repr__
+ignore_errors = True
