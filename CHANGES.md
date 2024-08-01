@@ -1,5 +1,8 @@
 ### 3.5.0 - in development
 
+- Automatically call `faulthandler.enable()` when starting loky worker
+  processes to report more informative information (post-mortem Python
+  tracebacks in particular) on worker crashs. (#419).
 
 - Fix detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on some Linux systems and recent
