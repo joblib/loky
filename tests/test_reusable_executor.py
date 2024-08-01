@@ -949,6 +949,89 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         executor4 = get_reusable_executor()
         assert executor4 is executor3
 
+    def test_faulthandler_enabled(self):
+        cmd = """if 1:
+            from loky import get_reusable_executor
+            from loky.process_executor import TerminatedWorkerError
+            import faulthandler
+
+            def f(i):
+                if {expect_enabled}:
+                    assert faulthandler.is_enabled()
+                else:
+                    assert not faulthandler.is_enabled()
+                if i == 5:
+                    faulthandler._sigsegv()
+
+            if {enable_faulthandler_via_initializer}:
+                executor = get_reusable_executor(max_workers=2, initializer=faulthandler.enable)
+            else:
+                executor = get_reusable_executor(max_workers=2)
+            try:
+                list(executor.map(f, range(10)))
+            except TerminatedWorkerError:
+                # expected
+                sys.exit(0)
+
+            raise RuntimeError("Should have raised a TerminatedWorkerError")
+        """
+
+        def check_faulthandler_output(
+            expect_enabled=True, enable_faulthandler_via_initializer=False
+        ):
+            p = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    cmd.format(
+                        expect_enabled=expect_enabled,
+                        enable_faulthandler_via_initializer=enable_faulthandler_via_initializer,
+                    ),
+                ],
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+            )
+            p.wait()
+            out, err = p.communicate()
+            assert p.returncode == 1, out.decode()
+            if expect_enabled:
+                assert b"Current thread" in err, err.decode()
+            else:
+                assert b"Current thread" not in err, err.decode()
+
+        original_pythonfaulthandler_env = os.environ.get(
+            "PYTHONFAULTHANDLER", None
+        )
+        try:
+            # Case 1: faulthandler should be automatically enabled by default.
+            if original_pythonfaulthandler_env is not None:
+                del os.environ["PYTHONFAULTHANDLER"]
+            check_faulthandler_output(expect_enabled=True)
+
+            # Case 2: faulthandler should also be enabled when
+            # PYTHONFAULTHANDLER=1 is set.
+            os.environ["PYTHONFAULTHANDLER"] = "1"
+            check_faulthandler_output(expect_enabled=True)
+
+            # Case 3: faulthandler should not be enabled when
+            # PYTHONFAULTHANDLER=0 is set explicitly.
+            os.environ["PYTHONFAULTHANDLER"] = "0"
+            check_faulthandler_output(expect_enabled=False)
+
+            # Case 4: faulthandler can also be enabled manually via the initializer.
+            del os.environ["PYTHONFAULTHANDLER"]
+            check_faulthandler_output(
+                expect_enabled=True, enable_faulthandler_via_initializer=True
+            )
+        finally:
+            if original_pythonfaulthandler_env is None:
+                os.environ["PYTHONFAULTHANDLER"] = "0"  # avoid KeyError
+                del os.environ["PYTHONFAULTHANDLER"]
+            else:
+                os.environ[
+                    "PYTHONFAULTHANDLER"
+                ] = original_pythonfaulthandler_env
+
 
 class TestExecutorInitializer(ReusableExecutorMixin):
     def _initializer(self, x):
