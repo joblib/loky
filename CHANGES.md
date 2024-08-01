@@ -1,5 +1,8 @@
 ### 3.5.0 - in development
 
+- Automatically call `faulthandler.enable()` when starting loky worker
+  processes to report more informative information (post-mortem Python
+  tracebacks in particular) on worker crashs. (#419).
 
 ### 3.4.1 - 2023-06-29
 
