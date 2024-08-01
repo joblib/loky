@@ -58,6 +58,7 @@ Process #1..n:
 __author__ = "Thomas Moreau (thomas.moreau.2010@gmail.com)"
 
 
+import faulthandler
 import os
 import gc
 import sys
@@ -374,6 +375,28 @@ def _sendback_result(result_queue, work_id, result=None, exception=None):
         result_queue.put(_ResultItem(work_id, exception=exc))
 
 
+def _enable_faulthandler_if_needed():
+    if "PYTHONFAULTHANDLER" in os.environ:
+        # Respect the environment variable to configure faulthandler. This
+        # makes it possible to never enable faulthandler in the loky workers by
+        # setting PYTHONFAULTHANDLER=0 explicitly in the environment.
+        mp.util.debug(
+            f"faulthandler explicitly configured by environment variable: "
+            f"PYTHONFAULTHANDLER={os.environ['PYTHONFAULTHANDLER']}."
+        )
+    else:
+        if faulthandler.is_enabled():
+            # Fault handler is already enabled, possibly via a custom
+            # initializer to customize the behavior.
+            mp.util.debug("faulthandler already enabled.")
+        else:
+            # Enable faulthandler by default with default paramaters otherwise.
+            mp.util.debug(
+                "Enabling faulthandler to report tracebacks on worker crashes."
+            )
+            faulthandler.enable()
+
+
 def _process_worker(
     call_queue,
     result_queue,
@@ -420,6 +443,8 @@ def _process_worker(
     pid = os.getpid()
 
     mp.util.debug(f"Worker started with timeout={timeout}")
+    _enable_faulthandler_if_needed()
+
     while True:
         try:
             call_item = call_queue.get(block=True, timeout=timeout)
@@ -709,7 +734,10 @@ class _ExecutorManagerThread(threading.Thread):
                 "terminated. This could be caused by a segmentation fault "
                 "while calling the function or by an excessive memory usage "
                 "causing the Operating System to kill the worker.\n"
-                f"{exit_codes}"
+                f"{exit_codes}\n"
+                "Detailed tracebacks of the workers should have been printed "
+                "to stderr in the executor process if faulthandler was not "
+                "disabled."
             )
 
         self.thread_wakeup.clear()
