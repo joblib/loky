@@ -192,7 +192,7 @@ def _python_exit():
     items = list(_threads_wakeups.items())
     if len(items) > 0:
         mp.util.debug(
-            "Interpreter shutting down. Waking up {len(items)}"
+            f"Interpreter shutting down. Waking up {len(items)}"
             f"executor_manager_thread:\n{items}"
         )
 
