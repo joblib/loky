@@ -255,11 +255,19 @@ def _count_physical_cores():
             cpu_count_physical = len(cpu_info)
         elif sys.platform == "win32":
             try:
+                # Wmic is not available on recent windows version
                 cpu_info = subprocess.run(
                     "wmic CPU Get NumberOfCores /Format:csv".split(),
                     capture_output=True,
                     text=True,
                 )
+                cpu_info = cpu_info.stdout.splitlines()
+                cpu_info = [
+                    l.split(",")[1]
+                    for l in cpu_info
+                    if (l and l != "Node,NumberOfCores")
+                ]
+                cpu_count_physical = sum(map(int, cpu_info))
             except FileNotFoundError:
                 cpu_info = subprocess.run(
                     (
@@ -272,14 +280,6 @@ def _count_physical_cores():
                 )
                 cpu_info = cpu_info.stdout.splitlines()
                 cpu_count_physical = int(cpu_info[0])
-            else:
-                cpu_info = cpu_info.stdout.splitlines()
-                cpu_info = [
-                    l.split(",")[1]
-                    for l in cpu_info
-                    if (l and l != "Node,NumberOfCores")
-                ]
-                cpu_count_physical = sum(map(int, cpu_info))
         elif sys.platform == "darwin":
             cpu_info = subprocess.run(
                 "sysctl -n hw.physicalcpu".split(),
