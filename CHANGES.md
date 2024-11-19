@@ -1,5 +1,8 @@
 ### 3.5.0 - in development
 
+- Use powershell's ``Get-WmiObject`` instead of ``wmic`` for counting cores on
+  windows if ``wmic`` could not be found. ``wmic`` is deprecated and not available
+  on new builds of Windows. (#423)
 
 ### 3.4.1 - 2023-06-29
 
