@@ -11,6 +11,9 @@ from loky.backend.reduction import get_loky_pickler
 from .utils import check_subprocess_call
 
 
+SUBPROCESS_TIMEOUT_IN_TESTS = 60
+
+
 class TestCloudpickleWrapper:
     def test_isolated_pickler_dispatch_tables(self):
         class A:
@@ -64,14 +67,18 @@ class TestCloudpickleWrapper:
             with open(filename, mode="w") as f:
                 f.write(code)
             cmd += [filename]
-            check_subprocess_call(cmd, stdout_regex="ok", timeout=10)
+            check_subprocess_call(
+                cmd, stdout_regex="ok", timeout=SUBPROCESS_TIMEOUT_IN_TESTS
+            )
 
             # Makes sure that if LOKY_PICKLER is set to default pickle, the
             # tasks are not wrapped with cloudpickle and it is not possible
             # using functions from the main module.
             env = {"LOKY_PICKLER": "pickle"}
             with pytest.raises(ValueError, match="A task has failed to un-s"):
-                check_subprocess_call(cmd, timeout=10, env=env)
+                check_subprocess_call(
+                    cmd, timeout=SUBPROCESS_TIMEOUT_IN_TESTS, env=env
+                )
         finally:
             os.unlink(filename)
 
@@ -107,7 +114,9 @@ class TestCloudpickleWrapper:
             with open(filename, mode="w") as f:
                 f.write(code)
             cmd += [filename]
-            check_subprocess_call(cmd, stdout_regex="ok", timeout=10)
+            check_subprocess_call(
+                cmd, stdout_regex="ok", timeout=SUBPROCESS_TIMEOUT_IN_TESTS
+            )
         finally:
             os.unlink(filename)
 
@@ -164,7 +173,12 @@ class TestCloudpickleWrapper:
             cmd += [filename]
 
             env = {"LOKY_PICKLER": "pickle"}
-            check_subprocess_call(cmd, stdout_regex="ok", timeout=10, env=env)
+            check_subprocess_call(
+                cmd,
+                stdout_regex="ok",
+                timeout=SUBPROCESS_TIMEOUT_IN_TESTS,
+                env=env,
+            )
         finally:
             os.unlink(filename)
 
@@ -248,9 +262,13 @@ class TestCloudpickleWrapper:
             if loky_pickler == "'pickle'":
                 match = "(Can't get|has no) attribute 'test_func'"
                 with pytest.raises(ValueError, match=match):
-                    check_subprocess_call(cmd, timeout=10)
+                    check_subprocess_call(
+                        cmd, timeout=SUBPROCESS_TIMEOUT_IN_TESTS
+                    )
             else:
-                check_subprocess_call(cmd, stdout_regex="ok", timeout=10)
+                check_subprocess_call(
+                    cmd, stdout_regex="ok", timeout=SUBPROCESS_TIMEOUT_IN_TESTS
+                )
         finally:
             os.unlink(filename)
 

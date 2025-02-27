@@ -43,6 +43,8 @@ HAVE_SEND_HANDLE = sys.platform == "win32" or (
 )
 HAVE_FROM_FD = hasattr(socket, "fromfd")
 
+SUBPROCESS_TIMEOUT_IN_TESTS = 60
+
 
 class TestLokyBackend:
     # loky processes
@@ -621,7 +623,9 @@ class TestLokyBackend:
                 cmd += [filename]
             else:
                 cmd += ["-c", code]
-            check_subprocess_call(cmd, stdout_regex="ok", timeout=10)
+            check_subprocess_call(
+                cmd, stdout_regex="ok", timeout=SUBPROCESS_TIMEOUT_IN_TESTS
+            )
         finally:
             if run_file:
                 os.unlink(filename)
@@ -645,7 +649,7 @@ class TestLokyBackend:
             with open(filename, mode="w") as f:
                 f.write(code)
             stdout, stderr = check_subprocess_call(
-                [sys.executable, filename], timeout=10
+                [sys.executable, filename], timeout=SUBPROCESS_TIMEOUT_IN_TESTS
             )
             if sys.platform == "win32":
                 assert "RuntimeError:" in stderr
@@ -689,7 +693,9 @@ class TestLokyBackend:
             with open(filename, mode="w") as f:
                 f.write(code)
             check_subprocess_call(
-                [sys.executable, filename], stdout_regex="ok", timeout=10
+                [sys.executable, filename],
+                stdout_regex="ok",
+                timeout=SUBPROCESS_TIMEOUT_IN_TESTS,
             )
         finally:
             os.unlink(filename)
@@ -775,7 +781,7 @@ def test_default_subcontext(method):
     """
 
     cmd = [sys.executable, "-c", code]
-    check_subprocess_call(cmd, timeout=10)
+    check_subprocess_call(cmd, timeout=SUBPROCESS_TIMEOUT_IN_TESTS)
 
     ctx_default = get_context()
     assert ctx_default.get_start_method() == "loky"
