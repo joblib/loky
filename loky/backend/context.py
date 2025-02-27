@@ -295,7 +295,6 @@ def _count_physical_cores_win32():
             f"powershell.exe {cmd}".split(),
             capture_output=True,
             text=True,
-            timeout=10,
         )
         cpu_info = cpu_info.stdout.splitlines()
         return int(cpu_info[0])
