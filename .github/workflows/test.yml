@@ -31,12 +31,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.x"
-
-      - name: Install dependencies
-        run: pip install pre-commit
-      - name: Run pre-commit
-        run: pre-commit run --all-files
+          python-version: "3.12"
+      - name: Install linters
+        bash: |
+          pip install black==25.1.0
+      - name: Run black
+        bash: |
+          black --check --diff .
 
   testing:
     name: Testing
