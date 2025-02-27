@@ -47,22 +47,22 @@ jobs:
       matrix:
         name: [default]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        PYTHON_VERSION: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        PYTHON_VERSION: ["3.9", "3.10", "3.11", "3.12", "3.13"]
         include:
 
           - name: windows-py313
             os: windows-latest
             PYTHON_VERSION: "3.13"
-          - name: windows-py38
+          - name: windows-py39
             os: windows-latest
-            PYTHON_VERSION: "3.8"
+            PYTHON_VERSION: "3.9"
 
           - name: macos-py313
             os: macos-latest
             PYTHON_VERSION: "3.13"
-          - name: macos-py38
+          - name: macos-py39
             os: macos-latest
-            PYTHON_VERSION: "3.8"
+            PYTHON_VERSION: "3.9"
 
           - name: linux-py313
             os: ubuntu-latest
@@ -78,9 +78,9 @@ jobs:
             os: ubuntu-latest
             PYTHON_VERSION: "3.9"
             RUN_MEMORY: "true"
-          - name: linux-py38
+          - name: linux-py39
             os: ubuntu-latest
-            PYTHON_VERSION: "3.8"
+            PYTHON_VERSION: "3.9"
             # Do not install psutil on Python 3.8 to have some CI runs that
             # tests that loky has no hard dependency on psutil.
             NO_PSUTIL: "true"
