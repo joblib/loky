@@ -31,10 +31,12 @@ jobs:
         imageName: "macos-latest"
         python.version: "3.11"
         tox.env: py311
+        LOKY_MAX_CPU_COUNT: "2"
       macos-py38:
         imageName: "macos-latest"
         python.version: "3.8"
         tox.env: py38
+        LOKY_MAX_CPU_COUNT: "2"
 
       linux-py311:
         imageName: "ubuntu-latest"
