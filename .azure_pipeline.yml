@@ -22,19 +22,19 @@ jobs:
         imageName: windows-latest
         python.version: "3.11"
         tox.env: py311
-      windows-py38:
+      windows-py39:
         imageName: windows-latest
-        python.version: "3.8"
-        tox.env: py38
+        python.version: "3.9"
+        tox.env: py39
 
       macos-py311:
         imageName: "macos-latest"
         python.version: "3.11"
         tox.env: py311
-      macos-py38:
+      macos-py39:
         imageName: "macos-latest"
-        python.version: "3.8"
-        tox.env: py38
+        python.version: "3.9"
+        tox.env: py39
 
       linux-py311:
         imageName: "ubuntu-latest"
@@ -50,10 +50,10 @@ jobs:
         python.version: "3.9"
         tox.env: py39
         RUN_MEMORY: "true"
-      linux-py38:
+      linux-py39:
         imageName: "ubuntu-latest"
-        python.version: "3.8"
-        tox.env: py38
+        python.version: "3.9"
+        tox.env: py39
 
   pool:
     vmImage: $(imageName)
