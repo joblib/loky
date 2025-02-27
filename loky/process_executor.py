@@ -205,8 +205,7 @@ def _python_exit():
     # Collect the executor_manager_thread's to make sure we exit cleanly.
     for thread, _ in items:
         # This locks is to prevent situations where an executor is gc'ed in one
-        # thread while the atexit finalizer is running in another thread. This
-        # can happen when joblib is used in pypy for instance.
+        # thread while the atexit finalizer is running in another thread.
         with _global_shutdown_lock:
             thread.join()
 

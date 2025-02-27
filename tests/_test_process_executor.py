@@ -39,9 +39,6 @@ from .utils import id_sleep, check_subprocess_call, filter_match
 from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
 
 
-IS_PYPY = hasattr(sys, "pypy_version_info")
-
-
 def create_future(state=PENDING, exception=None, result=None):
     f = Future()
     f._state = state
@@ -209,11 +206,6 @@ class ExecutorShutdownTest:
         # reference when we deleted self.executor.
         t_deadline = time.time() + 1
         while executor_reference() is not None and time.time() < t_deadline:
-            if IS_PYPY:
-                # PyPy can delay __del__ calls and GC compared to CPython.
-                # To ensure that this test pass without waiting too long we
-                # need an explicit GC.
-                gc.collect()
             time.sleep(0.001)
         assert executor_reference() is None
 
@@ -254,11 +246,6 @@ class ExecutorShutdownTest:
         # complete first.
         executor_reference = weakref.ref(self.executor)
         self.executor = None
-
-        if IS_PYPY:
-            # Object deletion and garbage collection can be delayed under PyPy.
-            time.sleep(1.0)
-            gc.collect()
 
         # Make sure that there is not other reference to the executor object.
         assert executor_reference() is None
@@ -311,10 +298,6 @@ class ExecutorShutdownTest:
         executor_manager_thread = executor._executor_manager_thread
         processes = executor._processes
         del executor
-        if IS_PYPY:
-            # Object deletion and garbage collection can be delayed under PyPy.
-            time.sleep(1.0)
-            gc.collect()
 
         executor_manager_thread.join()
         for p in processes.values():
@@ -715,8 +698,6 @@ class ExecutorTest:
 
         collected = False
         for _ in range(5):
-            if IS_PYPY:
-                gc.collect()
             collected = collect.wait(timeout=1.0)
             if collected:
                 return
