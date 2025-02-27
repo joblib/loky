@@ -318,9 +318,7 @@ def _count_physical_cores_win32():
     )
     cpu_info = cpu_info.stdout.splitlines()
     cpu_info = [
-        l.split(",")[1]
-        for l in cpu_info
-        if (l and l != "Node,NumberOfCores")
+        l.split(",")[1] for l in cpu_info if (l and l != "Node,NumberOfCores")
     ]
     return sum(map(int, cpu_info))
 
