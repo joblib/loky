@@ -13,7 +13,7 @@ python -c "import loky; print('loky.cpu_count():', loky.cpu_count())"
 python -c "import os; print('os.cpu_count():', os.cpu_count())"
 
 
-if [[ "$JOBLIB_TESTS" == "true" ]]; then
+if [ "$JOBLIB_TESTS" = "true" ]; then
     # Install joblib from pip, patch it to use this version of loky
     # and run the joblib tests with pytest.
     git clone https://github.com/joblib/joblib.git src_joblib
@@ -29,7 +29,7 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
 else
     # Make sure that we have the python docker image cached locally to avoid
     # a timeout in a test that needs it.
-    if [[ "$(which docker)" != "" ]] && [[ "$(uname)" = "Linux" ]]; then
+    if [ "$(which docker)" != "" ] && [ "$(uname)" = "Linux" ]; then
         docker pull python:3.10
     fi
 
@@ -40,7 +40,7 @@ else
 
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
-    if [[ "$RUN_MEMORY" != "true" ]]; then
+    if [ "$RUN_MEMORY" != "true" ]; then
         PYTEST_ARGS = "$PYTEST_ARGS --skip-high-memory"
 
     pytest loky $PYTEST_ARGS
