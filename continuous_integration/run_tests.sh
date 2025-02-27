@@ -41,7 +41,7 @@ else
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
     if [[ "$RUN_MEMORY" != "true" ]]; then
-        PYTEST_ARGS = "$PYTEST_ARGS --skip-high-memory"
+        PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
 
     pytest loky $PYTEST_ARGS
