@@ -9,7 +9,6 @@ import platform
 import pytest
 import weakref
 import tempfile
-import traceback
 import threading
 import faulthandler
 import warnings
@@ -25,6 +24,7 @@ from concurrent.futures._base import (
     CANCELLED_AND_NOTIFIED,
     FINISHED,
 )
+from _testcapi import _spawn_pthread_waiter, _end_spawned_pthread
 
 import loky
 from loky.process_executor import (
@@ -1205,6 +1205,27 @@ class ExecutorTest:
             assert error_message in str(e.__cause__)
 
         executor.shutdown(wait=True)
+
+    def test_no_deprecation_warning_is_raised_on_fork(self):
+        # On POSIX, recent versions of Python detect if the process has native
+        # threads running when calling `os.fork` and similar. All supported
+        # process executors should not trigger this warning by not calling
+        # `os.fork` (and `os.execve`) manually but instead using the compound
+        # _posixsubprocess.fork_exec.
+        _spawn_pthread_waiter()
+        try:
+            with warnings.catch_warnings(
+                category=DeprecationWarning, record=True
+            ) as w:
+                warnings.simplefilter("always", category=DeprecationWarning)
+                executor = self.executor_type(max_workers=2)
+                try:
+                    list(executor.map(sqrt, range(10)))
+                finally:
+                    executor.shutdown(wait=True)
+            assert len(w) == 0, [w.message for w in w]
+        finally:
+            _end_spawned_pthread()
 
 
 def _custom_initializer():
