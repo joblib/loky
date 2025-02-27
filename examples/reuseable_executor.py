@@ -6,6 +6,7 @@ It is possible to reuse an executor even if it has a complicated setup. When
 using the parameter `reuse=True`, the executor is resized if needed but the
 arguments stay the same.
 """
+
 from time import sleep
 import multiprocessing as mp
 import loky
