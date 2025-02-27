@@ -44,5 +44,5 @@ else
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
 
-    pytest loky $PYTEST_ARGS
+    pytest $PYTEST_ARGS .
 fi
