@@ -19,6 +19,14 @@ jobs:
   strategy:
     matrix:
 
+      windows-py313:
+        imageName: windows-latest
+        python.version: "3.13"
+        tox.env: py313
+      windows-py312:
+        imageName: windows-latest
+        python.version: "3.12"
+        tox.env: py312
       windows-py311:
         imageName: windows-latest
         python.version: "3.11"
@@ -28,6 +36,14 @@ jobs:
         python.version: "3.8"
         tox.env: py38
 
+      macos-py313:
+        imageName: "macos-latest"
+        python.version: "3.13"
+        tox.env: py313
+      macos-py312:
+        imageName: "macos-latest"
+        python.version: "3.12"
+        tox.env: py312
       macos-py311:
         imageName: "macos-latest"
         python.version: "3.11"
@@ -43,6 +59,14 @@ jobs:
         tox.env: pypy3
         LOKY_MAX_CPU_COUNT: "2"
 
+      linux-py313:
+        imageName: "ubuntu-latest"
+        python.version: "3.13"
+        tox.env: py313
+      linux-py312:
+        imageName: "ubuntu-latest"
+        python.version: "3.12"
+        tox.env: py312
       linux-py311:
         imageName: "ubuntu-latest"
         python.version: "3.11"
