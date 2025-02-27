@@ -22,20 +22,20 @@ jobs:
         imageName: windows-latest
         python.version: "3.11"
         tox.env: py311
-      windows-py38:
+      windows-py39:
         imageName: windows-latest
-        python.version: "3.8"
-        tox.env: py38
+        python.version: "3.9"
+        tox.env: py39
 
       macos-py311:
         imageName: "macos-latest"
         python.version: "3.11"
         tox.env: py311
         LOKY_MAX_CPU_COUNT: "2"
-      macos-py38:
+      macos-py39:
         imageName: "macos-latest"
-        python.version: "3.8"
-        tox.env: py38
+        python.version: "3.9"
+        tox.env: py39
         LOKY_MAX_CPU_COUNT: "2"
 
       linux-py311:
@@ -52,14 +52,10 @@ jobs:
         python.version: "3.9"
         tox.env: py39
         RUN_MEMORY: "true"
-      linux-py38:
+      linux-py39:
         imageName: "ubuntu-latest"
-        python.version: "3.8"
-        tox.env: py38
-      linux-py37:
-        imageName: "ubuntu-latest"
-        python.version: "3.7"
-        tox.env: py37
+        python.version: "3.9"
+        tox.env: py39
 
   pool:
     vmImage: $(imageName)
