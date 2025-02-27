@@ -23,8 +23,8 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
 
     pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
-    cp "$BUILD_SOURCESDIRECTORY"/continuous_integration/copy_loky.sh $JOBLIB/externals
-    (cd $JOBLIB/externals && bash copy_loky.sh "$BUILD_SOURCESDIRECTORY")
+    cp ../continuous_integration/copy_loky.sh $JOBLIB/externals
+    (cd $JOBLIB/externals && bash copy_loky.sh "../..")
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 else
     # Make sure that we have the python docker image cached locally to avoid
