@@ -2,6 +2,7 @@
 .*
 *sublime*
 tags
+!.github
 
 # Python running files
 __pycache__
