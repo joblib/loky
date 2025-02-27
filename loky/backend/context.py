@@ -288,16 +288,6 @@ def _count_physical_cores_linux():
     return len(cpu_info)
 
 
-def _count_physical_cores_darwin():
-    cpu_info = subprocess.run(
-        "sysctl -n hw.physicalcpu".split(),
-        capture_output=True,
-        text=True,
-    )
-    cpu_info = cpu_info.stdout
-    return int(cpu_info)
-
-
 def _count_physical_cores_win32():
     try:
         cmd = "-Command (Get-CimInstance -ClassName Win32_Processor).NumberOfCores"
@@ -305,6 +295,7 @@ def _count_physical_cores_win32():
             f"powershell.exe {cmd}".split(),
             capture_output=True,
             text=True,
+            timeout=10,
         )
         cpu_info = cpu_info.stdout.splitlines()
         return int(cpu_info[0])
@@ -321,6 +312,16 @@ def _count_physical_cores_win32():
         l.split(",")[1] for l in cpu_info if (l and l != "Node,NumberOfCores")
     ]
     return sum(map(int, cpu_info))
+
+
+def _count_physical_cores_darwin():
+    cpu_info = subprocess.run(
+        "sysctl -n hw.physicalcpu".split(),
+        capture_output=True,
+        text=True,
+    )
+    cpu_info = cpu_info.stdout
+    return int(cpu_info)
 
 
 class LokyContext(BaseContext):
