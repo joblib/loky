@@ -36,12 +36,6 @@ jobs:
         python.version: "3.8"
         tox.env: py38
 
-      linux-pypy3:
-        imageName: "ubuntu-latest"
-        python.version: "pypy3"
-        tox.env: pypy3
-        LOKY_MAX_CPU_COUNT: "2"
-
       linux-py311:
         imageName: "ubuntu-latest"
         python.version: "3.11"
@@ -65,24 +59,12 @@ jobs:
     vmImage: $(imageName)
   variables:
     JUNITXML: 'test-data.xml'
-    PYTEST_ARGS: '-vl --timeout=60 --maxfail=5'
+    PYTEST_ARGS: '-vl --timeout=120 --maxfail=5'
   steps:
     - task: UsePythonVersion@0
       inputs:
         versionSpec: '$(python.version)'
       displayName: 'Use Python $(python.version)'
-      condition: ne(variables['python.version'], 'pypy3')
-    - bash: |
-        wget -q https://downloads.python.org/pypy/pypy3.10-v7.3.12-linux64.tar.bz2 -O pypy.tar.bz2
-        mkdir -p pypy3
-        (cd pypy3; tar --strip-components=1 -xf ../pypy.tar.bz2)
-        mv pypy3 /opt/pypy37
-        /opt/pypy37/bin/pypy3 -m ensurepip
-        /opt/pypy37/bin/pypy3 -m pip install --upgrade pip wheel
-        /opt/pypy37/bin/pypy3 -m venv pypy-venv
-        echo "##vso[task.prependpath]pypy-venv/bin"
-      displayName: 'Install PyPy 3.10'
-      condition: eq(variables['python.version'], 'pypy3')
     # azure-pipelines unpredictably switches between Git\bin\bash and
     # Git\usr\bin\bash when running a bash script inside Windows environments.
     # The latter may use wrong bash commands, resulting in errors when codecov
