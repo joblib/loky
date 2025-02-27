@@ -36,11 +36,12 @@ else
     # Enable coverage reporting from subprocesses.
     python continuous_integration/install_coverage_subprocess_pth.py
 
+    PYTEST_ARGS="-vl --timeout=120 --maxfail=5 --cov=loky --cov-report xml"
+
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
     if [[ "$RUN_MEMORY" != "true" ]]; then
-        EXTRA_PYTEST_ARGS = "--skip-high-memory"
-    fi
+        PYTEST_ARGS = "$PYTEST_ARGS --skip-high-memory"
 
-    pytest loky -vl --timeout=120 --maxfail=5 ${EXTRA_PYTEST_ARGS} --cov=loky --cov-report xml
+    pytest loky $PYTEST_ARGS
 fi
