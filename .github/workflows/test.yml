@@ -5,10 +5,10 @@ permissions:
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
   schedule:
     # Weekly build on Tuesday at 2:00 PM
     - cron: "0 2 * * 2"
