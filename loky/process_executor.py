@@ -1014,7 +1014,6 @@ BrokenExecutor = BrokenProcessPool
 
 
 class ShutdownExecutorError(RuntimeError):
-
     """
     Raised when a ProcessPoolExecutor is shutdown while a future was in the
     running or pending state.
