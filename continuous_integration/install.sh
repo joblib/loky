@@ -13,7 +13,7 @@ conda activate testenv
 # Install pytest timeout to fasten failure in deadlocking tests
 PIP_INSTALL_PACKAGES="pytest-timeout coverage pytest-cov"
 
-if [[ -z "$NO_PSUTIL"]]; then
+if [[ -z "$NO_PSUTIL" ]]; then
     PIP_INSTALL_PACKAGES="$PIP_INSTALL_PACKAGES psutil"
 fi
 
