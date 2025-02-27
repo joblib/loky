@@ -33,10 +33,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install linters
-        bash: |
+        run: |
           pip install black==25.1.0
       - name: Run black
-        bash: |
+        run: |
           black --check --diff .
 
   testing:
