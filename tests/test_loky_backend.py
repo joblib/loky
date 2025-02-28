@@ -482,9 +482,8 @@ class TestLokyBackend:
         named_sem = []
         for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
 
-            # Check if fd is a standard IO file. For python 3.x stdin
-            # should be closed.
-            is_std = fd in ["f1", "f2"]
+            # Check if fd is a standard IO file.
+            is_std = fd in ["f0", "f1", "f2"]
 
             # Check if fd is a pipe
             is_pipe = t in ["tPIPE", "tFIFO"]
@@ -503,15 +502,14 @@ class TestLokyBackend:
                 named_sem += [name[1:]]
 
             # no other files should be opened at this stage in the process
-            assert is_pipe or is_std or is_rng or is_mem
+            assert is_pipe or is_std or is_rng or is_mem, (fd, t, name)
 
         # there should be:
         # - one pipe for communication with main process
         # - loky's resource_tracker pipe
         # - the Connection pipe
-        # - additionally, on posix + Python 3.8: multiprocessing's
-        #   resource_tracker pipe
-        if sys.version_info >= (3, 8) and os.name == "posix":
+        # - multiprocessing's resource_tracker pipe (POSIX only)
+        if os.name == "posix":
             n_expected_pipes = 4
         else:
             n_expected_pipes = 3
