@@ -1052,7 +1052,7 @@ def test_no_crash_max_workers_on_windows():
         assert executor.submit(lambda: None).result() is None
 
     # No warning on any OS when max_workers does not exceed the limit.
-    assert len(record) == 0
+    assert len(record) == 0, [w.message for w in record]
     assert before_downsizing_executor is executor
     assert len(executor._processes) == _MAX_WINDOWS_WORKERS
 
