@@ -46,5 +46,8 @@ else
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
 
+    LOKY_MAX_DEPTH=3
+    OMP_NUM_THREADS=4
+
     pytest $PYTEST_ARGS .
 fi
