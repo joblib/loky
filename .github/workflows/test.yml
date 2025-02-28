@@ -46,23 +46,23 @@ jobs:
       matrix:
         include:
 
-          - name: windows-py311
+          - name: windows-py313
             os: windows-latest
-            PYTHON_VERSION: "3.11"
+            PYTHON_VERSION: "3.13"
           - name: windows-py39
             os: windows-latest
             PYTHON_VERSION: "3.9"
 
-          - name: macos-py311
+          - name: macos-py313
             os: macos-latest
-            PYTHON_VERSION: "3.11"
+            PYTHON_VERSION: "3.13"
           - name: macos-py39
             os: macos-latest
             PYTHON_VERSION: "3.9"
 
-          - name: linux-py311
+          - name: linux-py313
             os: ubuntu-latest
-            PYTHON_VERSION: "3.11"
+            PYTHON_VERSION: "3.13"
           - name: linux-py39-joblib-tests
             os: ubuntu-latest
             PYTHON_VERSION: "3.9"
