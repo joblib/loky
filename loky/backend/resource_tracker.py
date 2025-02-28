@@ -7,6 +7,7 @@
 # Adapted from multiprocessing/resource_tracker.py
 #  * add some VERBOSE logging,
 #  * add support to track folders,
+#  * add Windows support,
 #  * refcounting scheme to avoid unlinking resources still in use.
 #
 # On Unix we run a server process which keeps track of unlinked
@@ -140,7 +141,7 @@ class ResourceTracker(_ResourceTracker):
                         signal.pthread_sigmask(
                             signal.SIG_BLOCK, _IGNORED_SIGNALS
                         )
-                    pid = util.spawnv_passfds(exe, args, fds_to_pass)
+                    pid = spawnv_passfds(exe, args, fds_to_pass)
                 finally:
                     if _HAVE_SIGMASK:
                         signal.pthread_sigmask(
@@ -307,3 +308,19 @@ def main(fd, verbose=0):
 
     if verbose:
         util.debug("resource tracker shut down")
+
+
+def spawnv_passfds(path, args, passfds):
+    if sys.platform != "win32":
+        return util.spawnv_passfds(path, args, passfds)
+    else:
+        passfds = sorted(passfds)
+        cmd = " ".join(f'"{x}"' for x in args)
+        try:
+            _, ht, pid, _ = _winapi.CreateProcess(
+                path, cmd, None, None, True, 0, None, None, None
+            )
+            _winapi.CloseHandle(ht)
+        except BaseException:
+            pass
+        return pid
