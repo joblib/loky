@@ -487,7 +487,7 @@ class TestLokyBackend:
             n_pipe += is_pipe
 
             # Check if fd is open for the rng. This can happen on different
-            # plateform and depending of the python version.
+            # platform and depending of the python version.
             is_rng = name == "n/dev/urandom"
 
             # Not sure if this really expected to be open or not...
