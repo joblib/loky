@@ -10,7 +10,7 @@ on:
     branches:
       - master
   schedule:
-    # Weekly build on Tuesday at 2:00 PM
+    # Weekly build on Tuesday at 2:00 AM
     - cron: "0 2 * * 2"
 
 # Cancel in-progress workflows when pushing
