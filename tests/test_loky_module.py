@@ -56,8 +56,6 @@ def test_cpu_count(monkeypatch):
     assert type(cpus_physical) is int
     assert 1 <= cpus_physical <= cpus
 
-    assert False
-
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
 def test_windows_max_cpu_count():
