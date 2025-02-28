@@ -35,9 +35,12 @@ def fork_exec(cmd, keep_fds, env=None):
     env = env or {}
     child_env = {**os.environ, **env}
 
+    # make sure fds are inheritable
+    [os.set_inheritable(fd, True) for fd in keep_fds]
+
     pid = os.fork()
     if pid == 0:  # pragma: no cover
         close_fds(keep_fds)
-        os.execve(sys.executable, cmd, child_env)
+        os.execve(cmd[0], cmd, child_env)
     else:
         return pid
