@@ -106,7 +106,7 @@ jobs:
 
       - name: Run tests
         run: |
-          bash -el continuous_integration/run_tests.sh
+          bash -el continuous_integration/runtests.sh
 
       - name: Upload to Codecov
         # always upload coverage even if tests fail
