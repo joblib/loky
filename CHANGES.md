@@ -1,5 +1,11 @@
 ### 3.5.0 - in development
 
+- Avoid raising `DeprecationWarning` related to `os.fork` when running in a
+  natively multi-threaded process. (#435).
+
+- Fix a crash when calling command that access `stdin` via `subprocess.run` in
+  worker processes on POSIX systems. (#435).
+
 - Drop support for Python 3.7 and Python 3.8. (#409)
 
 - Drop support for PyPy. (#427)
