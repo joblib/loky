@@ -4,6 +4,7 @@
 #
 # author: Thomas Moreau and Olivier Grisel
 #
+import sys
 import os
 import subprocess
 
@@ -66,7 +67,7 @@ def fork_exec(cmd, keep_fds, env=None):
     try:
         return _posixsubprocess.fork_exec(
             cmd,
-            [cmd[0]],
+            [sys.executable.encode("utf-8")],
             True,
             keep_fds,
             None,
