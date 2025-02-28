@@ -1,0 +1,116 @@
+name: CI
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    # Weekly build on Tuesday at 2:00 AM
+    - cron: "0 2 * * 2"
+
+# Cancel in-progress workflows when pushing
+# a new commit on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  linting:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+      - name: Install black
+        run: |
+          pip install black==25.1.0
+      - name: Run black
+        run: |
+          black --check --diff .
+
+  testing:
+    name: Testing
+    needs: linting
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+
+          - name: windows-py311
+            os: windows-latest
+            PYTHON_VERSION: "3.11"
+          - name: windows-py39
+            os: windows-latest
+            PYTHON_VERSION: "3.9"
+
+          - name: macos-py311
+            os: macos-latest
+            PYTHON_VERSION: "3.11"
+          - name: macos-py39
+            os: macos-latest
+            PYTHON_VERSION: "3.9"
+
+          - name: linux-py311
+            os: ubuntu-latest
+            PYTHON_VERSION: "3.11"
+          - name: linux-py39-joblib-tests
+            os: ubuntu-latest
+            PYTHON_VERSION: "3.9"
+            JOBLIB_TESTS: "true"
+          - name: linux-python-py39-high-memory
+            os: ubuntu-latest
+            PYTHON_VERSION: "3.9"
+            RUN_MEMORY: "true"
+          - name: linux-py39
+            os: ubuntu-latest
+            PYTHON_VERSION: "3.9"
+            # Do not install psutil on Python 3.9 to have some CI runs that
+            # tests that loky has no hard dependency on psutil.
+            NO_PSUTIL: "true"
+
+    env: ${{ matrix }}
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        # Need to use this shell to get conda working properly.
+        # See https://github.com/marketplace/actions/setup-miniconda#important
+        shell: ${{ matrix.os == 'windows-latest' && 'cmd /C CALL {0}' || 'bash -el {0}' }}
+
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: true
+          auto-update-conda: true
+          miniforge-version: latest
+
+      - name: Install dependencies
+        run: |
+          bash -el continuous_integration/install.sh
+
+      - name: Run tests
+        run: |
+          bash -el continuous_integration/runtests.sh
+
+      - name: Upload to Codecov
+        # always upload coverage even if tests fail
+        if: ${{ matrix.SKLEARN_TESTS != 'true' && (success() || failure()) }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml

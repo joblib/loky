@@ -6,8 +6,7 @@ from loky.backend import get_context
 from ._executor_mixin import ExecutorMixin
 
 
-if sys.platform != "win32" and not hasattr(sys, "pypy_version_info"):
-    # XXX: the forkserver backend is broken with pypy3.
+if sys.platform != "win32":
     from ._test_process_executor import (
         AsCompletedTests,
         ExecutorShutdownTest,

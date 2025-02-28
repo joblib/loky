@@ -18,8 +18,6 @@ except ImportError:
     psutil_exceptions = ()
 
 
-IS_PYPY = hasattr(sys, "pypy_version_info")
-
 # Set a large timeout as it should only be reached in case of deadlocks
 TIMEOUT = 40
 
@@ -148,9 +146,7 @@ def _check_executor_started(executor):
 
 
 class ExecutorMixin:
-    # PyPy is slower to create worker processes and creating
-    # too many processes can cause some tests to timeout.
-    worker_count = 2 if IS_PYPY else 5
+    worker_count = 5
 
     @classmethod
     def setup_class(cls):
