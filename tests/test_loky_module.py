@@ -2,6 +2,7 @@ import multiprocessing as mp
 import os
 import sys
 import shutil
+import subprocess
 import tempfile
 import warnings
 from subprocess import check_output
@@ -19,7 +20,29 @@ def test_version():
     ), "There are no __version__ argument on the loky module"
 
 
-def test_cpu_count():
+def test_cpu_count(monkeypatch):
+
+    # Monkeypatch subprocess.run to simulate the absence of lscpu on linux or CIM on
+    # windows to test the different code paths in _cpu_count_physical.
+    old_run = subprocess.run
+
+    def mock_run(*args, **kwargs):
+        if (
+            "lscpu" in args[0]
+            and os.environ.get("LOKY_TEST_NO_LSCPU") == "true"
+        ):
+            raise RuntimeError("lscpu not available")
+
+        if (
+            "powershell.exe" in args[0]
+            and os.environ.get("LOKY_TEST_NO_CIM") == "true"
+        ):
+            raise RuntimeError("Cim not available")
+
+        return old_run(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
     cpus = cpu_count()
     assert type(cpus) is int
     assert cpus >= 1
@@ -32,6 +55,8 @@ def test_cpu_count():
     cpus_physical = cpu_count(only_physical_cores=True)
     assert type(cpus_physical) is int
     assert 1 <= cpus_physical <= cpus
+
+    assert False
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")

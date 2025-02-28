@@ -271,6 +271,7 @@ def _count_physical_cores_linux():
         )
         cpu_info = cpu_info.stdout.splitlines()
         cpu_info = {line for line in cpu_info if not line.startswith("#")}
+        print("used lscpu")
         return len(cpu_info)
     except:
         pass  # fallback to /proc/cpuinfo
@@ -280,6 +281,7 @@ def _count_physical_cores_linux():
     )
     cpu_info = cpu_info.stdout.splitlines()
     cpu_info = {line for line in cpu_info if line.startswith("core id")}
+    print("used /proc/cpuinfo")
     return len(cpu_info)
 
 
