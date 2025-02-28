@@ -6,7 +6,7 @@ set -xe
 
 # Create new conda env
 conda config --set solver libmamba
-to_install="python=$PYTHON_VERSION pip numpy tblib viztracer setuptools"
+to_install="python=$PYTHON_VERSION pip numpy tblib viztracer"
 conda create -n testenv --yes -c conda-forge $to_install
 conda activate testenv
 
