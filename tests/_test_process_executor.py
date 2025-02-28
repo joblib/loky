@@ -24,7 +24,6 @@ from concurrent.futures._base import (
     CANCELLED_AND_NOTIFIED,
     FINISHED,
 )
-from _testcapi import _spawn_pthread_waiter, _end_spawned_pthread
 
 import loky
 from loky.process_executor import (
@@ -1212,6 +1211,11 @@ class ExecutorTest:
         # process executors should not trigger this warning by not calling
         # `os.fork` (and `os.execve`) manually but instead using the compound
         # _posixsubprocess.fork_exec.
+        try:
+            from _testcapi import _spawn_pthread_waiter, _end_spawned_pthread
+        except ImportError:
+            pytest.skip("Cannot test without _testcapi module")
+
         _spawn_pthread_waiter()
         try:
             with warnings.catch_warnings(
