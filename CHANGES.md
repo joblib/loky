@@ -1,5 +1,7 @@
 ### 3.5.0 - in development
 
+- Drop support for Python 3.7 and Python 3.8. (#409)
+
 - Drop support for PyPy. (#427)
 
 ### 3.4.1 - 2023-06-29
