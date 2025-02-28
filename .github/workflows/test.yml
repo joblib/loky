@@ -20,12 +20,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  COVERAGE: 'true'
+  LOKY_MAX_DEPTH: 3
+  OMP_NUM_THREADS: 4
 
 jobs:
-  env:
-    LOKY_MAX_DEPTH: 3
-    OMP_NUM_THREADS: 4
 
   linting:
     runs-on: ubuntu-latest
