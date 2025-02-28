@@ -13,7 +13,7 @@ def fork_exec(cmd, keep_fds, env=None):
     import _posixsubprocess
 
     # Encoded command args as bytes:
-    cmd = [arg.encode("utf-8") for arg in cmd]
+    cmd = [os.fsencode(arg) for arg in cmd]
 
     # Copy the environment variables to set in the child process (also encoded
     # as bytes).
@@ -30,16 +30,17 @@ def fork_exec(cmd, keep_fds, env=None):
 
     # VFORK is not supported on older Python versions.
     if hasattr(subprocess, "_USE_VFORK"):
-        call_setsid = [False]
+        # Python 3.11 and later
+        pgid_to_set = [-1]
         allow_vfork = [subprocess._USE_VFORK]
     else:
-        call_setsid = []
+        pgid_to_set = []
         allow_vfork = []
 
     try:
         return _posixsubprocess.fork_exec(
             cmd,
-            [sys.executable.encode("utf-8")],
+            [cmd[0]],
             True,
             keep_fds,
             None,
@@ -53,8 +54,8 @@ def fork_exec(cmd, keep_fds, env=None):
             errpipe_read,
             errpipe_write,
             False,
-            *call_setsid,
-            -1,
+            False,
+            *pgid_to_set,
             None,
             None,
             None,
