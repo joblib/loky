@@ -11,7 +11,9 @@ import subprocess
 def close_fds(keep_fds):  # pragma: no cover
     """Close all the file descriptors except those in keep_fds."""
 
-    # Make sure to keep stdout and stderr open for logging purpose
+    # Make sure to keep stdout and stderr open for logging purpose. Do not
+    # close stdin either, otherwise it can break calls to subprocess.run in the
+    # child process (at least on macOS).
     keep_fds = {*keep_fds, 0, 1, 2}
 
     # We try to retrieve all the open fds
