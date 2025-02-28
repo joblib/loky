@@ -40,8 +40,6 @@ else
 
     PYTEST_ARGS="-vl --timeout=120 --maxfail=5 --cov=loky --cov-report xml"
 
-    # Run the tests and collect trace coverage data both in the subprocesses
-    # and its subprocesses.
     if [[ "$RUN_MEMORY" != "true" ]]; then
         PYTEST_ARGS="$PYTEST_ARGS --skip-high-memory"
     fi
@@ -49,5 +47,7 @@ else
     LOKY_MAX_DEPTH=3
     OMP_NUM_THREADS=4
 
+    # Run the tests and collect trace coverage data both in the subprocesses
+    # and its subprocesses.
     pytest $PYTEST_ARGS .
 fi
