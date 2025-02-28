@@ -30,8 +30,10 @@ def fork_exec(cmd, keep_fds, env=None):
 
     # VFORK is not supported on older Python versions.
     if hasattr(subprocess, "_USE_VFORK"):
+        call_setsid = [False]
         allow_vfork = [subprocess._USE_VFORK]
     else:
+        call_setsid = []
         allow_vfork = []
 
     try:
@@ -51,7 +53,7 @@ def fork_exec(cmd, keep_fds, env=None):
             errpipe_read,
             errpipe_write,
             False,
-            False,
+            *call_setsid,
             -1,
             None,
             None,
