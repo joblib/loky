@@ -128,8 +128,6 @@ class ResourceTracker(_ResourceTracker):
                 exe = spawn.get_executable()
                 args = [exe, *util._args_from_interpreter_flags(), "-c", cmd]
                 util.debug(f"launching resource tracker: {args}")
-                args = [arg.encode("utf-8") for arg in args]
-                exe = args[0]
                 # bpo-33613: Register a signal mask that will block the
                 # signals.  This signal mask will be inherited by the child
                 # that is going to be spawned and will protect the child from a
@@ -312,6 +310,8 @@ def main(fd, verbose=0):
 
 def spawnv_passfds(path, args, passfds):
     if sys.platform != "win32":
+        args = [arg.encode("utf-8") for arg in args]
+        path = path.encode("utf-8")
         return util.spawnv_passfds(path, args, passfds)
     else:
         passfds = sorted(passfds)
