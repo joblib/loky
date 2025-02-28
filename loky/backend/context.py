@@ -18,20 +18,15 @@ import warnings
 import multiprocessing as mp
 from multiprocessing import get_context as mp_get_context
 from multiprocessing.context import BaseContext
+from concurrent.futures.process import _MAX_WINDOWS_WORKERS
 
 
 from .process import LokyProcess, LokyInitMainProcess
 
 # Apparently, on older Python versions, loky cannot work 61 workers on Windows
 # but instead 60: ¯\_(ツ)_/¯
-if sys.version_info >= (3, 8):
-    from concurrent.futures.process import _MAX_WINDOWS_WORKERS
-
-    if sys.version_info < (3, 10):
-        _MAX_WINDOWS_WORKERS = _MAX_WINDOWS_WORKERS - 1
-else:
-    # compat for versions before 3.8 which do not define this.
-    _MAX_WINDOWS_WORKERS = 60
+if sys.version_info < (3, 10):
+    _MAX_WINDOWS_WORKERS = _MAX_WINDOWS_WORKERS - 1
 
 START_METHODS = ["loky", "loky_init_main", "spawn"]
 if sys.platform != "win32":
@@ -189,8 +184,8 @@ def _cpu_count_affinity(os_cpu_count):
         except NotImplementedError:
             pass
 
-    # On PyPy and possibly other platforms, os.sched_getaffinity does not exist
-    # or raises NotImplementedError, let's try with the psutil if installed.
+    # On some platforms, os.sched_getaffinity does not exist or raises
+    # NotImplementedError, let's try with the psutil if installed.
     try:
         import psutil
 
@@ -203,7 +198,7 @@ def _cpu_count_affinity(os_cpu_count):
             sys.platform == "linux"
             and os.environ.get("LOKY_MAX_CPU_COUNT") is None
         ):
-            # PyPy does not implement os.sched_getaffinity on Linux which
+            # Some platforms don't implement os.sched_getaffinity on Linux which
             # can cause severe oversubscription problems. Better warn the
             # user in this particularly pathological case which can wreck
             # havoc, typically on CI workers.
