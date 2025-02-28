@@ -482,7 +482,7 @@ class TestLokyBackend:
             # Check if fd is a standard IO file.
             is_std = fd in ["f0", "f1", "f2"]
 
-            # Check if fd is a pipe
+            # Check if fd is a pipe.
             is_pipe = t in ["tPIPE", "tFIFO"]
             n_pipe += is_pipe
 
@@ -494,14 +494,14 @@ class TestLokyBackend:
             is_dev_null = name == "n/dev/null"
 
             # Check if fd is a semaphore or an open library. Store all the
-            # named semaphore
+            # named semaphore.
             is_mem = fd in ["fmem", "fDEL"]
             if sys.platform == "darwin":
                 is_mem |= "n/loky-" in name
             if is_mem and "n/dev/shm/sem." in name:
                 named_sem += [name[1:]]
 
-            # No other files should be opened at this stage in the process
+            # No other files should be opened at this stage in the process.
             if not (is_pipe or is_std or is_rng or is_mem or is_dev_null):
                 unexpected.append((fd, t, name))
 
