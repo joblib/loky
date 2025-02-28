@@ -40,7 +40,7 @@ def fork_exec(cmd, keep_fds, env=None):
     try:
         return _posixsubprocess.fork_exec(
             cmd,
-            [cmd[0]],
+            cmd[0:1],
             True,
             keep_fds,
             None,
