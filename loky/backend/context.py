@@ -292,7 +292,6 @@ def _count_physical_cores_win32():
             text=True,
         )
         cpu_info = cpu_info.stdout.splitlines()
-        print("used cim")
         return int(cpu_info[0])
     except:
         pass  # fallback to wmic (older Windows versions; deprecated now)
@@ -306,7 +305,6 @@ def _count_physical_cores_win32():
     cpu_info = [
         l.split(",")[1] for l in cpu_info if (l and l != "Node,NumberOfCores")
     ]
-    print("used wmic")
     return sum(map(int, cpu_info))
 
 
