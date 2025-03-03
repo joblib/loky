@@ -953,10 +953,11 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         cmd = """if 1:
             from loky import get_reusable_executor
             import faulthandler
-import logging
-from multiprocessing.util import log_to_stderr
+            import logging
+            from multiprocessing.util import log_to_stderr
 
-log_to_stderr(logging.DEBUG)
+            log_to_stderr(logging.DEBUG)
+
             def f(i):
                 if {expect_enabled}:
                     assert faulthandler.is_enabled()
@@ -971,6 +972,7 @@ log_to_stderr(logging.DEBUG)
                 executor = get_reusable_executor(max_workers=2)
 
             list(executor.map(f, range(10)))
+            # This should always trigger a crash.
         """
 
         def check_faulthandler_output(
@@ -990,8 +992,13 @@ log_to_stderr(logging.DEBUG)
             )
             p.wait()
             out, err = p.communicate()
+
+            # The worker is always expected to crash, irrespective of whether
+            # faulthandler is enabled or not.
             assert p.returncode == 1, out.decode()
-            assert b"Current thread" in err, err.decode()
+
+            if expect_enabled:
+                assert b"Current thread" in err, err.decode()
 
         original_pythonfaulthandler_env = os.environ.pop(
             "PYTHONFAULTHANDLER", None
