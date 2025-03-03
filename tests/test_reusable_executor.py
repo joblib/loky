@@ -1,21 +1,25 @@
 import os
-import subprocess
 import sys
 import gc
+import sys
+import time
 import ctypes
-from tempfile import NamedTemporaryFile
 import pytest
 import warnings
 import threading
+import subprocess
 from time import sleep
+import multiprocessing as mp
 from multiprocessing import util, current_process
 from pickle import PicklingError, UnpicklingError
+from tempfile import NamedTemporaryFile
 
 import cloudpickle
 from packaging.version import Version
 
 import loky
 from loky import cpu_count
+from loky import get_worker_rank
 from loky import get_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
@@ -678,6 +682,39 @@ class TestResizeExecutor(ReusableExecutorMixin):
         if len(recorded_warnings) > 1:
             expected_msg = "A worker stopped"
             assert expected_msg in recorded_warnings[0].message.args[0]
+
+    @staticmethod
+    def _worker_rank(x):
+        time.sleep(0.2)
+        rank, world = get_worker_rank()
+        return dict(
+            pid=os.getpid(),
+            name=mp.current_process().name,
+            rank=rank,
+            world=world,
+        )
+
+    def test_workers_rank_resize(self):
+
+        executor = get_reusable_executor(max_workers=2)
+
+        with warnings.catch_warnings(record=True):
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("always")
+            for size in [12, 2, 1, 12, 6, 1, 8, 5]:
+                executor = get_reusable_executor(max_workers=size, reuse=True)
+                results = executor.map(self._worker_rank, range(size * 5))
+                executor.map(sleep, [0.01] * 6)
+                workers_rank = {}
+                for f in results:
+                    assert f["world"] == size
+                    rank = workers_rank.get(f["pid"], None)
+                    assert rank is None or rank == f["rank"]
+                    workers_rank[f["pid"]] = f["rank"]
+                msg = ", ".join(
+                    f"{k}: {v}" for k, v in executor._rank_mapper.items()
+                )
+                assert set(workers_rank.values()) == set(range(size)), msg
 
 
 class TestGetReusableExecutor(ReusableExecutorMixin):
