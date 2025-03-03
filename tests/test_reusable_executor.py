@@ -952,10 +952,11 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
     def test_faulthandler_enabled(self):
         cmd = """if 1:
             from loky import get_reusable_executor
-            from loky.process_executor import TerminatedWorkerError
             import faulthandler
-            import sys
+import logging
+from multiprocessing.util import log_to_stderr
 
+log_to_stderr(logging.DEBUG)
             def f(i):
                 if {expect_enabled}:
                     assert faulthandler.is_enabled()
@@ -970,7 +971,6 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 executor = get_reusable_executor(max_workers=2)
 
             list(executor.map(f, range(10)))
-            print("Should have raised a TerminatedWorkerError")
         """
 
         def check_faulthandler_output(
@@ -991,11 +991,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             p.wait()
             out, err = p.communicate()
             assert p.returncode == 1, out.decode()
-            if sys.implementation.name == "cpython":
-                if expect_enabled:
-                    assert b"Current thread" in err, err.decode()
-                else:
-                    assert b"Current thread" not in err, err.decode()
+            assert b"Current thread" in err, err.decode()
 
         original_pythonfaulthandler_env = os.environ.get(
             "PYTHONFAULTHANDLER", None
