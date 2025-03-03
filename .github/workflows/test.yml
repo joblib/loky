@@ -52,6 +52,7 @@ jobs:
           - name: windows-py39
             os: windows-latest
             PYTHON_VERSION: "3.9"
+            LOKY_TEST_NO_CIM: "true"
 
           - name: macos-py313
             os: macos-latest
@@ -63,6 +64,7 @@ jobs:
           - name: linux-py313
             os: ubuntu-latest
             PYTHON_VERSION: "3.13"
+            LOKY_TEST_NO_LSCPU: "true"
           - name: linux-py39-joblib-tests
             os: ubuntu-latest
             PYTHON_VERSION: "3.9"

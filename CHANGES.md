@@ -6,6 +6,10 @@
 - Fix a crash when calling commands that access `stdin` via `subprocess.run` in
   worker processes on POSIX systems. (#435).
 
+- Fix detection of the number of physical cores in
+  `cpu_count(only_physical_cores=True)` on some Linux systems and recent
+  Windows versions. (#425)
+
 - Drop support for Python 3.7 and Python 3.8. (#409)
 
 - Drop support for PyPy. (#427)
