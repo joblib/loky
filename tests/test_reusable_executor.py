@@ -953,10 +953,6 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         cmd = """if 1:
             from loky import get_reusable_executor
             import faulthandler
-            import logging
-            from multiprocessing.util import log_to_stderr
-
-            log_to_stderr(logging.DEBUG)
 
             def f(i):
                 if {expect_enabled}:
