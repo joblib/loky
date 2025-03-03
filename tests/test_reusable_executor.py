@@ -993,13 +993,11 @@ log_to_stderr(logging.DEBUG)
             assert p.returncode == 1, out.decode()
             assert b"Current thread" in err, err.decode()
 
-        original_pythonfaulthandler_env = os.environ.get(
+        original_pythonfaulthandler_env = os.environ.pop(
             "PYTHONFAULTHANDLER", None
         )
         try:
             # Case 1: faulthandler should be automatically enabled by default.
-            if original_pythonfaulthandler_env is not None:
-                del os.environ["PYTHONFAULTHANDLER"]
             check_faulthandler_output(expect_enabled=True)
 
             # Case 2: faulthandler should also be enabled when
@@ -1019,8 +1017,7 @@ log_to_stderr(logging.DEBUG)
             )
         finally:
             if original_pythonfaulthandler_env is None:
-                os.environ["PYTHONFAULTHANDLER"] = "0"  # avoid KeyError
-                del os.environ["PYTHONFAULTHANDLER"]
+                os.environ.pop("PYTHONFAULTHANDLER", None)
             else:
                 os.environ["PYTHONFAULTHANDLER"] = (
                     original_pythonfaulthandler_env
