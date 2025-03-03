@@ -1026,9 +1026,9 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 os.environ["PYTHONFAULTHANDLER"] = "0"  # avoid KeyError
                 del os.environ["PYTHONFAULTHANDLER"]
             else:
-                os.environ[
-                    "PYTHONFAULTHANDLER"
-                ] = original_pythonfaulthandler_env
+                os.environ["PYTHONFAULTHANDLER"] = (
+                    original_pythonfaulthandler_env
+                )
 
 
 class TestExecutorInitializer(ReusableExecutorMixin):
