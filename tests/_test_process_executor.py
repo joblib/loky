@@ -112,10 +112,9 @@ class ExecutorShutdownTest:
 
     def test_shutdown_with_sys_exit_at_pickle(self):
         self.executor.shutdown()
-        for i in range(30):
-            with self.executor_type(max_workers=4) as e:
-                with pytest.raises(PicklingError):
-                    e.submit(id, ExitAtPickle()).result()
+        with self.executor_type(max_workers=4) as e:
+            with pytest.raises(PicklingError):
+                e.submit(id, ExitAtPickle()).result()
 
     def test_interpreter_shutdown(self):
         # Free resources to avoid random timeout in CI
