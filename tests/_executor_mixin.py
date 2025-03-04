@@ -4,6 +4,7 @@ import math
 import pytest
 import threading
 from time import sleep
+import random
 
 from loky import TimeoutError, get_reusable_executor
 from loky.backend import get_context
@@ -28,6 +29,10 @@ def initializer_event(event):
     """Initializer that set a global test event for test synchronization"""
     global _test_event
     _test_event = event
+
+    # Inject some randomness in the initialization to reveal race conditions.
+    if random.random() < 0.2:
+        sleep(random.random() * 0.1)  # 0-100ms
 
 
 def _direct_children_with_cmdline(p):
