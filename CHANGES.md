@@ -1,5 +1,9 @@
 ### 3.5.0 - in development
 
+- Automatically call `faulthandler.enable()` when starting loky worker
+  processes to report more informative information (post-mortem Python
+  tracebacks in particular) on worker crashs. (#419).
+
 - Fix a random deadlock caused by a race condition at executor shutdown that
   was observed on Linux and Windows. (#438)
 
