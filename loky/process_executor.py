@@ -306,9 +306,11 @@ class _SafeQueue(Queue):
         pending_work_items=None,
         running_work_items=None,
         thread_wakeup=None,
+        shutdown_lock=None,
         reducers=None,
     ):
         self.thread_wakeup = thread_wakeup
+        self.shutdown_lock = shutdown_lock
         self.pending_work_items = pending_work_items
         self.running_work_items = running_work_items
         super().__init__(max_size, reducers=reducers, ctx=ctx)
@@ -337,7 +339,8 @@ class _SafeQueue(Queue):
             if work_item is not None:
                 work_item.future.set_exception(raised_error)
                 del work_item
-            self.thread_wakeup.wakeup()
+            with self.shutdown_lock:
+                self.thread_wakeup.wakeup()
         else:
             super()._on_queue_feeder_error(e, obj)
 
@@ -1167,6 +1170,7 @@ class ProcessPoolExecutor(Executor):
             pending_work_items=self._pending_work_items,
             running_work_items=self._running_work_items,
             thread_wakeup=self._executor_manager_thread_wakeup,
+            shutdown_lock=self._shutdown_lock,
             reducers=job_reducers,
             ctx=self._context,
         )
