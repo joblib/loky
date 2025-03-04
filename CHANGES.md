@@ -4,6 +4,9 @@
   processes to report more informative information (post-mortem Python
   tracebacks in particular) on worker crashs. (#419).
 
+- Fix a random deadlock caused by a race condition at executor shutdown that
+  was observed on Linux and Windows. (#438)
+
 - Fix detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on some Linux systems and recent
   Windows versions. (#425)

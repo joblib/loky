@@ -107,12 +107,18 @@ class ExecutorShutdownTest:
 
     def test_shutdown_with_pickle_error(self):
         self.executor.shutdown()
-        with self.executor_type(max_workers=4) as e:
-            e.submit(id, ErrorAtPickle())
+        # Iterate a few times to catch deadlocks/race conditions in the
+        # executor shutdown.
+        for _ in range(5):
+            with self.executor_type(max_workers=4) as e:
+                with pytest.raises(PicklingError):
+                    e.submit(id, ErrorAtPickle()).result()
 
     def test_shutdown_with_sys_exit_at_pickle(self):
         self.executor.shutdown()
-        for i in range(30):
+        # Iterate a few times to catch deadlocks/race conditions in the
+        # executor shutdown.
+        for _ in range(5):
             with self.executor_type(max_workers=4) as e:
                 with pytest.raises(PicklingError):
                     e.submit(id, ExitAtPickle()).result()
