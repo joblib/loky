@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload to Codecov
         # always upload coverage even if tests fail
-        if: ${{ matrix.SKLEARN_TESTS != 'true' && (success() || failure()) }}
+        if: ${{ matrix.JOBLIB_TESTS != 'true' && (success() || failure()) }}
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
