@@ -1,10 +1,10 @@
 ### 3.5.0 - in development
 
 - Avoid raising `DeprecationWarning` related to `os.fork` when running in a
-  natively multi-threaded process. (#435).
+  natively multi-threaded process. (#429).
 
 - Fix a crash when calling commands that access `stdin` via `subprocess.run` in
-  worker processes on POSIX systems. (#435).
+  worker processes on POSIX systems. (#429).
 
 - Automatically call `faulthandler.enable()` when starting loky worker
   processes to report more informative information (post-mortem Python

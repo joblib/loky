@@ -39,29 +39,29 @@ def fork_exec(cmd, keep_fds, env=None):
 
     try:
         return _posixsubprocess.fork_exec(
-            cmd,
-            cmd[0:1],
-            True,
-            keep_fds,
-            None,
-            encoded_env,
-            -1,
-            -1,
-            -1,
-            -1,
-            -1,
-            -1,
-            errpipe_read,
-            errpipe_write,
-            False,
-            False,
-            *pgid_to_set,
-            None,
-            None,
-            None,
-            -1,
-            None,
-            *allow_vfork,
+            cmd,  # args
+            cmd[0:1],  # executable_list
+            True,  # close_fds
+            keep_fds,  # pass_fds
+            None,  # cwd
+            encoded_env,  # env
+            -1,  # p2cread
+            -1,  # p2cwrite
+            -1,  # c2pread
+            -1,  # c2pwrite
+            -1,  # errread
+            -1,  # errwrite
+            errpipe_read,  # errpipe_read
+            errpipe_write,  # errpipe_write
+            False,  # restore_signal
+            False,  # call_setsid
+            *pgid_to_set,  # pgid_to_set
+            None,  # gid
+            None,  # extra_groups
+            None,  # uid
+            -1,  # child_umask
+            None,  # preexec_fn
+            *allow_vfork,  # extra flag if vfork is available
         )
     finally:
         os.close(errpipe_read)
