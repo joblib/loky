@@ -949,6 +949,17 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         executor4 = get_reusable_executor()
         assert executor4 is executor3
 
+    def test_no_crash_on_stdin_access_in_child_subprocess_run(self):
+        # non-regression test for #420.
+        def call_subprocess():
+            sleep(0.01)
+            subprocess.run(
+                [sys.executable, "-c", "import sys; sys.stdin.read(0)"]
+            ).check_returncode()
+
+        executor = get_reusable_executor(max_workers=4, timeout=2)
+        executor.submit(call_subprocess).result()
+
     def test_faulthandler_enabled(self):
         cmd = """if 1:
             from loky import get_reusable_executor

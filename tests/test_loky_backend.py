@@ -71,7 +71,6 @@ class TestLokyBackend:
             kill_process_tree(child_process)
 
     def test_current(self):
-
         current = self.current_process()
         authkey = current.authkey
 
@@ -83,7 +82,6 @@ class TestLokyBackend:
         assert current.exitcode is None
 
     def test_daemon_argument(self):
-
         # By default uses the current process's daemon flag.
         proc0 = self.Process(target=self._test_process)
         assert proc0.daemon == self.current_process().daemon
@@ -296,7 +294,6 @@ class TestLokyBackend:
         time.sleep(100)
 
     def test_terminate(self):
-
         manager = self.Manager()
         event = manager.Event()
 
@@ -480,38 +477,42 @@ class TestLokyBackend:
 
         n_pipe = 0
         named_sem = []
+        unexpected = []
         for fd, t, name in zip(lines[::3], lines[1::3], lines[2::3]):
+            # Check if fd is a standard IO file.
+            is_std = fd in ["f0", "f1", "f2"]
 
-            # Check if fd is a standard IO file. For python 3.x stdin
-            # should be closed.
-            is_std = fd in ["f1", "f2"]
-
-            # Check if fd is a pipe
+            # Check if fd is a pipe.
             is_pipe = t in ["tPIPE", "tFIFO"]
             n_pipe += is_pipe
 
             # Check if fd is open for the rng. This can happen on different
-            # plateform and depending of the python version.
+            # platform and depending of the python version.
             is_rng = name == "n/dev/urandom"
 
+            # Not sure if this really expected to be open or not...
+            is_dev_null = name == "n/dev/null"
+
             # Check if fd is a semaphore or an open library. Store all the
-            # named semaphore
+            # named semaphore.
             is_mem = fd in ["fmem", "fDEL"]
             if sys.platform == "darwin":
                 is_mem |= "n/loky-" in name
             if is_mem and "n/dev/shm/sem." in name:
                 named_sem += [name[1:]]
 
-            # no other files should be opened at this stage in the process
-            assert is_pipe or is_std or is_rng or is_mem
+            # No other files should be opened at this stage in the process.
+            if not (is_pipe or is_std or is_rng or is_mem or is_dev_null):
+                unexpected.append((fd, t, name))
+
+        assert len(unexpected) == 0
 
         # there should be:
         # - one pipe for communication with main process
         # - loky's resource_tracker pipe
         # - the Connection pipe
-        # - additionally, on posix + Python 3.8: multiprocessing's
-        #   resource_tracker pipe
-        if sys.version_info >= (3, 8) and os.name == "posix":
+        # - multiprocessing's resource_tracker pipe (POSIX only)
+        if os.name == "posix":
             n_expected_pipes = 4
         else:
             n_expected_pipes = 3
@@ -552,7 +553,6 @@ class TestLokyBackend:
             )
             named_sem = []
             try:
-
                 p.start()
                 assert started.wait(5), "The process took too long to start"
                 r.close()
