@@ -72,6 +72,20 @@ VERBOSE = False
 
 
 class ResourceTracker(_ResourceTracker):
+    """Resource tracker with refcounting scheme.
+
+    This class is an extension of the multiprocessing ResourceTracker class
+    which implements a reference counting scheme to avoid unlinking shared
+    resources still in use in other processes.
+
+    This feature is notably used by `joblib.Parallel` to share temporary
+    folders and memory mapped files between the main process and the worker
+    processes.
+
+    The actual implementation of the refcounting scheme is in the main
+    function, which is run in a dedicated process.
+    """
+
     def maybe_unlink(self, name, rtype):
         """Decrement the refcount of a resource, and delete it if it hits 0"""
         self.ensure_running()
