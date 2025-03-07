@@ -21,7 +21,7 @@ def fork_exec(cmd, keep_fds, env=None):
     env = {**os.environ, **env}
     encoded_env = []
     for key, value in env.items():
-        encoded_env.append(f"{key}={value}".encode("utf-8"))
+        encoded_env.append(os.fsencode(f"{key}={value}"))
 
     # Fds with fileno larger than 3 (stdin=0, stdout=1, stderr=2) are be closed
     # in the child process, except for those passed in keep_fds.
