@@ -6,7 +6,6 @@ from concurrent.futures is not robust to pickling error (at least in versions
 3.6 and lower).
 """
 
-
 import time
 from loky import ProcessPoolExecutor
 from loky.backend import get_context

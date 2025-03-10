@@ -58,6 +58,7 @@ Process #1..n:
 __author__ = "Thomas Moreau (thomas.moreau.2010@gmail.com)"
 
 
+import faulthandler
 import os
 import gc
 import sys
@@ -191,7 +192,7 @@ def _python_exit():
     items = list(_threads_wakeups.items())
     if len(items) > 0:
         mp.util.debug(
-            "Interpreter shutting down. Waking up {len(items)}"
+            f"Interpreter shutting down. Waking up {len(items)}"
             f"executor_manager_thread:\n{items}"
         )
 
@@ -204,8 +205,7 @@ def _python_exit():
     # Collect the executor_manager_thread's to make sure we exit cleanly.
     for thread, _ in items:
         # This locks is to prevent situations where an executor is gc'ed in one
-        # thread while the atexit finalizer is running in another thread. This
-        # can happen when joblib is used in pypy for instance.
+        # thread while the atexit finalizer is running in another thread.
         with _global_shutdown_lock:
             thread.join()
 
@@ -304,9 +304,11 @@ class _SafeQueue(Queue):
         pending_work_items=None,
         running_work_items=None,
         thread_wakeup=None,
+        shutdown_lock=None,
         reducers=None,
     ):
         self.thread_wakeup = thread_wakeup
+        self.shutdown_lock = shutdown_lock
         self.pending_work_items = pending_work_items
         self.running_work_items = running_work_items
         super().__init__(max_size, reducers=reducers, ctx=ctx)
@@ -335,7 +337,8 @@ class _SafeQueue(Queue):
             if work_item is not None:
                 work_item.future.set_exception(raised_error)
                 del work_item
-            self.thread_wakeup.wakeup()
+            with self.shutdown_lock:
+                self.thread_wakeup.wakeup()
         else:
             super()._on_queue_feeder_error(e, obj)
 
@@ -371,6 +374,28 @@ def _sendback_result(result_queue, work_id, result=None, exception=None):
     except BaseException as e:
         exc = _ExceptionWithTraceback(e)
         result_queue.put(_ResultItem(work_id, exception=exc))
+
+
+def _enable_faulthandler_if_needed():
+    if "PYTHONFAULTHANDLER" in os.environ:
+        # Respect the environment variable to configure faulthandler. This
+        # makes it possible to never enable faulthandler in the loky workers by
+        # setting PYTHONFAULTHANDLER=0 explicitly in the environment.
+        mp.util.debug(
+            f"faulthandler explicitly configured by environment variable: "
+            f"PYTHONFAULTHANDLER={os.environ['PYTHONFAULTHANDLER']}."
+        )
+    else:
+        if faulthandler.is_enabled():
+            # Fault handler is already enabled, possibly via a custom
+            # initializer to customize the behavior.
+            mp.util.debug("faulthandler already enabled.")
+        else:
+            # Enable faulthandler by default with default paramaters otherwise.
+            mp.util.debug(
+                "Enabling faulthandler to report tracebacks on worker crashes."
+            )
+            faulthandler.enable()
 
 
 def _process_worker(
@@ -419,6 +444,8 @@ def _process_worker(
     pid = os.getpid()
 
     mp.util.debug(f"Worker started with timeout={timeout}")
+    _enable_faulthandler_if_needed()
+
     while True:
         try:
             call_item = call_queue.get(block=True, timeout=timeout)
@@ -708,7 +735,10 @@ class _ExecutorManagerThread(threading.Thread):
                 "terminated. This could be caused by a segmentation fault "
                 "while calling the function or by an excessive memory usage "
                 "causing the Operating System to kill the worker.\n"
-                f"{exit_codes}"
+                f"{exit_codes}\n"
+                "Detailed tracebacks of the workers should have been printed "
+                "to stderr in the executor process if faulthandler was not "
+                "disabled."
             )
 
         self.thread_wakeup.clear()
@@ -865,9 +895,11 @@ class _ExecutorManagerThread(threading.Thread):
                     self.call_queue.put_nowait(None)
                     n_sentinels_sent += 1
                 except queue.Full as e:
-                    if cooldown_time > 10.0:
+                    if cooldown_time > 5.0:
                         mp.util.info(
                             "failed to send all sentinels and exit with error."
+                            f"\ncall_queue size={self.call_queue._maxsize}; "
+                            f" full is {self.call_queue.full()}; "
                         )
                         raise e
                     mp.util.info(
@@ -875,7 +907,7 @@ class _ExecutorManagerThread(threading.Thread):
                         "once, waiting..."
                     )
                     sleep(cooldown_time)
-                    cooldown_time *= 2
+                    cooldown_time *= 1.2
                     break
 
         mp.util.debug(f"sent {n_sentinels_sent} sentinels to the call queue")
@@ -1010,7 +1042,6 @@ BrokenExecutor = BrokenProcessPool
 
 
 class ShutdownExecutorError(RuntimeError):
-
     """
     Raised when a ProcessPoolExecutor is shutdown while a future was in the
     running or pending state.
@@ -1136,6 +1167,7 @@ class ProcessPoolExecutor(Executor):
             pending_work_items=self._pending_work_items,
             running_work_items=self._running_work_items,
             thread_wakeup=self._executor_manager_thread_wakeup,
+            shutdown_lock=self._shutdown_lock,
             reducers=job_reducers,
             ctx=self._context,
         )

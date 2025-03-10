@@ -9,7 +9,6 @@ import platform
 import pytest
 import weakref
 import tempfile
-import traceback
 import threading
 import faulthandler
 import warnings
@@ -37,9 +36,6 @@ from loky._base import Future
 from . import _executor_mixin
 from .utils import id_sleep, check_subprocess_call, filter_match
 from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
-
-
-IS_PYPY = hasattr(sys, "pypy_version_info")
 
 
 def create_future(state=PENDING, exception=None, result=None):
@@ -110,13 +106,21 @@ class ExecutorShutdownTest:
 
     def test_shutdown_with_pickle_error(self):
         self.executor.shutdown()
-        with self.executor_type(max_workers=4) as e:
-            e.submit(id, ErrorAtPickle())
+        # Iterate a few times to catch deadlocks/race conditions in the
+        # executor shutdown.
+        for _ in range(5):
+            with self.executor_type(max_workers=4) as e:
+                with pytest.raises(PicklingError):
+                    e.submit(id, ErrorAtPickle()).result()
 
     def test_shutdown_with_sys_exit_at_pickle(self):
         self.executor.shutdown()
-        with self.executor_type(max_workers=4) as e:
-            e.submit(id, ExitAtPickle())
+        # Iterate a few times to catch deadlocks/race conditions in the
+        # executor shutdown.
+        for _ in range(5):
+            with self.executor_type(max_workers=4) as e:
+                with pytest.raises(PicklingError):
+                    e.submit(id, ExitAtPickle()).result()
 
     def test_interpreter_shutdown(self):
         # Free resources to avoid random timeout in CI
@@ -208,11 +212,6 @@ class ExecutorShutdownTest:
         # reference when we deleted self.executor.
         t_deadline = time.time() + 1
         while executor_reference() is not None and time.time() < t_deadline:
-            if IS_PYPY:
-                # PyPy can delay __del__ calls and GC compared to CPython.
-                # To ensure that this test pass without waiting too long we
-                # need an explicit GC.
-                gc.collect()
             time.sleep(0.001)
         assert executor_reference() is None
 
@@ -253,11 +252,6 @@ class ExecutorShutdownTest:
         # complete first.
         executor_reference = weakref.ref(self.executor)
         self.executor = None
-
-        if IS_PYPY:
-            # Object deletion and garbage collection can be delayed under PyPy.
-            time.sleep(1.0)
-            gc.collect()
 
         # Make sure that there is not other reference to the executor object.
         assert executor_reference() is None
@@ -310,10 +304,6 @@ class ExecutorShutdownTest:
         executor_manager_thread = executor._executor_manager_thread
         processes = executor._processes
         del executor
-        if IS_PYPY:
-            # Object deletion and garbage collection can be delayed under PyPy.
-            time.sleep(1.0)
-            gc.collect()
 
         executor_manager_thread.join()
         for p in processes.values():
@@ -714,8 +704,6 @@ class ExecutorTest:
 
         collected = False
         for _ in range(5):
-            if IS_PYPY:
-                gc.collect()
             collected = collect.wait(timeout=1.0)
             if collected:
                 return
@@ -1204,6 +1192,32 @@ class ExecutorTest:
             assert error_message in str(e.__cause__)
 
         executor.shutdown(wait=True)
+
+    def test_no_deprecation_warning_is_raised_on_fork(self):
+        # On POSIX, recent versions of Python detect if the process has native
+        # threads running when calling `os.fork` and similar. All supported
+        # process executors should not trigger this warning by not calling
+        # `os.fork` (and `os.execve`) manually but instead using the compound
+        # _posixsubprocess.fork_exec.
+        try:
+            from _testcapi import _spawn_pthread_waiter, _end_spawned_pthread
+        except ImportError:
+            pytest.skip("Cannot test without _testcapi module")
+
+        _spawn_pthread_waiter()
+        try:
+            with warnings.catch_warnings(
+                category=DeprecationWarning, record=True
+            ) as w:
+                warnings.simplefilter("always", category=DeprecationWarning)
+                executor = self.executor_type(max_workers=2)
+                try:
+                    list(executor.map(sqrt, range(10)))
+                finally:
+                    executor.shutdown(wait=True)
+            assert len(w) == 0, [w.message for w in w]
+        finally:
+            _end_spawned_pthread()
 
 
 def _custom_initializer():

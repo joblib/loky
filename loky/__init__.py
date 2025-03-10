@@ -3,6 +3,7 @@ It provides a robust and dynamic implementation os the
 :class:`ProcessPoolExecutor` and a function :func:`get_reusable_executor` which
 hide the pool management under the hood.
 """
+
 from concurrent.futures import (
     ALL_COMPLETED,
     FIRST_COMPLETED,
@@ -47,4 +48,4 @@ __all__ = [
 ]
 
 
-__version__ = "3.4.0.dev0"
+__version__ = "3.5.0.dev0"

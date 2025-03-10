@@ -1,4 +1,5 @@
 """Tests for the ResourceTracker class"""
+
 import errno
 import gc
 import os
@@ -262,7 +263,7 @@ class TestResourceTracker:
                     the_warn.message
                 )
             else:
-                assert len(all_warn) == 0
+                assert len(all_warn) == 0, [w.message for w in all_warn]
 
     @pytest.mark.skipif(
         sys.platform == "win32", reason="Limited signal support on Windows"

@@ -1,7 +1,9 @@
 # General ignore rules
 .*
+!.github
 *sublime*
 tags
+!.github
 
 # Python running files
 __pycache__

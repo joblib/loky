@@ -1,14 +1,51 @@
-### 3.4.0 - in development
+### 3.5.0 - in development
+
+- Avoid raising `DeprecationWarning` related to `os.fork` when running in a
+  natively multi-threaded process. (#429).
+
+- Fix a crash when calling commands that access `stdin` via `subprocess.run` in
+  worker processes on POSIX systems. (#429).
+
+- Automatically call `faulthandler.enable()` when starting loky worker
+  processes to report more informative information (post-mortem Python
+  tracebacks in particular) on worker crashs. (#419).
+
+- Fix a random deadlock caused by a race condition at executor shutdown that
+  was observed on Linux and Windows. (#438)
+
+- Fix detection of the number of physical cores in
+  `cpu_count(only_physical_cores=True)` on some Linux systems and recent
+  Windows versions. (#425)
+
+- Drop support for Python 3.7 and Python 3.8. (#409)
+
+- Drop support for PyPy. (#427)
+
+### 3.4.1 - 2023-06-29
+
+- Fix compatibility with python3.7, which does not define
+  a `_MAX_WINDOWS_WORKERS` constant. (#408)
+
+### 3.4.0 - 2023-04-14
 
 - Fix exception `__cause__` not being propagated with
-  `tblib.pickling_support.install()` (#255).
+  `tblib.pickling_support.install()`. (#255).
 
 - Fix handling of CPU affinity  by using `psutil`'s `cpu_affinity` on platforms
-  that do not implement `os.sched_getaffinity`, such as PyPy (#381).
+  that do not implement `os.sched_getaffinity`, such as PyPy. (#381).
+
+- Make the executor's gc process more thread-safe, in particular for PyPy,
+  where the gc calls can be run in any thread. (#384).
 
 - Fix crash when using `max_workers > 61` on Windows. Loky will no longer
   attempt to use more than 61 workers on that platform (or 60 depending on the
   Python version). (#390).
+
+- Fix loky compat with python 3.11 for nested calls. (#394).
+
+- Adapt the cooldown strategy when shutingdown an executor with full
+  `call_queue`. This should accelerate the time taken to shutdown
+  in general, in particular on overloaded machines. (#399).
 
 ### 3.3.0 - 2022-09-15
 

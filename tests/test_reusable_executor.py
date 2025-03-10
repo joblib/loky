@@ -949,6 +949,94 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         executor4 = get_reusable_executor()
         assert executor4 is executor3
 
+    def test_no_crash_on_stdin_access_in_child_subprocess_run(self):
+        # non-regression test for #420.
+        def call_subprocess():
+            sleep(0.01)
+            subprocess.run(
+                [sys.executable, "-c", "import sys; sys.stdin.read(0)"]
+            ).check_returncode()
+
+        executor = get_reusable_executor(max_workers=4, timeout=2)
+        executor.submit(call_subprocess).result()
+
+    def test_faulthandler_enabled(self):
+        cmd = """if 1:
+            from loky import get_reusable_executor
+            import faulthandler
+
+            def f(i):
+                if {expect_enabled}:
+                    assert faulthandler.is_enabled()
+                else:
+                    assert not faulthandler.is_enabled()
+                if i == 5:
+                    faulthandler._sigsegv()
+
+            if {enable_faulthandler_via_initializer}:
+                executor = get_reusable_executor(max_workers=2, initializer=faulthandler.enable)
+            else:
+                executor = get_reusable_executor(max_workers=2)
+
+            list(executor.map(f, range(10)))
+            # This should always trigger a crash.
+        """
+
+        def check_faulthandler_output(
+            expect_enabled=True, enable_faulthandler_via_initializer=False
+        ):
+            p = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    cmd.format(
+                        expect_enabled=expect_enabled,
+                        enable_faulthandler_via_initializer=enable_faulthandler_via_initializer,
+                    ),
+                ],
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+            )
+            p.wait()
+            out, err = p.communicate()
+
+            # The worker is always expected to crash, irrespective of whether
+            # faulthandler is enabled or not.
+            assert p.returncode == 1, out.decode()
+
+            if expect_enabled:
+                assert b"Current thread" in err, err.decode()
+
+        original_pythonfaulthandler_env = os.environ.pop(
+            "PYTHONFAULTHANDLER", None
+        )
+        try:
+            # Case 1: faulthandler should be automatically enabled by default.
+            check_faulthandler_output(expect_enabled=True)
+
+            # Case 2: faulthandler should also be enabled when
+            # PYTHONFAULTHANDLER=1 is set.
+            os.environ["PYTHONFAULTHANDLER"] = "1"
+            check_faulthandler_output(expect_enabled=True)
+
+            # Case 3: faulthandler should not be enabled when
+            # PYTHONFAULTHANDLER=0 is set explicitly.
+            os.environ["PYTHONFAULTHANDLER"] = "0"
+            check_faulthandler_output(expect_enabled=False)
+
+            # Case 4: faulthandler can also be enabled manually via the initializer.
+            del os.environ["PYTHONFAULTHANDLER"]
+            check_faulthandler_output(
+                expect_enabled=True, enable_faulthandler_via_initializer=True
+            )
+        finally:
+            if original_pythonfaulthandler_env is None:
+                os.environ.pop("PYTHONFAULTHANDLER", None)
+            else:
+                os.environ["PYTHONFAULTHANDLER"] = (
+                    original_pythonfaulthandler_env
+                )
+
 
 class TestExecutorInitializer(ReusableExecutorMixin):
     def _initializer(self, x):
@@ -1020,13 +1108,19 @@ def test_no_crash_max_workers_on_windows():
     # user asks for more workers than the maximum number of workers supported
     # by the platform.
 
+    # To make sure we have the proper size for the call_queue, we
+    # shutdown the existing executor.
+    # See https://github.com/joblib/loky#396
+    get_reusable_executor().shutdown()
+
     # Note: on overloaded CI hosts, spawning many processes can take a long
     # time. We need to increase the timeout to avoid spurious failures when
     # making assertions on `len(executor._processes)`.
-    idle_worker_timeout = 10 * 60
+    idle_worker_timeout = 5 * 60
     with warnings.catch_warnings(record=True) as record:
         executor = get_reusable_executor(
-            max_workers=_MAX_WINDOWS_WORKERS + 1, timeout=idle_worker_timeout
+            max_workers=_MAX_WINDOWS_WORKERS + 1,
+            timeout=idle_worker_timeout,
         )
         assert executor.submit(lambda: None).result() is None
     if sys.platform == "win32":
@@ -1046,7 +1140,7 @@ def test_no_crash_max_workers_on_windows():
         assert executor.submit(lambda: None).result() is None
 
     # No warning on any OS when max_workers does not exceed the limit.
-    assert len(record) == 0
+    assert len(record) == 0, [w.message for w in record]
     assert before_downsizing_executor is executor
     assert len(executor._processes) == _MAX_WINDOWS_WORKERS
 
