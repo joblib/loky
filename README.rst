@@ -15,7 +15,7 @@ The aim of this project is to provide a robust, cross-platform and
 cross-version implementation of the :class:`~concurrent.futures.ProcessPoolExecutor` class of
 :mod:`concurrent.futures`. It notably features:
 
--  **Deadlock free implementation**: one of the major concern in standard :class:`multiprocessing.pool.Pool` and in :class:`concurrent.futures.ProcessPoolExecutor` is their ability to handle crashes of worker processes. This library intends to fix those possible deadlocks and send back meaningful errors.
+-  **Deadlock free implementation**: one of the major concern in standard :class:`multiprocessing.pool.Pool` and in :class:`concurrent.futures.ProcessPoolExecutor` is their ability to handle crashes of worker processes. This library intends to fix those possible deadlocks and send back meaningful errors. Note that several fixes in ``loky`` have been ported to :class:`concurrent.futures.ProcessPoolExecutor` since python3.7+, which now be as ``loky``'s implementation.
 
 -  **Consistent spawn behavior**: All processes are started using fork/exec on POSIX systems. This ensures safer interactions with third party libraries.
 

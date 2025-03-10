@@ -28,56 +28,6 @@ Basic usage of ``loky``
 
     <div style='clear:both'></div>
 
-Deadlocks
----------
-
-List the possible deadlock for ``concurrent.futures.ProcessPoolExecutor``
-which are fixed in ``loky``.
-
-
-
-.. raw:: html
-
-    <div class="sphx-glr-thumbcontainer" tooltip="This example highlights the fact that the ProcessPoolExecutor implementation from concurrent.fu...">
-
-.. only:: html
-
-    .. figure:: /auto_examples/deadlocks/images/thumb/sphx_glr_deadlock_on_shutdown_thumb.png
-
-        :ref:`sphx_glr_auto_examples_deadlocks_deadlock_on_shutdown.py`
-
-.. raw:: html
-
-    </div>
-
-
-.. toctree::
-   :hidden:
-
-   /auto_examples/deadlocks/deadlock_on_shutdown
-
-.. raw:: html
-
-    <div class="sphx-glr-thumbcontainer" tooltip="This example highlights the fact that the ProcessPoolExecutor implementation from concurrent.fu...">
-
-.. only:: html
-
-    .. figure:: /auto_examples/deadlocks/images/thumb/sphx_glr_deadlock_on_failed_pickle_thumb.png
-
-        :ref:`sphx_glr_auto_examples_deadlocks_deadlock_on_failed_pickle.py`
-
-.. raw:: html
-
-    </div>
-
-
-.. toctree::
-   :hidden:
-
-   /auto_examples/deadlocks/deadlock_on_failed_pickle
-.. raw:: html
-
-    <div style='clear:both'></div>
 
 
 
