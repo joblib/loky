@@ -333,7 +333,8 @@ def main(pipe_handle, parent_pid, verbose=0):
         util.debug("resource tracker shut down")
 
 
-def spawnv_passfds(path, args, passfds):
+def spawnv_passfds(cmd, passfds):
+    path, args = cmd[0], cmd
     if sys.platform != "win32":
         args = [arg.encode("utf-8") for arg in args]
         path = path.encode("utf-8")
@@ -343,7 +344,7 @@ def spawnv_passfds(path, args, passfds):
         cmd = " ".join(f'"{x}"' for x in args)
         try:
             _, ht, pid, _ = _winapi.CreateProcess(
-                exe, cmd, None, None, False, 0, None, None, None
+                path, cmd, None, None, False, 0, None, None, None
             )
             _winapi.CloseHandle(ht)
             return pid
