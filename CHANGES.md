@@ -1,4 +1,4 @@
-### 3.6.0 - in development
+### 3.6.0 - in development
 
 ### 3.5.0 - 2025-03-14
 
