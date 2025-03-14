@@ -113,7 +113,6 @@ class TestSemaphore:
         assert_sem_value_equal(sem, 2)
 
     def test_timeout(self):
-
         sem = loky_context.Semaphore(0)
         acquire = TimingWrapper(sem.acquire)
 

@@ -4,8 +4,9 @@ import sys
 import shutil
 import subprocess
 import tempfile
+import textwrap
 import warnings
-from subprocess import check_output
+from subprocess import check_call, check_output
 
 import pytest
 
@@ -238,3 +239,50 @@ def test_only_physical_cores_with_user_limitation():
     if cpu_count_user < cpu_count_mp:
         assert cpu_count() == cpu_count_user
         assert cpu_count(only_physical_cores=True) == cpu_count_user
+
+
+def test_freeze_support_with_pyinstaller(tmpdir):
+    pyinstaller = shutil.which("pyinstaller")
+
+    if pyinstaller is None:
+        raise pytest.skip("pyinstaller is not installed")
+
+    frozen_source_code = textwrap.dedent(
+        """
+        import loky
+
+        if __name__ == "__main__":
+            loky.freeze_support()
+            e = loky.get_reusable_executor(max_workers=2)
+            print(sum(e.map(int, range(10))))
+        """
+    )
+    python_source_path = tmpdir / "frozen_loky.py"
+    python_source_path.write_text(frozen_source_code, encoding="utf-8")
+
+    # Run the Python script directly:
+    non_frozen_result = check_output(
+        [sys.executable, python_source_path],
+        text=True,
+    )
+
+    # Call pyinstaller to generate the frozen_loky executable.
+    check_call(
+        [
+            pyinstaller,
+            "--onefile",
+            "--distpath",
+            tmpdir,
+            "--specpath",
+            tmpdir,
+            python_source_path,
+        ]
+    )
+    if sys.platform == "win32":
+        frozen_loky = tmpdir / "frozen_loky.exe"
+    else:
+        frozen_loky = tmpdir / "frozen_loky"
+    assert frozen_loky.exists()
+
+    frozen_result = check_output([frozen_loky], text=True)
+    assert frozen_result == non_frozen_result
