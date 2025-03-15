@@ -15,7 +15,9 @@ import warnings
 from math import sqrt
 from pickle import PicklingError
 from threading import Thread
+import multiprocessing as mp
 from collections import defaultdict
+
 from concurrent import futures
 from concurrent.futures._base import (
     PENDING,
@@ -1112,6 +1114,32 @@ class ExecutorTest:
         assert var_child == var_value
 
         executor.shutdown(wait=True)
+
+    @staticmethod
+    def _worker_rank(x):
+        time.sleep(0.2)
+        rank, world = loky.get_worker_rank()
+        return dict(
+            pid=os.getpid(),
+            name=mp.current_process().name,
+            rank=rank,
+            world=world,
+        )
+
+    @pytest.mark.parametrize("max_workers", [1, 5, 13])
+    @pytest.mark.parametrize("timeout", [None, 0.01])
+    def test_workers_rank(self, max_workers, timeout):
+        executor = self.executor_type(max_workers, timeout=timeout)
+        results = executor.map(self._worker_rank, range(max_workers * 5))
+        workers_rank = {}
+        for f in results:
+            assert f["world"] == max_workers
+            rank = workers_rank.get(f["pid"], None)
+            assert rank is None or rank == f["rank"]
+            workers_rank[f["pid"]] = f["rank"]
+        msg = ", ".join(f"{k}, {v}" for k, v in executor._rank_mapper.items())
+        assert set(workers_rank.values()) == set(range(max_workers)), msg
+        executor.shutdown(wait=True, kill_workers=True)
 
     def test_viztracer_profiler(self):
         # Check that viztracer profiler is initialzed in workers when
