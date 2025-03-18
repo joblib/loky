@@ -1,3 +1,55 @@
+[build-system]
+requires = ["setuptools>=61.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loky"
+description= "A robust implementation of concurrent.futures.ProcessPoolExecutor"
+authors = [{name = "Thomas Moreau", email = "thomas.moreau.2010@gmail.com"}]
+license= {file = "LICENSE.txt"}
+dependencies = ["cloudpickle"]
+requires-python = ">=3.9"
+classifiers=[
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Utilities",
+    "Topic :: Software Development :: Libraries",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+tests = ["packaging", "pytest", "psutil"]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.urls]
+Homepage = "http://loky.readthedocs.io"
+Source = "https://github.com/joblib/loky"
+
+[tool.setuptools]
+packages = [
+    "loky",
+    "loky.backend",
+]
+platforms = ["any"]
+include-package-data = false
+
+[tool.setuptools.dynamic]
+version = {attr = "loky.__version__"}
+
 [tool.black]
 line-length = 79
 include = '\.pyi?$'
