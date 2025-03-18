@@ -28,12 +28,17 @@ def fork_exec(cmd, keep_fds, env=None):
     keep_fds = tuple(sorted(map(int, keep_fds)))
     errpipe_read, errpipe_write = os.pipe()
 
-    # VFORK is not supported on older Python versions.
-    if hasattr(subprocess, "_USE_VFORK"):
-        # Python 3.11 and later
+    if sys.version_info >= (3, 14):
+        # Python >= 3.14 removed allow_vfork from _posixsubprocess.fork_exec,
+        # see https://github.com/python/cpython/pull/121383
+        pgid_to_set = [-1]
+        allow_vfork = []
+    elif sys.version_info >= (3, 11):
+        # Python 3.11 - 3.13 has allow_vfork in _posixsubprocess.fork_exec
         pgid_to_set = [-1]
         allow_vfork = [subprocess._USE_VFORK]
     else:
+        # Python < 3.11
         pgid_to_set = []
         allow_vfork = []
 
