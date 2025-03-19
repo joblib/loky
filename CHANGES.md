@@ -1,3 +1,6 @@
+### 3.6.0 - in development
+
+
 ### 3.5.1 - 2025-03-18
 
 - Fix a regression to support Python 3.10 (and Python 3.14 dev) by passing
