@@ -28,6 +28,7 @@ def get_rtracker_fd():
     fd = resource_tracker._resource_tracker._fd
     if sys.platform == "win32":
         import msvcrt
+
         fd = msvcrt.get_osfhandle(fd)
     return fd
 
