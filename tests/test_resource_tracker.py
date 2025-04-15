@@ -25,12 +25,7 @@ def _resource_unlink(name, rtype):
 
 def get_rtracker_fd():
     resource_tracker.ensure_running()
-    fd = resource_tracker._resource_tracker._fd
-    if sys.platform == "win32":
-        import msvcrt
-
-        fd = msvcrt.get_osfhandle(fd)
-    return fd
+    return resource_tracker._resource_tracker._fd
 
 
 class TestResourceTracker:
@@ -45,12 +40,15 @@ class TestResourceTracker:
         assert not resource_exists(name, rtype)
 
     def test_child_retrieves_resource_tracker(self):
-        parent_rtracker_fd = get_rtracker_fd()
-        executor = ProcessPoolExecutor(max_workers=2)
-        child_rtracker_fd = executor.submit(get_rtracker_fd).result()
 
         # First simple fd retrieval check (see #200)
-        assert child_rtracker_fd == parent_rtracker_fd
+        # checking fd only work on posix for now
+        if sys.platform != "win32":
+            parent_rtracker_fd = get_rtracker_fd()
+            executor = ProcessPoolExecutor(max_workers=2)
+            child_rtracker_fd = executor.submit(get_rtracker_fd).result()
+
+            assert child_rtracker_fd == parent_rtracker_fd
 
         # Register a resource in the parent process, and un-register it in the
         # child process. If the two processes do not share the same
