@@ -44,11 +44,14 @@ class TestResourceTracker:
         # First simple fd retrieval check (see #200)
         # checking fd only work on posix for now
         if sys.platform != "win32":
-            parent_rtracker_fd = get_rtracker_fd()
-            executor = ProcessPoolExecutor(max_workers=2)
-            child_rtracker_fd = executor.submit(get_rtracker_fd).result()
+            try:
+                parent_rtracker_fd = get_rtracker_fd()
+                executor = ProcessPoolExecutor(max_workers=2)
+                child_rtracker_fd = executor.submit(get_rtracker_fd).result()
 
-            assert child_rtracker_fd == parent_rtracker_fd
+                assert child_rtracker_fd == parent_rtracker_fd
+            finally:
+                executor.shutdown()
 
         # Register a resource in the parent process, and un-register it in the
         # child process. If the two processes do not share the same
@@ -80,23 +83,20 @@ class TestResourceTracker:
         e.submit(maybe_unlink, filename, "file").result()
         e.shutdown()
         """
-        try:
-            p = subprocess.run(
-                [sys.executable, "-E", "-c", cmd],
-                capture_output=True,
-                text=True,
-            )
-            filename = p.stdout.strip()
 
-            pattern = f"decremented refcount of file {filename}"
-            assert pattern in p.stderr
-            assert "leaked" not in p.stderr
+        p = subprocess.run(
+            [sys.executable, "-E", "-c", cmd],
+            capture_output=True,
+            text=True,
+        )
+        filename = p.stdout.strip()
 
-            pattern = f"KeyError: '{filename}'"
-            assert pattern not in p.stderr
+        pattern = f"decremented refcount of file {filename}"
+        assert pattern in p.stderr
+        assert "leaked" not in p.stderr
 
-        finally:
-            executor.shutdown()
+        pattern = f"KeyError: '{filename}'"
+        assert pattern not in p.stderr
 
     # The following four tests are inspired from cpython _test_multiprocessing
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
