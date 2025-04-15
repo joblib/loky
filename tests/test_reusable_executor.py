@@ -375,10 +375,7 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         """Test the race conditions in reusable_executor crash handling"""
         pytest.importorskip("psutil")  # required for kill_friend & co
 
-        if (
-            sys.platform == "win32"
-            and n_proc > 5
-        ):
+        if sys.platform == "win32" and n_proc > 5:
             pytest.skip(
                 "On win32, the paging size can be too small to import numpy "
                 "multiple times in the sub-processes (imported when loading "
