@@ -683,9 +683,8 @@ class ExecutorTest:
         self.executor.shutdown()
 
     @pytest.mark.skipif(
-        platform.python_implementation() != "CPython"
-        or (sys.version_info >= (3, 8, 0) and sys.version_info < (3, 8, 2)),
-        reason="Underlying bug fixed upstream starting Python 3.8.2",
+        platform.python_implementation() != "CPython",
+        reason="cpython specific non-regression test (fixed starting 3.8.2)",
     )
     def test_no_stale_references(self):
         # Issue #16284: check that the executors don't unnecessarily hang onto
@@ -978,10 +977,6 @@ class ExecutorTest:
         sys.maxsize < 2**32,
         reason="Test requires a 64 bit version of Python",
     )
-    @pytest.mark.skipif(
-        sys.version_info < (3, 8),
-        reason="Python version does not support pickling objects of size > 2 ** 31GB",
-    )
     def test_no_failure_on_large_data_send(self):
         data = b"\x00" * int(2.2e9)
         self.executor.submit(id, data).result()
@@ -990,10 +985,6 @@ class ExecutorTest:
     @pytest.mark.skipif(
         sys.maxsize < 2**32,
         reason="Test requires a 64 bit version of Python",
-    )
-    @pytest.mark.skipif(
-        sys.version_info >= (3, 8),
-        reason="Python version supports pickling objects of size > 2 ** 31GB",
     )
     def test_expected_failure_on_large_data_send(self):
         data = b"\x00" * int(2.2e9)

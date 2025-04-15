@@ -377,7 +377,6 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
 
         if (
             sys.platform == "win32"
-            and sys.version_info >= (3, 8)
             and n_proc > 5
         ):
             pytest.skip(
