@@ -1,3 +1,5 @@
+### 3.6.0 - In development
+
 ### 3.5.2 - 2025-04-22
 
 - Fix ``resource_tracker`` teardown to accomodate with newer version of
