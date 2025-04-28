@@ -1,16 +1,17 @@
-import multiprocessing as mp
 import os
 import sys
 import shutil
 import subprocess
 import tempfile
 import warnings
+import multiprocessing as mp
 from subprocess import check_output
 
 import pytest
 
 import loky
 from loky import cpu_count
+from loky import get_worker_rank
 from loky.backend.context import _cpu_count_user, _MAX_WINDOWS_WORKERS
 
 
@@ -238,3 +239,8 @@ def test_only_physical_cores_with_user_limitation():
     if cpu_count_user < cpu_count_mp:
         assert cpu_count() == cpu_count_user
         assert cpu_count(only_physical_cores=True) == cpu_count_user
+
+
+def test_worker_rank_in_worker_only():
+    with pytest.raises(RuntimeError):
+        get_worker_rank()

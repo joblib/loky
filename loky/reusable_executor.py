@@ -236,9 +236,13 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                 # then no processes have been spawned and we can just
                 # update _max_workers and return
                 self._max_workers = max_workers
+                self._rank_mapper["world"] = max_workers
                 return
 
             self._wait_job_completion()
+
+            # Set the new size to be broadcasted to the workers
+            self._rank_mapper["world"] = max_workers
 
             # Some process might have returned due to timeout so check how many
             # children are still alive. Use the _process_management_lock to
