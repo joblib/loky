@@ -23,9 +23,9 @@ def _resource_unlink(name, rtype):
     resource_tracker._CLEANUP_FUNCS[rtype](name)
 
 
-def get_rtracker_pid():
+def get_rtracker_fd():
     resource_tracker.ensure_running()
-    return resource_tracker._resource_tracker._pid
+    return resource_tracker._resource_tracker._fd
 
 
 class TestResourceTracker:
@@ -40,12 +40,18 @@ class TestResourceTracker:
         assert not resource_exists(name, rtype)
 
     def test_child_retrieves_resource_tracker(self):
-        parent_rtracker_pid = get_rtracker_pid()
-        executor = ProcessPoolExecutor(max_workers=2)
-        child_rtracker_pid = executor.submit(get_rtracker_pid).result()
 
-        # First simple pid retrieval check (see #200)
-        assert child_rtracker_pid == parent_rtracker_pid
+        # First simple fd retrieval check (see #200)
+        # checking fd only work on posix for now
+        if sys.platform != "win32":
+            try:
+                parent_rtracker_fd = get_rtracker_fd()
+                executor = ProcessPoolExecutor(max_workers=2)
+                child_rtracker_fd = executor.submit(get_rtracker_fd).result()
+
+                assert child_rtracker_fd == parent_rtracker_fd
+            finally:
+                executor.shutdown()
 
         # Register a resource in the parent process, and un-register it in the
         # child process. If the two processes do not share the same
@@ -77,23 +83,20 @@ class TestResourceTracker:
         e.submit(maybe_unlink, filename, "file").result()
         e.shutdown()
         """
-        try:
-            p = subprocess.run(
-                [sys.executable, "-E", "-c", cmd],
-                capture_output=True,
-                text=True,
-            )
-            filename = p.stdout.strip()
 
-            pattern = f"decremented refcount of file {filename}"
-            assert pattern in p.stderr
-            assert "leaked" not in p.stderr
+        p = subprocess.run(
+            [sys.executable, "-E", "-c", cmd],
+            capture_output=True,
+            text=True,
+        )
+        filename = p.stdout.strip()
 
-            pattern = f"KeyError: '{filename}'"
-            assert pattern not in p.stderr
+        pattern = f"decremented refcount of file {filename}"
+        assert pattern in p.stderr
+        assert "leaked" not in p.stderr
 
-        finally:
-            executor.shutdown()
+        pattern = f"KeyError: '{filename}'"
+        assert pattern not in p.stderr
 
     # The following four tests are inspired from cpython _test_multiprocessing
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
@@ -290,15 +293,12 @@ class TestResourceTracker:
         cmd = """if 1:
         from loky import get_reusable_executor
         from multiprocessing.shared_memory import SharedMemory
-        from multiprocessing.resource_tracker import (
-            _resource_tracker as mp_resource_tracker
-        )
 
-        def mp_rtracker_getattrs():
+        def mp_rtracker_getfd():
             from multiprocessing.resource_tracker import (
                 _resource_tracker as mp_resource_tracker
             )
-            return mp_resource_tracker._fd, mp_resource_tracker._pid
+            return mp_resource_tracker._fd
 
 
         if __name__ == '__main__':
@@ -308,9 +308,9 @@ class TestResourceTracker:
 
             # loky forces the creation of the resource tracker at process
             # creation so that loky processes can inherit its file descriptor.
-            fd, pid = executor.submit(mp_rtracker_getattrs).result()
-            assert fd == mp_resource_tracker._fd
-            assert pid == mp_resource_tracker._pid
+            parent_fd = mp_rtracker_getfd()
+            child_fd = executor.submit(mp_rtracker_getfd).result()
+            assert child_fd == parent_fd
 
             # non-regression test for #242: unlinking in a loky process a
             # shared_memory segment tracked by multiprocessing and created its
@@ -322,5 +322,5 @@ class TestResourceTracker:
         p = subprocess.run(
             [sys.executable, "-c", cmd], capture_output=True, text=True
         )
-        assert not p.stdout
-        assert not p.stderr
+        assert not p.stdout, p.stdout
+        assert not p.stderr, p.stderr

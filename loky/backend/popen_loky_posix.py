@@ -119,8 +119,8 @@ class Popen:
             reduction._mk_inheritable(child_w)
             reduction._mk_inheritable(tracker_fd)
             self._fds += [child_r, child_w, tracker_fd]
-            if os.name == "posix":
-                mp_tracker_fd = prep_data["mp_tracker_args"]["fd"]
+            if and os.name == "posix":
+                mp_tracker_fd = prep_data["mp_tracker_fd"]
                 self.duplicate_for_child(mp_tracker_fd)
 
             from .fork_exec import fork_exec

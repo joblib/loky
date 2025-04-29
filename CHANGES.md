@@ -1,5 +1,15 @@
-### 3.6.0 - in development
+### 3.6.0 - In development
 
+
+### 3.5.3 - 2025-04-29
+
+- Fix ``call_queue`` size in the ``_ReusableExecutor``, which could be too
+  small when ``max_workers`` is larger than ``cpu_count()``. (#452)
+
+### 3.5.2 - 2025-04-22
+
+- Fix ``resource_tracker`` teardown to accomodate with newer version of
+  Python (3.12.10+, 3.13.3+, 3.14+). (#450)
 
 ### 3.5.1 - 2025-03-18
 
