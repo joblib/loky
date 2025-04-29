@@ -1,4 +1,4 @@
-### 3.6.0 - In development
+### 3.5.3 - 2025-04-29
 
 - Fix ``call_queue`` size in the ``_ReusableExecutor``, which could be too
   small when ``max_workers`` is larger than ``cpu_count()``. (#452)
