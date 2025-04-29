@@ -972,6 +972,11 @@ class ExecutorTest:
                 ctx=self.context,
             )
 
+    @pytest.mark.high_memory
+    @pytest.mark.skipif(
+        sys.maxsize < 2**32,
+        reason="Test requires a 64 bit version of Python",
+    )
     def test_no_failure_on_large_data_send(self):
         data = b"\x00" * int(2.2e9)
         self.executor.submit(id, data).result()
