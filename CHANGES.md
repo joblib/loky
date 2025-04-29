@@ -1,5 +1,8 @@
 ### 3.6.0 - In development
 
+- Fix ``call_queue`` size in the ``_ReusableExecutor``, which could be too
+  small when ``max_workers`` is larger then ``cpu_count()``. (#452)
+
 ### 3.5.2 - 2025-04-22
 
 - Fix ``resource_tracker`` teardown to accomodate with newer version of
