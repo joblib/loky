@@ -8,7 +8,7 @@ import pytest
 import warnings
 import threading
 from time import sleep
-from multiprocessing import util, current_process
+from multiprocessing import util, current_process, Manager
 from pickle import PicklingError, UnpicklingError
 
 import cloudpickle
@@ -1036,6 +1036,45 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 os.environ["PYTHONFAULTHANDLER"] = (
                     original_pythonfaulthandler_env
                 )
+
+    @pytest.mark.parametrize("n_cpus", [1, 2, 4])
+    def test_reusable_executor_queue_size(self, n_cpus):
+        # Check that the reusable executor can be lauched with more workers
+        # than the number of CPUs with no limitation on the queue_size.
+        #
+        # Non-regression test for https://github.com/joblib/loky/issues/396.
+
+        get_reusable_executor().shutdown()
+
+        import os
+
+        original_n_cpus = os.environ.get("LOKY_MAX_CPU_COUNT", None)
+        try:
+            os.environ["LOKY_MAX_CPU_COUNT"] = f"{n_cpus}"
+
+            n_workers = 2 * n_cpus + 2
+
+            manager = Manager()
+            barrier = manager.Barrier(n_workers, timeout=1)
+
+            def check_running(i, barrier):
+                print(f"TASK {i} running")
+                barrier.wait()
+                return True
+
+            executor = get_reusable_executor(max_workers=n_workers)
+            futures = [
+                executor.submit(check_running, i, barrier)
+                for i in range(n_workers)
+            ]
+            assert all(r.result() for r in futures)
+        finally:
+            manager.shutdown()
+            executor.shutdown()
+            if original_n_cpus is None:
+                os.environ.pop("LOKY_MAX_CPU_COUNT", None)
+            else:
+                os.environ["LOKY_MAX_CPU_COUNT"] = original_n_cpus
 
 
 class TestExecutorInitializer(ReusableExecutorMixin):
