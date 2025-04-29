@@ -200,7 +200,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                         reason = "shutdown"
                     elif executor.queue_size < max_workers:
                         # Do not reuse the executor if the queue size is too
-                        # small as this would lead to limited parallelism
+                        # small as this would lead to limited parallelism.
                         reason = "queue size is too small"
                     else:
                         reason = "arguments have changed"
