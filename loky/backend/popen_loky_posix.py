@@ -6,9 +6,8 @@
 import os
 import sys
 import signal
-import pickle
 from io import BytesIO
-from multiprocessing import util, process
+from multiprocessing import util
 from multiprocessing.connection import wait
 from multiprocessing.context import set_spawning_popen
 
@@ -32,6 +31,19 @@ class _DupFd:
 
 
 #
+# Backward compat for pypy and python<=3.7
+# XXX: to remove once 3.7 is not supported anymore.
+#
+if not hasattr(util, "close_fds"):
+
+    def _close_fds(*fds):
+        for fd in fds:
+            os.close(fd)
+
+    util.close_fds = _close_fds
+
+
+#
 # Start child process using subprocess.Popen
 #
 
@@ -49,7 +61,7 @@ class Popen:
 
     def duplicate_for_child(self, fd):
         self._fds.append(fd)
-        return reduction._mk_inheritable(fd)
+        return fd
 
     def poll(self, flag=os.WNOHANG):
         if self.returncode is None:
@@ -90,7 +102,6 @@ class Popen:
                     raise
 
     def _launch(self, process_obj):
-
         tracker_fd = resource_tracker._resource_tracker.getfd()
 
         fp = BytesIO()
@@ -109,15 +120,12 @@ class Popen:
         try:
             parent_r, child_w = os.pipe()
             child_r, parent_w = os.pipe()
-            # for fd in self._fds:
-            #     _mk_inheritable(fd)
 
-            cmd_python = [sys.executable]
-            cmd_python += ["-m", self.__module__]
-            cmd_python += ["--process-name", str(process_obj.name)]
-            cmd_python += ["--pipe", str(reduction._mk_inheritable(child_r))]
-            reduction._mk_inheritable(child_w)
-            reduction._mk_inheritable(tracker_fd)
+            cmd_python = spawn.get_command_line(
+                pipe_handle=child_r,
+                parent_pid=os.getpid(),
+                process_name=process_obj.name,
+            )
             self._fds += [child_r, child_w, tracker_fd]
             if os.name == "posix":
                 mp_tracker_fd = prep_data["mp_tracker_fd"]
@@ -129,17 +137,26 @@ class Popen:
             util.debug(
                 f"launched python with pid {pid} and cmd:\n{cmd_python}"
             )
-            self.sentinel = parent_r
 
+            # Write the preparation data in the queue in a backward compatible
+            # way.
+            # XXX: can this be simplify now that we only support python3.7+
             method = "getbuffer"
             if not hasattr(fp, method):
                 method = "getvalue"
-            with os.fdopen(parent_w, "wb") as f:
+            with os.fdopen(parent_w, "wb", closefd=False) as f:
                 f.write(getattr(fp, method)())
+
+            # Store the process's information
             self.pid = pid
+            self.sentinel = parent_r
         finally:
-            if parent_r is not None:
-                util.Finalize(self, os.close, (parent_r,))
+            fds_to_close = []
+            for fd in (parent_r, parent_w):
+                if fd is not None:
+                    fds_to_close.append(fd)
+            self.finalizer = util.Finalize(self, util.close_fds, fds_to_close)
+
             for fd in (child_r, child_w):
                 if fd is not None:
                     os.close(fd)
@@ -147,47 +164,3 @@ class Popen:
     @staticmethod
     def thread_is_spawning():
         return True
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser("Command line parser")
-    parser.add_argument(
-        "--pipe", type=int, required=True, help="File handle for the pipe"
-    )
-    parser.add_argument(
-        "--process-name",
-        type=str,
-        default=None,
-        help="Identifier for debugging purpose",
-    )
-
-    args = parser.parse_args()
-
-    info = {}
-    exitcode = 1
-    try:
-        with os.fdopen(args.pipe, "rb") as from_parent:
-            process.current_process()._inheriting = True
-            try:
-                prep_data = pickle.load(from_parent)
-                spawn.prepare(prep_data)
-                process_obj = pickle.load(from_parent)
-            finally:
-                del process.current_process()._inheriting
-
-        exitcode = process_obj._bootstrap()
-    except Exception:
-        print("\n\n" + "-" * 80)
-        print(f"{args.process_name} failed with traceback: ")
-        print("-" * 80)
-        import traceback
-
-        print(traceback.format_exc())
-        print("\n" + "-" * 80)
-    finally:
-        if from_parent is not None:
-            from_parent.close()
-
-        sys.exit(exitcode)

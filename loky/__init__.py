@@ -17,6 +17,7 @@ from concurrent.futures import (
 
 from ._base import Future
 from .backend.context import cpu_count
+from .backend.spawn import freeze_support
 from .backend.reduction import set_loky_pickler
 from .reusable_executor import get_reusable_executor
 from .cloudpickle_wrapper import wrap_non_picklable_objects
@@ -24,21 +25,26 @@ from .process_executor import BrokenProcessPool, ProcessPoolExecutor
 
 
 __all__ = [
-    "get_reusable_executor",
-    "cpu_count",
-    "wait",
-    "as_completed",
-    "Future",
+    # Constants
+    "ALL_COMPLETED",
+    "FIRST_COMPLETED",
+    "FIRST_EXCEPTION",
+    # Classes
     "Executor",
+    "Future",
     "ProcessPoolExecutor",
+    # Functions
+    "as_completed",
+    "cpu_count",
+    "freeze_support",
+    "get_reusable_executor",
+    "set_loky_pickler",
+    "wait",
+    "wrap_non_picklable_objects",
+    # Errors
     "BrokenProcessPool",
     "CancelledError",
     "TimeoutError",
-    "FIRST_COMPLETED",
-    "FIRST_EXCEPTION",
-    "ALL_COMPLETED",
-    "wrap_non_picklable_objects",
-    "set_loky_pickler",
 ]
 
 
