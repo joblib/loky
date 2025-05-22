@@ -1,4 +1,6 @@
-### 3.6.0 - In development
+### 3.5.4 - 2025-05-22
+
+- Fix ``resource_tracker`` teardown check for earlier python version. (#455)
 
 
 ### 3.5.3 - 2025-04-29
@@ -8,7 +10,7 @@
 
 ### 3.5.2 - 2025-04-22
 
-- Fix ``resource_tracker`` teardown to accomodate with newer version of
+- Fix ``resource_tracker`` teardown to accommodate with newer version of
   Python (3.12.10+, 3.13.3+, 3.14+). (#450)
 
 ### 3.5.1 - 2025-03-18
