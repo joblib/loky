@@ -1,3 +1,6 @@
+### 3.6.0 - In development
+
+
 ### 3.5.5 - 2025-05-22
 
 - Fix ``resource_tracker`` teardown check for earlier python version. (#455)
