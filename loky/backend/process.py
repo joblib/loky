@@ -44,6 +44,13 @@ class LokyProcess(BaseProcess):
             from .popen_loky_posix import Popen
         return Popen(process_obj)
 
+    def _bootstrap(self, parent_sentinel=None):
+        try:
+            super()._bootstrap(parent_sentinel=parent_sentinel)
+        except TypeError:
+            # Compat for pypy that doesn't accept the parent_sentinel argument
+            super()._bootstrap()
+
 
 class LokyInitMainProcess(LokyProcess):
     _start_method = "loky_init_main"

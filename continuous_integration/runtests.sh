@@ -28,6 +28,24 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
     cp "$LOKY_PATH"/continuous_integration/copy_loky.sh $JOBLIB/externals
     (cd $JOBLIB/externals && bash copy_loky.sh "$LOKY_PATH")
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
+elif [ "$PYINSTALLER_TESTS" = "true" ]; then
+    python -m venv venv/
+    if [ -d "./venv/Scripts" ]; then
+        source ./venv/Scripts/activate
+    else
+        source ./venv/bin/activate
+    fi
+    which python
+    pip install pytest pytest-timeout psutil coverage pyinstaller
+    pip install .
+    python -c "import loky; print('loky.cpu_count():', loky.cpu_count())"
+    python -c "import os; print('os.cpu_count():', os.cpu_count())"
+    export COVERAGE_PROCESS_START=`pwd`/.coveragerc
+    python continuous_integration/install_coverage_subprocess_pth.py
+    pytest -vl --maxfail=5 --timeout=60 -k pyinstaller --junitxml="${JUNITXML}"
+    coverage combine --quiet --append
+    coverage xml -i  # language agnostic report for the codecov upload script
+    coverage report  # display the report as text on stdout
 else
     # Make sure that we have the python docker image cached locally to avoid
     # a timeout in a test that needs it.

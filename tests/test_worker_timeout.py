@@ -57,7 +57,6 @@ class DelayedSimpleQueue(SimpleQueue):
 
     @staticmethod
     def _feed(readlock, reader, writer, delay):
-
         PICKLE_NONE = dumps(None)
 
         while True:

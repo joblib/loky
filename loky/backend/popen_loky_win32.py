@@ -2,15 +2,21 @@ import os
 import sys
 import msvcrt
 import _winapi
-from pickle import load
-from multiprocessing import process, util
+
+from multiprocessing import util
 from multiprocessing.context import set_spawning_popen
+from multiprocessing.popen_spawn_win32 import _close_handles
 from multiprocessing.popen_spawn_win32 import Popen as _Popen
 
 from . import reduction, spawn
 
 
 __all__ = ["Popen"]
+
+POPEN_FLAG = 0
+if spawn.OPEN_CONSOLE_FOR_SUBPROCESSES:
+    POPEN_FLAG = _winapi.CREATE_NEW_CONSOLE
+
 
 #
 #
@@ -65,9 +71,11 @@ class Popen(_Popen):
         # terminated before it could steal the handle from the parent process.
         rhandle, whandle = _winapi.CreatePipe(None, 0)
         wfd = msvcrt.open_osfhandle(whandle, 0)
-        cmd = get_command_line(parent_pid=os.getpid(), pipe_handle=rhandle)
 
-        python_exe = spawn.get_executable()
+        cmd = spawn.get_command_line(
+            pipe_handle=rhandle, parent_pid=os.getpid()
+        )
+        python_exe = cmd[0]
 
         # copy the environment variables to set in the child process
         child_env = {**os.environ, **process_obj.env}
@@ -79,7 +87,6 @@ class Popen(_Popen):
             child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
         cmd = " ".join(f'"{x}"' for x in cmd)
-
         with open(wfd, "wb") as to_child:
             # start process
             try:
@@ -115,59 +122,3 @@ class Popen(_Popen):
                 reduction.dump(process_obj, to_child)
             finally:
                 set_spawning_popen(None)
-
-
-def get_command_line(pipe_handle, parent_pid, **kwds):
-    """Returns prefix of command line used for spawning a child process."""
-    if getattr(sys, "frozen", False):
-        return [sys.executable, "--multiprocessing-fork", pipe_handle]
-    else:
-        prog = (
-            "from loky.backend.popen_loky_win32 import main; "
-            f"main(pipe_handle={pipe_handle}, parent_pid={parent_pid})"
-        )
-        opts = util._args_from_interpreter_flags()
-        return [
-            spawn.get_executable(),
-            *opts,
-            "-c",
-            prog,
-            "--multiprocessing-fork",
-        ]
-
-
-def is_forking(argv):
-    """Return whether commandline indicates we are forking."""
-    if len(argv) >= 2 and argv[1] == "--multiprocessing-fork":
-        return True
-    else:
-        return False
-
-
-def main(pipe_handle, parent_pid=None):
-    """Run code specified by data received over pipe."""
-    assert is_forking(sys.argv), "Not forking"
-
-    if parent_pid is not None:
-        source_process = _winapi.OpenProcess(
-            _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE, False, parent_pid
-        )
-    else:
-        source_process = None
-    new_handle = reduction.duplicate(
-        pipe_handle, source_process=source_process
-    )
-    fd = msvcrt.open_osfhandle(new_handle, os.O_RDONLY)
-    parent_sentinel = source_process
-
-    with os.fdopen(fd, "rb", closefd=True) as from_parent:
-        process.current_process()._inheriting = True
-        try:
-            preparation_data = load(from_parent)
-            spawn.prepare(preparation_data, parent_sentinel)
-            self = load(from_parent)
-        finally:
-            del process.current_process()._inheriting
-
-    exitcode = self._bootstrap(parent_sentinel)
-    sys.exit(exitcode)

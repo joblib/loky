@@ -19,7 +19,7 @@ import threading
 import _multiprocessing
 from time import time as _time
 from multiprocessing import process, util
-from multiprocessing.context import assert_spawning
+from multiprocessing import context
 
 from . import resource_tracker
 
@@ -59,7 +59,6 @@ SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 
 
 class SemLock:
-
     _rand = tempfile._RandomNameSequence()
 
     def __init__(self, kind, value, maxvalue, name=None):
@@ -122,9 +121,13 @@ class SemLock:
         return self._semlock.release()
 
     def __getstate__(self):
-        assert_spawning(self)
+        context.assert_spawning(self)
         sl = self._semlock
         h = sl.handle
+        if sys.platform == "win32":
+            h = context.get_spawning_popen().duplicate_for_child(sl.handle)
+        else:
+            h = sl.handle
         return (h, sl.kind, sl.maxvalue, sl.name)
 
     def __setstate__(self, state):
@@ -249,7 +252,7 @@ class Condition:
         self._make_methods()
 
     def __getstate__(self):
-        assert_spawning(self)
+        context.assert_spawning(self)
         return (
             self._lock,
             self._sleeping_count,

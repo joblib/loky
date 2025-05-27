@@ -80,6 +80,20 @@ jobs:
             # tests that loky has no hard dependency on psutil.
             NO_PSUTIL: "true"
 
+          # Test that the frozen executables are working
+          - name: windows-py312-frozen
+            os: windows-latest
+            PYTHON_VERSION: "3.12"
+            PYINSTALLER_TESTS: "true"
+          - name: macos-py312-frozen
+            os: macos-latest
+            PYTHON_VERSION: "3.12"
+            PYINSTALLER_TESTS: "true"
+          - name: linux-py312-frozen
+            os: ubuntu-latest
+            PYTHON_VERSION: "3.12"
+            PYINSTALLER_TESTS: "true"
+
     env: ${{ matrix }}
 
     runs-on: ${{ matrix.os }}

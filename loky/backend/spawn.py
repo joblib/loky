@@ -11,7 +11,17 @@ import sys
 import runpy
 import textwrap
 import types
+import pickle
+import importlib
+
 from multiprocessing import process, util
+from multiprocessing import freeze_support as _freeze_support_mp
+
+
+# If set to True, the child process will open a console that can be used to
+# get access to debugger. This is useful for debugging the child process
+# step-by-step.
+OPEN_CONSOLE_FOR_SUBPROCESSES = False
 
 
 if sys.platform != "win32":
@@ -23,6 +33,25 @@ else:
 
     WINEXE = sys.platform == "win32" and getattr(sys, "frozen", False)
     WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
+
+    def duplicate_in_child_process(handle, parent_pid=None):
+        """Duplicate a handle in child process given its parent pid.
+
+        Returns a file descriptor for the handle and the parent process.
+        """
+        import _winapi
+
+        if parent_pid is not None:
+            source_process = _winapi.OpenProcess(
+                _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE,
+                False,
+                parent_pid,
+            )
+        else:
+            source_process = None
+        new_handle = duplicate(handle, source_process=source_process)
+        return new_handle, source_process
+
 
 if WINSERVICE:
     _python_exe = os.path.join(sys.exec_prefix, "python.exe")
@@ -242,3 +271,94 @@ def _fixup_main_from_path(main_path):
     main_content = runpy.run_path(main_path, run_name="__mp_main__")
     main_module.__dict__.update(main_content)
     sys.modules["__main__"] = sys.modules["__mp_main__"] = main_module
+
+
+def main(pipe_handle, parent_pid, process_name=None):
+    # arguments are passed as strings, convert them back to int.
+    pipe_handle, parent_pid = int(pipe_handle), int(parent_pid)
+    if sys.platform == "win32":
+        handle, parent_sentinel = duplicate_in_child_process(
+            pipe_handle, parent_pid
+        )
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+    else:
+        fd = pipe_handle
+        parent_sentinel = os.dup(pipe_handle)
+
+    exitcode = 1
+    try:
+        exitcode = _main(fd, parent_sentinel=parent_sentinel)
+    except Exception:
+        print("\n\n" + "-" * 80)
+        print(f"{process_name} failed with traceback: ")
+        print("-" * 80)
+        import traceback
+
+        print(traceback.format_exc())
+        print("\n" + "-" * 80)
+    finally:
+        sys.exit(exitcode)
+
+
+def _main(fd, parent_sentinel):
+    with os.fdopen(fd, "rb", closefd=True) as from_parent:
+        process.current_process()._inheriting = True
+        try:
+            preparation_data = pickle.load(from_parent)
+            prepare(preparation_data)
+            self = pickle.load(from_parent)
+        finally:
+            del process.current_process()._inheriting
+    return self._bootstrap(parent_sentinel)
+
+
+def get_command_line(main_prog=main, **kwargs):
+    """
+    Returns a command line used for spawning a child process.
+    This command provides supports for frozen executables and
+    only works with main_prog named main.
+    """
+
+    assert main_prog.__name__ == "main"
+
+    if getattr(sys, "frozen", False):
+        # For frozen executables, add flag '--multiprocessin-fork' to notify,
+        # the `freeze_support` function and pass the arguments as 'key=value'
+        # so they can be used to call main.
+        list_kwargs = [f"{k}={v}" for k, v in kwargs.items()]
+        argv = [
+            sys.executable,
+            "--loky-fork",
+            main_prog.__module__,
+            *list_kwargs,
+        ]
+    else:
+        # For non-frozen executables, directly call `main_prog` with
+        # the arguments passed as strings.
+        list_kwargs = [f'{k}="{v}"' for k, v in kwargs.items()]
+        prog = (
+            f"from {main_prog.__module__} import main; "
+            f'main({", ".join(list_kwargs)})'
+        )
+        opts = util._args_from_interpreter_flags()
+        argv = [get_executable(), *opts, "-c", prog]
+    return argv
+
+
+def freeze_support():
+    """Run code for the child workers when necessary.
+    This helper allows the frozen executable to call the code for the child
+    workers when not in the main process.
+    It should be called right after the beginning of the programme, to
+    avoid recursive process spawning.
+    """
+    if len(sys.argv) >= 2 and sys.argv[1] == "--loky-fork":
+        module_main = sys.argv[2]
+        main = importlib.import_module(module_main).main
+        kwargs = {}
+        for p in sys.argv[3:]:
+            k, v = p.split("=")
+            kwargs[k] = v
+        exitcode = main(**kwargs)
+        sys.exit(exitcode)
+    _freeze_support_mp()

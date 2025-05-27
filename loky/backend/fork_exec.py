@@ -12,6 +12,9 @@ import subprocess
 def fork_exec(cmd, keep_fds, env=None):
     import _posixsubprocess
 
+    # make sure fds are inheritable
+    [os.set_inheritable(fd, True) for fd in keep_fds]
+
     # Encoded command args as bytes:
     cmd = [os.fsencode(arg) for arg in cmd]
 
