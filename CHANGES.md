@@ -1,5 +1,7 @@
 ### 3.6.0 - In development
 
+- Support detection of the number of physical cores in
+  `cpu_count(only_physical_cores=True)` on FreeBSD.
 
 ### 3.5.5 - 2025-05-22
 
