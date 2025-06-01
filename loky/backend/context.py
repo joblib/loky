@@ -247,6 +247,8 @@ def _count_physical_cores():
             cpu_count_physical = _count_physical_cores_win32()
         elif sys.platform == "darwin":
             cpu_count_physical = _count_physical_cores_darwin()
+        elif sys.platform.startswith("freebsd"):
+            cpu_count_physical = _count_physical_cores_freebsd()
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
@@ -311,6 +313,16 @@ def _count_physical_cores_win32():
 def _count_physical_cores_darwin():
     cpu_info = subprocess.run(
         "sysctl -n hw.physicalcpu".split(),
+        capture_output=True,
+        text=True,
+    )
+    cpu_info = cpu_info.stdout
+    return int(cpu_info)
+
+
+def _count_physical_cores_freebsd():
+    cpu_info = subprocess.run(
+        "sysctl -n kern.smp.cores".split(),
         capture_output=True,
         text=True,
     )
