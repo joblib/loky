@@ -66,3 +66,13 @@ exclude = '''
   | dist
 )/
 '''
+
+[tool.pytest.ini_options]
+# No test should last longer than 1 minute, even on the CI. Otherwise, dump
+# per-thread tracebacks. Note that this value can be overriden from the
+# commandline using: pytest -o faulthandler_timeout=<seconds> ...
+faulthandler_timeout=60
+# Interrupt in pytest in case of deadlock. This will only work once the
+# following PR has been merged and released:
+# https://github.com/pytest-dev/pytest/pull/13679
+faulthandler_exit_on_timeout=true
