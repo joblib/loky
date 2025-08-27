@@ -1,5 +1,6 @@
 ### 3.6.0 - In development
 
+- Fix ``resource_tracker`` compatibility with python 3.13.7+. (#461)
 
 ### 3.5.5 - 2025-05-22
 
