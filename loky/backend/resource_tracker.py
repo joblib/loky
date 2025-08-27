@@ -108,18 +108,22 @@ class ResourceTracker(_ResourceTracker):
 
     def maybe_unlink(self, name, rtype):
         """Decrement the refcount of a resource, and delete it if it hits 0"""
-        self.ensure_running()
         self._send("MAYBE_UNLINK", name, rtype)
 
     def ensure_running(self):
         """Make sure that resource tracker process is running.
 
         This can be run from any process.  Usually a child process will use
-        the resource created by its parent."""
+        the resource created by its parent.
+
+        This function is necessary for backward compatibility with python
+        versions before 3.13.7
+        """
         return self._ensure_running_and_write()
 
     def _teardown_dead_process(self):
-        # Backward compatibility for python version before 3.13.7
+        # Override this function for compatibility with windows and
+        # for python version before 3.13.7
 
         # At this point, the resource_tracker process has been killed
         # or crashed.
@@ -200,7 +204,11 @@ class ResourceTracker(_ResourceTracker):
         """Make sure that resource tracker process is running.
 
         This can be run from any process.  Usually a child process will use
-        the resource created by its parent."""
+        the resource created by its parent.
+
+
+        This function is added for compatibility with python version before 3.13.7
+        """
         with self._lock:
             if (
                 self._fd is not None
