@@ -117,7 +117,7 @@ class ResourceTracker(_ResourceTracker):
         the resource created by its parent.
 
         This function is necessary for backward compatibility with python
-        versions before 3.13.7
+        versions before 3.13.7.
         """
         return self._ensure_running_and_write()
 
@@ -207,7 +207,7 @@ class ResourceTracker(_ResourceTracker):
         the resource created by its parent.
 
 
-        This function is added for compatibility with python version before 3.13.7
+        This function is added for compatibility with python version before 3.13.7.
         """
         with self._lock:
             if (
