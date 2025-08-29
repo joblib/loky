@@ -6,8 +6,20 @@ set -xe
 
 # Create new conda env
 conda config --set solver libmamba
-to_install="python=$PYTHON_VERSION pip numpy tblib viztracer"
-conda create -n testenv --yes -c conda-forge $to_install
+
+if [[ "$FREE_THREADING" == "true" ]]; then
+    PYTHON_PACKAGE="python-freethreading"
+else
+    PYTHON_PACKAGE="python"
+fi
+
+# If the conda channel is not explicitly set, use conda-forge:
+if [[ -z "$CONDA_CHANNEL" ]]; then
+    CONDA_CHANNEL="conda-forge"
+fi
+
+to_install="$PYTHON_PACKAGE=$PYTHON_VERSION pip numpy tblib $EXTRA_PACKAGES"
+conda create -n testenv --yes -c $CONDA_CHANNEL $to_install
 conda activate testenv
 
 if [[ -z "$JOBLIB_TESTS" ]]; then
