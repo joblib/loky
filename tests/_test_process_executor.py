@@ -1,3 +1,4 @@
+import sysconfig
 from loky import process_executor
 
 import os
@@ -704,6 +705,12 @@ class ExecutorTest:
 
         collected = False
         for _ in range(5):
+            if bool(sysconfig.get_config_var("Py_GIL_DISABLED")):
+                # XXX: full GC collect is needed on free-threading CPython to
+                # actually trigger the garbage collection of my_object once the
+                # executor is done with it. Note sure if this can be considered
+                # a bug or not.
+                gc.collect()
             collected = collect.wait(timeout=1.0)
             if collected:
                 return
