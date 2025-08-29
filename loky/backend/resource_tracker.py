@@ -39,16 +39,15 @@
 
 
 import os
-import shutil
-import sys
 import signal
+import sys
+import threading
 import warnings
-from multiprocessing import util
-from multiprocessing.resource_tracker import (
-    ResourceTracker as _ResourceTracker,
-)
+from collections import deque
+import shutil
 
 from . import spawn
+from multiprocessing import util
 
 if sys.platform == "win32":
     import _winapi
@@ -91,11 +90,11 @@ if os.name == "posix":
 VERBOSE = False
 
 
-class ResourceTracker(_ResourceTracker):
+class ResourceTracker:
     """Resource tracker with refcounting scheme.
 
-    This class is an extension of the multiprocessing ResourceTracker class
-    which implements a reference counting scheme to avoid unlinking shared
+    This class is a modified copy of the multiprocessing ResourceTracker class
+    and implements a reference counting scheme to avoid unlinking shared
     resources still in use in other processes.
 
     This feature is notably used by `joblib.Parallel` to share temporary
@@ -106,25 +105,85 @@ class ResourceTracker(_ResourceTracker):
     function, which is run in a dedicated process.
     """
 
-    def maybe_unlink(self, name, rtype):
-        """Decrement the refcount of a resource, and delete it if it hits 0"""
-        self._send("MAYBE_UNLINK", name, rtype)
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._fd = None
+        self._pid = None
+        self._exitcode = None
+
+    def _reentrant_call_error(self):
+        # gh-109629: this happens if an explicit call to the ResourceTracker
+        # gets interrupted by a garbage collection, invoking a finalizer (*)
+        # that itself calls back into ResourceTracker.
+        #   (*) for example the SemLock finalizer
+        raise ReentrantCallError(
+            "Reentrant call into the multiprocessing resource tracker")
+
+    def __del__(self):
+        # making sure child processess are cleaned before ResourceTracker
+        # gets destructed.
+        # see https://github.com/python/cpython/issues/88887
+        try:
+            self._stop(use_blocking_lock=False)
+        except ChildProcessError:
+            # ignore error due to trying to clean up child process which has already been
+            # shutdown on windows. See https://github.com/joblib/loky/pull/450
+            pass
+
+    def _stop(self, use_blocking_lock=True):
+        if use_blocking_lock:
+            with self._lock:
+                self._stop_locked()
+        else:
+            acquired = self._lock.acquire(blocking=False)
+            try:
+                self._stop_locked()
+            finally:
+                if acquired:
+                    self._lock.release()
+
+    def _stop_locked(
+        self,
+        close=os.close,
+        waitpid=os.waitpid,
+        waitstatus_to_exitcode=os.waitstatus_to_exitcode,
+    ):
+        # This shouldn't happen (it might when called by a finalizer)
+        # so we check for it anyway.
+        if self._lock._recursion_count() > 1:
+            raise self._reentrant_call_error()
+        if self._fd is None:
+            # not running
+            return
+        if self._pid is None:
+            return
+
+        # closing the "alive" file descriptor stops main()
+        close(self._fd)
+        self._fd = None
+
+        _, status = waitpid(self._pid, 0)
+
+        self._pid = None
+
+        try:
+            self._exitcode = waitstatus_to_exitcode(status)
+        except ValueError:
+            # os.waitstatus_to_exitcode may raise an exception for invalid values
+            self._exitcode = None
+
+    def getfd(self):
+        self.ensure_running()
+        return self._fd
 
     def ensure_running(self):
         """Make sure that resource tracker process is running.
 
         This can be run from any process.  Usually a child process will use
-        the resource created by its parent.
-
-        This function is necessary for backward compatibility with python
-        versions before 3.13.7.
-        """
+        the resource created by its parent."""
         return self._ensure_running_and_write()
 
     def _teardown_dead_process(self):
-        # Override this function for compatibility with windows and
-        # for python version before 3.13.7
-
         # At this point, the resource_tracker process has been killed
         # or crashed.
         os.close(self._fd)
@@ -149,7 +208,7 @@ class ResourceTracker(_ResourceTracker):
         )
 
     def _launch(self):
-        # This is the overridden part of the resource tracker, which launches
+        # This is the modified part of the resource tracker, which launches
         # loky's version, which is compatible with windows and allow to track
         # folders with external ref counting.
 
@@ -201,14 +260,6 @@ class ResourceTracker(_ResourceTracker):
                 os.close(r)
 
     def _ensure_running_and_write(self, msg=None):
-        """Make sure that resource tracker process is running.
-
-        This can be run from any process.  Usually a child process will use
-        the resource created by its parent.
-
-
-        This function is added for compatibility with python version before 3.13.7.
-        """
         with self._lock:
             if (
                 self._fd is not None
@@ -230,21 +281,43 @@ class ResourceTracker(_ResourceTracker):
         if msg is not None:
             self._write(msg)
 
+
+    def _check_alive(self):
+        '''Check that the pipe has not been closed by sending a probe.'''
+        try:
+            # We cannot use send here as it calls ensure_running, creating
+            # a cycle.
+            os.write(self._fd, b'PROBE:0:noop\n')
+        except OSError:
+            return False
+        else:
+            return True
+
+
+    def register(self, name, rtype):
+        '''Register name of resource with resource tracker.'''
+        self._send('REGISTER', name, rtype)
+
+    def unregister(self, name, rtype):
+        '''Unregister name of resource with resource tracker.'''
+        self._send('UNREGISTER', name, rtype)
+
     def _write(self, msg):
         nbytes = os.write(self._fd, msg)
         assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
 
-    def __del__(self):
-        # ignore error due to trying to clean up child process which has already been
-        # shutdown on windows. See https://github.com/joblib/loky/pull/450
-        # This is only required if __del__ is defined
-        if not hasattr(_ResourceTracker, "__del__"):
-            return
-        try:
-            super().__del__()
-        except ChildProcessError:
-            pass
+    def _send(self, cmd, name, rtype):
+        msg = f"{cmd}:{name}:{rtype}\n".encode("ascii")
+        if len(msg) > 512:
+            # posix guarantees that writes to a pipe of less than PIPE_BUF
+            # bytes are atomic, and that PIPE_BUF >= 512
+            raise ValueError('msg too long')
 
+        self._ensure_running_and_write(msg)
+
+    def maybe_unlink(self, name, rtype):
+        """Decrement the refcount of a resource, and delete it if it hits 0"""
+        self._send("MAYBE_UNLINK", name, rtype)
 
 _resource_tracker = ResourceTracker()
 ensure_running = _resource_tracker.ensure_running
