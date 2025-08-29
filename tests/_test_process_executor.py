@@ -708,7 +708,7 @@ class ExecutorTest:
             if bool(sysconfig.get_config_var("Py_GIL_DISABLED")):
                 # XXX: full GC collect is needed on free-threading CPython to
                 # actually trigger the garbage collection of my_object once the
-                # executor is done with it. Note sure if this can be considered
+                # executor is done with it. Not sure if this can be considered
                 # a bug or not.
                 gc.collect()
             collected = collect.wait(timeout=1.0)
