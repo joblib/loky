@@ -61,10 +61,16 @@ jobs:
             os: macos-latest
             PYTHON_VERSION: "3.9"
 
+          - name: linux-py314-free-threading
+            os: ubuntu-latest
+            PYTHON_VERSION: "3.14.0rc2"
+            CONDA_CHANNEL: "conda-forge/label/python_rc"
+            FREE_THREADING: "true"
           - name: linux-py313
             os: ubuntu-latest
             PYTHON_VERSION: "3.13"
             LOKY_TEST_NO_LSCPU: "true"
+            EXTRA_PACKAGES: "viztracer"
           - name: linux-py39-joblib-tests
             os: ubuntu-latest
             PYTHON_VERSION: "3.9"
