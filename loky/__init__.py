@@ -21,6 +21,7 @@ from .backend.reduction import set_loky_pickler
 from .reusable_executor import get_reusable_executor
 from .cloudpickle_wrapper import wrap_non_picklable_objects
 from .process_executor import BrokenProcessPool, ProcessPoolExecutor
+from .worker_id import get_worker_id
 
 
 __all__ = [
@@ -38,6 +39,7 @@ __all__ = [
     "FIRST_EXCEPTION",
     "ALL_COMPLETED",
     "wrap_non_picklable_objects",
+    "get_worker_id",
     "set_loky_pickler",
 ]
 
