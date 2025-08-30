@@ -71,7 +71,7 @@
 
 - Fix loky compat with python 3.11 for nested calls. (#394).
 
-- Adapt the cooldown strategy when shutingdown an executor with full
+- Adapt the cooldown strategy when shutting down an executor with full
   `call_queue`. This should accelerate the time taken to shutdown
   in general, in particular on overloaded machines. (#399).
 
@@ -281,10 +281,10 @@
 - Fix bad interaction between `max_workers=None` and `reuse='auto'` (#132).
 - Add initializer for `get_reusable_executor` (#134)
 
-### 2.1.2 - 2018-06-04 - Release Highligths
+### 2.1.2 - 2018-06-04 - Release Highlights
 
 - Fix terminate for nested processes
-- Fix support for windows freezed application
+- Fix support for windows frozen application
 - Fix some internal API inconsistencies
 
 ### 2.1.1 - 2018-04-13 - Bug fix release
@@ -335,7 +335,7 @@
 
 - Fix default backend for ReusablePoolExecutor
 
-### 1.1 - 2017-07-28 - Release higlights
+### 1.1 - 2017-07-28 - Release highlights
 
 - Rename `loky` backend to `loky_init_main`.
 - New `loky` backend which makes it possible to use `loky` with no `if __name__ == '__main__':` safeguard.
@@ -352,8 +352,8 @@
 
 ### 0.3 - 2017-06-02 - Release highlights
 
-- Basic handling of nested parallel calls up to recursion depth 3 (by default, can be changd by setting LOKY_MAX_DEPTH)
-- Various internal code clean-up and test improvments
+- Basic handling of nested parallel calls up to recursion depth 3 (by default, can be changed by setting LOKY_MAX_DEPTH)
+- Various internal code clean-up and test improvements
 
 
 ### 0.2 - 2017-03-24 - Release highlights

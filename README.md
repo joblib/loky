@@ -86,7 +86,7 @@ def say_hello(k):
     return pid
 
 
-# Create an executor with 4 worker processes, that will
+# Create an executor with 4 worker processes that will
 # automatically shutdown after idling for 2s
 executor = get_reusable_executor(max_workers=4, timeout=2)
 
@@ -99,14 +99,14 @@ print("Number of used processes:", n_workers)
 assert n_workers == 4
 ```
 
-For more advance usage, see our
+For more advanced usage, see our
 [documentation](https://loky.readthedocs.io/en/stable/)
 
 ### Workflow to contribute
 
 To contribute to **loky**, first create an account on
 [github](http://github.com/). Once this is done, fork the
-[loky repository](http://github.com/loky/loky) to have your own repository,
+[loky repository](http://github.com/joblib/loky) to have your own repository,
 clone it using 'git clone' on the computers where you want to work. Make your
 changes in your clone, push them to your github account, test them on several
 computers, and when you are happy with them, send a pull request to the main
@@ -124,10 +124,10 @@ modules. From the root of the project, run the test suite using:
 
 ### Why was the project named `loky`?
 
-While developping `loky`, we had some bad experiences trying to debug deadlocks
+While developing `loky`, we had some bad experiences trying to debug deadlocks
 when using `multiprocessing.Pool` and `concurrent.futures.ProcessPoolExecutor`,
 especially when calling functions with non-picklable arguments or returned
-values at the beginning of the project. When we had to chose a name, we had
+values at the beginning of the project. When we had to choose a name, we had
 dealt with so many deadlocks that we wanted some kind of invocation to repel
 them! Hence `loky`: a mix of a god, locks and the `y` that make it somehow
 cooler and nicer : (and also less likely to result in name conflict in google
