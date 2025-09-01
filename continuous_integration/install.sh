@@ -18,7 +18,8 @@ if [[ -z "$CONDA_CHANNEL" ]]; then
     CONDA_CHANNEL="conda-forge"
 fi
 
-to_install="$PYTHON_PACKAGE=$PYTHON_VERSION pip numpy tblib $EXTRA_PACKAGES"
+to_install="$PYTHON_PACKAGE=$PYTHON_VERSION pip"
+# to_install="$PYTHON_PACKAGE=$PYTHON_VERSION pip numpy tblib $EXTRA_PACKAGES"
 conda create -n testenv --yes -c $CONDA_CHANNEL $to_install
 conda activate testenv
 
@@ -31,6 +32,6 @@ if [[ -z "$NO_PSUTIL" ]]; then
     PIP_INSTALL_PACKAGES="$PIP_INSTALL_PACKAGES psutil"
 fi
 
-pip install $PIP_INSTALL_PACKAGES
+pip install numpy $PIP_INSTALL_PACKAGES
 
 pip install -v .
