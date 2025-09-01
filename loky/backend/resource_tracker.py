@@ -117,7 +117,8 @@ class ResourceTracker:
         # that itself calls back into ResourceTracker.
         #   (*) for example the SemLock finalizer
         raise ReentrantCallError(
-            "Reentrant call into the multiprocessing resource tracker")
+            "Reentrant call into the multiprocessing resource tracker"
+        )
 
     def __del__(self):
         # making sure child processess are cleaned before ResourceTracker
@@ -244,9 +245,7 @@ class ResourceTracker:
                 pid = spawnv_passfds(exe, args, fds_to_pass)
             finally:
                 if _HAVE_SIGMASK:
-                    signal.pthread_sigmask(
-                        signal.SIG_UNBLOCK, _IGNORED_SIGNALS
-                    )
+                    signal.pthread_sigmask(signal.SIG_UNBLOCK, _IGNORED_SIGNALS)
         except BaseException:
             os.close(w)
             raise
@@ -281,26 +280,24 @@ class ResourceTracker:
         if msg is not None:
             self._write(msg)
 
-
     def _check_alive(self):
-        '''Check that the pipe has not been closed by sending a probe.'''
+        """Check that the pipe has not been closed by sending a probe."""
         try:
             # We cannot use send here as it calls ensure_running, creating
             # a cycle.
-            os.write(self._fd, b'PROBE:0:noop\n')
+            os.write(self._fd, b"PROBE:0:noop\n")
         except OSError:
             return False
         else:
             return True
 
-
     def register(self, name, rtype):
-        '''Register name of resource with resource tracker.'''
-        self._send('REGISTER', name, rtype)
+        """Register name of resource with resource tracker."""
+        self._send("REGISTER", name, rtype)
 
     def unregister(self, name, rtype):
-        '''Unregister name of resource with resource tracker.'''
-        self._send('UNREGISTER', name, rtype)
+        """Unregister name of resource with resource tracker."""
+        self._send("UNREGISTER", name, rtype)
 
     def _write(self, msg):
         nbytes = os.write(self._fd, msg)
@@ -311,13 +308,14 @@ class ResourceTracker:
         if len(msg) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
             # bytes are atomic, and that PIPE_BUF >= 512
-            raise ValueError('msg too long')
+            raise ValueError("msg too long")
 
         self._ensure_running_and_write(msg)
 
     def maybe_unlink(self, name, rtype):
         """Decrement the refcount of a resource, and delete it if it hits 0"""
         self._send("MAYBE_UNLINK", name, rtype)
+
 
 _resource_tracker = ResourceTracker()
 ensure_running = _resource_tracker.ensure_running
@@ -408,14 +406,10 @@ def main(fd, verbose=0):
                             del registry[rtype][name]
                             try:
                                 if verbose:
-                                    util.debug(
-                                        f"[ResourceTracker] unlink {name}"
-                                    )
+                                    util.debug(f"[ResourceTracker] unlink {name}")
                                 _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
-                                warnings.warn(
-                                    f"resource_tracker: {name}: {e!r}"
-                                )
+                                warnings.warn(f"resource_tracker: {name}: {e!r}")
 
                     else:
                         raise RuntimeError(f"unrecognized command {cmd!r}")
