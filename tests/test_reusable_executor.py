@@ -453,6 +453,10 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         assert "message raised in child" in str(exc_info.value.__cause__)
 
     @pytest.mark.skipif(np is None, reason="requires numpy")
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="workaround https://github.com/joblib/loky/issues/469",
+    )
     def test_numpy_dot_parent_and_child_no_freeze(self):
         """Test that no freeze happens in child process when numpy's thread
         pool is started in the parent.
