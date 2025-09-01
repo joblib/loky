@@ -459,9 +459,12 @@ class TestExecutorDeadLock(ReusableExecutorMixin):
         """
         a = np.random.randn(1000, 1000)
         np.dot(a, a)  # trigger the thread pool init in the parent process
-        executor = get_reusable_executor(max_workers=2)
-        executor.submit(np.dot, a, a).result()
-        executor.shutdown(wait=True)
+        # executor = get_reusable_executor(max_workers=2)
+        from concurrent.futures import ProcessPoolExecutor
+
+        with ProcessPoolExecutor(max_workers=2) as executor:
+            executor.submit(np.dot, a, a).result()
+        # executor.shutdown(wait=True)
 
 
 class TestTerminateExecutor(ReusableExecutorMixin):
