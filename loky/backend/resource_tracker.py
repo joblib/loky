@@ -39,15 +39,14 @@
 
 
 import os
-import signal
-import sys
-import threading
-import warnings
-from collections import deque
 import shutil
+import sys
+import signal
+import warnings
+from multiprocessing import util
+import threading
 
 from . import spawn
-from multiprocessing import util
 
 if sys.platform == "win32":
     import _winapi
