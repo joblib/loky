@@ -86,6 +86,7 @@ if os.name == "posix":
             }
         )
 
+PY_GREATER_THAN_311 = sys.version_info[:2] >= (3, 11)
 
 VERBOSE = False
 
@@ -106,7 +107,11 @@ class ResourceTracker:
     """
 
     def __init__(self):
-        self._lock = threading.RLock()
+        # Until CPython <= 3.10 code use a Lock. CPython >= 3.11 code relies on
+        # threading.RLock._recursion_count which does not exist for Python <= 3.10
+        self._lock = (
+            threading.RLock() if PY_GREATER_THAN_311 else threading.Lock()
+        )
         self._fd = None
         self._pid = None
         self._exitcode = None
@@ -120,58 +125,75 @@ class ResourceTracker:
             "Reentrant call into the multiprocessing resource tracker"
         )
 
-    def __del__(self):
-        # making sure child processess are cleaned before ResourceTracker
-        # gets destructed.
-        # see https://github.com/python/cpython/issues/88887
-        try:
-            self._stop(use_blocking_lock=False)
-        except ChildProcessError:
-            # ignore error due to trying to clean up child process which has already been
-            # shutdown on windows. See https://github.com/joblib/loky/pull/450
-            pass
+    if PY_GREATER_THAN_311:
 
-    def _stop(self, use_blocking_lock=True):
-        if use_blocking_lock:
-            with self._lock:
-                self._stop_locked()
-        else:
-            acquired = self._lock.acquire(blocking=False)
+        def _stop(self, use_blocking_lock=True):
+            if use_blocking_lock:
+                with self._lock:
+                    self._stop_locked()
+            else:
+                acquired = self._lock.acquire(blocking=False)
+                try:
+                    self._stop_locked()
+                finally:
+                    if acquired:
+                        self._lock.release()
+
+        def _stop_locked(
+            self,
+            close=os.close,
+            waitpid=os.waitpid,
+            waitstatus_to_exitcode=os.waitstatus_to_exitcode,
+        ):
+            # This shouldn't happen (it might when called by a finalizer)
+            # so we check for it anyway.
+            if self._lock._recursion_count() > 1:
+                raise self._reentrant_call_error()
+            if self._fd is None:
+                # not running
+                return
+            if self._pid is None:
+                return
+
+            # closing the "alive" file descriptor stops main()
+            close(self._fd)
+            self._fd = None
+
+            _, status = waitpid(self._pid, 0)
+
+            self._pid = None
+
             try:
-                self._stop_locked()
-            finally:
-                if acquired:
-                    self._lock.release()
+                self._exitcode = waitstatus_to_exitcode(status)
+            except ValueError:
+                # os.waitstatus_to_exitcode may raise an exception for invalid values
+                self._exitcode = None
 
-    def _stop_locked(
-        self,
-        close=os.close,
-        waitpid=os.waitpid,
-        waitstatus_to_exitcode=os.waitstatus_to_exitcode,
-    ):
-        # This shouldn't happen (it might when called by a finalizer)
-        # so we check for it anyway.
-        if self._lock._recursion_count() > 1:
-            raise self._reentrant_call_error()
-        if self._fd is None:
-            # not running
-            return
-        if self._pid is None:
-            return
+        def __del__(self):
+            # making sure child processess are cleaned before ResourceTracker
+            # gets destructed.
+            # see https://github.com/python/cpython/issues/88887
+            try:
+                self._stop(use_blocking_lock=False)
+            except ChildProcessError:
+                # ignore error due to trying to clean up child process which has already been
+                # shutdown on windows. See https://github.com/joblib/loky/pull/450
+                pass
 
-        # closing the "alive" file descriptor stops main()
-        close(self._fd)
-        self._fd = None
+    else:
 
-        _, status = waitpid(self._pid, 0)
+        def _stop(self):
+            with self._lock:
+                if self._fd is None:
+                    # not running
+                    return
 
-        self._pid = None
+                # closing the "alive" file descriptor stops main()
+                os.close(self._fd)
+                self._fd = None
 
-        try:
-            self._exitcode = waitstatus_to_exitcode(status)
-        except ValueError:
-            # os.waitstatus_to_exitcode may raise an exception for invalid values
-            self._exitcode = None
+                os.waitpid(self._pid, 0)
+                self._pid = None
 
     def getfd(self):
         self.ensure_running()
