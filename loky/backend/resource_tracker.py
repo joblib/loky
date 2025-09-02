@@ -116,16 +116,27 @@ class ResourceTracker:
         self._pid = None
         self._exitcode = None
 
-    def _reentrant_call_error(self):
-        # gh-109629: this happens if an explicit call to the ResourceTracker
-        # gets interrupted by a garbage collection, invoking a finalizer (*)
-        # that itself calls back into ResourceTracker.
-        #   (*) for example the SemLock finalizer
-        raise ReentrantCallError(
-            "Reentrant call into the multiprocessing resource tracker"
-        )
-
     if PY_GREATER_THAN_311:
+
+        def _reentrant_call_error(self):
+            # gh-109629: this happens if an explicit call to the ResourceTracker
+            # gets interrupted by a garbage collection, invoking a finalizer (*)
+            # that itself calls back into ResourceTracker.
+            #   (*) for example the SemLock finalizer
+            raise ReentrantCallError(
+                "Reentrant call into the multiprocessing resource tracker"
+            )
+
+        def __del__(self):
+            # making sure child processess are cleaned before ResourceTracker
+            # gets destructed.
+            # see https://github.com/python/cpython/issues/88887
+            try:
+                self._stop(use_blocking_lock=False)
+            except ChildProcessError:
+                # ignore error due to trying to clean up child process which has already been
+                # shutdown on windows. See https://github.com/joblib/loky/pull/450
+                pass
 
         def _stop(self, use_blocking_lock=True):
             if use_blocking_lock:
@@ -168,17 +179,6 @@ class ResourceTracker:
             except ValueError:
                 # os.waitstatus_to_exitcode may raise an exception for invalid values
                 self._exitcode = None
-
-        def __del__(self):
-            # making sure child processess are cleaned before ResourceTracker
-            # gets destructed.
-            # see https://github.com/python/cpython/issues/88887
-            try:
-                self._stop(use_blocking_lock=False)
-            except ChildProcessError:
-                # ignore error due to trying to clean up child process which has already been
-                # shutdown on windows. See https://github.com/joblib/loky/pull/450
-                pass
 
     else:
 
