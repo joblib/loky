@@ -163,7 +163,7 @@ def test_cpu_count_cgroup_limit():
             "Docker doesn't properly set cgroup CPU limits in this environment"
         )
 
-    # The following will always run using the Python 3.7 docker image.
+    # The following will always run using the Python 3.10 docker image.
     # We mount the loky source as /loky inside the container,
     # so it can be imported when running commands under /
 
