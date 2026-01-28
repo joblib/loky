@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import warnings
 from subprocess import check_output
+from unittest.mock import patch, mock_open
 
 import pytest
 
@@ -268,45 +269,17 @@ def test_cpu_count_cgroup_empty_file():
 
     from loky.backend.context import _cpu_count_cgroup
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create an empty cpu.max file
-        cpu_max_path = f"{tmp_dir}/cpu.max"
-        with open(cpu_max_path, "w") as f:
-            f.write("")
+    os_cpu_count = mp.cpu_count()
 
-        # Mock os.path.exists and open to use our test file
-        import loky.backend.context
-
-        old_exists = os.path.exists
-        old_open = open
-
-        def mock_exists(path):
-            if path == "/sys/fs/cgroup/cpu.max":
-                return True
-            elif path.startswith("/sys/fs/cgroup/cpu/"):
-                return False
-            return old_exists(path)
-
-        def mock_open_func(path, *args, **kwargs):
-            if path == "/sys/fs/cgroup/cpu.max":
-                return open(cpu_max_path, *args, **kwargs)
-            return old_open(path, *args, **kwargs)
-
-        try:
-            # Monkeypatch os.path.exists
-            loky.backend.context.os.path.exists = mock_exists
-            # Note: We can't directly monkeypatch the builtin open in a simple way,
-            # so we test the function's logic indirectly by calling it
+    # Mock the file to be empty
+    with patch("builtins.open", mock_open(read_data="")):
+        with patch("os.path.exists") as mock_exists:
+            # cpu.max exists, but other files don't
+            mock_exists.side_effect = lambda path: path == "/sys/fs/cgroup/cpu.max"
 
             # This should not raise ValueError even with empty file
-            result = _cpu_count_cgroup(mp.cpu_count())
-            assert (
-                result == mp.cpu_count()
-            ), "Empty cpu.max should return os_cpu_count"
-
-        finally:
-            # Restore
-            loky.backend.context.os.path.exists = old_exists
+            result = _cpu_count_cgroup(os_cpu_count)
+            assert result == os_cpu_count, "Empty cpu.max should return os_cpu_count"
 
 
 def test_cpu_count_cgroup_max_value():
@@ -316,39 +289,14 @@ def test_cpu_count_cgroup_max_value():
 
     from loky.backend.context import _cpu_count_cgroup
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create a cpu.max file with just "max"
-        cpu_max_path = f"{tmp_dir}/cpu.max"
-        with open(cpu_max_path, "w") as f:
-            f.write("max\n")
+    os_cpu_count = mp.cpu_count()
 
-        # Mock os.path.exists to use our test file
-        import loky.backend.context
+    # Mock the file to contain just "max"
+    with patch("builtins.open", mock_open(read_data="max\n")):
+        with patch("os.path.exists") as mock_exists:
+            # cpu.max exists, but other files don't
+            mock_exists.side_effect = lambda path: path == "/sys/fs/cgroup/cpu.max"
 
-        old_exists = os.path.exists
-
-        def mock_exists(path):
-            if path == "/sys/fs/cgroup/cpu.max":
-                return True
-            elif path.startswith("/sys/fs/cgroup/cpu/"):
-                return False
-            return old_exists(path)
-
-        try:
-            # Monkeypatch os.path.exists
-            loky.backend.context.os.path.exists = mock_exists
-
-            # We need to also mock the file reading since the actual test won't
-            # have /sys/fs/cgroup/cpu.max. Let's test the logic in a unit-test style
-            # by directly testing the parsing logic
-
-            # Simulate what happens when reading "max"
-            content = "max"
-            parts = content.split()
-            # Should have only 1 part
-            assert len(parts) == 1
-            # The code should treat this as "max" (unlimited)
-
-        finally:
-            # Restore
-            loky.backend.context.os.path.exists = old_exists
+            # This should return os_cpu_count when cpu.max contains "max"
+            result = _cpu_count_cgroup(os_cpu_count)
+            assert result == os_cpu_count, "cpu.max with 'max' should return os_cpu_count"
