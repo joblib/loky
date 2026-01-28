@@ -152,18 +152,14 @@ def _cpu_count_cgroup(os_cpu_count):
     if os.path.exists(cpu_max_fname):
         # cgroup v2
         # https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
-        try:
-            with open(cpu_max_fname) as fh:
-                content = fh.read().strip()
-                if content:
-                    # Parse the quota and period values
-                    parts = content.split()
-                    if len(parts) == 2:
-                        cpu_quota_us, cpu_period_us = parts
-                    # If len(parts) != 2, leave as None and fall back to v1
-        except (IOError, OSError):
-            # If we can't read the file, leave as None and fall back to v1
-            pass
+        with open(cpu_max_fname) as fh:
+            content = fh.read().strip()
+            if content:
+                # Parse the quota and period values
+                parts = content.split()
+                if len(parts) == 2:
+                    cpu_quota_us, cpu_period_us = parts
+                # If len(parts) != 2, leave as None and fall back to v1
 
     # If we didn't get values from cgroup v2, try cgroup v1
     if cpu_quota_us is None or cpu_period_us is None:
