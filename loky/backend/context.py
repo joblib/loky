@@ -167,7 +167,9 @@ def _cpu_count_cgroup(os_cpu_count):
 
     # If we didn't get values from cgroup v2, try cgroup v1
     if cpu_quota_us is None or cpu_period_us is None:
-        if os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
+        if os.path.exists(cfs_quota_fname) and os.path.exists(
+            cfs_period_fname
+        ):
             # cgroup v1
             # https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
             with open(cfs_quota_fname) as fh:
@@ -177,7 +179,9 @@ def _cpu_count_cgroup(os_cpu_count):
         else:
             # No Cgroup CPU bandwidth limit (e.g. non-Linux platform)
             cpu_quota_us = "max"
-            cpu_period_us = 100_000  # unused, for consistency with default values
+            cpu_period_us = (
+                100_000  # unused, for consistency with default values
+            )
 
     if cpu_quota_us == "max":
         # No active Cgroup quota on a Cgroup-capable platform

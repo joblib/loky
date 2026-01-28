@@ -145,20 +145,22 @@ def test_cpu_count_cgroup_limit():
     # Check if Docker can actually set cgroup CPU limits in this environment
     # by verifying that --cpus flag writes to cgroup files
     cgroup_check = check_output(
-        f"{docker_bin} run --rm --cpus 0.5 python:3.10 python3 -c \""
+        f'{docker_bin} run --rm --cpus 0.5 python:3.10 python3 -c "'
         "import os; "
         "v2 = '/sys/fs/cgroup/cpu.max'; "
         "v1_quota = '/sys/fs/cgroup/cpu/cpu.cfs_quota_us'; "
         "v2_content = open(v2).read().strip() if os.path.exists(v2) else ''; "
         "v1_content = open(v1_quota).read().strip() if os.path.exists(v1_quota) else ''; "
         "print('ok' if (v2_content and v2_content != 'max') or (v1_content and v1_content != '-1') else 'skip')"
-        "\"",
+        '"',
         shell=True,
         text=True,
     ).strip()
 
-    if cgroup_check != 'ok':
-        pytest.skip("Docker doesn't properly set cgroup CPU limits in this environment")
+    if cgroup_check != "ok":
+        pytest.skip(
+            "Docker doesn't properly set cgroup CPU limits in this environment"
+        )
 
     # The following will always run using the Python 3.7 docker image.
     # We mount the loky source as /loky inside the container,
@@ -274,6 +276,7 @@ def test_cpu_count_cgroup_empty_file():
 
         # Mock os.path.exists and open to use our test file
         import loky.backend.context
+
         old_exists = os.path.exists
         old_open = open
 
@@ -297,7 +300,9 @@ def test_cpu_count_cgroup_empty_file():
 
             # This should not raise ValueError even with empty file
             result = _cpu_count_cgroup(mp.cpu_count())
-            assert result == mp.cpu_count(), "Empty cpu.max should return os_cpu_count"
+            assert (
+                result == mp.cpu_count()
+            ), "Empty cpu.max should return os_cpu_count"
 
         finally:
             # Restore
@@ -319,6 +324,7 @@ def test_cpu_count_cgroup_max_value():
 
         # Mock os.path.exists to use our test file
         import loky.backend.context
+
         old_exists = os.path.exists
 
         def mock_exists(path):
@@ -346,5 +352,3 @@ def test_cpu_count_cgroup_max_value():
         finally:
             # Restore
             loky.backend.context.os.path.exists = old_exists
-
-
