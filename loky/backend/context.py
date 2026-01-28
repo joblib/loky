@@ -179,9 +179,6 @@ def _cpu_count_cgroup(os_cpu_count):
         else:
             # No Cgroup CPU bandwidth limit (e.g. non-Linux platform)
             cpu_quota_us = "max"
-            cpu_period_us = (
-                100_000  # unused, for consistency with default values
-            )
 
     if cpu_quota_us == "max":
         # No active Cgroup quota on a Cgroup-capable platform
