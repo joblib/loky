@@ -145,7 +145,7 @@ def _cpu_count_cgroup(os_cpu_count):
     cpu_max_fname = "/sys/fs/cgroup/cpu.max"
     cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
     cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
-    if os.path.exists(cpu_max_fname):
+    if os.path.exists(cpu_max_fname) and os.path.getsize(cpu_max_fname) > 0:
         # cgroup v2
         # https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
         with open(cpu_max_fname) as fh:
