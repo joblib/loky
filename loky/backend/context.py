@@ -153,10 +153,8 @@ def _cpu_count_cgroup(os_cpu_count):
         # cgroup v2
         # https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
         with open(cpu_max_fname) as fh:
-            content = fh.read().strip()
-            if content:
-                # Parse the quota and period values
-                parts = content.split()
+            # Parse the quota and period values
+            parts = fh.read().strip().split()
                 if len(parts) == 2:
                     cpu_quota_us, cpu_period_us = parts
                 # If len(parts) != 2, leave as None and fall back to v1
