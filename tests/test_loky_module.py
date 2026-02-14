@@ -261,10 +261,13 @@ def test_only_physical_cores_with_user_limitation():
         assert cpu_count(only_physical_cores=True) == cpu_count_user
 
 
-@pytest.mark.parametrize("read_data,description", [
-    ("", "empty file"),
-    ("max\n", "max value"),
-])
+@pytest.mark.parametrize(
+    "read_data,description",
+    [
+        ("", "empty file"),
+        ("max\n", "max value"),
+    ],
+)
 def test_cpu_count_cgroup_invalid_content(read_data, description):
     # Test that invalid cgroup cpu.max file content is handled gracefully
     # and doesn't cause a ValueError when trying to unpack values
@@ -279,8 +282,12 @@ def test_cpu_count_cgroup_invalid_content(read_data, description):
     with patch("builtins.open", mock_open(read_data=read_data)):
         with patch("os.path.exists") as mock_exists:
             # cpu.max exists, but other files don't
-            mock_exists.side_effect = lambda path: path == "/sys/fs/cgroup/cpu.max"
+            mock_exists.side_effect = (
+                lambda path: path == "/sys/fs/cgroup/cpu.max"
+            )
 
             # This should not raise ValueError and return os_cpu_count
             result = _cpu_count_cgroup(os_cpu_count)
-            assert result == os_cpu_count, f"cpu.max with {description} should return os_cpu_count"
+            assert (
+                result == os_cpu_count
+            ), f"cpu.max with {description} should return os_cpu_count"
