@@ -261,8 +261,12 @@ def test_only_physical_cores_with_user_limitation():
         assert cpu_count(only_physical_cores=True) == cpu_count_user
 
 
-def test_cpu_count_cgroup_empty_file():
-    # Test that empty cgroup cpu.max file is handled gracefully
+@pytest.mark.parametrize("read_data,description", [
+    ("", "empty file"),
+    ("max\n", "max value"),
+])
+def test_cpu_count_cgroup_invalid_content(read_data, description):
+    # Test that invalid cgroup cpu.max file content is handled gracefully
     # and doesn't cause a ValueError when trying to unpack values
     if sys.platform != "linux":
         pytest.skip()
@@ -271,32 +275,12 @@ def test_cpu_count_cgroup_empty_file():
 
     os_cpu_count = mp.cpu_count()
 
-    # Mock the file to be empty
-    with patch("builtins.open", mock_open(read_data="")):
+    # Mock the file with the provided read_data
+    with patch("builtins.open", mock_open(read_data=read_data)):
         with patch("os.path.exists") as mock_exists:
             # cpu.max exists, but other files don't
             mock_exists.side_effect = lambda path: path == "/sys/fs/cgroup/cpu.max"
 
-            # This should not raise ValueError even with empty file
+            # This should not raise ValueError and return os_cpu_count
             result = _cpu_count_cgroup(os_cpu_count)
-            assert result == os_cpu_count, "Empty cpu.max should return os_cpu_count"
-
-
-def test_cpu_count_cgroup_max_value():
-    # Test that cgroup cpu.max containing just "max" is handled gracefully
-    if sys.platform != "linux":
-        pytest.skip()
-
-    from loky.backend.context import _cpu_count_cgroup
-
-    os_cpu_count = mp.cpu_count()
-
-    # Mock the file to contain just "max"
-    with patch("builtins.open", mock_open(read_data="max\n")):
-        with patch("os.path.exists") as mock_exists:
-            # cpu.max exists, but other files don't
-            mock_exists.side_effect = lambda path: path == "/sys/fs/cgroup/cpu.max"
-
-            # This should return os_cpu_count when cpu.max contains "max"
-            result = _cpu_count_cgroup(os_cpu_count)
-            assert result == os_cpu_count, "cpu.max with 'max' should return os_cpu_count"
+            assert result == os_cpu_count, f"cpu.max with {description} should return os_cpu_count"

@@ -155,9 +155,9 @@ def _cpu_count_cgroup(os_cpu_count):
         with open(cpu_max_fname) as fh:
             # Parse the quota and period values
             parts = fh.read().strip().split()
-                if len(parts) == 2:
-                    cpu_quota_us, cpu_period_us = parts
-                # If len(parts) != 2, leave as None and fall back to v1
+            if len(parts) == 2:
+                cpu_quota_us, cpu_period_us = parts
+            # If len(parts) != 2, leave as None and fall back to v1
 
     # If we didn't get values from cgroup v2, try cgroup v1
     if cpu_quota_us is None or cpu_period_us is None:
