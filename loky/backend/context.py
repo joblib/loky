@@ -145,22 +145,34 @@ def _cpu_count_cgroup(os_cpu_count):
     cpu_max_fname = "/sys/fs/cgroup/cpu.max"
     cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
     cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
+
+    cpu_quota_us = None
+    cpu_period_us = None
+
     if os.path.exists(cpu_max_fname):
         # cgroup v2
         # https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
         with open(cpu_max_fname) as fh:
-            cpu_quota_us, cpu_period_us = fh.read().strip().split()
-    elif os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
-        # cgroup v1
-        # https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
-        with open(cfs_quota_fname) as fh:
-            cpu_quota_us = fh.read().strip()
-        with open(cfs_period_fname) as fh:
-            cpu_period_us = fh.read().strip()
-    else:
-        # No Cgroup CPU bandwidth limit (e.g. non-Linux platform)
-        cpu_quota_us = "max"
-        cpu_period_us = 100_000  # unused, for consistency with default values
+            # Parse the quota and period values
+            parts = fh.read().strip().split()
+            if len(parts) == 2:
+                cpu_quota_us, cpu_period_us = parts
+            # If len(parts) != 2, leave as None and fall back to v1
+
+    # If we didn't get values from cgroup v2, try cgroup v1
+    if cpu_quota_us is None or cpu_period_us is None:
+        if os.path.exists(cfs_quota_fname) and os.path.exists(
+            cfs_period_fname
+        ):
+            # cgroup v1
+            # https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
+            with open(cfs_quota_fname) as fh:
+                cpu_quota_us = fh.read().strip()
+            with open(cfs_period_fname) as fh:
+                cpu_period_us = fh.read().strip()
+        else:
+            # No Cgroup CPU bandwidth limit (e.g. non-Linux platform)
+            cpu_quota_us = "max"
 
     if cpu_quota_us == "max":
         # No active Cgroup quota on a Cgroup-capable platform
@@ -172,7 +184,7 @@ def _cpu_count_cgroup(os_cpu_count):
             return math.ceil(cpu_quota_us / cpu_period_us)
         else:  # pragma: no cover
             # Setting a negative cpu_quota_us value is a valid way to disable
-            # cgroup CPU bandwith limits
+            # cgroup CPU bandwidth limits
             return os_cpu_count
 
 
