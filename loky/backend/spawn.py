@@ -11,7 +11,12 @@ import sys
 import runpy
 import textwrap
 import types
+import ast
+import importlib
 from multiprocessing import process, util
+from multiprocessing import freeze_support as mp_freeze_support
+
+LOKY_FORK_MARKER = "--loky-fork"
 
 
 if sys.platform != "win32":
@@ -34,11 +39,65 @@ def get_executable():
     return _python_exe
 
 
+def _format_arg(name, value):
+    return f"{name}={value!r}"
+
+
+def _parse_arg(arg):
+    name, value = arg.split("=", 1)
+    try:
+        return name, ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        return name, value
+
+
+def _is_loky_forking(argv):
+    return len(argv) >= 3 and argv[1] == LOKY_FORK_MARKER
+
+
+def get_command_line(main_module, *, extra_args=(), **kwargs):
+    """
+    Returns a command line used for spawning a child process.
+    This command provides supports for frozen executables and
+    only works with a module exposing a main function.
+    """
+    if getattr(sys, "frozen", False):
+        return [
+            sys.executable,
+            LOKY_FORK_MARKER,
+            main_module,
+            *[_format_arg(name, value) for name, value in kwargs.items()],
+        ]
+
+    prog = (
+        f"from {main_module} import main; import sys; "
+        f"sys.exit(main("
+        f"{', '.join(_format_arg(name, value) for name, value in kwargs.items())}"
+        f"))"
+    )
+    opts = util._args_from_interpreter_flags()
+    return [get_executable(), *opts, "-c", prog, *extra_args]
+
+
+def freeze_support():
+    """Run code for the child workers when necessary.
+    This helper allows the frozen executable to call the code for the child
+    workers when not in the main process.
+    It should be called right after the beginning of the programme, to
+    avoid recursive process spawning.
+    """
+    if _is_loky_forking(sys.argv):
+        main_module = sys.argv[2]
+        kwargs = dict(_parse_arg(arg) for arg in sys.argv[3:])
+        main = importlib.import_module(main_module).main
+        sys.exit(main(**kwargs))
+
+    mp_freeze_support()
+
+
 def _check_not_importing_main():
     if getattr(process.current_process(), "_inheriting", False):
-        raise RuntimeError(
-            textwrap.dedent(
-                """\
+        raise RuntimeError(textwrap.dedent("""\
             An attempt has been made to start a new process before the
             current process has finished its bootstrapping phase.
 
@@ -51,9 +110,7 @@ def _check_not_importing_main():
                     ...
 
             The "freeze_support()" line can be omitted if the program
-            is not going to be frozen to produce an executable."""
-            )
-        )
+            is not going to be frozen to produce an executable."""))
 
 
 def get_preparation_data(name, init_main_module=True):
