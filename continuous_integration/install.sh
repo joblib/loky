@@ -14,12 +14,12 @@ else
 fi
 
 # If the conda channel is not explicitly set, use conda-forge:
-if [[ -z "$CONDA_CHANNEL" ]]; then
-    CONDA_CHANNEL="conda-forge"
+if [[ -z "$CONDA_CHANNEL_OPTS" ]]; then
+    CONDA_CHANNEL_OPTS="-c conda-forge"
 fi
 
 to_install="$PYTHON_PACKAGE=$PYTHON_VERSION pip numpy tblib $EXTRA_PACKAGES"
-conda create -n testenv --yes -c $CONDA_CHANNEL $to_install
+conda create -n testenv --yes $CONDA_CHANNEL_OPTS $to_install
 conda activate testenv
 
 if [[ -z "$JOBLIB_TESTS" ]]; then

@@ -64,7 +64,7 @@ jobs:
           - name: linux-py315
             os: ubuntu-latest
             PYTHON_VERSION: "3.15.0a8"
-            CONDA_CHANNEL: "conda-forge/label/python_dev"
+            CONDA_CHANNEL_OPTS: "-c conda-forge -c conda-forge/label/python_dev -c conda-forge/label/python_rc"
           - name: linux-py314-free-threading
             os: ubuntu-latest
             PYTHON_VERSION: "3.14"
