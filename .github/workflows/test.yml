@@ -49,14 +49,16 @@ jobs:
           - name: windows-py313
             os: windows-latest
             PYTHON_VERSION: "3.13"
+            EXTRA_PACKAGES: "numpy tblib"
           - name: windows-py39
             os: windows-latest
             PYTHON_VERSION: "3.9"
             LOKY_TEST_NO_CIM: "true"
-
+            EXTRA_PACKAGES: "numpy tblib"
           - name: macos-py313
             os: macos-latest
             PYTHON_VERSION: "3.13"
+            EXTRA_PACKAGES: "numpy tblib"
           - name: macos-py39
             os: macos-latest
             PYTHON_VERSION: "3.9"
@@ -69,14 +71,16 @@ jobs:
             os: ubuntu-latest
             PYTHON_VERSION: "3.14"
             FREE_THREADING: "true"
+            EXTRA_PACKAGES: "numpy tblib"
           - name: linux-py314
             os: ubuntu-latest
             PYTHON_VERSION: "3.14"
+            EXTRA_PACKAGES: "numpy tblib"
           - name: linux-py313
             os: ubuntu-latest
             PYTHON_VERSION: "3.13"
             LOKY_TEST_NO_LSCPU: "true"
-            EXTRA_PACKAGES: "viztracer"
+            EXTRA_PACKAGES: "numpy tblib viztracer"
           - name: linux-py39-joblib-tests
             os: ubuntu-latest
             PYTHON_VERSION: "3.9"
@@ -85,6 +89,7 @@ jobs:
             os: ubuntu-latest
             PYTHON_VERSION: "3.9"
             RUN_MEMORY: "true"
+            EXTRA_PACKAGES: "numpy tblib"
           - name: linux-py39
             os: ubuntu-latest
             PYTHON_VERSION: "3.9"

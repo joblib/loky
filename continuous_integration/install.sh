@@ -18,7 +18,7 @@ if [[ -z "$CONDA_CHANNEL_OPTS" ]]; then
     CONDA_CHANNEL_OPTS="-c conda-forge"
 fi
 
-to_install="$PYTHON_PACKAGE=$PYTHON_VERSION pip numpy tblib $EXTRA_PACKAGES"
+to_install="$PYTHON_PACKAGE=$PYTHON_VERSION pip $EXTRA_PACKAGES"
 conda create -n testenv --yes $CONDA_CHANNEL_OPTS $to_install
 conda activate testenv
 
