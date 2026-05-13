@@ -1,7 +1,7 @@
 ### 3.6.0 - In development
 
 - Support detection of the number of physical cores in
-  `cpu_count(only_physical_cores=True)` on FreeBSD.
+  `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
 
 - Fix ``cpu_count`` failing on certain OS due to empty
   ``cpu.max`` file (#479) 
