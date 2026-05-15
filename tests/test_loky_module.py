@@ -374,8 +374,9 @@ def test_count_performance_cores_linux_inconsistent_type_for_same_core(
     }
 
     def _open_side_effect(path, *args, **kwargs):
-        if path in file_contents:
-            return mock_open(read_data=file_contents[path])()
+        normalized_path = path.replace("\\", "/")
+        if normalized_path in file_contents:
+            return mock_open(read_data=file_contents[normalized_path])()
         raise OSError()
 
     with patch("builtins.open", side_effect=_open_side_effect):
@@ -438,8 +439,9 @@ def test_count_performance_cores_linux_hybrid_data(monkeypatch):
     }
 
     def _open_side_effect(path, *args, **kwargs):
-        if path in file_contents:
-            return mock_open(read_data=file_contents[path])()
+        normalized_path = path.replace("\\", "/")
+        if normalized_path in file_contents:
+            return mock_open(read_data=file_contents[normalized_path])()
         raise OSError()
 
     with patch("builtins.open", side_effect=_open_side_effect):
