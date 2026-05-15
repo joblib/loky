@@ -291,3 +291,135 @@ def test_cpu_count_cgroup_invalid_content(read_data, description):
             assert (
                 result == os_cpu_count
             ), f"cpu.max with {description} should return os_cpu_count"
+
+
+def test_count_physical_cores_prefers_performance_cores(monkeypatch):
+    import loky.backend.context as context
+
+    monkeypatch.setattr(context.sys, "platform", "linux")
+    monkeypatch.setattr(
+        context,
+        "_count_performance_cores_linux",
+        lambda: 4,
+    )
+    monkeypatch.setattr(
+        context,
+        "_count_physical_cores_linux",
+        lambda: 8,
+    )
+    monkeypatch.setattr(context, "physical_cores_cache", None)
+
+    first_value, first_exc = context._count_physical_cores()
+    second_value, second_exc = context._count_physical_cores()
+
+    assert first_value == 4
+    assert first_exc is None
+    assert second_value == 4
+    assert second_exc is None
+
+
+def test_count_physical_cores_fallback_to_physical_on_ambiguity(monkeypatch):
+    import loky.backend.context as context
+
+    monkeypatch.setattr(context.sys, "platform", "linux")
+    monkeypatch.setattr(
+        context,
+        "_count_performance_cores_linux",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        context,
+        "_count_physical_cores_linux",
+        lambda: 8,
+    )
+    monkeypatch.setattr(context, "physical_cores_cache", None)
+
+    value, exc = context._count_physical_cores()
+
+    assert value == 8
+    assert exc is None
+
+
+def test_count_performance_cores_linux_missing_sysfs(monkeypatch):
+    import loky.backend.context as context
+
+    monkeypatch.setattr(context.glob, "glob", lambda _: [])
+    assert context._count_performance_cores_linux() is None
+
+
+def test_count_performance_cores_linux_inconsistent_topology(monkeypatch):
+    import loky.backend.context as context
+
+    cpu_paths = ["/sys/devices/system/cpu/cpu0", "/sys/devices/system/cpu/cpu1"]
+    monkeypatch.setattr(context.glob, "glob", lambda _: cpu_paths)
+
+    file_contents = {
+        "/sys/devices/system/cpu/cpu0/topology/core_type": "2",
+        "/sys/devices/system/cpu/cpu0/topology/core_id": "0",
+        "/sys/devices/system/cpu/cpu0/topology/physical_package_id": "0",
+        "/sys/devices/system/cpu/cpu1/topology/core_type": "1",
+        "/sys/devices/system/cpu/cpu1/topology/core_id": "0",
+        "/sys/devices/system/cpu/cpu1/topology/physical_package_id": "0",
+    }
+
+    def _open_side_effect(path, *args, **kwargs):
+        if path in file_contents:
+            return mock_open(read_data=file_contents[path])()
+        raise OSError()
+
+    with patch("builtins.open", side_effect=_open_side_effect):
+        assert context._count_performance_cores_linux() is None
+
+
+def test_count_performance_cores_win32_ctypes_failure(monkeypatch):
+    import loky.backend.context as context
+
+    import ctypes
+
+    def _raise_os_error(*args, **kwargs):
+        raise OSError()
+
+    monkeypatch.setattr(ctypes, "WinDLL", _raise_os_error)
+    assert context._count_performance_cores_win32() is None
+
+
+def test_count_performance_cores_darwin_missing_perflevel(monkeypatch):
+    import loky.backend.context as context
+
+    def _mock_run(cmd, capture_output, text):
+        class _Result:
+            def __init__(self, stdout):
+                self.stdout = stdout
+
+        if cmd == ["sysctl", "-n", "hw.nperflevels"]:
+            return _Result("2\n")
+        if cmd == ["sysctl", "-n", "hw.perflevel0.physicalcpu"]:
+            return _Result("")
+        raise RuntimeError("unexpected command")
+
+    monkeypatch.setattr(context.subprocess, "run", _mock_run)
+    assert context._count_performance_cores_darwin() is None
+
+
+def test_count_performance_cores_linux_hybrid_data(monkeypatch):
+    import loky.backend.context as context
+
+    cpu_paths = ["/sys/devices/system/cpu/cpu0", "/sys/devices/system/cpu/cpu1"]
+    monkeypatch.setattr(context.glob, "glob", lambda _: cpu_paths)
+
+    file_contents = {
+        "/sys/devices/system/cpu/cpu0/topology/core_type": "2",
+        "/sys/devices/system/cpu/cpu0/topology/core_id": "0",
+        "/sys/devices/system/cpu/cpu0/topology/physical_package_id": "0",
+        "/sys/devices/system/cpu/cpu1/topology/core_type": "1",
+        "/sys/devices/system/cpu/cpu1/topology/core_id": "1",
+        "/sys/devices/system/cpu/cpu1/topology/physical_package_id": "0",
+    }
+
+    def _open_side_effect(path, *args, **kwargs):
+        if path in file_contents:
+            return mock_open(read_data=file_contents[path])()
+        raise OSError()
+
+    with patch("builtins.open", side_effect=_open_side_effect):
+        assert context._count_performance_cores_linux() == 1

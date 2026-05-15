@@ -12,6 +12,7 @@
 import os
 import sys
 import math
+import glob
 import subprocess
 import traceback
 import warnings
@@ -254,13 +255,13 @@ def _count_physical_cores():
     # Not cached yet, find it
     try:
         if sys.platform == "linux":
-            cpu_count_physical = _count_physical_cores_linux()
+            cpu_count_physical = _count_preferred_cores_linux()
         elif sys.platform == "win32":
-            cpu_count_physical = _count_physical_cores_win32()
+            cpu_count_physical = _count_preferred_cores_win32()
         elif sys.platform == "darwin":
-            cpu_count_physical = _count_physical_cores_darwin()
+            cpu_count_physical = _count_preferred_cores_darwin()
         elif sys.platform.startswith("freebsd"):
-            cpu_count_physical = _count_physical_cores_freebsd()
+            cpu_count_physical = _count_preferred_cores_freebsd()
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
@@ -297,6 +298,76 @@ def _count_physical_cores_linux():
     return len(cpu_info)
 
 
+def _count_preferred_cores_linux():
+    cpu_count_performance = _count_performance_cores_linux()
+    if cpu_count_performance is not None:
+        return cpu_count_performance
+    return _count_physical_cores_linux()
+
+
+def _count_performance_cores_linux():
+    # On recent Linux kernels with hybrid CPU support, inspect core_type from
+    # /sys/devices/system/cpu/cpu*/topology/core_type.
+    cpu_core_types = {}
+    cpu_paths = sorted(glob.glob("/sys/devices/system/cpu/cpu[0-9]*"))
+    if not cpu_paths:
+        return None
+
+    for cpu_path in cpu_paths:
+        try:
+            with open(os.path.join(cpu_path, "online")) as f:
+                if f.read().strip() == "0":
+                    continue
+        except OSError:
+            # If "online" does not exist (e.g. cpu0), assume online.
+            pass
+
+        topology_path = os.path.join(cpu_path, "topology")
+        core_type_path = os.path.join(topology_path, "core_type")
+        core_id_path = os.path.join(topology_path, "core_id")
+        package_id_path = os.path.join(topology_path, "physical_package_id")
+
+        try:
+            with open(core_type_path) as f:
+                core_type = int(f.read().strip())
+            with open(core_id_path) as f:
+                core_id = int(f.read().strip())
+            with open(package_id_path) as f:
+                package_id = int(f.read().strip())
+        except (OSError, ValueError):
+            continue
+
+        if core_type < 0:
+            return None
+
+        core_key = (package_id, core_id)
+        previous_type = cpu_core_types.get(core_key)
+        if previous_type is not None and previous_type != core_type:
+            # Inconsistent topology information: ambiguous.
+            return None
+        cpu_core_types[core_key] = core_type
+
+    if not cpu_core_types:
+        return None
+
+    unique_core_types = set(cpu_core_types.values())
+    if len(unique_core_types) <= 1:
+        # Not a hybrid topology, or unavailable class information.
+        return None
+
+    # The highest core_type value corresponds to the highest performance class
+    # in Linux topology sysfs exports.
+    performance_core_type = max(unique_core_types)
+    performance_cores = sum(
+        core_type == performance_core_type
+        for core_type in cpu_core_types.values()
+    )
+    if performance_cores < 1:
+        return None
+
+    return performance_cores
+
+
 def _count_physical_cores_win32():
     try:
         cmd = "-Command (Get-CimInstance -ClassName Win32_Processor).NumberOfCores"
@@ -322,6 +393,96 @@ def _count_physical_cores_win32():
     return sum(map(int, cpu_info))
 
 
+def _count_preferred_cores_win32():
+    cpu_count_performance = _count_performance_cores_win32()
+    if cpu_count_performance is not None:
+        return cpu_count_performance
+    return _count_physical_cores_win32()
+
+
+def _count_performance_cores_win32():
+    try:
+        import ctypes
+    except Exception:
+        return None
+
+    relation_processor_core = 0
+    error_insufficient_buffer = 122
+    offset_efficiency_class = 9  # Relationship + Size + Flags + EfficiencyClass
+
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        get_processor_info = kernel32.GetLogicalProcessorInformationEx
+    except Exception:
+        return None
+
+    get_processor_info.argtypes = [
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_ulong),
+    ]
+    get_processor_info.restype = ctypes.c_bool
+
+    buffer_size = ctypes.c_ulong(0)
+    success = get_processor_info(
+        relation_processor_core, None, ctypes.byref(buffer_size)
+    )
+    if success:
+        return None
+    if ctypes.get_last_error() != error_insufficient_buffer:
+        return None
+    if buffer_size.value <= 0:
+        return None
+
+    buffer = ctypes.create_string_buffer(buffer_size.value)
+    success = get_processor_info(
+        relation_processor_core, ctypes.byref(buffer), ctypes.byref(buffer_size)
+    )
+    if not success:
+        return None
+
+    raw_buffer = memoryview(buffer.raw)
+    offset = 0
+    efficiency_classes = []
+    while offset < buffer_size.value:
+        if offset + 8 > buffer_size.value:
+            return None
+
+        relationship = int.from_bytes(raw_buffer[offset : offset + 4], "little")
+        record_size = int.from_bytes(
+            raw_buffer[offset + 4 : offset + 8], "little"
+        )
+
+        if record_size <= 0 or offset + record_size > buffer_size.value:
+            return None
+
+        if relationship == relation_processor_core:
+            if offset + offset_efficiency_class >= buffer_size.value:
+                return None
+            efficiency_classes.append(raw_buffer[offset + offset_efficiency_class])
+
+        offset += record_size
+
+    if not efficiency_classes:
+        return None
+
+    unique_classes = set(efficiency_classes)
+    if len(unique_classes) <= 1:
+        # Not a hybrid topology, or unavailable class information.
+        return None
+
+    # EfficiencyClass 0 is the highest-performance class.
+    performance_class = min(unique_classes)
+    performance_cores = sum(
+        efficiency_class == performance_class
+        for efficiency_class in efficiency_classes
+    )
+    if performance_cores < 1:
+        return None
+
+    return performance_cores
+
+
 def _count_physical_cores_darwin():
     cpu_info = subprocess.run(
         "sysctl -n hw.physicalcpu".split(),
@@ -332,6 +493,44 @@ def _count_physical_cores_darwin():
     return int(cpu_info)
 
 
+def _count_preferred_cores_darwin():
+    cpu_count_performance = _count_performance_cores_darwin()
+    if cpu_count_performance is not None:
+        return cpu_count_performance
+    return _count_physical_cores_darwin()
+
+
+def _count_performance_cores_darwin():
+    # On macOS with hybrid topologies, perflevel0 reports performance cores.
+    nperflevels_output = subprocess.run(
+        "sysctl -n hw.nperflevels".split(),
+        capture_output=True,
+        text=True,
+    )
+    try:
+        nperflevels = int(nperflevels_output.stdout.strip())
+    except (TypeError, ValueError):
+        return None
+
+    if nperflevels <= 1:
+        return None
+
+    cpu_info = subprocess.run(
+        "sysctl -n hw.perflevel0.physicalcpu".split(),
+        capture_output=True,
+        text=True,
+    )
+    try:
+        cpu_count_performance = int(cpu_info.stdout.strip())
+    except (TypeError, ValueError):
+        return None
+
+    if cpu_count_performance < 1:
+        return None
+
+    return cpu_count_performance
+
+
 def _count_physical_cores_freebsd():
     cpu_info = subprocess.run(
         "sysctl -n kern.smp.cores".split(),
@@ -340,6 +539,10 @@ def _count_physical_cores_freebsd():
     )
     cpu_info = cpu_info.stdout
     return int(cpu_info)
+
+
+def _count_preferred_cores_freebsd():
+    return _count_physical_cores_freebsd()
 
 
 class LokyContext(BaseContext):
