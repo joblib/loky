@@ -350,7 +350,10 @@ def test_count_performance_cores_linux_missing_sysfs(monkeypatch):
 def test_count_performance_cores_linux_inconsistent_topology(monkeypatch):
     import loky.backend.context as context
 
-    cpu_paths = ["/sys/devices/system/cpu/cpu0", "/sys/devices/system/cpu/cpu1"]
+    cpu_paths = [
+        "/sys/devices/system/cpu/cpu0",
+        "/sys/devices/system/cpu/cpu1",
+    ]
     monkeypatch.setattr(context.glob, "glob", lambda _: cpu_paths)
 
     file_contents = {
@@ -374,12 +377,17 @@ def test_count_performance_cores_linux_inconsistent_topology(monkeypatch):
 def test_count_performance_cores_win32_ctypes_failure(monkeypatch):
     import loky.backend.context as context
 
-    import ctypes
+    import sys
+    from types import SimpleNamespace
 
     def _raise_os_error(*args, **kwargs):
         raise OSError()
 
-    monkeypatch.setattr(ctypes, "WinDLL", _raise_os_error)
+    monkeypatch.setitem(
+        sys.modules,
+        "ctypes",
+        SimpleNamespace(WinDLL=_raise_os_error),
+    )
     assert context._count_performance_cores_win32() is None
 
 
@@ -404,7 +412,10 @@ def test_count_performance_cores_darwin_missing_perflevel(monkeypatch):
 def test_count_performance_cores_linux_hybrid_data(monkeypatch):
     import loky.backend.context as context
 
-    cpu_paths = ["/sys/devices/system/cpu/cpu0", "/sys/devices/system/cpu/cpu1"]
+    cpu_paths = [
+        "/sys/devices/system/cpu/cpu0",
+        "/sys/devices/system/cpu/cpu1",
+    ]
     monkeypatch.setattr(context.glob, "glob", lambda _: cpu_paths)
 
     file_contents = {

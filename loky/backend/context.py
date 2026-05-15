@@ -408,7 +408,9 @@ def _count_performance_cores_win32():
 
     relation_processor_core = 0
     error_insufficient_buffer = 122
-    offset_efficiency_class = 9  # Relationship + Size + Flags + EfficiencyClass
+    offset_efficiency_class = (
+        9  # Relationship + Size + Flags + EfficiencyClass
+    )
 
     try:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -436,7 +438,9 @@ def _count_performance_cores_win32():
 
     buffer = ctypes.create_string_buffer(buffer_size.value)
     success = get_processor_info(
-        relation_processor_core, ctypes.byref(buffer), ctypes.byref(buffer_size)
+        relation_processor_core,
+        ctypes.byref(buffer),
+        ctypes.byref(buffer_size),
     )
     if not success:
         return None
@@ -448,7 +452,9 @@ def _count_performance_cores_win32():
         if offset + 8 > buffer_size.value:
             return None
 
-        relationship = int.from_bytes(raw_buffer[offset : offset + 4], "little")
+        relationship = int.from_bytes(
+            raw_buffer[offset : offset + 4], "little"
+        )
         record_size = int.from_bytes(
             raw_buffer[offset + 4 : offset + 8], "little"
         )
@@ -459,7 +465,9 @@ def _count_performance_cores_win32():
         if relationship == relation_processor_core:
             if offset + offset_efficiency_class >= buffer_size.value:
                 return None
-            efficiency_classes.append(raw_buffer[offset + offset_efficiency_class])
+            efficiency_classes.append(
+                raw_buffer[offset + offset_efficiency_class]
+            )
 
         offset += record_size
 
