@@ -342,8 +342,9 @@ def test_count_physical_cores_fallback_to_physical_on_ambiguity(monkeypatch):
 
 def test_count_performance_cores_linux_missing_sysfs(monkeypatch):
     import loky.backend.context as context
+    import glob
 
-    monkeypatch.setattr(context.glob, "glob", lambda _: [])
+    monkeypatch.setattr(glob, "glob", lambda _: [])
     assert context._count_performance_cores_linux() is None
 
 
@@ -351,12 +352,13 @@ def test_count_performance_cores_linux_inconsistent_type_for_same_core(
     monkeypatch,
 ):
     import loky.backend.context as context
+    import glob
 
     cpu_paths = [
         "/sys/devices/system/cpu/cpu0",
         "/sys/devices/system/cpu/cpu1",
     ]
-    monkeypatch.setattr(context.glob, "glob", lambda _: cpu_paths)
+    monkeypatch.setattr(glob, "glob", lambda _: cpu_paths)
 
     file_contents = {
         # Same core (same package/core id) exposed with conflicting core_type
@@ -381,14 +383,13 @@ def test_count_performance_cores_linux_inconsistent_type_for_same_core(
 def test_count_performance_cores_win32_ctypes_failure(monkeypatch):
     import loky.backend.context as context
 
-    import sys
     from types import SimpleNamespace
 
     def _raise_os_error(*args, **kwargs):
         raise OSError()
 
     monkeypatch.setitem(
-        sys.modules,
+        context.sys.modules,
         "ctypes",
         SimpleNamespace(WinDLL=_raise_os_error),
     )
@@ -415,12 +416,13 @@ def test_count_performance_cores_darwin_missing_perflevel(monkeypatch):
 
 def test_count_performance_cores_linux_hybrid_data(monkeypatch):
     import loky.backend.context as context
+    import glob
 
     cpu_paths = [
         "/sys/devices/system/cpu/cpu0",
         "/sys/devices/system/cpu/cpu1",
     ]
-    monkeypatch.setattr(context.glob, "glob", lambda _: cpu_paths)
+    monkeypatch.setattr(glob, "glob", lambda _: cpu_paths)
 
     file_contents = {
         # Two distinct physical cores with different core_type values:

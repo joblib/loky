@@ -12,7 +12,6 @@
 import os
 import sys
 import math
-import glob
 import subprocess
 import traceback
 import warnings
@@ -308,6 +307,8 @@ def _count_preferred_cores_linux():
 
 
 def _count_performance_cores_linux():
+    import glob
+
     # On recent Linux kernels with hybrid CPU support, inspect core_type from
     # /sys/devices/system/cpu/cpu*/topology/core_type.
     cpu_core_types = {}
