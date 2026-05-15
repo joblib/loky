@@ -106,6 +106,10 @@ class ResourceTracker(_ResourceTracker):
     function, which is run in a dedicated process.
     """
 
+    def __init__(self):
+        super().__init__()
+        self._read_handle = None
+
     def maybe_unlink(self, name, rtype):
         """Decrement the refcount of a resource, and delete it if it hits 0"""
         self._send("MAYBE_UNLINK", name, rtype)
@@ -128,6 +132,7 @@ class ResourceTracker(_ResourceTracker):
         # At this point, the resource_tracker process has been killed
         # or crashed.
         os.close(self._fd)
+        self._close_read_handle()
 
         # Let's remove the process entry from the process table on POSIX system
         # to avoid zombie processes.
@@ -148,10 +153,30 @@ class ResourceTracker(_ResourceTracker):
             "Some folders/semaphores might leak."
         )
 
+    def _close_read_handle(self):
+        if sys.platform != "win32" or self._read_handle is None:
+            return
+
+        try:
+            _winapi.CloseHandle(self._read_handle)
+        except OSError:
+            pass
+        finally:
+            self._read_handle = None
+
+    def _stop(self, *args, **kwargs):
+        try:
+            return super()._stop(*args, **kwargs)
+        finally:
+            self._close_read_handle()
+
     def _launch(self):
         # This is the overridden part of the resource tracker, which launches
         # loky's version, which is compatible with windows and allow to track
         # folders with external ref counting.
+
+        if sys.platform == "win32":
+            return self._launch_win32()
 
         fds_to_pass = []
         try:
@@ -159,19 +184,14 @@ class ResourceTracker(_ResourceTracker):
         except Exception:
             pass
 
-        # Create a pipe for posix and windows
         r, w = os.pipe()
-        if sys.platform == "win32":
-            _r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
-            os.close(r)
-            r = _r
 
-        cmd = f"from {main.__module__} import main; main({r}, {VERBOSE})"
+        args = spawn.get_command_line(
+            main.__module__, fd=r, verbose=int(VERBOSE)
+        )
         try:
             fds_to_pass.append(r)
             # process will out live us, so no need to wait on pid
-            exe = spawn.get_executable()
-            args = [exe, *util._args_from_interpreter_flags(), "-c", cmd]
             util.debug(f"launching resource tracker: {args}")
             # bpo-33613: Register a signal mask that will block the
             # signals.  This signal mask will be inherited by the child
@@ -182,7 +202,7 @@ class ResourceTracker(_ResourceTracker):
             try:
                 if _HAVE_SIGMASK:
                     signal.pthread_sigmask(signal.SIG_BLOCK, _IGNORED_SIGNALS)
-                pid = spawnv_passfds(exe, args, fds_to_pass)
+                pid = _spawn_resource_tracker(args[0], args, fds_to_pass)
             finally:
                 if _HAVE_SIGMASK:
                     signal.pthread_sigmask(
@@ -195,10 +215,37 @@ class ResourceTracker(_ResourceTracker):
             self._fd = w
             self._pid = pid
         finally:
-            if sys.platform == "win32":
-                _winapi.CloseHandle(r)
-            else:
-                os.close(r)
+            os.close(r)
+
+    def _launch_win32(self):
+        self._close_read_handle()
+        rhandle = whandle = None
+        w = None
+        try:
+            rhandle, whandle = _winapi.CreatePipe(None, 0)
+            w = msvcrt.open_osfhandle(whandle, 0)
+            whandle = None
+
+            args = spawn.get_command_line(
+                main.__module__,
+                pipe_handle=rhandle,
+                parent_pid=os.getpid(),
+                verbose=int(VERBOSE),
+            )
+            util.debug(f"launching resource tracker: {args}")
+            pid = _spawn_resource_tracker(args[0], args)
+        except BaseException:
+            if w is not None:
+                os.close(w)
+            if whandle is not None:
+                _winapi.CloseHandle(whandle)
+            if rhandle is not None:
+                _winapi.CloseHandle(rhandle)
+            raise
+        else:
+            self._fd = w
+            self._pid = pid
+            self._read_handle = rhandle
 
     def _ensure_running_and_write(self, msg=None):
         """Make sure that resource tracker process is running.
@@ -254,8 +301,29 @@ unregister = _resource_tracker.unregister
 getfd = _resource_tracker.getfd
 
 
-def main(fd, verbose=0):
+def main(fd=None, verbose=0, pipe_handle=None, parent_pid=None):
     """Run resource tracker."""
+    verbose = int(verbose)
+    if sys.platform == "win32":
+        if pipe_handle is None:
+            pipe_handle = fd
+        pipe_handle = int(pipe_handle)
+        if parent_pid is None:
+            fd = msvcrt.open_osfhandle(pipe_handle, os.O_RDONLY)
+        else:
+            source_process = _winapi.OpenProcess(
+                _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE,
+                False,
+                int(parent_pid),
+            )
+            try:
+                handle = duplicate(pipe_handle, source_process=source_process)
+            finally:
+                _winapi.CloseHandle(source_process)
+            fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+    else:
+        fd = int(fd)
+
     if verbose:
         util.log_to_stderr(level=util.DEBUG)
 
@@ -278,8 +346,6 @@ def main(fd, verbose=0):
     registry = {rtype: {} for rtype in _CLEANUP_FUNCS.keys()}
 
     try:
-        if sys.platform == "win32":
-            fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
         # keep track of registered/unregistered resources
         with open(fd, "rb") as f:
             for line in f:
@@ -393,19 +459,15 @@ def main(fd, verbose=0):
         util.debug("resource tracker shut down")
 
 
-def spawnv_passfds(path, args, passfds):
+def _spawn_resource_tracker(path, args, passfds=()):
     if sys.platform != "win32":
         args = [arg.encode("utf-8") for arg in args]
         path = path.encode("utf-8")
         return util.spawnv_passfds(path, args, passfds)
-    else:
-        passfds = sorted(passfds)
-        cmd = " ".join(f'"{x}"' for x in args)
-        try:
-            _, ht, pid, _ = _winapi.CreateProcess(
-                path, cmd, None, None, True, 0, None, None, None
-            )
-            _winapi.CloseHandle(ht)
-        except BaseException:
-            pass
-        return pid
+
+    cmd = " ".join(f'"{x}"' for x in args)
+    _, ht, pid, _ = _winapi.CreateProcess(
+        path, cmd, None, None, False, 0, None, None, None
+    )
+    _winapi.CloseHandle(ht)
+    return pid

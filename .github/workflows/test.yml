@@ -85,6 +85,18 @@ jobs:
             # Do not install psutil on Python 3.9 to have some CI runs that
             # tests that loky has no hard dependency on psutil.
             NO_PSUTIL: "true"
+          - name: windows-py313-pyinstaller
+            os: windows-latest
+            PYTHON_VERSION: "3.13"
+            PYINSTALLER_TESTS: "true"
+          - name: macos-py313-pyinstaller
+            os: macos-latest
+            PYTHON_VERSION: "3.13"
+            PYINSTALLER_TESTS: "true"
+          - name: linux-py313-pyinstaller
+            os: ubuntu-latest
+            PYTHON_VERSION: "3.13"
+            PYINSTALLER_TESTS: "true"
 
     env: ${{ matrix }}
 

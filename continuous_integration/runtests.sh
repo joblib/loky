@@ -28,6 +28,9 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
     cp "$LOKY_PATH"/continuous_integration/copy_loky.sh $JOBLIB/externals
     (cd $JOBLIB/externals && bash copy_loky.sh "$LOKY_PATH")
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
+elif [[ "$PYINSTALLER_TESTS" == "true" ]]; then
+    PYTEST_ARGS="-vl --timeout=300 --maxfail=1 --cov=loky --cov-report xml"
+    pytest $PYTEST_ARGS tests/test_loky_module.py -k freeze
 else
     # Make sure that we have the python docker image cached locally to avoid
     # a timeout in a test that needs it.
