@@ -442,3 +442,50 @@ def test_count_performance_cores_linux_hybrid_data(monkeypatch):
 
     with patch("builtins.open", side_effect=_open_side_effect):
         assert context._count_performance_cores_linux() == 1
+
+
+def test_cpu_count_only_performance_cores_false_disables_filtering(
+    monkeypatch,
+):
+    import loky.backend.context as context
+
+    monkeypatch.setattr(context.sys, "platform", "linux")
+    monkeypatch.setattr(context.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr(context, "_cpu_count_user", lambda _: 8)
+    monkeypatch.setattr(context, "_count_preferred_cores_linux", lambda: 4)
+    monkeypatch.setattr(context, "_count_physical_cores_linux", lambda: 8)
+    monkeypatch.setattr(context, "physical_cores_cache", {})
+
+    assert context.cpu_count(only_physical_cores=True) == 4
+    assert (
+        context.cpu_count(
+            only_physical_cores=True, only_performance_cores=False
+        )
+        == 8
+    )
+
+
+def test_cpu_count_only_performance_cores_invalid_value():
+    with pytest.raises(ValueError, match="only_performance_cores"):
+        cpu_count(only_performance_cores="wrong")
+
+
+def test_count_physical_cores_cache_is_split_by_mode(monkeypatch):
+    import loky.backend.context as context
+
+    monkeypatch.setattr(context.sys, "platform", "linux")
+    monkeypatch.setattr(context, "_count_preferred_cores_linux", lambda: 4)
+    monkeypatch.setattr(context, "_count_physical_cores_linux", lambda: 8)
+    monkeypatch.setattr(context, "physical_cores_cache", {})
+
+    preferred_value, preferred_exc = context._count_physical_cores(
+        only_performance_cores="auto"
+    )
+    physical_value, physical_exc = context._count_physical_cores(
+        only_performance_cores=False
+    )
+
+    assert preferred_value == 4
+    assert preferred_exc is None
+    assert physical_value == 8
+    assert physical_exc is None

@@ -34,9 +34,9 @@ if sys.platform != "win32":
 
 _DEFAULT_START_METHOD = None
 
-# Cache for the number of physical cores to avoid repeating subprocess calls.
+# Cache for preferred core counts to avoid repeating subprocess calls.
 # It should not change during the lifetime of the program.
-physical_cores_cache = None
+physical_cores_cache = {}
 
 
 def get_context(method=None):
@@ -75,7 +75,7 @@ def get_start_method():
     return _DEFAULT_START_METHOD
 
 
-def cpu_count(only_physical_cores=False):
+def cpu_count(only_physical_cores=False, only_performance_cores="auto"):
     """Return the number of CPUs the current process can use.
 
     The returned number of CPUs accounts for:
@@ -94,6 +94,12 @@ def cpu_count(only_physical_cores=False):
     any other way such as: process affinity, Cgroup restricted CPU bandwidth
     or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
     cores is not found, return the number of logical cores.
+
+    The ``only_performance_cores`` parameter controls hybrid-core filtering
+    when ``only_physical_cores`` is True:
+    - ``"auto"`` (default): prefer performance-core counts when available.
+    - ``True``: always attempt performance-core filtering before falling back.
+    - ``False``: disable performance-core filtering and use physical cores.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
     Python < 3.10), see:
@@ -114,6 +120,11 @@ def cpu_count(only_physical_cores=False):
     cpu_count_user = _cpu_count_user(os_cpu_count)
     aggregate_cpu_count = max(min(os_cpu_count, cpu_count_user), 1)
 
+    if only_performance_cores not in ("auto", True, False):
+        raise ValueError(
+            "only_performance_cores must be one of: 'auto', True, False"
+        )
+
     if not only_physical_cores:
         return aggregate_cpu_count
 
@@ -121,7 +132,9 @@ def cpu_count(only_physical_cores=False):
         # Respect user setting
         return max(cpu_count_user, 1)
 
-    cpu_count_physical, exception = _count_physical_cores()
+    cpu_count_physical, exception = _count_physical_cores(
+        only_performance_cores=only_performance_cores
+    )
     if cpu_count_physical != "not found":
         return cpu_count_physical
 
@@ -236,7 +249,7 @@ def _cpu_count_user(os_cpu_count):
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
 
-def _count_physical_cores():
+def _count_physical_cores(only_performance_cores="auto"):
     """Return a tuple (preferred physical/performance core count, exception)
 
     If the preferred core count is found, exception is set to None.
@@ -248,17 +261,34 @@ def _count_physical_cores():
 
     # First check if the value is cached
     global physical_cores_cache
-    if physical_cores_cache is not None:
-        return physical_cores_cache, exception
+    if not isinstance(physical_cores_cache, dict):
+        physical_cores_cache = {}
+
+    if only_performance_cores in ("auto", True):
+        cache_key = "preferred"
+    else:
+        cache_key = "physical"
+
+    if cache_key in physical_cores_cache:
+        return physical_cores_cache[cache_key], exception
 
     # Not cached yet, find it
     try:
         if sys.platform == "linux":
-            cpu_count_preferred = _count_preferred_cores_linux()
+            if only_performance_cores in ("auto", True):
+                cpu_count_preferred = _count_preferred_cores_linux()
+            else:
+                cpu_count_preferred = _count_physical_cores_linux()
         elif sys.platform == "win32":
-            cpu_count_preferred = _count_preferred_cores_win32()
+            if only_performance_cores in ("auto", True):
+                cpu_count_preferred = _count_preferred_cores_win32()
+            else:
+                cpu_count_preferred = _count_physical_cores_win32()
         elif sys.platform == "darwin":
-            cpu_count_preferred = _count_preferred_cores_darwin()
+            if only_performance_cores in ("auto", True):
+                cpu_count_preferred = _count_preferred_cores_darwin()
+            else:
+                cpu_count_preferred = _count_physical_cores_darwin()
         elif sys.platform.startswith("freebsd"):
             cpu_count_preferred = _count_preferred_cores_freebsd()
         else:
@@ -275,7 +305,7 @@ def _count_physical_cores():
         cpu_count_preferred = "not found"
 
     # Put the result in cache
-    physical_cores_cache = cpu_count_preferred
+    physical_cores_cache[cache_key] = cpu_count_preferred
 
     return cpu_count_preferred, exception
 
