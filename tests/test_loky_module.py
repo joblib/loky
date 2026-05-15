@@ -312,6 +312,8 @@ def test_count_physical_cores_prefers_performance_cores(monkeypatch):
     first_value, first_exc = context._count_physical_cores()
     second_value, second_exc = context._count_physical_cores()
 
+    assert isinstance(context.physical_cores_cache, dict)
+    assert context.physical_cores_cache["preferred"] == 4
     assert first_value == 4
     assert first_exc is None
     assert second_value == 4

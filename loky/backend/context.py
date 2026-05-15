@@ -259,9 +259,15 @@ def _count_physical_cores(only_performance_cores="auto"):
     """
     exception = None
 
+    if only_performance_cores not in ("auto", True, False):
+        raise ValueError(
+            "only_performance_cores must be one of: 'auto', True, False"
+        )
+
     # First check if the value is cached
     global physical_cores_cache
     if not isinstance(physical_cores_cache, dict):
+        # Backward-compatible migration path for stale scalar caches.
         physical_cores_cache = {}
 
     if only_performance_cores in ("auto", True):
@@ -290,6 +296,7 @@ def _count_physical_cores(only_performance_cores="auto"):
             else:
                 cpu_count_preferred = _count_physical_cores_darwin()
         elif sys.platform.startswith("freebsd"):
+            # FreeBSD has no performance-core distinction for now.
             cpu_count_preferred = _count_preferred_cores_freebsd()
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
