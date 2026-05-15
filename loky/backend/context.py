@@ -238,12 +238,12 @@ def _cpu_count_user(os_cpu_count):
 
 
 def _count_physical_cores():
-    """Return a tuple (number of physical cores, exception)
+    """Return a tuple (preferred physical/performance core count, exception)
 
-    If the number of physical cores is found, exception is set to None.
+    If the preferred core count is found, exception is set to None.
     If it has not been found, return ("not found", exception).
 
-    The number of physical cores is cached to avoid repeating subprocess calls.
+    The preferred core count is cached to avoid repeating subprocess calls.
     """
     exception = None
 
@@ -255,28 +255,30 @@ def _count_physical_cores():
     # Not cached yet, find it
     try:
         if sys.platform == "linux":
-            cpu_count_physical = _count_preferred_cores_linux()
+            cpu_count_preferred = _count_preferred_cores_linux()
         elif sys.platform == "win32":
-            cpu_count_physical = _count_preferred_cores_win32()
+            cpu_count_preferred = _count_preferred_cores_win32()
         elif sys.platform == "darwin":
-            cpu_count_physical = _count_preferred_cores_darwin()
+            cpu_count_preferred = _count_preferred_cores_darwin()
         elif sys.platform.startswith("freebsd"):
-            cpu_count_physical = _count_preferred_cores_freebsd()
+            cpu_count_preferred = _count_preferred_cores_freebsd()
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
-        # if cpu_count_physical < 1, we did not find a valid value
-        if cpu_count_physical < 1:
-            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
+        # if cpu_count_preferred < 1, we did not find a valid value
+        if cpu_count_preferred < 1:
+            raise ValueError(
+                f"found {cpu_count_preferred} preferred cores < 1"
+            )
 
     except Exception as e:
         exception = e
-        cpu_count_physical = "not found"
+        cpu_count_preferred = "not found"
 
     # Put the result in cache
-    physical_cores_cache = cpu_count_physical
+    physical_cores_cache = cpu_count_preferred
 
-    return cpu_count_physical, exception
+    return cpu_count_preferred, exception
 
 
 def _count_physical_cores_linux():
