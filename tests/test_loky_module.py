@@ -347,7 +347,9 @@ def test_count_performance_cores_linux_missing_sysfs(monkeypatch):
     assert context._count_performance_cores_linux() is None
 
 
-def test_count_performance_cores_linux_inconsistent_topology(monkeypatch):
+def test_count_performance_cores_linux_inconsistent_type_for_same_core(
+    monkeypatch,
+):
     import loky.backend.context as context
 
     cpu_paths = [
@@ -357,6 +359,8 @@ def test_count_performance_cores_linux_inconsistent_topology(monkeypatch):
     monkeypatch.setattr(context.glob, "glob", lambda _: cpu_paths)
 
     file_contents = {
+        # Same core (same package/core id) exposed with conflicting core_type
+        # values should be treated as ambiguous and fall back.
         "/sys/devices/system/cpu/cpu0/topology/core_type": "2",
         "/sys/devices/system/cpu/cpu0/topology/core_id": "0",
         "/sys/devices/system/cpu/cpu0/topology/physical_package_id": "0",
@@ -419,6 +423,8 @@ def test_count_performance_cores_linux_hybrid_data(monkeypatch):
     monkeypatch.setattr(context.glob, "glob", lambda _: cpu_paths)
 
     file_contents = {
+        # Two distinct physical cores with different core_type values:
+        # only one of them belongs to the best (performance) class.
         "/sys/devices/system/cpu/cpu0/topology/core_type": "2",
         "/sys/devices/system/cpu/cpu0/topology/core_id": "0",
         "/sys/devices/system/cpu/cpu0/topology/physical_package_id": "0",

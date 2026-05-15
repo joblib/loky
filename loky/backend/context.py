@@ -314,18 +314,19 @@ def _count_performance_cores_linux():
         return None
 
     for cpu_path in cpu_paths:
+        online_path = os.path.join(cpu_path, "online")
+        topology_path = os.path.join(cpu_path, "topology")
+        core_type_path = os.path.join(topology_path, "core_type")
+        core_id_path = os.path.join(topology_path, "core_id")
+        package_id_path = os.path.join(topology_path, "physical_package_id")
+
         try:
-            with open(os.path.join(cpu_path, "online")) as f:
+            with open(online_path) as f:
                 if f.read().strip() == "0":
                     continue
         except OSError:
             # If "online" does not exist (e.g. cpu0), assume online.
             pass
-
-        topology_path = os.path.join(cpu_path, "topology")
-        core_type_path = os.path.join(topology_path, "core_type")
-        core_id_path = os.path.join(topology_path, "core_id")
-        package_id_path = os.path.join(topology_path, "physical_package_id")
 
         try:
             with open(core_type_path) as f:
@@ -338,6 +339,8 @@ def _count_performance_cores_linux():
             continue
 
         if core_type < 0:
+            # Negative values are invalid class identifiers. Treat this as
+            # ambiguous topology information and fall back.
             return None
 
         core_key = (package_id, core_id)
@@ -403,19 +406,19 @@ def _count_preferred_cores_win32():
 def _count_performance_cores_win32():
     try:
         import ctypes
-    except Exception:
+    except ImportError:
         return None
 
     relation_processor_core = 0
     error_insufficient_buffer = 122
-    offset_efficiency_class = (
-        9  # Relationship + Size + Flags + EfficiencyClass
-    )
+    offset_efficiency_class = 9
+    # Offset to EfficiencyClass in SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX:
+    # 4 bytes Relationship + 4 bytes Size + 1 byte Flags.
 
     try:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         get_processor_info = kernel32.GetLogicalProcessorInformationEx
-    except Exception:
+    except (AttributeError, OSError):
         return None
 
     get_processor_info.argtypes = [
@@ -449,6 +452,7 @@ def _count_performance_cores_win32():
     offset = 0
     efficiency_classes = []
     while offset < buffer_size.value:
+        # 8 bytes are needed to read Relationship (4 bytes) and Size (4 bytes).
         if offset + 8 > buffer_size.value:
             return None
 
@@ -463,7 +467,7 @@ def _count_performance_cores_win32():
             return None
 
         if relationship == relation_processor_core:
-            if offset + offset_efficiency_class >= buffer_size.value:
+            if offset + offset_efficiency_class + 1 > buffer_size.value:
                 return None
             efficiency_classes.append(
                 raw_buffer[offset + offset_efficiency_class]
