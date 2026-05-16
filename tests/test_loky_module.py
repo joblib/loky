@@ -486,6 +486,7 @@ def test_cpu_count_only_performance_cores_ignored_without_physical_cores(
     monkeypatch.setattr(context.os, "cpu_count", lambda: 8)
     monkeypatch.setattr(context, "_cpu_count_user", lambda _: 8)
 
+    # Invalid values are ignored when only_physical_cores is False.
     assert context.cpu_count(only_performance_cores="wrong") == 8
 
 
