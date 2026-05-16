@@ -75,7 +75,7 @@ def get_start_method():
     return _DEFAULT_START_METHOD
 
 
-def cpu_count(only_physical_cores=False, only_performance_cores="auto"):
+def cpu_count(only_physical_cores=False, only_performance_cores=True):
     """Return the number of CPUs the current process can use.
 
     The returned number of CPUs accounts for:
@@ -97,8 +97,7 @@ def cpu_count(only_physical_cores=False, only_performance_cores="auto"):
 
     The ``only_performance_cores`` parameter controls hybrid-core filtering
     when ``only_physical_cores`` is True:
-    - ``"auto"`` (default): prefer performance-core counts when available.
-    - ``True``: always attempt performance-core filtering before falling back.
+    - ``True`` (default): prefer performance-core counts when available.
     - ``False``: disable performance-core filtering and use physical cores.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
@@ -120,13 +119,11 @@ def cpu_count(only_physical_cores=False, only_performance_cores="auto"):
     cpu_count_user = _cpu_count_user(os_cpu_count)
     aggregate_cpu_count = max(min(os_cpu_count, cpu_count_user), 1)
 
-    if only_performance_cores not in ("auto", True, False):
-        raise ValueError(
-            "only_performance_cores must be one of: 'auto', True, False"
-        )
-
     if not only_physical_cores:
         return aggregate_cpu_count
+
+    if not isinstance(only_performance_cores, bool):
+        raise ValueError("only_performance_cores must be a boolean")
 
     if cpu_count_user < os_cpu_count:
         # Respect user setting
@@ -249,7 +246,7 @@ def _cpu_count_user(os_cpu_count):
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
 
-def _count_physical_cores(only_performance_cores="auto"):
+def _count_physical_cores(only_performance_cores=True):
     """Return a tuple (preferred physical/performance core count, exception)
 
     If the preferred core count is found, exception is set to None.
@@ -259,10 +256,8 @@ def _count_physical_cores(only_performance_cores="auto"):
     """
     exception = None
 
-    if only_performance_cores not in ("auto", True, False):
-        raise ValueError(
-            "only_performance_cores must be one of: 'auto', True, False"
-        )
+    if not isinstance(only_performance_cores, bool):
+        raise ValueError("only_performance_cores must be a boolean")
 
     # First check if the value is cached
     global physical_cores_cache
@@ -270,10 +265,7 @@ def _count_physical_cores(only_performance_cores="auto"):
         # Backward-compatible migration path for stale scalar caches.
         physical_cores_cache = {}
 
-    if only_performance_cores in ("auto", True):
-        cache_key = "preferred"
-    else:
-        cache_key = "physical"
+    cache_key = "preferred" if only_performance_cores else "physical"
 
     if cache_key in physical_cores_cache:
         return physical_cores_cache[cache_key], exception
@@ -281,17 +273,17 @@ def _count_physical_cores(only_performance_cores="auto"):
     # Not cached yet, find it
     try:
         if sys.platform == "linux":
-            if only_performance_cores in ("auto", True):
+            if only_performance_cores:
                 cpu_count_preferred = _count_preferred_cores_linux()
             else:
                 cpu_count_preferred = _count_physical_cores_linux()
         elif sys.platform == "win32":
-            if only_performance_cores in ("auto", True):
+            if only_performance_cores:
                 cpu_count_preferred = _count_preferred_cores_win32()
             else:
                 cpu_count_preferred = _count_physical_cores_win32()
         elif sys.platform == "darwin":
-            if only_performance_cores in ("auto", True):
+            if only_performance_cores:
                 cpu_count_preferred = _count_preferred_cores_darwin()
             else:
                 cpu_count_preferred = _count_physical_cores_darwin()

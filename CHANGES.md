@@ -3,8 +3,9 @@
 - Improve `cpu_count(only_physical_cores=True)` on hybrid CPU systems by
   preferring performance-core counts when available and safely falling back to
   physical cores (or logical aggregate if physical-core detection fails).
-- Add `only_performance_cores` to `cpu_count`; keep `"auto"` as default hybrid
-  behavior and allow `only_performance_cores=False` to disable filtering.
+- Add `only_performance_cores` boolean option to `cpu_count` (default `True`):
+  it is ignored unless `only_physical_cores=True`, in which case `False`
+  disables performance-core filtering and uses physical-core detection.
 
 - Support detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)

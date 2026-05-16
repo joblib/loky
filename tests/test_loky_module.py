@@ -235,14 +235,17 @@ def test_only_physical_cores_error():
 
             loky.backend.context.physical_cores_cache = None
 
-            with patch.object(
-                loky.backend.context,
-                "_count_performance_cores_linux",
-                return_value=None,
-            ), patch.object(
-                loky.backend.context,
-                "_count_physical_cores_linux",
-                side_effect=RuntimeError("physical core probe failed"),
+            with (
+                patch.object(
+                    loky.backend.context,
+                    "_count_performance_cores_linux",
+                    return_value=None,
+                ),
+                patch.object(
+                    loky.backend.context,
+                    "_count_physical_cores_linux",
+                    side_effect=RuntimeError("physical core probe failed"),
+                ),
             ):
                 with pytest.warns(
                     UserWarning,
@@ -472,7 +475,18 @@ def test_cpu_count_only_performance_cores_false_disables_filtering(
 
 def test_cpu_count_only_performance_cores_invalid_value():
     with pytest.raises(ValueError, match="only_performance_cores"):
-        cpu_count(only_performance_cores="wrong")
+        cpu_count(only_physical_cores=True, only_performance_cores="wrong")
+
+
+def test_cpu_count_only_performance_cores_ignored_without_physical_cores(
+    monkeypatch,
+):
+    import loky.backend.context as context
+
+    monkeypatch.setattr(context.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr(context, "_cpu_count_user", lambda _: 8)
+
+    assert context.cpu_count(only_performance_cores="wrong") == 8
 
 
 def test_count_physical_cores_cache_is_split_by_mode(monkeypatch):
@@ -484,7 +498,7 @@ def test_count_physical_cores_cache_is_split_by_mode(monkeypatch):
     monkeypatch.setattr(context, "physical_cores_cache", {})
 
     preferred_value, preferred_exc = context._count_physical_cores(
-        only_performance_cores="auto"
+        only_performance_cores=True
     )
     physical_value, physical_exc = context._count_physical_cores(
         only_performance_cores=False
