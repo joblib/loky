@@ -235,16 +235,25 @@ def test_only_physical_cores_error():
 
             loky.backend.context.physical_cores_cache = None
 
-            with pytest.warns(
-                UserWarning,
-                match="Could not find the number of" " physical cores",
+            with patch.object(
+                loky.backend.context,
+                "_count_performance_cores_linux",
+                return_value=None,
+            ), patch.object(
+                loky.backend.context,
+                "_count_physical_cores_linux",
+                side_effect=RuntimeError("physical core probe failed"),
             ):
-                cpu_count(only_physical_cores=True)
+                with pytest.warns(
+                    UserWarning,
+                    match="Could not find the number of" " physical cores",
+                ):
+                    cpu_count(only_physical_cores=True)
 
-            # Should not warn the second time
-            with warnings.catch_warnings():
-                warnings.simplefilter("error")
-                cpu_count(only_physical_cores=True)
+                # Should not warn the second time
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error")
+                    cpu_count(only_physical_cores=True)
 
         finally:
             os.environ["PATH"] = old_path
@@ -350,7 +359,7 @@ def test_count_performance_cores_linux_missing_sysfs(monkeypatch):
     assert context._count_performance_cores_linux() is None
 
 
-def test_count_performance_cores_linux_inconsistent_type_for_same_core(
+def test_count_performance_cores_linux_no_hybrid_frequency_data(
     monkeypatch,
 ):
     import loky.backend.context as context
@@ -363,14 +372,10 @@ def test_count_performance_cores_linux_inconsistent_type_for_same_core(
     monkeypatch.setattr(glob, "glob", lambda _: cpu_paths)
 
     file_contents = {
-        # Same core (same package/core id) exposed with conflicting core_type
-        # values should be treated as ambiguous and fall back.
-        "/sys/devices/system/cpu/cpu0/topology/core_type": "2",
-        "/sys/devices/system/cpu/cpu0/topology/core_id": "0",
-        "/sys/devices/system/cpu/cpu0/topology/physical_package_id": "0",
-        "/sys/devices/system/cpu/cpu1/topology/core_type": "1",
-        "/sys/devices/system/cpu/cpu1/topology/core_id": "0",
-        "/sys/devices/system/cpu/cpu1/topology/physical_package_id": "0",
+        # Identical base frequencies across all CPUs do not indicate
+        # a hybrid topology.
+        "/sys/devices/system/cpu/cpu0/cpufreq/base_frequency": "1900000",
+        "/sys/devices/system/cpu/cpu1/cpufreq/base_frequency": "1900000",
     }
 
     def _open_side_effect(path, *args, **kwargs):
@@ -428,14 +433,10 @@ def test_count_performance_cores_linux_hybrid_data(monkeypatch):
     monkeypatch.setattr(glob, "glob", lambda _: cpu_paths)
 
     file_contents = {
-        # Two distinct physical cores with different core_type values:
-        # only one of them belongs to the best (performance) class.
-        "/sys/devices/system/cpu/cpu0/topology/core_type": "2",
-        "/sys/devices/system/cpu/cpu0/topology/core_id": "0",
-        "/sys/devices/system/cpu/cpu0/topology/physical_package_id": "0",
-        "/sys/devices/system/cpu/cpu1/topology/core_type": "1",
-        "/sys/devices/system/cpu/cpu1/topology/core_id": "1",
-        "/sys/devices/system/cpu/cpu1/topology/physical_package_id": "0",
+        # Two cores with different base frequencies: one performance core and
+        # one efficiency core.
+        "/sys/devices/system/cpu/cpu0/cpufreq/base_frequency": "1900000",
+        "/sys/devices/system/cpu/cpu1/cpufreq/base_frequency": "1600000",
     }
 
     def _open_side_effect(path, *args, **kwargs):

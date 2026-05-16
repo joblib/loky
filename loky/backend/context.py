@@ -346,19 +346,17 @@ def _count_preferred_cores_linux():
 def _count_performance_cores_linux():
     import glob
 
-    # On recent Linux kernels with hybrid CPU support, inspect core_type from
-    # /sys/devices/system/cpu/cpu*/topology/core_type.
-    cpu_core_types = {}
+    # Use cpufreq base_frequency as a heuristic for performance-core detection.
+    # On hybrid systems, performance cores typically expose the highest base
+    # frequency while efficiency cores use lower base frequencies.
+    cpu_freqs = {}
     cpu_paths = sorted(glob.glob("/sys/devices/system/cpu/cpu[0-9]*"))
     if not cpu_paths:
         return None
 
     for cpu_path in cpu_paths:
         online_path = os.path.join(cpu_path, "online")
-        topology_path = os.path.join(cpu_path, "topology")
-        core_type_path = os.path.join(topology_path, "core_type")
-        core_id_path = os.path.join(topology_path, "core_id")
-        package_id_path = os.path.join(topology_path, "physical_package_id")
+        base_freq_path = os.path.join(cpu_path, "cpufreq", "base_frequency")
 
         try:
             with open(online_path) as f:
@@ -369,42 +367,29 @@ def _count_performance_cores_linux():
             pass
 
         try:
-            with open(core_type_path) as f:
-                core_type = int(f.read().strip())
-            with open(core_id_path) as f:
-                core_id = int(f.read().strip())
-            with open(package_id_path) as f:
-                package_id = int(f.read().strip())
+            with open(base_freq_path) as f:
+                base_freq = int(f.read().strip())
         except (OSError, ValueError):
             continue
 
-        if core_type < 0:
-            # Negative values are invalid class identifiers. Treat this as
-            # ambiguous topology information and fall back.
-            return None
+        if base_freq < 1:
+            continue
 
-        core_key = (package_id, core_id)
-        previous_type = cpu_core_types.get(core_key)
-        if previous_type is not None and previous_type != core_type:
-            # Inconsistent topology information: ambiguous.
-            return None
-        cpu_core_types[core_key] = core_type
+        cpu_freqs[cpu_path] = base_freq
 
-    if not cpu_core_types:
+    if not cpu_freqs:
         return None
 
-    unique_core_types = set(cpu_core_types.values())
-    if len(unique_core_types) <= 1:
+    freq_to_count = {}
+    for freq in cpu_freqs.values():
+        freq_to_count[freq] = freq_to_count.get(freq, 0) + 1
+
+    if len(freq_to_count) <= 1:
         # Not a hybrid topology, or unavailable class information.
         return None
 
-    # The highest core_type value corresponds to the highest performance class
-    # in Linux topology sysfs exports.
-    performance_core_type = max(unique_core_types)
-    performance_cores = sum(
-        core_type == performance_core_type
-        for core_type in cpu_core_types.values()
-    )
+    # Cores with the highest base frequency are considered performance cores.
+    performance_cores = freq_to_count[max(freq_to_count)]
     if performance_cores < 1:
         return None
 
