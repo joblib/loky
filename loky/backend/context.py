@@ -500,8 +500,9 @@ def _count_performance_cores_win32():
         # Not a hybrid topology, or unavailable class information.
         return None
 
-    # EfficiencyClass 0 is the highest-performance class.
-    performance_class = min(unique_classes)
+    # On Windows hybrid systems, higher EfficiencyClass values correspond to
+    # higher-performance cores.
+    performance_class = max(unique_classes)
     performance_cores = sum(
         efficiency_class == performance_class
         for efficiency_class in efficiency_classes

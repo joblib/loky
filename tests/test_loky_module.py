@@ -407,6 +407,77 @@ def test_count_performance_cores_win32_ctypes_failure(monkeypatch):
     assert context._count_performance_cores_win32() is None
 
 
+def test_count_performance_cores_win32_selects_highest_efficiency_class(
+    monkeypatch,
+):
+    import loky.backend.context as context
+
+    from types import SimpleNamespace
+
+    record_size = 16
+
+    def _record(efficiency_class):
+        data = bytearray(record_size)
+        data[0:4] = (0).to_bytes(4, "little")  # RelationProcessorCore
+        data[4:8] = record_size.to_bytes(4, "little")
+        data[9] = efficiency_class
+        return bytes(data)
+
+    # Simulate a hybrid topology: 4 performance cores and 12 efficiency cores.
+    payload = _record(1) * 4 + _record(0) * 12
+
+    class _FakeCtypes:
+        c_int = int
+        c_void_p = object
+        c_bool = bool
+
+        class c_ulong:
+            def __init__(self, value=0):
+                self.value = value
+
+        @staticmethod
+        def POINTER(_):
+            return object
+
+        @staticmethod
+        def byref(obj):
+            return obj
+
+        @staticmethod
+        def create_string_buffer(size):
+            return SimpleNamespace(raw=bytearray(size))
+
+        _last_error = 0
+
+        @staticmethod
+        def get_last_error():
+            return _FakeCtypes._last_error
+
+    class _Kernel32:
+        def __init__(self):
+            self.GetLogicalProcessorInformationEx = (
+                self._get_logical_processor_information_ex
+            )
+
+        @staticmethod
+        def _get_logical_processor_information_ex(
+            relationship,
+            buffer,
+            buffer_size,
+        ):
+            if buffer is None:
+                buffer_size.value = len(payload)
+                _FakeCtypes._last_error = 122
+                return False
+            buffer.raw[: len(payload)] = payload
+            return True
+
+    _FakeCtypes.WinDLL = lambda *args, **kwargs: _Kernel32()
+    monkeypatch.setitem(context.sys.modules, "ctypes", _FakeCtypes)
+
+    assert context._count_performance_cores_win32() == 4
+
+
 def test_count_performance_cores_darwin_missing_perflevel(monkeypatch):
     import loky.backend.context as context
 
