@@ -441,6 +441,7 @@ def _count_performance_cores_win32():
     relation_processor_core = 0
     error_insufficient_buffer = 122
     offset_efficiency_class = 9
+    min_record_size = offset_efficiency_class + 1
     # GetLogicalProcessorInformationEx API:
     # https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getlogicalprocessorinformationex
     # PROCESSOR_RELATIONSHIP layout and EfficiencyClass field:
@@ -501,8 +502,8 @@ def _count_performance_cores_win32():
 
         if relationship == relation_processor_core:
             if (
-                offset_efficiency_class + 1 > record_size
-                or offset + offset_efficiency_class + 1 > buffer_size.value
+                record_size < min_record_size
+                or offset + min_record_size > buffer_size.value
             ):
                 return None
             efficiency_classes.append(
