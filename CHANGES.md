@@ -4,7 +4,7 @@
   `only_performance_cores=True` (default) for
   `cpu_count(only_physical_cores=True)`, preferring performance-core counts
   when available with safe fallback behavior, and fixing Windows performance
-  core detection to be consistent with Linux on hybrid Intel CPUs. (#630)
+  core detection to be consistent with Linux on hybrid Intel CPUs (#630).
 
 - Support detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
