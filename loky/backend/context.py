@@ -441,6 +441,7 @@ def _count_performance_cores_win32():
     relation_processor_core = 0
     error_insufficient_buffer = 122
     offset_efficiency_class = 9
+    # EfficiencyClass is a BYTE field in PROCESSOR_RELATIONSHIP.
     size_efficiency_class = 1
     min_record_size = offset_efficiency_class + size_efficiency_class
     # GetLogicalProcessorInformationEx API:
@@ -502,6 +503,9 @@ def _count_performance_cores_win32():
             return None
 
         if relationship == relation_processor_core:
+            # Ensure the current record is large enough to contain the
+            # EfficiencyClass field, and that reading it stays within the
+            # allocated API buffer.
             if (
                 record_size < min_record_size
                 or offset + min_record_size > buffer_size.value
