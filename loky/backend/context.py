@@ -503,9 +503,8 @@ def _count_performance_cores_win32():
             return None
 
         if relationship == relation_processor_core:
-            # Ensure the current record is large enough to contain the
-            # EfficiencyClass field, and that reading it stays within the
-            # allocated API buffer.
+            # Validate record size and buffer bounds before reading
+            # EfficiencyClass field.
             if (
                 record_size < min_record_size
                 or offset + min_record_size > buffer_size.value
