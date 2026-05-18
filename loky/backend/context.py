@@ -34,7 +34,7 @@ if sys.platform != "win32":
 
 _DEFAULT_START_METHOD = None
 
-# Cache for preferred core counts to avoid repeating subprocess calls.
+# Cache for physical/performance core counts to avoid repeating subprocess calls.
 # It should not change during the lifetime of the program.
 physical_cores_cache = {}
 
@@ -98,7 +98,8 @@ def cpu_count(only_physical_cores=False, only_performance_cores=True):
     The ``only_performance_cores`` parameter controls hybrid-core filtering
     when ``only_physical_cores`` is True:
     - ``True`` (default): prefer performance-core counts when available.
-    - ``False``: disable performance-core filtering and use physical cores.
+    - ``False``: disable performance-core filtering and count any physical
+      cores, including efficiency and low-power cores of hybrid CPUs.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
     Python < 3.10), see:
@@ -121,9 +122,6 @@ def cpu_count(only_physical_cores=False, only_performance_cores=True):
 
     if not only_physical_cores:
         return aggregate_cpu_count
-
-    if not isinstance(only_performance_cores, bool):
-        raise ValueError("only_performance_cores must be a boolean")
 
     if cpu_count_user < os_cpu_count:
         # Respect user setting
@@ -247,12 +245,12 @@ def _cpu_count_user(os_cpu_count):
 
 
 def _count_physical_cores(only_performance_cores=True):
-    """Return a tuple (preferred physical/performance core count, exception)
+    """Return a tuple (physical/performance core count, exception)
 
-    If the preferred core count is found, exception is set to None.
+    If the core count is found, exception is set to None.
     If it has not been found, return ("not found", exception).
 
-    The preferred core count is cached to avoid repeating subprocess calls.
+    The core count is cached to avoid repeating subprocess calls.
     """
     exception = None
 
@@ -265,7 +263,7 @@ def _count_physical_cores(only_performance_cores=True):
         # Backward-compatible migration path for stale scalar caches.
         physical_cores_cache = {}
 
-    cache_key = "preferred" if only_performance_cores else "physical"
+    cache_key = "performance" if only_performance_cores else "physical"
 
     if cache_key in physical_cores_cache:
         return physical_cores_cache[cache_key], exception
@@ -274,39 +272,53 @@ def _count_physical_cores(only_performance_cores=True):
     try:
         if sys.platform == "linux":
             if only_performance_cores:
-                cpu_count_preferred = _count_preferred_cores_linux()
+                cpu_count_performance_or_physical = (
+                    _count_performance_or_physical_cores_linux()
+                )
             else:
-                cpu_count_preferred = _count_physical_cores_linux()
+                cpu_count_performance_or_physical = (
+                    _count_physical_cores_linux()
+                )
         elif sys.platform == "win32":
             if only_performance_cores:
-                cpu_count_preferred = _count_preferred_cores_win32()
+                cpu_count_performance_or_physical = (
+                    _count_performance_or_physical_cores_win32()
+                )
             else:
-                cpu_count_preferred = _count_physical_cores_win32()
+                cpu_count_performance_or_physical = (
+                    _count_physical_cores_win32()
+                )
         elif sys.platform == "darwin":
             if only_performance_cores:
-                cpu_count_preferred = _count_preferred_cores_darwin()
+                cpu_count_performance_or_physical = (
+                    _count_performance_or_physical_cores_darwin()
+                )
             else:
-                cpu_count_preferred = _count_physical_cores_darwin()
+                cpu_count_performance_or_physical = (
+                    _count_physical_cores_darwin()
+                )
         elif sys.platform.startswith("freebsd"):
             # FreeBSD has no performance-core distinction for now.
-            cpu_count_preferred = _count_preferred_cores_freebsd()
+            cpu_count_performance_or_physical = (
+                _count_performance_or_physical_cores_freebsd()
+            )
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
-        # if cpu_count_preferred < 1, we did not find a valid value
-        if cpu_count_preferred < 1:
+        # if cpu_count_performance_or_physical < 1, no valid value was found
+        if cpu_count_performance_or_physical < 1:
             raise ValueError(
-                f"found {cpu_count_preferred} preferred cores < 1"
+                f"found {cpu_count_performance_or_physical} cores < 1"
             )
 
     except Exception as e:
         exception = e
-        cpu_count_preferred = "not found"
+        cpu_count_performance_or_physical = "not found"
 
     # Put the result in cache
-    physical_cores_cache[cache_key] = cpu_count_preferred
+    physical_cores_cache[cache_key] = cpu_count_performance_or_physical
 
-    return cpu_count_preferred, exception
+    return cpu_count_performance_or_physical, exception
 
 
 def _count_physical_cores_linux():
@@ -328,7 +340,7 @@ def _count_physical_cores_linux():
     return len(cpu_info)
 
 
-def _count_preferred_cores_linux():
+def _count_performance_or_physical_cores_linux():
     cpu_count_performance = _count_performance_cores_linux()
     if cpu_count_performance is not None:
         return cpu_count_performance
@@ -413,7 +425,7 @@ def _count_physical_cores_win32():
     return sum(map(int, cpu_info))
 
 
-def _count_preferred_cores_win32():
+def _count_performance_or_physical_cores_win32():
     cpu_count_performance = _count_performance_cores_win32()
     if cpu_count_performance is not None:
         return cpu_count_performance
@@ -429,6 +441,10 @@ def _count_performance_cores_win32():
     relation_processor_core = 0
     error_insufficient_buffer = 122
     offset_efficiency_class = 9
+    # GetLogicalProcessorInformationEx API:
+    # https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getlogicalprocessorinformationex
+    # PROCESSOR_RELATIONSHIP layout and EfficiencyClass field:
+    # https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-processor_relationship
     # Offset to EfficiencyClass in SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX:
     # 4 bytes Relationship + 4 bytes Size + 1 byte Flags.
 
@@ -484,7 +500,7 @@ def _count_performance_cores_win32():
             return None
 
         if relationship == relation_processor_core:
-            if offset + offset_efficiency_class + 1 > buffer_size.value:
+            if offset + offset_efficiency_class + 1 > offset + record_size:
                 return None
             efficiency_classes.append(
                 raw_buffer[offset + offset_efficiency_class]
@@ -523,7 +539,7 @@ def _count_physical_cores_darwin():
     return int(cpu_info)
 
 
-def _count_preferred_cores_darwin():
+def _count_performance_or_physical_cores_darwin():
     cpu_count_performance = _count_performance_cores_darwin()
     if cpu_count_performance is not None:
         return cpu_count_performance
@@ -571,7 +587,7 @@ def _count_physical_cores_freebsd():
     return int(cpu_info)
 
 
-def _count_preferred_cores_freebsd():
+def _count_performance_or_physical_cores_freebsd():
     return _count_physical_cores_freebsd()
 
 

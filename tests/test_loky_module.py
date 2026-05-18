@@ -325,7 +325,7 @@ def test_count_physical_cores_prefers_performance_cores(monkeypatch):
     second_value, second_exc = context._count_physical_cores()
 
     assert isinstance(context.physical_cores_cache, dict)
-    assert context.physical_cores_cache["preferred"] == 4
+    assert context.physical_cores_cache["performance"] == 4
     assert first_value == 4
     assert first_exc is None
     assert second_value == 4
@@ -533,7 +533,11 @@ def test_cpu_count_only_performance_cores_false_disables_filtering(
     monkeypatch.setattr(context.sys, "platform", "linux")
     monkeypatch.setattr(context.os, "cpu_count", lambda: 8)
     monkeypatch.setattr(context, "_cpu_count_user", lambda _: 8)
-    monkeypatch.setattr(context, "_count_preferred_cores_linux", lambda: 4)
+    monkeypatch.setattr(
+        context,
+        "_count_performance_or_physical_cores_linux",
+        lambda: 4,
+    )
     monkeypatch.setattr(context, "_count_physical_cores_linux", lambda: 8)
     monkeypatch.setattr(context, "physical_cores_cache", {})
 
@@ -567,18 +571,22 @@ def test_count_physical_cores_cache_is_split_by_mode(monkeypatch):
     import loky.backend.context as context
 
     monkeypatch.setattr(context.sys, "platform", "linux")
-    monkeypatch.setattr(context, "_count_preferred_cores_linux", lambda: 4)
+    monkeypatch.setattr(
+        context,
+        "_count_performance_or_physical_cores_linux",
+        lambda: 4,
+    )
     monkeypatch.setattr(context, "_count_physical_cores_linux", lambda: 8)
     monkeypatch.setattr(context, "physical_cores_cache", {})
 
-    preferred_value, preferred_exc = context._count_physical_cores(
+    performance_value, performance_exc = context._count_physical_cores(
         only_performance_cores=True
     )
     physical_value, physical_exc = context._count_physical_cores(
         only_performance_cores=False
     )
 
-    assert preferred_value == 4
-    assert preferred_exc is None
+    assert performance_value == 4
+    assert performance_exc is None
     assert physical_value == 8
     assert physical_exc is None
