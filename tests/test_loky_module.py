@@ -423,7 +423,9 @@ def test_count_performance_cores_win32_selects_highest_efficiency_class(
         data[9] = efficiency_class
         return bytes(data)
 
-    # Simulate a hybrid topology: 4 performance cores and 12 efficiency cores.
+    # Simulate a hybrid topology where higher efficiency class values are
+    # performance cores: 4 performance cores (class 1) and 12 efficiency
+    # cores (class 0).
     payload = _record(1) * 4 + _record(0) * 12
 
     class _FakeCtypes:
