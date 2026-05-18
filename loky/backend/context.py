@@ -500,7 +500,7 @@ def _count_performance_cores_win32():
             return None
 
         if relationship == relation_processor_core:
-            if offset + offset_efficiency_class + 1 > offset + record_size:
+            if offset_efficiency_class + 1 > record_size:
                 return None
             efficiency_classes.append(
                 raw_buffer[offset + offset_efficiency_class]
