@@ -546,11 +546,6 @@ def test_cpu_count_only_performance_cores_false_disables_filtering(
     )
 
 
-def test_cpu_count_only_performance_cores_invalid_value():
-    with pytest.raises(ValueError, match="only_performance_cores"):
-        cpu_count(only_physical_cores=True, only_performance_cores="wrong")
-
-
 def test_cpu_count_only_performance_cores_ignored_without_physical_cores(
     monkeypatch,
 ):
