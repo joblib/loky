@@ -269,8 +269,6 @@ def _count_physical_cores(only_performance_cores=True):
 
     The core count is cached to avoid repeating subprocess calls.
     """
-    if not isinstance(only_performance_cores, bool):
-        raise ValueError("only_performance_cores must be a boolean")
 
     # First check if the value is cached
     global physical_cores_cache
