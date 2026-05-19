@@ -495,12 +495,20 @@ def test_count_performance_cores_win32_ctypes_failure(monkeypatch):
             + _make_win32_processor_relationship_record(0) * 3,
             1,
         ),
+        # 4 homogeneous cores all with the same efficiency class (no hybrid
+        # topology): the function should return None to signal that no
+        # performance-core subset was identified.
+        (
+            _make_win32_processor_relationship_record(1) * 4,
+            None,
+        ),
     ],
     ids=[
         "4P_12E",
         "2P_4M_8E_tri_hybrid",
         "8P_8E",
         "1P_3E",
+        "4_homogeneous",
     ],
 )
 def test_count_performance_cores_win32_selects_highest_efficiency_class(
