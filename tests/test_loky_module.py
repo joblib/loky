@@ -383,7 +383,9 @@ def test_count_performance_cores_linux_no_hybrid_frequency_data(
         assert context._count_performance_cores_linux() == 2
 
 
-def _make_win32_record(efficiency_class, record_size=16):
+def _make_win32_processor_relationship_record(
+    efficiency_class, record_size=16
+):
     """Build a fake PROCESSOR_RELATIONSHIP binary record for testing."""
     data = bytearray(record_size)
     data[0:4] = (0).to_bytes(4, "little")  # RelationProcessorCore
@@ -393,7 +395,7 @@ def _make_win32_record(efficiency_class, record_size=16):
     return bytes(data)
 
 
-def _make_fake_ctypes_module(payload):
+def _make_fake_win32_ctypes_module(payload):
     """Return a fake ctypes module that serves *payload* via
     GetLogicalProcessorInformationEx and a matching SimpleNamespace wrapper."""
     from types import SimpleNamespace
@@ -464,20 +466,53 @@ def test_count_performance_cores_win32_ctypes_failure(monkeypatch):
     assert context._count_performance_cores_win32() is None
 
 
+@pytest.mark.parametrize(
+    "payload,expected_count",
+    [
+        # 4 performance cores (class 1) + 12 efficiency cores (class 0)
+        (
+            _make_win32_processor_relationship_record(1) * 4
+            + _make_win32_processor_relationship_record(0) * 12,
+            4,
+        ),
+        # 2 performance cores (class 2) + 4 medium cores (class 1)
+        # + 8 efficiency cores (class 0): tri-hybrid topology
+        (
+            _make_win32_processor_relationship_record(2) * 2
+            + _make_win32_processor_relationship_record(1) * 4
+            + _make_win32_processor_relationship_record(0) * 8,
+            2,
+        ),
+        # 8 performance cores (class 1) + 8 efficiency cores (class 0)
+        (
+            _make_win32_processor_relationship_record(1) * 8
+            + _make_win32_processor_relationship_record(0) * 8,
+            8,
+        ),
+        # 1 performance core (class 1) + 3 efficiency cores (class 0)
+        (
+            _make_win32_processor_relationship_record(1) * 1
+            + _make_win32_processor_relationship_record(0) * 3,
+            1,
+        ),
+    ],
+    ids=[
+        "4P_12E",
+        "2P_4M_8E_tri_hybrid",
+        "8P_8E",
+        "1P_3E",
+    ],
+)
 def test_count_performance_cores_win32_selects_highest_efficiency_class(
-    monkeypatch,
+    monkeypatch, payload, expected_count
 ):
     import loky.backend.context as context
 
-    # Simulate a hybrid topology where higher efficiency class values are
-    # performance cores: 4 performance cores (class 1) and 12 efficiency
-    # cores (class 0).
-    payload = _make_win32_record(1) * 4 + _make_win32_record(0) * 12
     monkeypatch.setitem(
-        context.sys.modules, "ctypes", _make_fake_ctypes_module(payload)
+        context.sys.modules, "ctypes", _make_fake_win32_ctypes_module(payload)
     )
 
-    assert context._count_performance_cores_win32() == 4
+    assert context._count_performance_cores_win32() == expected_count
 
 
 @pytest.mark.parametrize(
@@ -485,7 +520,7 @@ def test_count_performance_cores_win32_selects_highest_efficiency_class(
     [
         (b"", "empty buffer"),
         (
-            _make_win32_record(0) * 4,
+            _make_win32_processor_relationship_record(0) * 4,
             "all same efficiency class",
         ),
         (
@@ -496,7 +531,9 @@ def test_count_performance_cores_win32_selects_highest_efficiency_class(
         (
             # Record whose stored record_size is smaller than min_record_size=10
             # (cannot fit the EfficiencyClass byte).
-            _make_win32_record(efficiency_class=1, record_size=8),
+            _make_win32_processor_relationship_record(
+                efficiency_class=1, record_size=8
+            ),
             "record_size below minimum",
         ),
         (
@@ -521,7 +558,7 @@ def test_count_performance_cores_win32_invalid_processor_information(
     import loky.backend.context as context
 
     monkeypatch.setitem(
-        context.sys.modules, "ctypes", _make_fake_ctypes_module(payload)
+        context.sys.modules, "ctypes", _make_fake_win32_ctypes_module(payload)
     )
     assert context._count_performance_cores_win32() is None
 
