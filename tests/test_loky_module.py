@@ -219,44 +219,25 @@ def test_only_physical_cores_error():
     if _cpu_count_user(cpu_count_mp) < cpu_count_mp:
         pytest.skip()
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Write bad lscpu program
-        lscpu_path = f"{tmp_dir}/lscpu"
-        with open(lscpu_path, "w") as f:
-            f.write("#!/bin/sh\n" "exit(1)")
-        os.chmod(lscpu_path, 0o777)
+    import loky.backend.context
 
-        try:
-            old_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{tmp_dir}:{old_path}"
+    loky.backend.context.physical_cores_cache = {}
 
-            # clear the cache otherwise the warning is not triggered
-            import loky.backend.context
+    with patch.object(
+        loky.backend.context,
+        "_count_physical_cores_linux",
+        side_effect=RuntimeError("physical core probe failed"),
+    ):
+        with pytest.warns(
+            UserWarning,
+            match="Could not find the number of physical cores",
+        ):
+            cpu_count(only_physical_cores=True, only_performance_cores=False)
 
-            loky.backend.context.physical_cores_cache = {}
-
-            with patch.object(
-                loky.backend.context,
-                "_count_physical_cores_linux",
-                side_effect=RuntimeError("physical core probe failed"),
-            ):
-                with pytest.warns(
-                    UserWarning,
-                    match="Could not find the number of" " physical cores",
-                ):
-                    cpu_count(
-                        only_physical_cores=True, only_performance_cores=False
-                    )
-
-                # Should not warn the second time
-                with warnings.catch_warnings():
-                    warnings.simplefilter("error")
-                    cpu_count(
-                        only_physical_cores=True, only_performance_cores=False
-                    )
-
-        finally:
-            os.environ["PATH"] = old_path
+        # Should not warn the second time
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            cpu_count(only_physical_cores=True, only_performance_cores=False)
 
 
 def test_only_physical_cores_with_user_limitation():
@@ -351,7 +332,16 @@ def test_count_performance_cores_linux_missing_sysfs(monkeypatch):
     import loky.backend.context as context
     import glob
 
-    monkeypatch.setattr(glob, "glob", lambda _: [])
+    original_glob = glob.glob
+    monkeypatch.setattr(
+        glob,
+        "glob",
+        lambda path: (
+            []
+            if path.startswith("/sys/devices/system/cpu")
+            else original_glob(path)
+        ),
+    )
     assert context._count_performance_cores_linux() is None
 
 
@@ -365,11 +355,20 @@ def test_count_performance_cores_linux_no_hybrid_frequency_data(
         "/sys/devices/system/cpu/cpu0",
         "/sys/devices/system/cpu/cpu1",
     ]
-    monkeypatch.setattr(glob, "glob", lambda _: cpu_paths)
+    original_glob = glob.glob
+    monkeypatch.setattr(
+        glob,
+        "glob",
+        lambda path: (
+            cpu_paths
+            if path.startswith("/sys/devices/system/cpu")
+            else original_glob(path)
+        ),
+    )
 
     file_contents = {
         # Identical base frequencies across all CPUs do not indicate
-        # a hybrid topology.
+        # a hybrid topology: both cores are considered performance cores.
         "/sys/devices/system/cpu/cpu0/cpufreq/base_frequency": "1900000",
         "/sys/devices/system/cpu/cpu1/cpufreq/base_frequency": "1900000",
     }
@@ -381,45 +380,23 @@ def test_count_performance_cores_linux_no_hybrid_frequency_data(
         raise OSError()
 
     with patch("builtins.open", side_effect=_open_side_effect):
-        assert context._count_performance_cores_linux() is None
+        assert context._count_performance_cores_linux() == 2
 
 
-def test_count_performance_cores_win32_ctypes_failure(monkeypatch):
-    import loky.backend.context as context
-
-    from types import SimpleNamespace
-
-    def _raise_os_error(*args, **kwargs):
-        raise OSError()
-
-    monkeypatch.setitem(
-        context.sys.modules,
-        "ctypes",
-        SimpleNamespace(WinDLL=_raise_os_error),
-    )
-    assert context._count_performance_cores_win32() is None
-
-
-def test_count_performance_cores_win32_selects_highest_efficiency_class(
-    monkeypatch,
-):
-    import loky.backend.context as context
-
-    from types import SimpleNamespace
-
-    record_size = 16
-
-    def _record(efficiency_class):
-        data = bytearray(record_size)
-        data[0:4] = (0).to_bytes(4, "little")  # RelationProcessorCore
-        data[4:8] = record_size.to_bytes(4, "little")
+def _make_win32_record(efficiency_class, record_size=16):
+    """Build a fake PROCESSOR_RELATIONSHIP binary record for testing."""
+    data = bytearray(record_size)
+    data[0:4] = (0).to_bytes(4, "little")  # RelationProcessorCore
+    data[4:8] = record_size.to_bytes(4, "little")
+    if record_size >= 10:
         data[9] = efficiency_class
-        return bytes(data)
+    return bytes(data)
 
-    # Simulate a hybrid topology where higher efficiency class values are
-    # performance cores: 4 performance cores (class 1) and 12 efficiency
-    # cores (class 0).
-    payload = _record(1) * 4 + _record(0) * 12
+
+def _make_fake_ctypes_module(payload):
+    """Return a fake ctypes module that serves *payload* via
+    GetLogicalProcessorInformationEx and a matching SimpleNamespace wrapper."""
+    from types import SimpleNamespace
 
     class _FakeCtypes:
         c_int = int
@@ -468,9 +445,85 @@ def test_count_performance_cores_win32_selects_highest_efficiency_class(
             return True
 
     _FakeCtypes.WinDLL = lambda *args, **kwargs: _Kernel32()
-    monkeypatch.setitem(context.sys.modules, "ctypes", _FakeCtypes)
+    return _FakeCtypes
+
+
+def test_count_performance_cores_win32_ctypes_failure(monkeypatch):
+    import loky.backend.context as context
+
+    from types import SimpleNamespace
+
+    def _raise_os_error(*args, **kwargs):
+        raise OSError()
+
+    monkeypatch.setitem(
+        context.sys.modules,
+        "ctypes",
+        SimpleNamespace(WinDLL=_raise_os_error),
+    )
+    assert context._count_performance_cores_win32() is None
+
+
+def test_count_performance_cores_win32_selects_highest_efficiency_class(
+    monkeypatch,
+):
+    import loky.backend.context as context
+
+    # Simulate a hybrid topology where higher efficiency class values are
+    # performance cores: 4 performance cores (class 1) and 12 efficiency
+    # cores (class 0).
+    payload = _make_win32_record(1) * 4 + _make_win32_record(0) * 12
+    monkeypatch.setitem(
+        context.sys.modules, "ctypes", _make_fake_ctypes_module(payload)
+    )
 
     assert context._count_performance_cores_win32() == 4
+
+
+@pytest.mark.parametrize(
+    "payload,description",
+    [
+        (b"", "empty buffer"),
+        (
+            _make_win32_record(0) * 4,
+            "all same efficiency class",
+        ),
+        (
+            # Record whose stored record_size field is 0 (malformed).
+            (0).to_bytes(4, "little") + (0).to_bytes(4, "little"),
+            "zero record_size",
+        ),
+        (
+            # Record whose stored record_size is smaller than min_record_size=10
+            # (cannot fit the EfficiencyClass byte).
+            _make_win32_record(efficiency_class=1, record_size=8),
+            "record_size below minimum",
+        ),
+        (
+            # Record whose stored record_size exceeds the actual buffer length.
+            (0).to_bytes(4, "little") + (999).to_bytes(4, "little"),
+            "record_size beyond buffer",
+        ),
+    ],
+    ids=[
+        "empty_buffer",
+        "all_same_class",
+        "zero_record_size",
+        "record_size_below_minimum",
+        "record_size_beyond_buffer",
+    ],
+)
+def test_count_performance_cores_win32_invalid_processor_information(
+    monkeypatch, payload, description
+):
+    # Verify that malformed or degenerate kernel32 data causes
+    # _count_performance_cores_win32 to return None instead of raising.
+    import loky.backend.context as context
+
+    monkeypatch.setitem(
+        context.sys.modules, "ctypes", _make_fake_ctypes_module(payload)
+    )
+    assert context._count_performance_cores_win32() is None
 
 
 def test_count_performance_cores_darwin_missing_perflevel(monkeypatch):
@@ -499,7 +552,16 @@ def test_count_performance_cores_linux_hybrid_data(monkeypatch):
         "/sys/devices/system/cpu/cpu0",
         "/sys/devices/system/cpu/cpu1",
     ]
-    monkeypatch.setattr(glob, "glob", lambda _: cpu_paths)
+    original_glob = glob.glob
+    monkeypatch.setattr(
+        glob,
+        "glob",
+        lambda path: (
+            cpu_paths
+            if path.startswith("/sys/devices/system/cpu")
+            else original_glob(path)
+        ),
+    )
 
     file_contents = {
         # Two cores with different base frequencies: one performance core and
@@ -529,7 +591,7 @@ def test_cpu_count_only_performance_cores_false_disables_filtering(
     monkeypatch.setattr(context, "_cpu_count_user", lambda _: 8)
     monkeypatch.setattr(
         context,
-        f"_count_performance_or_physical_cores_{platform}",
+        f"_count_performance_cores_{platform}",
         lambda: 4,
     )
     monkeypatch.setattr(
@@ -559,7 +621,7 @@ def test_cpu_count_only_performance_cores_ignored_without_physical_cores(
     # never called when only_physical_cores is False (the default).
     monkeypatch.setattr(
         context,
-        f"_count_performance_or_physical_cores_{platform}",
+        f"_count_performance_cores_{platform}",
         lambda: 2,
     )
 
@@ -575,7 +637,7 @@ def test_count_physical_cores_cache_is_split_by_mode(monkeypatch, platform):
     monkeypatch.setattr(context.sys, "platform", platform)
     monkeypatch.setattr(
         context,
-        f"_count_performance_or_physical_cores_{platform}",
+        f"_count_performance_cores_{platform}",
         lambda: 4,
     )
     monkeypatch.setattr(
@@ -595,25 +657,24 @@ def test_count_physical_cores_cache_is_split_by_mode(monkeypatch, platform):
 
 
 @pytest.mark.parametrize("platform", ["linux", "win32", "darwin"])
-def test_count_performance_cores_fallback_on_invalid_data(
+def test_count_physical_cores_falls_back_when_performance_detection_unavailable(
     monkeypatch, platform
 ):
     # When performance core detection returns None (e.g. because the relevant
-    # sysfs files are missing, empty, or contain non-integer values), the
-    # _count_performance_or_physical_cores_* helpers must fall back to
-    # _count_physical_cores_* and return its value.
+    # sysfs files are missing, empty, or contain non-integer values),
+    # _count_physical_cores must fall back to physical-core detection.
     import loky.backend.context as context
 
+    monkeypatch.setattr(context.sys, "platform", platform)
     monkeypatch.setattr(
         context, f"_count_performance_cores_{platform}", lambda: None
     )
     monkeypatch.setattr(
         context, f"_count_physical_cores_{platform}", lambda: 8
     )
+    monkeypatch.setattr(context, "physical_cores_cache", {})
 
-    result = getattr(
-        context, f"_count_performance_or_physical_cores_{platform}"
-    )()
+    result = context._count_physical_cores(only_performance_cores=True)
     assert result == 8
 
 
@@ -635,7 +696,16 @@ def test_count_performance_cores_linux_invalid_base_freq(
         "/sys/devices/system/cpu/cpu0",
         "/sys/devices/system/cpu/cpu1",
     ]
-    monkeypatch.setattr(glob, "glob", lambda _: cpu_paths)
+    original_glob = glob.glob
+    monkeypatch.setattr(
+        glob,
+        "glob",
+        lambda path: (
+            cpu_paths
+            if path.startswith("/sys/devices/system/cpu")
+            else original_glob(path)
+        ),
+    )
 
     file_contents = {
         "/sys/devices/system/cpu/cpu0/cpufreq/base_frequency": base_freq_content,

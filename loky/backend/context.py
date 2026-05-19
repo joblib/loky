@@ -231,35 +231,6 @@ def _cpu_count_user(os_cpu_count):
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
 
-def _detect_platform_cores(use_performance):
-    """Dispatch to the appropriate platform-specific core-count function.
-
-    When ``use_performance`` is True, try performance-or-physical helpers
-    (performance cores first, fall back to physical on that platform).
-    When False, call only the physical-core helpers directly.
-
-    Returns the number of cores as an integer.
-    Raises NotImplementedError on unsupported platforms.
-    """
-    if sys.platform == "linux":
-        if use_performance:
-            return _count_performance_or_physical_cores_linux()
-        return _count_physical_cores_linux()
-    elif sys.platform == "win32":
-        if use_performance:
-            return _count_performance_or_physical_cores_win32()
-        return _count_physical_cores_win32()
-    elif sys.platform == "darwin":
-        if use_performance:
-            return _count_performance_or_physical_cores_darwin()
-        return _count_physical_cores_darwin()
-    elif sys.platform.startswith("freebsd"):
-        # FreeBSD has no performance-core distinction for now.
-        return _count_performance_or_physical_cores_freebsd()
-    else:
-        raise NotImplementedError(f"unsupported platform: {sys.platform}")
-
-
 def _count_physical_cores(only_performance_cores=True):
     """Return the physical/performance core count, or the string "not found".
 
@@ -277,24 +248,50 @@ def _count_physical_cores(only_performance_cores=True):
     if cache_key in physical_cores_cache:
         return physical_cores_cache[cache_key]
 
-    # Not cached yet, find it
-    exception = None
-    try:
-        n_cores = _detect_platform_cores(only_performance_cores)
-    except Exception as e:
-        exception = e
-        if only_performance_cores:
-            # Fall back to physical core count if performance detection fails.
-            try:
-                n_cores = _detect_platform_cores(False)
-                exception = None
-            except Exception as e2:
-                exception = e2
-                n_cores = "not found"
-        else:
-            n_cores = "not found"
+    # Not cached yet, find it.
+    # Platform-specific helpers are looked up at call time so that
+    # monkeypatching in tests is correctly reflected.
+    platform = sys.platform
+    if platform.startswith("freebsd"):
+        platform = "freebsd"
 
-    # Put the result in cache
+    # TODO: implement performance core detection for freebsd.
+    performance_detectors = {
+        "linux": _count_performance_cores_linux,
+        "win32": _count_performance_cores_win32,
+        "darwin": _count_performance_cores_darwin,
+    }
+    physical_detectors = {
+        "linux": _count_physical_cores_linux,
+        "win32": _count_physical_cores_win32,
+        "darwin": _count_physical_cores_darwin,
+        "freebsd": _count_physical_cores_freebsd,
+    }
+
+    exception = None
+    n_cores = None
+
+    if only_performance_cores and platform in performance_detectors:
+        try:
+            n_cores = performance_detectors[platform]()
+        except Exception as e:
+            exception = e
+            n_cores = None
+
+    if n_cores is None:
+        if platform not in physical_detectors:
+            exception = NotImplementedError(
+                f"unsupported platform: {sys.platform}"
+            )
+            n_cores = "not found"
+        else:
+            try:
+                n_cores = physical_detectors[platform]()
+            except Exception as e:
+                if exception is None:
+                    exception = e
+                n_cores = "not found"
+
     if n_cores == "not found":
         warnings.warn(
             "Could not find the number of physical cores for the "
@@ -327,14 +324,8 @@ def _count_physical_cores_linux():
     return len(cpu_info)
 
 
-def _count_performance_or_physical_cores_linux():
-    cpu_count_performance = _count_performance_cores_linux()
-    if cpu_count_performance is not None:
-        return cpu_count_performance
-    return _count_physical_cores_linux()
-
-
 def _count_performance_cores_linux():
+    from collections import Counter
     import glob
 
     # Use cpufreq base_frequency as a heuristic for performance-core detection.
@@ -371,20 +362,11 @@ def _count_performance_cores_linux():
     if not cpu_freqs:
         return None
 
-    freq_to_count = {}
-    for freq in cpu_freqs.values():
-        freq_to_count[freq] = freq_to_count.get(freq, 0) + 1
-
-    if len(freq_to_count) <= 1:
-        # Not a hybrid topology, or unavailable class information.
-        return None
-
-    # Cores with the highest base frequency are considered performance cores.
-    performance_cores = freq_to_count[max(freq_to_count)]
-    if performance_cores < 1:
-        return None
-
-    return performance_cores
+    # Count cores at each base frequency. On a non-hybrid system all cores
+    # share the same frequency and we simply return that total count.
+    # On a hybrid system the highest frequency identifies performance cores.
+    freq_to_count = Counter(cpu_freqs.values())
+    return freq_to_count[max(freq_to_count)]
 
 
 def _count_physical_cores_win32():
@@ -410,13 +392,6 @@ def _count_physical_cores_win32():
         l.split(",")[1] for l in cpu_info if (l and l != "Node,NumberOfCores")
     ]
     return sum(map(int, cpu_info))
-
-
-def _count_performance_or_physical_cores_win32():
-    cpu_count_performance = _count_performance_cores_win32()
-    if cpu_count_performance is not None:
-        return cpu_count_performance
-    return _count_physical_cores_win32()
 
 
 def _count_performance_cores_win32():
@@ -518,9 +493,6 @@ def _count_performance_cores_win32():
         efficiency_class == performance_class
         for efficiency_class in efficiency_classes
     )
-    if performance_cores < 1:
-        return None
-
     return performance_cores
 
 
@@ -532,13 +504,6 @@ def _count_physical_cores_darwin():
     )
     cpu_info = cpu_info.stdout
     return int(cpu_info)
-
-
-def _count_performance_or_physical_cores_darwin():
-    cpu_count_performance = _count_performance_cores_darwin()
-    if cpu_count_performance is not None:
-        return cpu_count_performance
-    return _count_physical_cores_darwin()
 
 
 def _count_performance_cores_darwin():
@@ -580,11 +545,6 @@ def _count_physical_cores_freebsd():
     )
     cpu_info = cpu_info.stdout
     return int(cpu_info)
-
-
-def _count_performance_or_physical_cores_freebsd():
-    # TODO: implement performance core detection for freebsd.
-    return _count_physical_cores_freebsd()
 
 
 class LokyContext(BaseContext):
