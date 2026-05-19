@@ -444,12 +444,12 @@ def _count_performance_cores_win32():
     # EfficiencyClass is a BYTE field in PROCESSOR_RELATIONSHIP.
     size_efficiency_class = 1
     min_record_size = offset_efficiency_class + size_efficiency_class
-    # GetLogicalProcessorInformationEx API:
-    # https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getlogicalprocessorinformationex
+    # GetLogicalProcessorInformationEx API (header: sysinfoapi.h, lib: Kernel32.lib):
+    # https://learn.microsoft.com/windows/win32/api/sysinfoapi/nf-sysinfoapi-getlogicalprocessorinformationex
     # PROCESSOR_RELATIONSHIP layout and EfficiencyClass field:
     # https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-processor_relationship
     # Offset to EfficiencyClass in SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX:
-    # 4 bytes Relationship + 4 bytes Size + 1 byte Flags.
+    # 4 bytes Relationship + 4 bytes Size + 1 byte Flags (= offset 9).
 
     try:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
