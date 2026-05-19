@@ -13,7 +13,6 @@ import os
 import sys
 import math
 import subprocess
-import traceback
 import warnings
 import multiprocessing as mp
 from multiprocessing import get_context as mp_get_context
@@ -127,23 +126,11 @@ def cpu_count(only_physical_cores=False, only_performance_cores=True):
         # Respect user setting
         return max(cpu_count_user, 1)
 
-    cpu_count_physical, exception = _count_physical_cores(
+    cpu_count_physical = _count_physical_cores(
         only_performance_cores=only_performance_cores
     )
     if cpu_count_physical != "not found":
         return cpu_count_physical
-
-    # Fallback to default behavior
-    if exception is not None:
-        # warns only the first time
-        warnings.warn(
-            "Could not find the number of physical cores for the "
-            f"following reason:\n{exception}\n"
-            "Returning the number of logical cores instead. You can "
-            "silence this warning by setting LOKY_MAX_CPU_COUNT to "
-            "the number of cores you want to use."
-        )
-        traceback.print_tb(exception.__traceback__)
 
     return aggregate_cpu_count
 
@@ -245,80 +232,74 @@ def _cpu_count_user(os_cpu_count):
 
 
 def _count_physical_cores(only_performance_cores=True):
-    """Return a tuple (physical/performance core count, exception)
-
-    If the core count is found, exception is set to None.
-    If it has not been found, return ("not found", exception).
+    """Return the physical/performance core count, or "not found".
 
     The core count is cached to avoid repeating subprocess calls.
     """
-    exception = None
-
     if not isinstance(only_performance_cores, bool):
         raise ValueError("only_performance_cores must be a boolean")
 
     # First check if the value is cached
     global physical_cores_cache
-    if not isinstance(physical_cores_cache, dict):
-        # Backward-compatible migration path for stale scalar caches.
-        physical_cores_cache = {}
-
     cache_key = "performance" if only_performance_cores else "physical"
 
     if cache_key in physical_cores_cache:
-        return physical_cores_cache[cache_key], exception
+        return physical_cores_cache[cache_key]
 
     # Not cached yet, find it
     try:
         if sys.platform == "linux":
             if only_performance_cores:
-                cpu_count_performance_or_physical = (
-                    _count_performance_or_physical_cores_linux()
-                )
+                n_cores = _count_performance_or_physical_cores_linux()
             else:
-                cpu_count_performance_or_physical = (
-                    _count_physical_cores_linux()
-                )
+                n_cores = _count_physical_cores_linux()
         elif sys.platform == "win32":
             if only_performance_cores:
-                cpu_count_performance_or_physical = (
-                    _count_performance_or_physical_cores_win32()
-                )
+                n_cores = _count_performance_or_physical_cores_win32()
             else:
-                cpu_count_performance_or_physical = (
-                    _count_physical_cores_win32()
-                )
+                n_cores = _count_physical_cores_win32()
         elif sys.platform == "darwin":
             if only_performance_cores:
-                cpu_count_performance_or_physical = (
-                    _count_performance_or_physical_cores_darwin()
-                )
+                n_cores = _count_performance_or_physical_cores_darwin()
             else:
-                cpu_count_performance_or_physical = (
-                    _count_physical_cores_darwin()
-                )
+                n_cores = _count_physical_cores_darwin()
         elif sys.platform.startswith("freebsd"):
             # FreeBSD has no performance-core distinction for now.
-            cpu_count_performance_or_physical = (
-                _count_performance_or_physical_cores_freebsd()
-            )
+            n_cores = _count_performance_or_physical_cores_freebsd()
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
-        # if cpu_count_performance_or_physical < 1, no valid value was found
-        if cpu_count_performance_or_physical < 1:
-            raise ValueError(
-                f"found {cpu_count_performance_or_physical} cores < 1"
-            )
-
-    except Exception as e:
-        exception = e
-        cpu_count_performance_or_physical = "not found"
+    except Exception:
+        if only_performance_cores:
+            # Fall back to physical core count if performance detection fails.
+            try:
+                if sys.platform == "linux":
+                    n_cores = _count_physical_cores_linux()
+                elif sys.platform == "win32":
+                    n_cores = _count_physical_cores_win32()
+                elif sys.platform == "darwin":
+                    n_cores = _count_physical_cores_darwin()
+                elif sys.platform.startswith("freebsd"):
+                    n_cores = _count_performance_or_physical_cores_freebsd()
+                else:
+                    n_cores = "not found"
+            except Exception:
+                n_cores = "not found"
+        else:
+            n_cores = "not found"
 
     # Put the result in cache
-    physical_cores_cache[cache_key] = cpu_count_performance_or_physical
+    if n_cores == "not found":
+        warnings.warn(
+            "Could not find the number of physical cores for the "
+            "current platform.\n"
+            "Returning the number of logical cores instead. You can "
+            "silence this warning by setting LOKY_MAX_CPU_COUNT to "
+            "the number of cores you want to use."
+        )
+    physical_cores_cache[cache_key] = n_cores
 
-    return cpu_count_performance_or_physical, exception
+    return n_cores
 
 
 def _count_physical_cores_linux():

@@ -233,7 +233,7 @@ def test_only_physical_cores_error():
             # clear the cache otherwise the warning is not triggered
             import loky.backend.context
 
-            loky.backend.context.physical_cores_cache = None
+            loky.backend.context.physical_cores_cache = {}
 
             with (
                 patch.object(
@@ -319,17 +319,14 @@ def test_count_physical_cores_prefers_performance_cores(monkeypatch):
         "_count_physical_cores_linux",
         lambda: 8,
     )
-    monkeypatch.setattr(context, "physical_cores_cache", None)
+    monkeypatch.setattr(context, "physical_cores_cache", {})
 
-    first_value, first_exc = context._count_physical_cores()
-    second_value, second_exc = context._count_physical_cores()
+    first_value = context._count_physical_cores()
+    second_value = context._count_physical_cores()
 
-    assert isinstance(context.physical_cores_cache, dict)
     assert context.physical_cores_cache["performance"] == 4
     assert first_value == 4
-    assert first_exc is None
     assert second_value == 4
-    assert second_exc is None
 
 
 def test_count_physical_cores_fallback_to_physical_on_ambiguity(monkeypatch):
@@ -346,12 +343,11 @@ def test_count_physical_cores_fallback_to_physical_on_ambiguity(monkeypatch):
         "_count_physical_cores_linux",
         lambda: 8,
     )
-    monkeypatch.setattr(context, "physical_cores_cache", None)
+    monkeypatch.setattr(context, "physical_cores_cache", {})
 
-    value, exc = context._count_physical_cores()
+    value = context._count_physical_cores()
 
     assert value == 8
-    assert exc is None
 
 
 def test_count_performance_cores_linux_missing_sysfs(monkeypatch):
@@ -579,14 +575,12 @@ def test_count_physical_cores_cache_is_split_by_mode(monkeypatch):
     monkeypatch.setattr(context, "_count_physical_cores_linux", lambda: 8)
     monkeypatch.setattr(context, "physical_cores_cache", {})
 
-    performance_value, performance_exc = context._count_physical_cores(
+    performance_value = context._count_physical_cores(
         only_performance_cores=True
     )
-    physical_value, physical_exc = context._count_physical_cores(
+    physical_value = context._count_physical_cores(
         only_performance_cores=False
     )
 
     assert performance_value == 4
-    assert performance_exc is None
     assert physical_value == 8
-    assert physical_exc is None
