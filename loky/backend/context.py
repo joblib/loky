@@ -365,6 +365,8 @@ def _count_performance_cores_linux():
     # Count cores at each base frequency. On a non-hybrid system all cores
     # share the same frequency and we simply return that total count.
     # On a hybrid system the highest frequency identifies performance cores.
+    # cpu_freqs is non-empty here so freq_to_count is never empty and
+    # max(freq_to_count) is safe.
     freq_to_count = Counter(cpu_freqs.values())
     return freq_to_count[max(freq_to_count)]
 
