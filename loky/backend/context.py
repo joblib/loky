@@ -280,14 +280,18 @@ def _count_physical_cores(only_performance_cores=True):
         return physical_cores_cache[cache_key]
 
     # Not cached yet, find it
+    exception = None
     try:
         n_cores = _detect_platform_cores(only_performance_cores)
-    except Exception:
+    except Exception as e:
+        exception = e
         if only_performance_cores:
             # Fall back to physical core count if performance detection fails.
             try:
                 n_cores = _detect_platform_cores(False)
-            except Exception:
+                exception = None
+            except Exception as e2:
+                exception = e2
                 n_cores = "not found"
         else:
             n_cores = "not found"
@@ -296,7 +300,7 @@ def _count_physical_cores(only_performance_cores=True):
     if n_cores == "not found":
         warnings.warn(
             "Could not find the number of physical cores for the "
-            "current platform.\n"
+            f"following reason:\n{exception}\n"
             "Returning the number of logical cores instead. You can "
             "silence this warning by setting LOKY_MAX_CPU_COUNT to "
             "the number of cores you want to use."
