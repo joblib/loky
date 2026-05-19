@@ -231,6 +231,33 @@ def _cpu_count_user(os_cpu_count):
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
 
+def _detect_platform_cores(use_performance):
+    """Dispatch to the appropriate platform-specific core-count function.
+
+    When ``use_performance`` is True, try performance-or-physical helpers
+    (performance cores first, fall back to physical on that platform).
+    When False, call only the physical-core helpers directly.
+    Raises NotImplementedError on unsupported platforms.
+    """
+    if sys.platform == "linux":
+        if use_performance:
+            return _count_performance_or_physical_cores_linux()
+        return _count_physical_cores_linux()
+    elif sys.platform == "win32":
+        if use_performance:
+            return _count_performance_or_physical_cores_win32()
+        return _count_physical_cores_win32()
+    elif sys.platform == "darwin":
+        if use_performance:
+            return _count_performance_or_physical_cores_darwin()
+        return _count_physical_cores_darwin()
+    elif sys.platform.startswith("freebsd"):
+        # FreeBSD has no performance-core distinction for now.
+        return _count_performance_or_physical_cores_freebsd()
+    else:
+        raise NotImplementedError(f"unsupported platform: {sys.platform}")
+
+
 def _count_physical_cores(only_performance_cores=True):
     """Return the physical/performance core count, or "not found".
 
@@ -248,41 +275,12 @@ def _count_physical_cores(only_performance_cores=True):
 
     # Not cached yet, find it
     try:
-        if sys.platform == "linux":
-            if only_performance_cores:
-                n_cores = _count_performance_or_physical_cores_linux()
-            else:
-                n_cores = _count_physical_cores_linux()
-        elif sys.platform == "win32":
-            if only_performance_cores:
-                n_cores = _count_performance_or_physical_cores_win32()
-            else:
-                n_cores = _count_physical_cores_win32()
-        elif sys.platform == "darwin":
-            if only_performance_cores:
-                n_cores = _count_performance_or_physical_cores_darwin()
-            else:
-                n_cores = _count_physical_cores_darwin()
-        elif sys.platform.startswith("freebsd"):
-            # FreeBSD has no performance-core distinction for now.
-            n_cores = _count_performance_or_physical_cores_freebsd()
-        else:
-            raise NotImplementedError(f"unsupported platform: {sys.platform}")
-
+        n_cores = _detect_platform_cores(only_performance_cores)
     except Exception:
         if only_performance_cores:
             # Fall back to physical core count if performance detection fails.
             try:
-                if sys.platform == "linux":
-                    n_cores = _count_physical_cores_linux()
-                elif sys.platform == "win32":
-                    n_cores = _count_physical_cores_win32()
-                elif sys.platform == "darwin":
-                    n_cores = _count_physical_cores_darwin()
-                elif sys.platform.startswith("freebsd"):
-                    n_cores = _count_performance_or_physical_cores_freebsd()
-                else:
-                    n_cores = "not found"
+                n_cores = _detect_platform_cores(False)
             except Exception:
                 n_cores = "not found"
         else:
