@@ -237,6 +237,8 @@ def _detect_platform_cores(use_performance):
     When ``use_performance`` is True, try performance-or-physical helpers
     (performance cores first, fall back to physical on that platform).
     When False, call only the physical-core helpers directly.
+
+    Returns the number of cores as an integer.
     Raises NotImplementedError on unsupported platforms.
     """
     if sys.platform == "linux":
@@ -259,7 +261,11 @@ def _detect_platform_cores(use_performance):
 
 
 def _count_physical_cores(only_performance_cores=True):
-    """Return the physical/performance core count, or "not found".
+    """Return the physical/performance core count, or the string "not found".
+
+    When ``only_performance_cores`` is True (default), prefer performance-core
+    counts on hybrid CPUs; fall back to all physical cores if detection fails.
+    When False, count all physical cores regardless of type.
 
     The core count is cached to avoid repeating subprocess calls.
     """
