@@ -3,7 +3,9 @@
 - Improve `cpu_count` hybrid CPU handling by introducing
   `only_performance_cores=True` (default) for
   `cpu_count(only_physical_cores=True)`, preferring performance-core counts
-  when available with safe fallback behavior otherwise (#630).
+  when available with safe fallback behavior otherwise. To restore the old
+  behavior, call:
+  `loky.cpu_count(only_physical_cores=True, only_performance_cores=False)` (#630).
 
 - Support detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)

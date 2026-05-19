@@ -583,6 +583,7 @@ def _count_physical_cores_freebsd():
 
 
 def _count_performance_or_physical_cores_freebsd():
+    # TODO: implement performance core detection for freebsd.
     return _count_physical_cores_freebsd()
 
 

@@ -235,28 +235,25 @@ def test_only_physical_cores_error():
 
             loky.backend.context.physical_cores_cache = {}
 
-            with (
-                patch.object(
-                    loky.backend.context,
-                    "_count_performance_cores_linux",
-                    return_value=None,
-                ),
-                patch.object(
-                    loky.backend.context,
-                    "_count_physical_cores_linux",
-                    side_effect=RuntimeError("physical core probe failed"),
-                ),
+            with patch.object(
+                loky.backend.context,
+                "_count_physical_cores_linux",
+                side_effect=RuntimeError("physical core probe failed"),
             ):
                 with pytest.warns(
                     UserWarning,
                     match="Could not find the number of" " physical cores",
                 ):
-                    cpu_count(only_physical_cores=True)
+                    cpu_count(
+                        only_physical_cores=True, only_performance_cores=False
+                    )
 
                 # Should not warn the second time
                 with warnings.catch_warnings():
                     warnings.simplefilter("error")
-                    cpu_count(only_physical_cores=True)
+                    cpu_count(
+                        only_physical_cores=True, only_performance_cores=False
+                    )
 
         finally:
             os.environ["PATH"] = old_path
@@ -521,20 +518,23 @@ def test_count_performance_cores_linux_hybrid_data(monkeypatch):
         assert context._count_performance_cores_linux() == 1
 
 
+@pytest.mark.parametrize("platform", ["linux", "win32", "darwin"])
 def test_cpu_count_only_performance_cores_false_disables_filtering(
-    monkeypatch,
+    monkeypatch, platform
 ):
     import loky.backend.context as context
 
-    monkeypatch.setattr(context.sys, "platform", "linux")
+    monkeypatch.setattr(context.sys, "platform", platform)
     monkeypatch.setattr(context.os, "cpu_count", lambda: 8)
     monkeypatch.setattr(context, "_cpu_count_user", lambda _: 8)
     monkeypatch.setattr(
         context,
-        "_count_performance_or_physical_cores_linux",
+        f"_count_performance_or_physical_cores_{platform}",
         lambda: 4,
     )
-    monkeypatch.setattr(context, "_count_physical_cores_linux", lambda: 8)
+    monkeypatch.setattr(
+        context, f"_count_physical_cores_{platform}", lambda: 8
+    )
     monkeypatch.setattr(context, "physical_cores_cache", {})
 
     assert context.cpu_count(only_physical_cores=True) == 4
@@ -546,28 +546,41 @@ def test_cpu_count_only_performance_cores_false_disables_filtering(
     )
 
 
+@pytest.mark.parametrize("platform", ["linux", "win32", "darwin"])
 def test_cpu_count_only_performance_cores_ignored_without_physical_cores(
-    monkeypatch,
+    monkeypatch, platform
 ):
     import loky.backend.context as context
 
+    monkeypatch.setattr(context.sys, "platform", platform)
     monkeypatch.setattr(context.os, "cpu_count", lambda: 8)
     monkeypatch.setattr(context, "_cpu_count_user", lambda _: 8)
-
-    # Invalid values are ignored when only_physical_cores is False.
-    assert context.cpu_count(only_performance_cores="wrong") == 8
-
-
-def test_count_physical_cores_cache_is_split_by_mode(monkeypatch):
-    import loky.backend.context as context
-
-    monkeypatch.setattr(context.sys, "platform", "linux")
+    # Patch performance detection to a non-default value to confirm it is
+    # never called when only_physical_cores is False (the default).
     monkeypatch.setattr(
         context,
-        "_count_performance_or_physical_cores_linux",
+        f"_count_performance_or_physical_cores_{platform}",
+        lambda: 2,
+    )
+
+    # only_performance_cores is ignored when only_physical_cores is False
+    assert context.cpu_count(only_performance_cores=True) == 8
+    assert context.cpu_count(only_performance_cores=False) == 8
+
+
+@pytest.mark.parametrize("platform", ["linux", "win32", "darwin"])
+def test_count_physical_cores_cache_is_split_by_mode(monkeypatch, platform):
+    import loky.backend.context as context
+
+    monkeypatch.setattr(context.sys, "platform", platform)
+    monkeypatch.setattr(
+        context,
+        f"_count_performance_or_physical_cores_{platform}",
         lambda: 4,
     )
-    monkeypatch.setattr(context, "_count_physical_cores_linux", lambda: 8)
+    monkeypatch.setattr(
+        context, f"_count_physical_cores_{platform}", lambda: 8
+    )
     monkeypatch.setattr(context, "physical_cores_cache", {})
 
     performance_value = context._count_physical_cores(
@@ -579,3 +592,82 @@ def test_count_physical_cores_cache_is_split_by_mode(monkeypatch):
 
     assert performance_value == 4
     assert physical_value == 8
+
+
+@pytest.mark.parametrize("platform", ["linux", "win32", "darwin"])
+def test_count_performance_cores_fallback_on_invalid_data(
+    monkeypatch, platform
+):
+    # When performance core detection returns None (e.g. because the relevant
+    # sysfs files are missing, empty, or contain non-integer values), the
+    # _count_performance_or_physical_cores_* helpers must fall back to
+    # _count_physical_cores_* and return its value.
+    import loky.backend.context as context
+
+    monkeypatch.setattr(
+        context, f"_count_performance_cores_{platform}", lambda: None
+    )
+    monkeypatch.setattr(
+        context, f"_count_physical_cores_{platform}", lambda: 8
+    )
+
+    result = getattr(
+        context, f"_count_performance_or_physical_cores_{platform}"
+    )()
+    assert result == 8
+
+
+@pytest.mark.parametrize(
+    "base_freq_content",
+    ["", "not-a-number"],
+    ids=["empty", "non_integer"],
+)
+def test_count_performance_cores_linux_invalid_base_freq(
+    monkeypatch, base_freq_content
+):
+    # When base_frequency files contain empty or non-integer content, the
+    # per-CPU entry is skipped (ValueError / empty string) and performance
+    # detection returns None so the caller falls back to physical cores.
+    import loky.backend.context as context
+    import glob
+
+    cpu_paths = [
+        "/sys/devices/system/cpu/cpu0",
+        "/sys/devices/system/cpu/cpu1",
+    ]
+    monkeypatch.setattr(glob, "glob", lambda _: cpu_paths)
+
+    file_contents = {
+        "/sys/devices/system/cpu/cpu0/cpufreq/base_frequency": base_freq_content,
+        "/sys/devices/system/cpu/cpu1/cpufreq/base_frequency": base_freq_content,
+    }
+
+    def _open_side_effect(path, *args, **kwargs):
+        normalized_path = path.replace("\\", "/")
+        if normalized_path in file_contents:
+            return mock_open(read_data=file_contents[normalized_path])()
+        raise OSError()
+
+    with patch("builtins.open", side_effect=_open_side_effect):
+        assert context._count_performance_cores_linux() is None
+
+
+def test_count_performance_cores_darwin_invalid_perflevel_count(monkeypatch):
+    # When hw.perflevel0.physicalcpu contains an empty or non-integer value,
+    # _count_performance_cores_darwin must return None so the caller falls
+    # back to _count_physical_cores_darwin.
+    import loky.backend.context as context
+
+    def _mock_run(cmd, capture_output, text):
+        class _Result:
+            def __init__(self, stdout):
+                self.stdout = stdout
+
+        if cmd == ["sysctl", "-n", "hw.nperflevels"]:
+            return _Result("2\n")
+        if cmd == ["sysctl", "-n", "hw.perflevel0.physicalcpu"]:
+            return _Result("not-a-number\n")
+        raise RuntimeError("unexpected command")
+
+    monkeypatch.setattr(context.subprocess, "run", _mock_run)
+    assert context._count_performance_cores_darwin() is None
