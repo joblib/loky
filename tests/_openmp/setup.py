@@ -1,8 +1,7 @@
 import os
 import sys
-from distutils.core import setup
+from setuptools import setup, Extension
 from Cython.Build import cythonize
-from distutils.extension import Extension
 
 
 if sys.platform == "darwin":
