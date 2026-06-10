@@ -4,7 +4,11 @@
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
 
 - Fix ``cpu_count`` failing on certain OS due to empty
-  ``cpu.max`` file (#479) 
+  ``cpu.max`` file (#479)
+
+- Fix a race condition in ``get_reusable_executor`` where concurrent
+  submissions after executor replacement could raise
+  ``ShutdownExecutorError``. (#632)
 
 ### 3.5.6 - 2025-08-27
 
