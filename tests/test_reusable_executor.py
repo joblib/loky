@@ -933,9 +933,7 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
         def submit_on_resolved_executor():
             try:
-                executor = get_reusable_executor(
-                    max_workers=1, env={"a": "1"}
-                )
+                executor = get_reusable_executor(max_workers=1, env={"a": "1"})
                 resolved.set()
                 barrier.wait(timeout=10)
                 results.append(
