@@ -409,6 +409,7 @@ def _process_worker(
     timeout,
     worker_exit_lock,
     current_depth,
+    worker_id,
 ):
     """Evaluates calls from call_queue and places the results in result_queue.
 
@@ -444,6 +445,9 @@ def _process_worker(
     _process_reference_size = None
     _last_memory_leak_check = None
     pid = os.getpid()
+
+    # set the worker_id environment variable
+    os.environ["LOKY_WORKER_ID"] = str(worker_id)
 
     mp.util.debug(f"Worker started with timeout={timeout}")
     _enable_faulthandler_if_needed()
@@ -588,6 +592,9 @@ class _ExecutorManagerThread(threading.Thread):
 
         # A list of the ctx.Process instances used as workers.
         self.processes = executor._processes
+
+        # A dict mapping worker pids to worker IDs
+        self.process_worker_ids = executor._process_worker_ids
 
         # A ctx.Queue that will be filled with _CallItems derived from
         # _WorkItems for processing by the process workers.
@@ -757,6 +764,7 @@ class _ExecutorManagerThread(threading.Thread):
             # itself: we should not mark the executor as broken.
             with self.processes_management_lock:
                 p = self.processes.pop(result_item, None)
+                self.process_worker_ids.pop(result_item, None)
 
             # p can be None if the executor is concurrently shutting down.
             if p is not None:
@@ -860,7 +868,9 @@ class _ExecutorManagerThread(threading.Thread):
         # terminates descendant workers of the children in case there is some
         # nested parallelism.
         while self.processes:
-            _, p = self.processes.popitem()
+            pid, p = self.processes.popitem()
+            self.process_worker_ids.pop(pid, None)
+
             mp.util.debug(f"terminate process {p.name}, reason: {reason}")
             try:
                 kill_process_tree(p)
@@ -1130,8 +1140,10 @@ class ProcessPoolExecutor(Executor):
         # Map of pids to processes
         self._processes = {}
 
+        # Map of pids to process worker IDs
+        self._process_worker_ids = {}
+
         # Internal variables of the ProcessPoolExecutor
-        self._processes = {}
         self._queue_count = 0
         self._pending_work_items = {}
         self._running_work_items = []
@@ -1213,9 +1225,21 @@ class ProcessPoolExecutor(Executor):
                         _python_exit
                     )
 
+    def _get_available_worker_id(self):
+        if _CURRENT_DEPTH > 0:
+            return -1
+
+        used_ids = set(self._process_worker_ids.values())
+        available_ids = set(range(self._max_workers)) - used_ids
+        if len(available_ids):
+            return available_ids.pop()
+        else:
+            return -1
+
     def _adjust_process_count(self):
         while len(self._processes) < self._max_workers:
             worker_exit_lock = self._context.BoundedSemaphore(1)
+            worker_id = self._get_available_worker_id()
             args = (
                 self._call_queue,
                 self._result_queue,
@@ -1225,8 +1249,10 @@ class ProcessPoolExecutor(Executor):
                 self._timeout,
                 worker_exit_lock,
                 _CURRENT_DEPTH + 1,
+                worker_id,
             )
             worker_exit_lock.acquire()
+
             try:
                 # Try to spawn the process with some environment variable to
                 # overwrite but it only works with the loky context for now.
@@ -1238,6 +1264,7 @@ class ProcessPoolExecutor(Executor):
             p._worker_exit_lock = worker_exit_lock
             p.start()
             self._processes[p.pid] = p
+            self._process_worker_ids[p.pid] = worker_id
         mp.util.debug(
             f"Adjusted process count to {self._max_workers}: "
             f"{[(p.name, pid) for pid, p in self._processes.items()]}"
