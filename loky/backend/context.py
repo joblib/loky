@@ -304,6 +304,7 @@ def _count_physical_cores_win32():
             f"powershell.exe {cmd}".split(),
             capture_output=True,
             text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
         cpu_info = cpu_info.stdout.splitlines()
         return int(cpu_info[0])
@@ -314,6 +315,7 @@ def _count_physical_cores_win32():
         "wmic CPU Get NumberOfCores /Format:csv".split(),
         capture_output=True,
         text=True,
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
     cpu_info = cpu_info.stdout.splitlines()
     cpu_info = [
