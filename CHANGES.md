@@ -1,5 +1,14 @@
 ### 3.6.0 - In development
 
+- Improve `cpu_count` hybrid CPU handling by introducing
+  `only_performance_cores=True` (default) for
+  `cpu_count(only_physical_cores=True)`, preferring performance-core counts
+  when available with safe fallback behavior otherwise.
+  At the time of writing, performance core detection is only implemented for
+  Linux, macOS and Windows. The behavior is unchanged for other platforms.
+  To restore the old behavior for all platforms, call:
+  `loky.cpu_count(only_physical_cores=True, only_performance_cores=False)` (#630).
+
 - Support detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
 

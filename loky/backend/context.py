@@ -13,7 +13,6 @@ import os
 import sys
 import math
 import subprocess
-import traceback
 import warnings
 import multiprocessing as mp
 from multiprocessing import get_context as mp_get_context
@@ -34,9 +33,9 @@ if sys.platform != "win32":
 
 _DEFAULT_START_METHOD = None
 
-# Cache for the number of physical cores to avoid repeating subprocess calls.
+# Cache for physical/performance core counts to avoid repeating subprocess calls.
 # It should not change during the lifetime of the program.
-physical_cores_cache = None
+physical_cores_cache = {}
 
 
 def get_context(method=None):
@@ -75,7 +74,7 @@ def get_start_method():
     return _DEFAULT_START_METHOD
 
 
-def cpu_count(only_physical_cores=False):
+def cpu_count(only_physical_cores=False, only_performance_cores=True):
     """Return the number of CPUs the current process can use.
 
     The returned number of CPUs accounts for:
@@ -94,6 +93,12 @@ def cpu_count(only_physical_cores=False):
     any other way such as: process affinity, Cgroup restricted CPU bandwidth
     or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
     cores is not found, return the number of logical cores.
+
+    The ``only_performance_cores`` parameter controls hybrid-core filtering
+    when ``only_physical_cores`` is True:
+    - ``True`` (default): prefer performance-core counts when available.
+    - ``False``: disable performance-core filtering and count any physical
+      cores, including efficiency and low-power cores of hybrid CPUs.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
     Python < 3.10), see:
@@ -121,21 +126,11 @@ def cpu_count(only_physical_cores=False):
         # Respect user setting
         return max(cpu_count_user, 1)
 
-    cpu_count_physical, exception = _count_physical_cores()
+    cpu_count_physical = _count_physical_cores(
+        only_performance_cores=only_performance_cores
+    )
     if cpu_count_physical != "not found":
         return cpu_count_physical
-
-    # Fallback to default behavior
-    if exception is not None:
-        # warns only the first time
-        warnings.warn(
-            "Could not find the number of physical cores for the "
-            f"following reason:\n{exception}\n"
-            "Returning the number of logical cores instead. You can "
-            "silence this warning by setting LOKY_MAX_CPU_COUNT to "
-            "the number of cores you want to use."
-        )
-        traceback.print_tb(exception.__traceback__)
 
     return aggregate_cpu_count
 
@@ -236,46 +231,78 @@ def _cpu_count_user(os_cpu_count):
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
 
-def _count_physical_cores():
-    """Return a tuple (number of physical cores, exception)
+def _count_physical_cores(only_performance_cores=True):
+    """Return the physical/performance core count, or the string "not found".
 
-    If the number of physical cores is found, exception is set to None.
-    If it has not been found, return ("not found", exception).
+    When ``only_performance_cores`` is True (default), prefer performance-core
+    counts on hybrid CPUs; fall back to all physical cores if detection fails.
+    When False, count all physical cores regardless of type.
 
-    The number of physical cores is cached to avoid repeating subprocess calls.
+    The core count is cached to avoid repeating subprocess calls.
     """
-    exception = None
 
     # First check if the value is cached
     global physical_cores_cache
-    if physical_cores_cache is not None:
-        return physical_cores_cache, exception
+    cache_key = "performance" if only_performance_cores else "physical"
 
-    # Not cached yet, find it
-    try:
-        if sys.platform == "linux":
-            cpu_count_physical = _count_physical_cores_linux()
-        elif sys.platform == "win32":
-            cpu_count_physical = _count_physical_cores_win32()
-        elif sys.platform == "darwin":
-            cpu_count_physical = _count_physical_cores_darwin()
-        elif sys.platform.startswith("freebsd"):
-            cpu_count_physical = _count_physical_cores_freebsd()
+    if cache_key in physical_cores_cache:
+        return physical_cores_cache[cache_key]
+
+    # Not cached yet, find it.
+    # Platform-specific helpers are looked up at call time so that
+    # monkeypatching in tests is correctly reflected.
+    platform = sys.platform
+    if platform.startswith("freebsd"):
+        platform = "freebsd"
+
+    # TODO: implement performance core detection for freebsd.
+    performance_detectors = {
+        "linux": _count_performance_cores_linux,
+        "win32": _count_performance_cores_win32,
+        "darwin": _count_performance_cores_darwin,
+    }
+    physical_detectors = {
+        "linux": _count_physical_cores_linux,
+        "win32": _count_physical_cores_win32,
+        "darwin": _count_physical_cores_darwin,
+        "freebsd": _count_physical_cores_freebsd,
+    }
+
+    exception = None
+    n_cores = None
+
+    if only_performance_cores and platform in performance_detectors:
+        try:
+            n_cores = performance_detectors[platform]()
+        except Exception as e:
+            exception = e
+            n_cores = None
+
+    if n_cores is None:
+        if platform not in physical_detectors:
+            exception = NotImplementedError(
+                f"unsupported platform: {sys.platform}"
+            )
+            n_cores = "not found"
         else:
-            raise NotImplementedError(f"unsupported platform: {sys.platform}")
+            try:
+                n_cores = physical_detectors[platform]()
+            except Exception as e:
+                if exception is None:
+                    exception = e
+                n_cores = "not found"
 
-        # if cpu_count_physical < 1, we did not find a valid value
-        if cpu_count_physical < 1:
-            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
+    if n_cores == "not found":
+        warnings.warn(
+            "Could not find the number of physical cores for the "
+            f"following reason:\n{exception}\n"
+            "Returning the number of logical cores instead. You can "
+            "silence this warning by setting LOKY_MAX_CPU_COUNT to "
+            "the number of cores you want to use."
+        )
+    physical_cores_cache[cache_key] = n_cores
 
-    except Exception as e:
-        exception = e
-        cpu_count_physical = "not found"
-
-    # Put the result in cache
-    physical_cores_cache = cpu_count_physical
-
-    return cpu_count_physical, exception
+    return n_cores
 
 
 def _count_physical_cores_linux():
@@ -295,6 +322,53 @@ def _count_physical_cores_linux():
     cpu_info = cpu_info.stdout.splitlines()
     cpu_info = {line for line in cpu_info if line.startswith("core id")}
     return len(cpu_info)
+
+
+def _count_performance_cores_linux():
+    from collections import Counter
+    import glob
+
+    # Use cpufreq base_frequency as a heuristic for performance-core detection.
+    # On hybrid systems, performance cores typically expose the highest base
+    # frequency while efficiency cores use lower base frequencies.
+    cpu_freqs = {}
+    cpu_paths = sorted(glob.glob("/sys/devices/system/cpu/cpu[0-9]*"))
+    if not cpu_paths:
+        return None
+
+    for cpu_path in cpu_paths:
+        online_path = os.path.join(cpu_path, "online")
+        base_freq_path = os.path.join(cpu_path, "cpufreq", "base_frequency")
+
+        try:
+            with open(online_path) as f:
+                if f.read().strip() == "0":
+                    continue
+        except OSError:
+            # If "online" does not exist (e.g. cpu0), assume online.
+            pass
+
+        try:
+            with open(base_freq_path) as f:
+                base_freq = int(f.read().strip())
+        except (OSError, ValueError):
+            continue
+
+        if base_freq < 1:
+            continue
+
+        cpu_freqs[cpu_path] = base_freq
+
+    if not cpu_freqs:
+        return None
+
+    # Count cores at each base frequency. On a non-hybrid system all cores
+    # share the same frequency and we simply return that total count.
+    # On a hybrid system the highest frequency identifies performance cores.
+    # cpu_freqs is non-empty here so freq_to_count is never empty and
+    # max(freq_to_count) is safe.
+    freq_to_count = Counter(cpu_freqs.values())
+    return freq_to_count[max(freq_to_count)]
 
 
 def _count_physical_cores_win32():
@@ -322,6 +396,108 @@ def _count_physical_cores_win32():
     return sum(map(int, cpu_info))
 
 
+def _count_performance_cores_win32():
+    try:
+        import ctypes
+    except ImportError:
+        return None
+
+    relation_processor_core = 0
+    error_insufficient_buffer = 122
+    offset_efficiency_class = 9
+    # EfficiencyClass is a BYTE field in PROCESSOR_RELATIONSHIP.
+    size_efficiency_class = 1
+    min_record_size = offset_efficiency_class + size_efficiency_class
+    # GetLogicalProcessorInformationEx API (header: sysinfoapi.h, lib: Kernel32.lib):
+    # https://learn.microsoft.com/windows/win32/api/sysinfoapi/nf-sysinfoapi-getlogicalprocessorinformationex
+    # PROCESSOR_RELATIONSHIP layout and EfficiencyClass field:
+    # https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-processor_relationship
+    # Offset to EfficiencyClass in SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX:
+    # 4 bytes Relationship + 4 bytes Size + 1 byte Flags (= offset 9).
+
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        get_processor_info = kernel32.GetLogicalProcessorInformationEx
+    except (AttributeError, OSError):
+        return None
+
+    get_processor_info.argtypes = [
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_ulong),
+    ]
+    get_processor_info.restype = ctypes.c_bool
+
+    buffer_size = ctypes.c_ulong(0)
+    success = get_processor_info(
+        relation_processor_core, None, ctypes.byref(buffer_size)
+    )
+    if success:
+        return None
+    if ctypes.get_last_error() != error_insufficient_buffer:
+        return None
+    if buffer_size.value <= 0:
+        return None
+
+    buffer = ctypes.create_string_buffer(buffer_size.value)
+    success = get_processor_info(
+        relation_processor_core,
+        ctypes.byref(buffer),
+        ctypes.byref(buffer_size),
+    )
+    if not success:
+        return None
+
+    raw_buffer = memoryview(buffer.raw)
+    offset = 0
+    efficiency_classes = []
+    while offset < buffer_size.value:
+        # 8 bytes are needed to read Relationship (4 bytes) and Size (4 bytes).
+        if offset + 8 > buffer_size.value:
+            return None
+
+        relationship = int.from_bytes(
+            raw_buffer[offset : offset + 4], "little"
+        )
+        record_size = int.from_bytes(
+            raw_buffer[offset + 4 : offset + 8], "little"
+        )
+
+        if record_size <= 0 or offset + record_size > buffer_size.value:
+            return None
+
+        if relationship == relation_processor_core:
+            # Validate record size and buffer bounds before reading
+            # EfficiencyClass field.
+            if (
+                record_size < min_record_size
+                or offset + min_record_size > buffer_size.value
+            ):
+                return None
+            efficiency_classes.append(
+                raw_buffer[offset + offset_efficiency_class]
+            )
+
+        offset += record_size
+
+    if not efficiency_classes:
+        return None
+
+    unique_classes = set(efficiency_classes)
+    if len(unique_classes) <= 1:
+        # Not a hybrid topology, or unavailable class information.
+        return None
+
+    # On Windows hybrid systems, higher EfficiencyClass values correspond to
+    # higher-performance cores.
+    performance_class = max(unique_classes)
+    performance_cores = sum(
+        efficiency_class == performance_class
+        for efficiency_class in efficiency_classes
+    )
+    return performance_cores
+
+
 def _count_physical_cores_darwin():
     cpu_info = subprocess.run(
         "sysctl -n hw.physicalcpu".split(),
@@ -330,6 +506,37 @@ def _count_physical_cores_darwin():
     )
     cpu_info = cpu_info.stdout
     return int(cpu_info)
+
+
+def _count_performance_cores_darwin():
+    # On macOS with hybrid topologies, perflevel0 reports performance cores.
+    nperflevels_output = subprocess.run(
+        "sysctl -n hw.nperflevels".split(),
+        capture_output=True,
+        text=True,
+    )
+    try:
+        nperflevels = int(nperflevels_output.stdout.strip())
+    except (TypeError, ValueError):
+        return None
+
+    if nperflevels <= 1:
+        return None
+
+    cpu_info = subprocess.run(
+        "sysctl -n hw.perflevel0.physicalcpu".split(),
+        capture_output=True,
+        text=True,
+    )
+    try:
+        cpu_count_performance = int(cpu_info.stdout.strip())
+    except (TypeError, ValueError):
+        return None
+
+    if cpu_count_performance < 1:
+        return None
+
+    return cpu_count_performance
 
 
 def _count_physical_cores_freebsd():
