@@ -10,6 +10,8 @@
   submissions after executor replacement could raise
   ``ShutdownExecutorError``. (#632)
 
+- Support Python 3.15. (#626)
+
 ### 3.5.6 - 2025-08-27
 
 - Fix ``resource_tracker`` compatibility with python 3.13.7+. (#461)
