@@ -1228,3 +1228,26 @@ def test_no_crash_max_workers_on_windows():
     assert len(executor._processes) == _MAX_WINDOWS_WORKERS
 
     executor.shutdown()
+
+
+def test_thread_local() -> None:
+    """``get_reusable_executor()`` returns a thread-local executor."""
+
+    def in_thread():
+        executors = set()
+        for _ in range(100):
+            executors.add(id(get_reusable_executor()))
+        assert len(executors) == 1
+        executor_ids.add(executors.pop())
+
+    executor_ids = set()
+    threads = []
+    for _ in range(10):
+        t = threading.Thread(target=in_thread)
+        threads.append(t)
+        t.start()
+    for t in threads:
+        t.join()
+
+    # Should have 10 different IDs:
+    assert len(executor_ids) == 10
