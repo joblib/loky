@@ -21,14 +21,16 @@ __all__ = ["get_reusable_executor"]
 
 class _ExecutorStorage(threading.local):
     """Cache a thread-local executor"""
-    executor : _ReusablePoolExecutor | None = None
-    executor_kwargs : dict[str, Any] | None = None
+
+    executor: _ReusablePoolExecutor | None = None
+    executor_kwargs: dict[str, Any] | None = None
 
 
-# Singleton executor and id management
+# Lock for id management:
 _executor_lock = threading.RLock()
 _next_executor_id = 0
 
+# Thread-local executor storage:
 _executor_storage = _ExecutorStorage()
 
 
@@ -181,9 +183,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         )
         if executor is None:
             is_reused = False
-            mp.util.debug(
-                f"Create a executor with max_workers={max_workers}."
-            )
+            mp.util.debug(f"Create a executor with max_workers={max_workers}.")
             executor_id = _get_next_executor_id()
             _executor_storage.executor_kwargs = kwargs
             _executor_storage.executor = executor = cls(
@@ -216,10 +216,9 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                     f"reused ({reason})."
                 )
                 executor.shutdown(wait=True, kill_workers=kill_workers)
-                _executor_storage.executor = executor = _executor_storage.executor_kwargs = None
-                # Build and return the replacement while still holding
-                # the singleton lock so this branch never returns the
-                # stale executor that was just shut down.
+                _executor_storage.executor = executor = (
+                    _executor_storage.executor_kwargs
+                ) = None
                 return cls.get_reusable_executor(
                     max_workers=max_workers, **kwargs
                 )
@@ -257,9 +256,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
             self._max_workers = max_workers
             for _ in range(max_workers, nb_children_alive):
                 self._call_queue.put(None)
-        while (
-            len(self._processes) > max_workers and not self._flags.broken
-        ):
+        while len(self._processes) > max_workers and not self._flags.broken:
             time.sleep(1e-3)
 
         self._adjust_process_count()
