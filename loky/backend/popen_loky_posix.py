@@ -14,7 +14,6 @@ from multiprocessing.context import set_spawning_popen
 
 from . import reduction, resource_tracker, spawn
 
-
 __all__ = ["Popen"]
 
 
@@ -112,10 +111,11 @@ class Popen:
             # for fd in self._fds:
             #     _mk_inheritable(fd)
 
-            cmd_python = [sys.executable]
-            cmd_python += ["-m", self.__module__]
-            cmd_python += ["--process-name", str(process_obj.name)]
-            cmd_python += ["--pipe", str(reduction._mk_inheritable(child_r))]
+            cmd_python = spawn.get_command_line(
+                self.__module__,
+                pipe_handle=reduction._mk_inheritable(child_r),
+                process_name=process_obj.name,
+            )
             reduction._mk_inheritable(child_w)
             reduction._mk_inheritable(tracker_fd)
             self._fds += [child_r, child_w, tracker_fd]
@@ -149,6 +149,32 @@ class Popen:
         return True
 
 
+def main(pipe_handle, process_name=None):
+    pipe_handle = int(pipe_handle)
+    exitcode = 1
+    try:
+        with os.fdopen(pipe_handle, "rb") as from_parent:
+            process.current_process()._inheriting = True
+            try:
+                prep_data = pickle.load(from_parent)
+                spawn.prepare(prep_data)
+                process_obj = pickle.load(from_parent)
+            finally:
+                del process.current_process()._inheriting
+
+        exitcode = process_obj._bootstrap()
+    except Exception:
+        print("\n\n" + "-" * 80)
+        print(f"{process_name} failed with traceback: ")
+        print("-" * 80)
+        import traceback
+
+        print(traceback.format_exc())
+        print("\n" + "-" * 80)
+
+    return exitcode
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -164,30 +190,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    info = {}
-    exitcode = 1
-    try:
-        with os.fdopen(args.pipe, "rb") as from_parent:
-            process.current_process()._inheriting = True
-            try:
-                prep_data = pickle.load(from_parent)
-                spawn.prepare(prep_data)
-                process_obj = pickle.load(from_parent)
-            finally:
-                del process.current_process()._inheriting
-
-        exitcode = process_obj._bootstrap()
-    except Exception:
-        print("\n\n" + "-" * 80)
-        print(f"{args.process_name} failed with traceback: ")
-        print("-" * 80)
-        import traceback
-
-        print(traceback.format_exc())
-        print("\n" + "-" * 80)
-    finally:
-        if from_parent is not None:
-            from_parent.close()
-
-        sys.exit(exitcode)
+    sys.exit(main(args.pipe, args.process_name))
