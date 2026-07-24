@@ -15,7 +15,7 @@ Task & results serialization
 
 To share function definition across multiple python processes, it is necessary to rely on a serialization protocol. The standard protocol in python is :mod:`pickle` but its default implementation in the standard library has several limitations. For instance, it cannot serialize functions which are defined interactively or in the :code:`__main__` module.
 
-To avoid this limitation, :mod:`loky` relies on |cloudpickle| when it is present. |cloudpickle| is a fork of the pickle protocol which allows the serialization of a greater number of objects and it can be installed using :code:`pip install cloudpickle`. As this library is slower than the :mod:`pickle` module in the standard library, by default, :mod:`loky` uses it only to serialize objects which are detected to be in the :code:`__main__` module.
+To avoid this limitation, :mod:`loky` relies on |cloudpickle| when it is present. |cloudpickle| is a fork of the pickle protocol which allows the serialization of a greater number of objects and it can be installed using :code:`pip install cloudpickle`. |cloudpickle| is used by default to serialize tasks and results, because it can handle interactively defined functions, lambdas, and locally defined classes that the standard pickle module cannot pickle. Recent versions of |cloudpickle| are based on the C implementation of pickle, so this is not a significant performance trade-off compared to plain pickle for most workloads.
 
 There are three ways to temper with the serialization in :mod:`loky`:
 
@@ -27,13 +27,6 @@ The benefits and drawbacks of each method are highlighted in this example_.
 
 
 .. autofunction:: loky.wrap_non_picklable_objects
-
-
-Processes start methods in :mod:`loky`
---------------------------------------
-
-The API in :mod:`loky` provides a :func:`set_start_method` function to set the default  :code:`start_method`, which controls the way :class:`Process` are started. The available methods are {:code:`'loky'`, :code:`'loky_int_main'`, :code:`'spawn'`}. On unix, the start methods {:code:`'fork'`, :code:`'forkserver'`} are also available.
-Note that :mod:`loky` is not compatible with :func:`multiprocessing.set_start_method` function. The default start method needs to be set with the provided function to ensure a proper behavior.
 
 
 Protection against memory leaks
