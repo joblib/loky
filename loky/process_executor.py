@@ -117,6 +117,15 @@ except ImportError:
     _USE_PSUTIL = False
 
 
+class _RecycledWorkerPid(int):
+    """PID of a worker that the executor itself decided to shut down.
+
+    Behaves like the plain PID the workers usually send back, but lets the
+    manager thread tell a recycling it triggered on purpose from a worker that
+    stopped on its own.
+    """
+
+
 class _ThreadWakeup:
     def __init__(self):
         self._closed = False
@@ -524,7 +533,7 @@ def _process_worker(
                 # The process is leaking memory: let the master process
                 # know that we need to start a new worker.
                 mp.util.info("Memory leak detected: shutting down worker")
-                result_queue.put(pid)
+                result_queue.put(_RecycledWorkerPid(pid))
                 with worker_exit_lock:
                     mp.util.debug("Exit due to memory leak")
                     return
@@ -609,6 +618,10 @@ class _ExecutorManagerThread(threading.Thread):
         # A lock to avoid concurrent shutdown of workers on timeout and spawn
         # of new processes or shut down
         self.processes_management_lock = executor._processes_management_lock
+
+        # Long-running executors can recycle workers many times over their
+        # lifetime; the user only needs to hear about it once.
+        self.recycling_warned = False
 
         super().__init__(name="ExecutorManagerThread")
         if sys.version_info < (3, 9):
@@ -779,12 +792,27 @@ class _ExecutorManagerThread(threading.Thread):
                     executor is not None
                     and len(self.processes) < executor._max_workers
                 ):
-                    warnings.warn(
-                        "A worker stopped while some jobs were given to the "
-                        "executor. This can be caused by a too short worker "
-                        "timeout or by a memory leak.",
-                        UserWarning,
-                    )
+                    if not isinstance(result_item, _RecycledWorkerPid):
+                        warnings.warn(
+                            "A worker stopped while some jobs were given to "
+                            "the executor. This can be caused by a too short "
+                            "worker timeout or by a memory leak.",
+                            UserWarning,
+                        )
+                    elif not self.recycling_warned:
+                        # Recycling is a deliberate decision of the executor and
+                        # it is transparent to the caller, so repeating it for
+                        # every worker of a long-running executor is just noise.
+                        self.recycling_warned = True
+                        warnings.warn(
+                            "A worker was restarted while some jobs were given "
+                            "to the executor because it was using more than "
+                            f"{_MAX_MEMORY_LEAK_SIZE / 1e6:.0f} MB more memory "
+                            "than when it started, which usually indicates a "
+                            "memory leak. Further restarts of this executor "
+                            "will not be reported.",
+                            UserWarning,
+                        )
                     with executor._processes_management_lock:
                         executor._adjust_process_count()
                     executor = None

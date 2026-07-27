@@ -1012,7 +1012,7 @@ class ExecutorTest:
             leaked_size = sum(len(buffer) for buffer in os._loky_leak)
             return os.getpid(), leaked_size
 
-        with pytest.warns(UserWarning, match="memory leak"):
+        with pytest.warns(UserWarning, match="memory leak") as record:
             # Total run time should be 3s which is way over the 1s cooldown
             # period between two consecutive memory checks in the worker.
             futures = [executor.submit(_leak_some_memory) for _ in range(300)]
@@ -1029,6 +1029,9 @@ class ExecutorTest:
             # memory check.
             for _, leak_size in results:
                 assert leak_size / 1e6 < 650
+
+        # The worker gets recycled repeatedly but that is only reported once
+        assert sum("memory leak" in str(w.message) for w in record) == 1
 
     def test_reference_cycle_collection(self):
         # make the parallel call create a reference cycle and make

@@ -10,6 +10,12 @@
   submissions after executor replacement could raise
   ``ShutdownExecutorError``. (#632)
 
+- Report a worker that is recycled because of a suspected memory leak with a
+  message that says so, and only once per executor instead of once per restart.
+  Such a restart used to repeatedly emit the generic "A worker stopped while
+  some jobs were given to the executor" warning for the whole life of a
+  long-running executor.
+
 ### 3.5.6 - 2025-08-27
 
 - Fix ``resource_tracker`` compatibility with python 3.13.7+. (#461)
