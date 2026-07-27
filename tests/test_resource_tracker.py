@@ -289,6 +289,57 @@ class TestResourceTracker:
         # Uncatchable signal.
         self.check_resource_tracker_death(signal.SIGKILL, True)
 
+    def test_resource_tracker_keeps_process_handle(self):
+        # The pid alone is not enough to reap the tracker safely on Windows
+        resource_tracker.ensure_running()
+        handle = resource_tracker._resource_tracker._proc_handle
+        if sys.platform == "win32":
+            assert handle is not None
+        else:
+            assert handle is None
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="posix-only teardown path"
+    )
+    def test_resource_tracker_del_already_reaped(self, monkeypatch):
+        # An already reaped tracker raises ChildProcessError from os.waitpid,
+        # which must not escape the destructor.
+        base = resource_tracker._ResourceTracker
+        if not hasattr(base, "__del__"):
+            pytest.skip("this Python version has no ResourceTracker.__del__")
+
+        def raising_del(self):
+            raise ChildProcessError(errno.ECHILD, "No child processes")
+
+        monkeypatch.setattr(base, "__del__", raising_del)
+        resource_tracker.ResourceTracker().__del__()
+
+    def test_resource_tracker_del_does_not_reap_by_pid_on_win32(
+        self, monkeypatch
+    ):
+        # Non-regression test: the inherited teardown ends in os.waitpid, which
+        # on Windows resolves the pid through OpenProcess and then either fails
+        # or blocks forever on a recycled pid, so it must not be reached there.
+        base = resource_tracker._ResourceTracker
+        if not hasattr(base, "__del__"):
+            pytest.skip("this Python version has no ResourceTracker.__del__")
+
+        reaped = []
+        monkeypatch.setattr(base, "__del__", lambda self: reaped.append(True))
+        monkeypatch.setattr(sys, "platform", "win32")
+
+        tracker = resource_tracker.ResourceTracker()
+        r, w = os.pipe()
+        os.close(r)
+        tracker._fd, tracker._pid = w, 123456
+        tracker.__del__()
+
+        assert not reaped, "the destructor reaped the tracker by pid"
+        assert tracker._fd is None and tracker._pid is None
+        with pytest.raises(OSError):
+            # the "alive" fd must have been closed to stop the tracker
+            os.close(w)
+
     def test_loky_process_inherit_multiprocessing_resource_tracker(self):
         cmd = """if 1:
         from loky import get_reusable_executor
