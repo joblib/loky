@@ -49,17 +49,17 @@ jobs:
           - name: windows-py313
             os: windows-latest
             PYTHON_VERSION: "3.13"
-          - name: windows-py39
+          - name: windows-py310
             os: windows-latest
-            PYTHON_VERSION: "3.9"
+            PYTHON_VERSION: "3.10"
             LOKY_TEST_NO_CIM: "true"
 
           - name: macos-py313
             os: macos-latest
             PYTHON_VERSION: "3.13"
-          - name: macos-py39
+          - name: macos-py310
             os: macos-latest
-            PYTHON_VERSION: "3.9"
+            PYTHON_VERSION: "3.10"
 
           - name: linux-py314-free-threading
             os: ubuntu-latest
@@ -71,18 +71,18 @@ jobs:
             PYTHON_VERSION: "3.13"
             LOKY_TEST_NO_LSCPU: "true"
             EXTRA_PACKAGES: "viztracer"
-          - name: linux-py39-joblib-tests
+          - name: linux-py310-joblib-tests
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
+            PYTHON_VERSION: "3.10"
             JOBLIB_TESTS: "true"
-          - name: linux-python-py39-high-memory
+          - name: linux-python-py310-high-memory
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
+            PYTHON_VERSION: "3.10"
             RUN_MEMORY: "true"
-          - name: linux-py39
+          - name: linux-py310
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
-            # Do not install psutil on Python 3.9 to have some CI runs that
+            PYTHON_VERSION: "3.10"
+            # Do not install psutil on Python 3.10 to have some CI runs that
             # tests that loky has no hard dependency on psutil.
             NO_PSUTIL: "true"
 
