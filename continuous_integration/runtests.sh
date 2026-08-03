@@ -21,7 +21,7 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
     git clone https://github.com/joblib/joblib.git src_joblib
     cd src_joblib
     pip install pytest
-    pip install threadpoolctl  # required by some joblib tests
+    pip install threadpoolctl pytest-asyncio  # required by some joblib tests
 
     pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
