@@ -11,7 +11,7 @@
   ``ShutdownExecutorError``. (#632)
 
 - Dropped support for Python 3.9, as it is no longer receiving
-  security updates. (#TODO)
+  security updates. (#647)
 
 ### 3.5.6 - 2025-08-27
 
