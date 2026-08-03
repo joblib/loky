@@ -26,6 +26,7 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
     pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
     cp "$LOKY_PATH"/continuous_integration/copy_loky.sh $JOBLIB/externals
+    cp conftest.py $JOBLIB/conftest.py
     (cd $JOBLIB/externals && bash copy_loky.sh "$LOKY_PATH")
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 else
