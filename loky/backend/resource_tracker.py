@@ -146,9 +146,9 @@ class ResourceTracker(_ResourceTracker):
             except OSError:
                 # The resource_tracker has already been terminated.
                 pass
-        elif self._proc_handle is not None:
+        elif (proc_handle := self._proc_handle) is not None:
             # Do not leak the handle when a dead tracker gets relaunched
-            _winapi.CloseHandle(self._proc_handle)
+            _winapi.CloseHandle(proc_handle)
         self._fd = None
         self._pid = None
         self._proc_handle = None
@@ -246,17 +246,20 @@ class ResourceTracker(_ResourceTracker):
         assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
 
     def __del__(self):
-        # ignore error due to trying to clean up child process which has already been
-        # shutdown on windows. See https://github.com/joblib/loky/pull/450
-        # This is only required if __del__ is defined
+        # There is nothing to override on Python versions that do not define a
+        # destructor on the base class.
         if not hasattr(_ResourceTracker, "__del__"):
             return
         if sys.platform == "win32":
+            # Tearing down the tracker on Windows requires specific handling.
             self._stop_win32()
             return
         try:
             super().__del__()
         except ChildProcessError:
+            # ECHILD when the tracker is not a child of this process, e.g. in
+            # an os.fork()ed child that inherited _pid. cpython guards this
+            # itself since 3.13 (gh-140485) but 3.12 never got the backport.
             pass
 
     def _stop_win32(self, close=os.close):

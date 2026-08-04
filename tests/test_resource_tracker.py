@@ -303,7 +303,8 @@ class TestResourceTracker:
     )
     def test_resource_tracker_del_already_reaped(self, monkeypatch):
         # An already reaped tracker raises ChildProcessError from os.waitpid,
-        # which must not escape the destructor.
+        # which must not escape the destructor. Still needed on 3.12, whose
+        # _stop_locked has an unguarded waitpid (see joblib/joblib#1708).
         base = resource_tracker._ResourceTracker
         if not hasattr(base, "__del__"):
             pytest.skip("this Python version has no ResourceTracker.__del__")
