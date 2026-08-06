@@ -50,18 +50,18 @@ jobs:
             os: windows-latest
             PYTHON_VERSION: "3.13"
             EXTRA_PACKAGES: "numpy tblib"
-          - name: windows-py39
+          - name: windows-py310
             os: windows-latest
-            PYTHON_VERSION: "3.9"
+            PYTHON_VERSION: "3.10"
             LOKY_TEST_NO_CIM: "true"
             EXTRA_PACKAGES: "numpy tblib"
           - name: macos-py313
             os: macos-latest
             PYTHON_VERSION: "3.13"
             EXTRA_PACKAGES: "numpy tblib"
-          - name: macos-py39
+          - name: macos-py310
             os: macos-latest
-            PYTHON_VERSION: "3.9"
+            PYTHON_VERSION: "3.10"
 
           - name: linux-py315
             os: ubuntu-latest
@@ -81,19 +81,19 @@ jobs:
             PYTHON_VERSION: "3.13"
             LOKY_TEST_NO_LSCPU: "true"
             EXTRA_PACKAGES: "numpy tblib viztracer"
-          - name: linux-py39-joblib-tests
+          - name: linux-py310-joblib-tests
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
+            PYTHON_VERSION: "3.10"
             JOBLIB_TESTS: "true"
-          - name: linux-python-py39-high-memory
+          - name: linux-python-py310-high-memory
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
+            PYTHON_VERSION: "3.10"
             RUN_MEMORY: "true"
             EXTRA_PACKAGES: "numpy tblib"
-          - name: linux-py39
+          - name: linux-py310
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
-            # Do not install psutil on Python 3.9 to have some CI runs that
+            PYTHON_VERSION: "3.10"
+            # Do not install psutil on Python 3.10 to have some CI runs that
             # tests that loky has no hard dependency on psutil.
             NO_PSUTIL: "true"
 

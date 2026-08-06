@@ -286,7 +286,7 @@ def _count_physical_cores_linux():
         cpu_info = cpu_info.stdout.splitlines()
         cpu_info = {line for line in cpu_info if not line.startswith("#")}
         return len(cpu_info)
-    except:
+    except Exception:
         pass  # fallback to /proc/cpuinfo
 
     cpu_info = subprocess.run(
@@ -299,21 +299,23 @@ def _count_physical_cores_linux():
 
 def _count_physical_cores_win32():
     try:
-        cmd = "-Command (Get-CimInstance -ClassName Win32_Processor).NumberOfCores"
+        cmd = "-NoProfile -Command (Get-CimInstance -ClassName Win32_Processor).NumberOfCores"
         cpu_info = subprocess.run(
             f"powershell.exe {cmd}".split(),
             capture_output=True,
             text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
         cpu_info = cpu_info.stdout.splitlines()
         return int(cpu_info[0])
-    except:
+    except Exception:
         pass  # fallback to wmic (older Windows versions; deprecated now)
 
     cpu_info = subprocess.run(
         "wmic CPU Get NumberOfCores /Format:csv".split(),
         capture_output=True,
         text=True,
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
     cpu_info = cpu_info.stdout.splitlines()
     cpu_info = [

@@ -3,6 +3,7 @@ import subprocess
 import sys
 import gc
 import ctypes
+from concurrent.futures import ThreadPoolExecutor
 from tempfile import NamedTemporaryFile
 import pytest
 import warnings
@@ -923,6 +924,53 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
             for t in threads:
                 t.join()
         assert output_collector == ["ok"] * len(threads)
+
+    def test_reusable_executor_submit_during_shutdown_race(self):
+        resolved = threading.Event()
+        barrier = threading.Barrier(2)
+        results = []
+        errors = []
+
+        def submit_on_resolved_executor():
+            try:
+                executor = get_reusable_executor(max_workers=1, env={"a": "1"})
+                resolved.set()
+                barrier.wait(timeout=10)
+                results.append(
+                    executor.submit(id_sleep, 1, 0).result(timeout=10)
+                )
+            except Exception as e:
+                errors.append(e)
+
+        thread = threading.Thread(target=submit_on_resolved_executor)
+        thread.start()
+
+        assert resolved.wait(timeout=10)
+        get_reusable_executor(max_workers=1, env={"a": "2"})
+        barrier.wait(timeout=10)
+        thread.join(timeout=10)
+
+        assert not thread.is_alive()
+        assert not any(isinstance(e, ShutdownExecutorError) for e in errors)
+        if errors:
+            raise errors[0]
+        assert results == [1]
+
+    @pytest.mark.parametrize("iteration", range(2))
+    def test_reusable_executor_submit_with_concurrent_env_changes(
+        self, iteration
+    ):
+        def submit_with_env(i):
+            executor = get_reusable_executor(
+                max_workers=1, env={"a": f"{iteration}-{i}"}
+            )
+            return executor.submit(id_sleep, i, 0).result(timeout=10)
+
+        n_submissions = 20
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            results = list(executor.map(submit_with_env, range(n_submissions)))
+
+        assert results == list(range(n_submissions))
 
     def test_reusable_executor_reuse_true(self):
         executor = get_reusable_executor(max_workers=3, timeout=42)

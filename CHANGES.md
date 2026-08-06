@@ -1,7 +1,17 @@
 ### 3.6.0 - In development
 
 - Support detection of the number of physical cores in
-  `cpu_count(only_physical_cores=True)` on FreeBSD.
+  `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
+
+- Fix ``cpu_count`` failing on certain OS due to empty
+  ``cpu.max`` file (#479)
+
+- Fix a race condition in ``get_reusable_executor`` where concurrent
+  submissions after executor replacement could raise
+  ``ShutdownExecutorError``. (#632)
+
+- Drop support for Python 3.9, as it is no longer receiving security
+  updates. (#647)
 
 - Support Python 3.15. (#626)
 
