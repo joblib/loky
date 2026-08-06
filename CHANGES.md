@@ -13,6 +13,8 @@
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
 
+- Support Python 3.15. (#626)
+
 ### 3.5.6 - 2025-08-27
 
 - Fix ``resource_tracker`` compatibility with python 3.13.7+. (#461)

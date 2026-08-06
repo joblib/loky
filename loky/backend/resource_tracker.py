@@ -43,6 +43,15 @@ import shutil
 import sys
 import signal
 import warnings
+
+# Python 3.15+ uses JSON format for resource tracker messages
+try:
+    from multiprocessing.resource_tracker import _decode_message
+
+    _HAS_DECODE_MESSAGE = True
+except ImportError:
+    _HAS_DECODE_MESSAGE = False
+
 from multiprocessing import util
 from multiprocessing.resource_tracker import (
     ResourceTracker as _ResourceTracker,
@@ -284,14 +293,17 @@ def main(fd, verbose=0):
         with open(fd, "rb") as f:
             for line in f:
                 try:
-                    splitted = line.strip().decode("ascii").split(":")
-                    # name can potentially contain separator symbols (for
-                    # instance folders on Windows)
-                    cmd, name, rtype = (
-                        splitted[0],
-                        ":".join(splitted[1:-1]),
-                        splitted[-1],
-                    )
+                    if _HAS_DECODE_MESSAGE:
+                        # Python 3.15+ uses JSON format; _decode_message handles both
+                        cmd, rtype, name = _decode_message(line)
+                    else:
+                        # Old format: CMD:name:rtype (name can contain ":")
+                        splitted = line.strip().decode("ascii").split(":")
+                        cmd, name, rtype = (
+                            splitted[0],
+                            ":".join(splitted[1:-1]),
+                            splitted[-1],
+                        )
 
                     if rtype not in _CLEANUP_FUNCS:
                         raise ValueError(
