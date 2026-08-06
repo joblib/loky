@@ -28,6 +28,32 @@ def get_rtracker_fd():
     return resource_tracker._resource_tracker._fd
 
 
+class _RecordingWinapi:
+    """Stand-in for _winapi so the win32 paths can be tested on any platform"""
+
+    def __init__(self, create_process=None):
+        self.waited = []
+        self.closed = []
+        self._create_process = create_process
+
+    def WaitForSingleObject(self, handle, timeout):
+        self.waited.append((handle, timeout))
+
+    def CloseHandle(self, handle):
+        self.closed.append(handle)
+
+    def CreateProcess(self, *args):
+        return self._create_process
+
+
+def _make_stopped_tracker(handle=42):
+    tracker = resource_tracker.ResourceTracker()
+    r, w = os.pipe()
+    os.close(r)
+    tracker._fd, tracker._pid, tracker._proc_handle = w, 123456, handle
+    return tracker, w
+
+
 class TestResourceTracker:
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
     def test_resource_utils(self, rtype):
@@ -314,6 +340,64 @@ class TestResourceTracker:
 
         monkeypatch.setattr(base, "__del__", raising_del)
         resource_tracker.ResourceTracker().__del__()
+
+    def test_resource_tracker_del_without_base_del(self, monkeypatch):
+        # Nothing to override before cpython grew a destructor (gh-88887)
+        monkeypatch.delattr(
+            resource_tracker._ResourceTracker, "__del__", raising=False
+        )
+        tracker, w = _make_stopped_tracker()
+        tracker.__del__()
+
+        assert tracker._fd == w
+        os.close(w)
+
+    def test_resource_tracker_stop_win32_waits_on_handle(self, monkeypatch):
+        # The point of the fix: reap through the CreateProcess handle, bounded,
+        # rather than through the pid, which OpenProcess can resolve to a
+        # recycled and unrelated process.
+        winapi = _RecordingWinapi()
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        tracker, w = _make_stopped_tracker()
+        tracker._stop_win32()
+
+        timeout = resource_tracker._WIN32_STOP_TIMEOUT_MS
+        assert winapi.waited == [(42, timeout)]
+        assert winapi.closed == [42]
+        assert tracker._fd is None
+        assert tracker._pid is None
+        assert tracker._proc_handle is None
+        with pytest.raises(OSError):
+            # the "alive" fd must have been closed to stop the tracker
+            os.close(w)
+
+    # a child that inherited the tracker has no handle of its own to close
+    @pytest.mark.parametrize("handle", [42, None])
+    def test_resource_tracker_relaunch_closes_handle(
+        self, monkeypatch, handle
+    ):
+        # A tracker that died and gets relaunched must not leak its handle
+        winapi = _RecordingWinapi()
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(os, "name", "nt")
+        tracker, w = _make_stopped_tracker(handle=handle)
+        with pytest.warns(UserWarning, match="died unexpectedly"):
+            tracker._teardown_dead_process()
+
+        assert winapi.closed == ([] if handle is None else [handle])
+        assert tracker._proc_handle is None
+
+    def test_spawnv_passfds_keeps_the_process_handle(self, monkeypatch):
+        # Only the thread handle is closed; the process handle is returned
+        winapi = _RecordingWinapi(create_process=(42, 43, 123456, 0))
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(sys, "platform", "win32")
+
+        assert resource_tracker.spawnv_passfds("exe", ["exe"], []) == (
+            123456,
+            42,
+        )
+        assert winapi.closed == [43]
 
     def test_resource_tracker_del_does_not_reap_by_pid_on_win32(
         self, monkeypatch
