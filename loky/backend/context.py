@@ -16,6 +16,9 @@ import subprocess
 import traceback
 import warnings
 import multiprocessing as mp
+import ctypes
+
+from ctypes import wintypes
 from multiprocessing import get_context as mp_get_context
 from multiprocessing.context import BaseContext
 from concurrent.futures.process import _MAX_WINDOWS_WORKERS
@@ -299,15 +302,11 @@ def _count_physical_cores_linux():
 
 def _count_physical_cores_win32():
     try:
-        cmd = "-NoProfile -Command (Get-CimInstance -ClassName Win32_Processor).NumberOfCores"
-        cpu_info = subprocess.run(
-            f"powershell.exe {cmd}".split(),
-            capture_output=True,
-            text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        cpu_info = cpu_info.stdout.splitlines()
-        return int(cpu_info[0])
+        return _count_physical_cores_win32_ctypes()
+    except Exception:
+        pass  # fallback to powershell
+    try:
+        return _count_physical_cores_win32_powershell()
     except Exception:
         pass  # fallback to wmic (older Windows versions; deprecated now)
 
@@ -322,6 +321,63 @@ def _count_physical_cores_win32():
         l.split(",")[1] for l in cpu_info if (l and l != "Node,NumberOfCores")
     ]
     return sum(map(int, cpu_info))
+
+
+def _count_physical_cores_win32_powershell():
+    cmd = "-NoProfile -Command (Get-CimInstance -ClassName Win32_Processor).NumberOfCores"
+    cpu_info = subprocess.run(
+        f"powershell.exe {cmd}".split(),
+        capture_output=True,
+        text=True,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    cpu_info = cpu_info.stdout.splitlines()
+    return int(cpu_info[0])
+
+
+def _count_physical_cores_win32_ctypes():
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    # mirror the C struct SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX documented here:
+    # https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-system_logical_processor_information_ex
+    class SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX(ctypes.Structure):
+        _fields_ = [
+            ("Relationship", wintypes.DWORD),
+            ("Size", wintypes.DWORD),
+        ]
+
+    # enum values of LOGICAL_PROCESSOR_RELATIONSHIP
+    # RelationProcessorCore give physical cores. Unsure how this handles
+    # multi-socket systems.
+    # https://learn.microsoft.com/en-us/windows/win32/api/winnt/ne-winnt-logical_processor_relationship
+    RelationProcessorCore = 0
+
+    # push buffer size to buffer_len
+    rel_type = RelationProcessorCore
+    bsz = wintypes.DWORD(0)
+    bsz_rf = ctypes.byref(bsz)
+
+    kernel32.GetLogicalProcessorInformationEx(rel_type, None, bsz_rf)
+    buf = ctypes.create_string_buffer(bsz.value)
+
+    # retrieves information on relationships of logical processors / hardware
+    # https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getlogicalprocessorinformationex
+    if not kernel32.GetLogicalProcessorInformationEx(rel_type, buf, bsz_rf):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    offset = 0
+    physical_core_count = 0
+
+    while offset < bsz.value:
+        processor_core_info = ctypes.cast(
+            ctypes.byref(buf, offset),
+            ctypes.POINTER(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)
+        ).contents
+
+        physical_core_count += 1
+        offset += processor_core_info.Size
+
+    return physical_core_count
 
 
 def _count_physical_cores_darwin():
