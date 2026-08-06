@@ -1,3 +1,4 @@
+import sysconfig
 from loky import process_executor
 
 import os
@@ -704,6 +705,12 @@ class ExecutorTest:
 
         collected = False
         for _ in range(5):
+            if hasattr(sys, "_is_gil_enabled") and not sys._is_gil_enabled():
+                # XXX: full GC collect is needed on free-threading CPython to
+                # actually trigger the garbage collection of my_object once the
+                # executor is done with it. Not sure if this can be considered
+                # a bug or not.
+                gc.collect()
             collected = collect.wait(timeout=1.0)
             if collected:
                 return
