@@ -28,6 +28,32 @@ def get_rtracker_fd():
     return resource_tracker._resource_tracker._fd
 
 
+class _RecordingWinapi:
+    """Stand-in for _winapi so the win32 paths can be tested on any platform"""
+
+    def __init__(self, create_process=None):
+        self.waited = []
+        self.closed = []
+        self._create_process = create_process
+
+    def WaitForSingleObject(self, handle, timeout):
+        self.waited.append((handle, timeout))
+
+    def CloseHandle(self, handle):
+        self.closed.append(handle)
+
+    def CreateProcess(self, *args):
+        return self._create_process
+
+
+def _make_stopped_tracker(handle=42):
+    tracker = resource_tracker.ResourceTracker()
+    r, w = os.pipe()
+    os.close(r)
+    tracker._fd, tracker._pid, tracker._proc_handle = w, 123456, handle
+    return tracker, w
+
+
 class TestResourceTracker:
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
     def test_resource_utils(self, rtype):
@@ -288,6 +314,116 @@ class TestResourceTracker:
     def test_resource_tracker_sigkill(self):
         # Uncatchable signal.
         self.check_resource_tracker_death(signal.SIGKILL, True)
+
+    def test_resource_tracker_keeps_process_handle(self):
+        # The pid alone is not enough to reap the tracker safely on Windows
+        resource_tracker.ensure_running()
+        handle = resource_tracker._resource_tracker._proc_handle
+        if sys.platform == "win32":
+            assert handle is not None
+        else:
+            assert handle is None
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="posix-only teardown path"
+    )
+    def test_resource_tracker_del_already_reaped(self, monkeypatch):
+        # An already reaped tracker raises ChildProcessError from os.waitpid,
+        # which must not escape the destructor. Still needed on 3.12, whose
+        # _stop_locked has an unguarded waitpid (see joblib/joblib#1708).
+        base = resource_tracker._ResourceTracker
+        if not hasattr(base, "__del__"):
+            pytest.skip("this Python version has no ResourceTracker.__del__")
+
+        def raising_del(self):
+            raise ChildProcessError(errno.ECHILD, "No child processes")
+
+        monkeypatch.setattr(base, "__del__", raising_del)
+        resource_tracker.ResourceTracker().__del__()
+
+    def test_resource_tracker_del_without_base_del(self, monkeypatch):
+        # Nothing to override before cpython grew a destructor (gh-88887)
+        monkeypatch.delattr(
+            resource_tracker._ResourceTracker, "__del__", raising=False
+        )
+        tracker, w = _make_stopped_tracker()
+        tracker.__del__()
+
+        assert tracker._fd == w
+        os.close(w)
+
+    def test_resource_tracker_stop_win32_waits_on_handle(self, monkeypatch):
+        # The point of the fix: reap through the CreateProcess handle, bounded,
+        # rather than through the pid, which OpenProcess can resolve to a
+        # recycled and unrelated process.
+        winapi = _RecordingWinapi()
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        tracker, w = _make_stopped_tracker()
+        tracker._stop_win32()
+
+        timeout = resource_tracker._WIN32_STOP_TIMEOUT_MS
+        assert winapi.waited == [(42, timeout)]
+        assert winapi.closed == [42]
+        assert tracker._fd is None
+        assert tracker._pid is None
+        assert tracker._proc_handle is None
+        with pytest.raises(OSError):
+            # the "alive" fd must have been closed to stop the tracker
+            os.close(w)
+
+    # a child that inherited the tracker has no handle of its own to close
+    @pytest.mark.parametrize("handle", [42, None])
+    def test_resource_tracker_relaunch_closes_handle(
+        self, monkeypatch, handle
+    ):
+        # A tracker that died and gets relaunched must not leak its handle
+        winapi = _RecordingWinapi()
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(os, "name", "nt")
+        tracker, w = _make_stopped_tracker(handle=handle)
+        with pytest.warns(UserWarning, match="died unexpectedly"):
+            tracker._teardown_dead_process()
+
+        assert winapi.closed == ([] if handle is None else [handle])
+        assert tracker._proc_handle is None
+
+    def test_spawnv_passfds_keeps_the_process_handle(self, monkeypatch):
+        # Only the thread handle is closed; the process handle is returned
+        winapi = _RecordingWinapi(create_process=(42, 43, 123456, 0))
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(sys, "platform", "win32")
+
+        assert resource_tracker.spawnv_passfds("exe", ["exe"], []) == (
+            123456,
+            42,
+        )
+        assert winapi.closed == [43]
+
+    def test_resource_tracker_del_does_not_reap_by_pid_on_win32(
+        self, monkeypatch
+    ):
+        # Non-regression test: the inherited teardown ends in os.waitpid, which
+        # on Windows resolves the pid through OpenProcess and then either fails
+        # or blocks forever on a recycled pid, so it must not be reached there.
+        base = resource_tracker._ResourceTracker
+        if not hasattr(base, "__del__"):
+            pytest.skip("this Python version has no ResourceTracker.__del__")
+
+        reaped = []
+        monkeypatch.setattr(base, "__del__", lambda self: reaped.append(True))
+        monkeypatch.setattr(sys, "platform", "win32")
+
+        tracker = resource_tracker.ResourceTracker()
+        r, w = os.pipe()
+        os.close(r)
+        tracker._fd, tracker._pid = w, 123456
+        tracker.__del__()
+
+        assert not reaped, "the destructor reaped the tracker by pid"
+        assert tracker._fd is None and tracker._pid is None
+        with pytest.raises(OSError):
+            # the "alive" fd must have been closed to stop the tracker
+            os.close(w)
 
     def test_loky_process_inherit_multiprocessing_resource_tracker(self):
         cmd = """if 1:

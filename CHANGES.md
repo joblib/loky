@@ -10,6 +10,13 @@
   submissions after executor replacement could raise
   ``ShutdownExecutorError``. (#632)
 
+- Wait on the tracker's process handle instead of its pid when stopping the
+  ``resource_tracker`` on Windows. The inherited teardown ends in
+  ``os.waitpid``, which resolves the pid through ``OpenProcess``: once the
+  tracker has exited that either raises ``PermissionError: [Errno 13]`` or, if
+  the pid has been recycled, blocks the interpreter forever waiting on an
+  unrelated process.
+
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
 

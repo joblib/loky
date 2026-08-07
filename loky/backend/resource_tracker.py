@@ -90,6 +90,9 @@ if os.name == "posix":
 
 VERBOSE = False
 
+# Bound on how long the destructor waits for the tracker to exit on Windows
+_WIN32_STOP_TIMEOUT_MS = 1000
+
 
 class ResourceTracker(_ResourceTracker):
     """Resource tracker with refcounting scheme.
@@ -105,6 +108,9 @@ class ResourceTracker(_ResourceTracker):
     The actual implementation of the refcounting scheme is in the main
     function, which is run in a dedicated process.
     """
+
+    # Windows process handle of the tracker, see spawnv_passfds
+    _proc_handle = None
 
     def maybe_unlink(self, name, rtype):
         """Decrement the refcount of a resource, and delete it if it hits 0"""
@@ -140,8 +146,12 @@ class ResourceTracker(_ResourceTracker):
             except OSError:
                 # The resource_tracker has already been terminated.
                 pass
+        elif (proc_handle := self._proc_handle) is not None:
+            # Do not leak the handle when a dead tracker gets relaunched
+            _winapi.CloseHandle(proc_handle)
         self._fd = None
         self._pid = None
+        self._proc_handle = None
 
         warnings.warn(
             "resource_tracker: process died unexpectedly, relaunching. "
@@ -182,7 +192,7 @@ class ResourceTracker(_ResourceTracker):
             try:
                 if _HAVE_SIGMASK:
                     signal.pthread_sigmask(signal.SIG_BLOCK, _IGNORED_SIGNALS)
-                pid = spawnv_passfds(exe, args, fds_to_pass)
+                pid, proc_handle = spawnv_passfds(exe, args, fds_to_pass)
             finally:
                 if _HAVE_SIGMASK:
                     signal.pthread_sigmask(
@@ -194,6 +204,7 @@ class ResourceTracker(_ResourceTracker):
         else:
             self._fd = w
             self._pid = pid
+            self._proc_handle = proc_handle
         finally:
             if sys.platform == "win32":
                 _winapi.CloseHandle(r)
@@ -235,15 +246,43 @@ class ResourceTracker(_ResourceTracker):
         assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
 
     def __del__(self):
-        # ignore error due to trying to clean up child process which has already been
-        # shutdown on windows. See https://github.com/joblib/loky/pull/450
-        # This is only required if __del__ is defined
+        # There is nothing to override on Python versions that do not define a
+        # destructor on the base class.
         if not hasattr(_ResourceTracker, "__del__"):
+            return
+        if sys.platform == "win32":
+            # Tearing down the tracker on Windows requires specific handling.
+            self._stop_win32()
             return
         try:
             super().__del__()
         except ChildProcessError:
+            # ECHILD when the tracker is not a child of this process, e.g. in
+            # an os.fork()ed child that inherited _pid. cpython guards this
+            # itself since 3.13 (gh-140485) but 3.12 never got the backport.
             pass
+
+    def _stop_win32(self, close=os.close):
+        """Stop the tracker without reaping it by pid.
+
+        The inherited teardown ends in ``os.waitpid(self._pid, 0)``, which on
+        Windows resolves the pid through ``OpenProcess``. Once the tracker has
+        exited that either fails with ``PermissionError`` or, if the pid has
+        been recycled, blocks forever on an unrelated process. Wait on the
+        handle from ``CreateProcess`` instead, which no recycling can alias.
+        """
+        fd, self._fd = self._fd, None
+        handle, self._proc_handle = self._proc_handle, None
+        self._pid = None
+        if fd is not None:
+            # Closing the "alive" file descriptor stops main()
+            close(fd)
+        # _winapi can already be torn down when this runs from a finalizer
+        if handle is not None and _winapi is not None:
+            try:
+                _winapi.WaitForSingleObject(handle, _WIN32_STOP_TIMEOUT_MS)
+            finally:
+                _winapi.CloseHandle(handle)
 
 
 _resource_tracker = ResourceTracker()
@@ -394,18 +433,25 @@ def main(fd, verbose=0):
 
 
 def spawnv_passfds(path, args, passfds):
+    """Spawn the tracker and return its ``(pid, handle)``.
+
+    ``handle`` is the Windows process handle, and None elsewhere.
+    """
     if sys.platform != "win32":
         args = [arg.encode("utf-8") for arg in args]
         path = path.encode("utf-8")
-        return util.spawnv_passfds(path, args, passfds)
+        return util.spawnv_passfds(path, args, passfds), None
     else:
         passfds = sorted(passfds)
         cmd = " ".join(f'"{x}"' for x in args)
         try:
-            _, ht, pid, _ = _winapi.CreateProcess(
+            hp, ht, pid, _ = _winapi.CreateProcess(
                 path, cmd, None, None, True, 0, None, None, None
             )
             _winapi.CloseHandle(ht)
         except BaseException:
             pass
-        return pid
+        # The process handle is kept rather than closed: waiting on the pid
+        # instead goes through OpenProcess, which is unsafe as soon as the pid
+        # can have been recycled.
+        return pid, hp
