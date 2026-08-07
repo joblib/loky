@@ -63,6 +63,18 @@ def test_windows_max_cpu_count():
     assert cpu_count() <= _MAX_WINDOWS_WORKERS
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
+def test_windows_physical_cores_ctypes_matches_powershell():
+    from loky.backend.context import (
+        _count_physical_cores_win32_ctypes,
+        _count_physical_cores_win32_powershell,
+    )
+
+    ctypes_count = _count_physical_cores_win32_ctypes()
+    powershell_count = _count_physical_cores_win32_powershell()
+    assert ctypes_count == powershell_count
+
+
 cpu_count_cmd = (
     "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
 )
