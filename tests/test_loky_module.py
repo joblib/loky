@@ -103,6 +103,18 @@ def test_windows_physical_cores_falls_back_to_powershell():
     mock_powershell.assert_called_once()
 
 
+def test_windows_physical_cores_powershell_sums_sockets_mine(monkeypatch):
+    from loky.backend.context import _count_physical_cores_win32_powershell
+
+    completed_process = subprocess.CompletedProcess([], 0, stdout="4\n4\n")
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0, raising=False)
+    monkeypatch.setattr(
+        subprocess, "run", lambda *args, **kwargs: completed_process
+    )
+
+    assert _count_physical_cores_win32_powershell() == 8
+
+
 cpu_count_cmd = (
     "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
 )
