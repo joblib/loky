@@ -63,6 +63,7 @@ exclude = '''
   | buck-out
   | build
   | dist
+  | loky/backend/py.*resource_tracker\.py
 )/
 '''
 
