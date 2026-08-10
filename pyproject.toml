@@ -53,7 +53,7 @@ version = {attr = "loky.__version__"}
 line-length = 79
 include = '\.pyi?$'
 exclude = '''
-/(
+(
     \.git
   | \.hg
   | \.mypy_cache
@@ -64,9 +64,11 @@ exclude = '''
   | build
   | dist
   | loky/backend/py.*resource_tracker\.py
-)/
+)
 '''
-
+force-exclude = '''
+  ^/loky/backend/py[^/]*resource_tracker\.py$
+'''
 [tool.pytest.ini_options]
 # No test should last longer than 1 minute, even on the CI. Otherwise, dump
 # per-thread tracebacks. Note that this value can be overriden from the
