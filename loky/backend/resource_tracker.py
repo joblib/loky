@@ -115,7 +115,9 @@ class ResourceTracker(_ResourceTracker):
 
     def __del__(self):
         try:
-            super().__del__()
+            # Python 3.10 ResourceTracker doesn't have a __del__ method
+            if PY_GREATER_THAN_311:
+                super().__del__()
         except ChildProcessError:
             # ignore error due to trying to clean up child process which has already been
             # shutdown on windows. See https://github.com/joblib/loky/pull/450
@@ -192,6 +194,67 @@ class ResourceTracker(_ResourceTracker):
                 _winapi.CloseHandle(r)
             else:
                 os.close(r)
+
+    # TODO for Python 3.10 need to override ensure_running since _launch is not used ...
+    if not PY_GREATER_THAN_311:
+        def _write(self, msg):
+            nbytes = os.write(self._fd, msg)
+            assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
+
+        def _teardown_dead_process(self):
+            os.close(self._fd)
+
+        def _ensure_running_and_write(self, msg=None):
+            """Make sure that resource tracker process is running.
+
+            This can be run from any process.  Usually a child process will use
+            the resource created by its parent.
+
+
+            This function is added for compatibility with python version before 3.13.7.
+            """
+            with self._lock:
+                if (
+                    self._fd is not None
+                ):  # resource tracker was launched before, is it still running?
+                    if msg is None:
+                        to_send = b"PROBE:0:noop\n"
+                    else:
+                        to_send = msg
+                    try:
+                        self._write(to_send)
+                    except OSError:
+                        self._teardown_dead_process()
+                        self._launch()
+
+                    msg = None  # message was sent in probe
+                else:
+                    self._launch()
+
+        # def _ensure_running_and_write(self, msg=None):
+        #     with self._lock:
+        #         if self._fd is not None:
+        #             # resource tracker was launched before, is it still running?
+        #             if msg is None:
+        #                 to_send = self._make_probe_message()
+        #             else:
+        #                 to_send = msg
+        #             try:
+        #                 self._write(to_send)
+        #             except OSError:
+        #                 self._teardown_dead_process()
+        #                 self._launch()
+
+        #             msg = None  # message was sent in probe
+        #         else:
+        #             self._launch()
+
+        #     if msg is not None:
+        #         self._write(msg)
+
+        def ensure_running(self):
+            self._ensure_running_and_write()
+
     # fmt: on
 
     def maybe_unlink(self, name, rtype):
@@ -209,6 +272,7 @@ getfd = _resource_tracker.getfd
 
 def main(fd, verbose=0):
     """Run resource tracker."""
+    # TODO harmonized with py314 main
     if verbose:
         util.log_to_stderr(level=util.DEBUG)
 
