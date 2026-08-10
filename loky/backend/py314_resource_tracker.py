@@ -29,22 +29,20 @@ import json
 from multiprocessing import spawn
 from multiprocessing import util
 
-__all__ = ["ensure_running", "register", "unregister"]
+__all__ = ['ensure_running', 'register', 'unregister']
 
-_HAVE_SIGMASK = hasattr(signal, "pthread_sigmask")
+_HAVE_SIGMASK = hasattr(signal, 'pthread_sigmask')
 _IGNORED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
-
 def cleanup_noop(name):
-    raise RuntimeError("noop should never be registered or cleaned up")
-
+    raise RuntimeError('noop should never be registered or cleaned up')
 
 _CLEANUP_FUNCS = {
-    "noop": cleanup_noop,
-    "dummy": lambda name: None,  # Dummy resource used in tests
+    'noop': cleanup_noop,
+    'dummy': lambda name: None,  # Dummy resource used in tests
 }
 
-if os.name == "posix":
+if os.name == 'posix':
     import _multiprocessing
     import _posixshmem
 
@@ -53,9 +51,9 @@ if os.name == "posix":
     # sem_unlink() may be missing if the Python build process detected the
     # absence of POSIX named semaphores. In that case, no named semaphores were
     # ever opened, so no cleanup would be necessary.
-    if hasattr(_multiprocessing, "sem_unlink"):
-        _CLEANUP_FUNCS["semaphore"] = _multiprocessing.sem_unlink
-    _CLEANUP_FUNCS["shared_memory"] = _posixshmem.shm_unlink
+    if hasattr(_multiprocessing, 'sem_unlink'):
+        _CLEANUP_FUNCS['semaphore'] = _multiprocessing.sem_unlink
+    _CLEANUP_FUNCS['shared_memory'] = _posixshmem.shm_unlink
 
 
 class ReentrantCallError(RuntimeError):
@@ -88,8 +86,7 @@ class ResourceTracker(object):
         # that itself calls back into ResourceTracker.
         #   (*) for example the SemLock finalizer
         raise ReentrantCallError(
-            "Reentrant call into the multiprocessing resource tracker"
-        )
+            "Reentrant call into the multiprocessing resource tracker")
 
     def __del__(self):
         # making sure child processess are cleaned before ResourceTracker
@@ -123,9 +120,8 @@ class ResourceTracker(object):
         self._reentrant_messages.clear()
         self._pid = None
         self._exitcode = None
-        if self._fd is not None and not getattr(
-            _fork_intent, "preserve_fd", False
-        ):
+        if (self._fd is not None and
+            not getattr(_fork_intent, 'preserve_fd', False)):
             fd = self._fd
             self._fd = None
             try:
@@ -152,7 +148,7 @@ class ResourceTracker(object):
         waitstatus_to_exitcode=os.waitstatus_to_exitcode,
         monotonic=time.monotonic,
         sleep=time.sleep,
-        WNOHANG=getattr(os, "WNOHANG", None),
+        WNOHANG=getattr(os, 'WNOHANG', None),
         wait_timeout=None,
     ):
         # This shouldn't happen (it might when called by a finalizer)
@@ -212,10 +208,10 @@ class ResourceTracker(object):
         return self._fd
 
     def ensure_running(self):
-        """Make sure that resource tracker process is running.
+        '''Make sure that resource tracker process is running.
 
         This can be run from any process.  Usually a child process will use
-        the resource created by its parent."""
+        the resource created by its parent.'''
         return self._ensure_running_and_write()
 
     def _teardown_dead_process(self):
@@ -234,10 +230,8 @@ class ResourceTracker(object):
         self._pid = None
         self._exitcode = None
 
-        warnings.warn(
-            "resource_tracker: process died unexpectedly, "
-            "relaunching.  Some resources might leak."
-        )
+        warnings.warn('resource_tracker: process died unexpectedly, '
+                      'relaunching.  Some resources might leak.')
 
     def _launch(self):
         fds_to_pass = []
@@ -253,8 +247,8 @@ class ResourceTracker(object):
             args = [
                 exe,
                 *util._args_from_interpreter_flags(),
-                "-c",
-                f"from multiprocessing.resource_tracker import main;main({r})",
+                '-c',
+                f'from multiprocessing.resource_tracker import main;main({r})',
             ]
             # bpo-33613: Register a signal mask that will block the signals.
             # This signal mask will be inherited by the child that is going
@@ -265,9 +259,7 @@ class ResourceTracker(object):
             prev_sigmask = None
             try:
                 if _HAVE_SIGMASK:
-                    prev_sigmask = signal.pthread_sigmask(
-                        signal.SIG_BLOCK, _IGNORED_SIGNALS
-                    )
+                    prev_sigmask = signal.pthread_sigmask(signal.SIG_BLOCK, _IGNORED_SIGNALS)
                 pid = util.spawnv_passfds(exe, args, fds_to_pass)
             finally:
                 if prev_sigmask is not None:
@@ -284,7 +276,7 @@ class ResourceTracker(object):
     def _make_probe_message(self):
         """Return a probe message."""
         if self._use_simple_format:
-            return b"PROBE:0:noop\n"
+            return b'PROBE:0:noop\n'
         return (
             json.dumps(
                 {"cmd": "PROBE", "rtype": "noop"},
@@ -328,7 +320,7 @@ class ResourceTracker(object):
             self._write(msg)
 
     def _check_alive(self):
-        """Check that the pipe has not been closed by sending a probe."""
+        '''Check that the pipe has not been closed by sending a probe.'''
         try:
             # We cannot use send here as it calls ensure_running, creating
             # a cycle.
@@ -339,24 +331,24 @@ class ResourceTracker(object):
             return True
 
     def register(self, name, rtype):
-        """Register name of resource with resource tracker."""
-        self._send("REGISTER", name, rtype)
+        '''Register name of resource with resource tracker.'''
+        self._send('REGISTER', name, rtype)
 
     def unregister(self, name, rtype):
-        """Unregister name of resource with resource tracker."""
-        self._send("UNREGISTER", name, rtype)
+        '''Unregister name of resource with resource tracker.'''
+        self._send('UNREGISTER', name, rtype)
 
     def _write(self, msg):
         nbytes = os.write(self._fd, msg)
         assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
 
     def _send(self, cmd, name, rtype):
-        if self._use_simple_format and "\n" not in name:
+        if self._use_simple_format and '\n' not in name:
             msg = f"{cmd}:{name}:{rtype}\n".encode("ascii")
             if len(msg) > 512:
                 # posix guarantees that writes to a pipe of less than PIPE_BUF
                 # bytes are atomic, and that PIPE_BUF >= 512
-                raise ValueError("msg too long")
+                raise ValueError('msg too long')
             self._ensure_running_and_write(msg)
             return
 
@@ -369,25 +361,19 @@ class ResourceTracker(object):
         # As we want the overall message to be kept atomic and therefore smaller than 512,
         # we encode encode the raw name bytes with URL-safe Base64 - so a 255 long name
         # will not exceed 340 bytes.
-        b = name.encode("utf-8", "surrogateescape")
+        b = name.encode('utf-8', 'surrogateescape')
         if len(b) > 255:
-            raise ValueError("shared memory name too long (max 255 bytes)")
-        b64 = base64.urlsafe_b64encode(b).decode("ascii")
+            raise ValueError('shared memory name too long (max 255 bytes)')
+        b64 = base64.urlsafe_b64encode(b).decode('ascii')
 
         payload = {"cmd": cmd, "rtype": rtype, "base64_name": b64}
-        msg = (
-            json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
-            + "\n"
-        ).encode("ascii")
+        msg = (json.dumps(payload, ensure_ascii=True, separators=(",", ":")) + "\n").encode("ascii")
 
         # The entire JSON message is guaranteed < PIPE_BUF (512 bytes) by construction.
-        assert (
-            len(msg) <= 512
-        ), f"internal error: message too long ({len(msg)} bytes)"
-        assert msg.startswith(b"{")
+        assert len(msg) <= 512, f"internal error: message too long ({len(msg)} bytes)"
+        assert msg.startswith(b'{')
 
         self._ensure_running_and_write(msg)
-
 
 # gh-146313: Per-thread flag set by .popen_fork.Popen._launch() just before
 # os.fork(), telling _after_fork_in_child() to keep the inherited pipe fd so
@@ -404,46 +390,36 @@ unregister = _resource_tracker.unregister
 getfd = _resource_tracker.getfd
 
 # gh-146313: See _after_fork_in_child docstring.
-if hasattr(os, "register_at_fork"):
+if hasattr(os, 'register_at_fork'):
     os.register_at_fork(after_in_child=_resource_tracker._after_fork_in_child)
 
 
 def _decode_message(line):
-    if line.startswith(b"{"):
+    if line.startswith(b'{'):
         try:
-            obj = json.loads(line.decode("ascii"))
+            obj = json.loads(line.decode('ascii'))
         except Exception as e:
-            raise ValueError(
-                "malformed resource_tracker message: %r" % (line,)
-            ) from e
+            raise ValueError("malformed resource_tracker message: %r" % (line,)) from e
 
         cmd = obj["cmd"]
         rtype = obj["rtype"]
-        b64 = obj.get("base64_name", "")
+        b64  = obj.get("base64_name", "")
 
-        if (
-            not isinstance(cmd, str)
-            or not isinstance(rtype, str)
-            or not isinstance(b64, str)
-        ):
+        if not isinstance(cmd, str) or not isinstance(rtype, str) or not isinstance(b64, str):
             raise ValueError("malformed resource_tracker fields: %r" % (obj,))
 
         try:
-            name = base64.urlsafe_b64decode(b64).decode(
-                "utf-8", "surrogateescape"
-            )
+            name = base64.urlsafe_b64decode(b64).decode('utf-8', 'surrogateescape')
         except ValueError as e:
-            raise ValueError(
-                "malformed resource_tracker base64_name: %r" % (b64,)
-            ) from e
+            raise ValueError("malformed resource_tracker base64_name: %r" % (b64,)) from e
     else:
-        cmd, rest = line.strip().decode("ascii").split(":", maxsplit=1)
-        name, rtype = rest.rsplit(":", maxsplit=1)
+        cmd, rest = line.strip().decode('ascii').split(':', maxsplit=1)
+        name, rtype = rest.rsplit(':', maxsplit=1)
     return cmd, rtype, name
 
 
 def main(fd):
-    """Run resource tracker."""
+    '''Run resource tracker.'''
     # protect the process from ^C and "killall python" etc
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -461,25 +437,24 @@ def main(fd):
 
     try:
         # keep track of registered/unregistered resources
-        with open(fd, "rb") as f:
+        with open(fd, 'rb') as f:
             for line in f:
                 try:
                     cmd, rtype, name = _decode_message(line)
                     cleanup_func = _CLEANUP_FUNCS.get(rtype, None)
                     if cleanup_func is None:
                         raise ValueError(
-                            f"Cannot register {name} for automatic cleanup: "
-                            f"unknown resource type {rtype}"
-                        )
+                            f'Cannot register {name} for automatic cleanup: '
+                            f'unknown resource type {rtype}')
 
-                    if cmd == "REGISTER":
+                    if cmd == 'REGISTER':
                         cache[rtype].add(name)
-                    elif cmd == "UNREGISTER":
+                    elif cmd == 'UNREGISTER':
                         cache[rtype].remove(name)
-                    elif cmd == "PROBE":
+                    elif cmd == 'PROBE':
                         pass
                     else:
-                        raise RuntimeError("unrecognized command %r" % cmd)
+                        raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
                     exit_code = 3
                     try:
@@ -492,15 +467,15 @@ def main(fd):
             if rtype_cache:
                 try:
                     exit_code = 1
-                    if rtype == "dummy":
+                    if rtype == 'dummy':
                         # The test 'dummy' resource is expected to leak.
                         # We skip the warning (and *only* the warning) for it.
                         pass
                     else:
                         warnings.warn(
-                            f"resource_tracker: There appear to be "
-                            f"{len(rtype_cache)} leaked {rtype} objects to "
-                            f"clean up at shutdown: {rtype_cache}"
+                            f'resource_tracker: There appear to be '
+                            f'{len(rtype_cache)} leaked {rtype} objects to '
+                            f'clean up at shutdown: {rtype_cache}'
                         )
                 except Exception:
                     pass
@@ -513,7 +488,7 @@ def main(fd):
                         _CLEANUP_FUNCS[rtype](name)
                     except Exception as e:
                         exit_code = 2
-                        warnings.warn("resource_tracker: %r: %s" % (name, e))
+                        warnings.warn('resource_tracker: %r: %s' % (name, e))
                 finally:
                     pass
 
