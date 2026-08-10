@@ -63,10 +63,11 @@ exclude = '''
   | buck-out
   | build
   | dist
-  | loky/backend/py.*resource_tracker\.py
 )
 '''
 
+# Because pre-commit uses explicit filenames, you need to use force-exclude in
+# order for pre-commit black to leave the stdlib files untouched
 force-exclude = '''
   loky/backend/py.*resource_tracker\.py
 '''
