@@ -114,14 +114,21 @@ class ResourceTracker(_ResourceTracker):
     """
 
     def __del__(self):
-        try:
-            # Python 3.10 ResourceTracker doesn't have a __del__ method
-            if PY_GREATER_THAN_311:
-                super().__del__()
-        except ChildProcessError:
-            # ignore error due to trying to clean up child process which has already been
-            # shutdown on windows. See https://github.com/joblib/loky/pull/450
-            pass
+        # Python 3.10 does not have a __del__
+        if not PY_GREATER_THAN_311:
+            return
+
+        if os.name == "posix":
+            super().__del__()
+        else:
+            # TODO What is the right thing to do on Windows?
+            try:
+                # use timeout=None which avoids WNOHANG which doesn't exist on Windows
+                self._stop(use_blocking_lock=False)
+            except ChildProcessError:
+                # ignore error due to trying to clean up child process which has already been
+                # shutdown on windows. See https://github.com/joblib/loky/pull/450
+                pass
 
     def getfd(self):
         self.ensure_running()
