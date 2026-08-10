@@ -129,7 +129,25 @@ class ResourceTracker(_ResourceTracker):
 
     def _teardown_dead_process(self):
         if os.name == "posix":
-            super()._teardown_dead_process()
+            if PY_GREATER_THAN_311:
+                super()._teardown_dead_process()
+            else:
+                # Python 3.10 doesn't have _teardown_dead_process copy implementation
+                os.close(self._fd)
+
+                # Clean-up to avoid dangling processes.
+                try:
+                    # _pid can be None if this process is a child from another
+                    # python process, which has started the resource_tracker.
+                    if self._pid is not None:
+                        os.waitpid(self._pid, 0)
+                except ChildProcessError:
+                    # The resource_tracker has already been terminated.
+                    pass
+                self._fd = None
+                self._pid = None
+                self._exitcode = None
+
         else:
             # Windows
             os.close(self._fd)
@@ -195,14 +213,14 @@ class ResourceTracker(_ResourceTracker):
             else:
                 os.close(r)
 
-    # TODO for Python 3.10 need to override ensure_running since _launch is not used ...
     if not PY_GREATER_THAN_311:
+        # for Python 3.10 need to override ensure_running since _launch is not used ...
+        def ensure_running(self):
+            self._ensure_running_and_write()
+
         def _write(self, msg):
             nbytes = os.write(self._fd, msg)
             assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
-
-        def _teardown_dead_process(self):
-            os.close(self._fd)
 
         def _ensure_running_and_write(self, msg=None):
             """Make sure that resource tracker process is running.
@@ -230,31 +248,6 @@ class ResourceTracker(_ResourceTracker):
                     msg = None  # message was sent in probe
                 else:
                     self._launch()
-
-        # def _ensure_running_and_write(self, msg=None):
-        #     with self._lock:
-        #         if self._fd is not None:
-        #             # resource tracker was launched before, is it still running?
-        #             if msg is None:
-        #                 to_send = self._make_probe_message()
-        #             else:
-        #                 to_send = msg
-        #             try:
-        #                 self._write(to_send)
-        #             except OSError:
-        #                 self._teardown_dead_process()
-        #                 self._launch()
-
-        #             msg = None  # message was sent in probe
-        #         else:
-        #             self._launch()
-
-        #     if msg is not None:
-        #         self._write(msg)
-
-        def ensure_running(self):
-            self._ensure_running_and_write()
-
     # fmt: on
 
     def maybe_unlink(self, name, rtype):
@@ -272,7 +265,7 @@ getfd = _resource_tracker.getfd
 
 def main(fd, verbose=0):
     """Run resource tracker."""
-    # TODO harmonized with py314 main
+    # TODO harmonize with py314 main
     if verbose:
         util.log_to_stderr(level=util.DEBUG)
 
