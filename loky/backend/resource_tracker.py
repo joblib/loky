@@ -141,7 +141,8 @@ class ResourceTracker(_ResourceTracker):
                     # python process, which has started the resource_tracker.
                     if self._pid is not None:
                         os.waitpid(self._pid, 0)
-                except ChildProcessError:
+                # On Windows you get OSError it seems
+                except (ChildProcessError, OSError):
                     # The resource_tracker has already been terminated.
                     pass
                 self._fd = None
