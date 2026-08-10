@@ -26,8 +26,8 @@ from collections import deque
 
 import json
 
-from . import spawn
-from . import util
+from multiprocessing import spawn
+from multiprocessing import util
 
 __all__ = ["ensure_running", "register", "unregister"]
 

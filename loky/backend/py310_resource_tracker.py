@@ -21,8 +21,8 @@ import sys
 import threading
 import warnings
 
-from . import spawn
-from . import util
+from multiprocessing import spawn
+from multiprocessing import util
 
 __all__ = ["ensure_running", "register", "unregister"]
 
