@@ -38,6 +38,11 @@ _DEFAULT_START_METHOD = None
 # It should not change during the lifetime of the program.
 physical_cores_cache = None
 
+# Similar cache for the number of physical cores restricted to a given CPU
+# affinity mask (as a frozenset of logical CPU ids), see
+# `_count_physical_cores_affinity`.
+physical_cores_affinity_cache = {}
+
 
 def get_context(method=None):
     # Try to overload the default context
@@ -90,10 +95,16 @@ def cpu_count(only_physical_cores=False):
 
     If ``only_physical_cores`` is True, return the number of physical cores
     instead of the number of logical cores (hyperthreading / SMT). Note that
-    this option is not enforced if the number of usable cores is controlled in
-    any other way such as: process affinity, Cgroup restricted CPU bandwidth
-    or the LOKY_MAX_CPU_COUNT environment variable. If the number of physical
-    cores is not found, return the number of logical cores.
+    this option is not enforced if the number of usable cores is controlled
+    by a Cgroup restricted CPU bandwidth or the LOKY_MAX_CPU_COUNT
+    environment variable. If the number of physical cores is not found,
+    return the number of logical cores.
+
+    On Linux, when the number of usable cores is restricted by process
+    affinity (e.g. via ``taskset``), ``only_physical_cores=True`` still
+    collapses hyper-threading / SMT sibling logical CPUs that share the
+    same physical core, so that e.g. pinning a process to 2 SMT siblings
+    of a single physical core is reported as 1 physical core.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
     Python < 3.10), see:
@@ -118,7 +129,24 @@ def cpu_count(only_physical_cores=False):
         return aggregate_cpu_count
 
     if cpu_count_user < os_cpu_count:
-        # Respect user setting
+        # Respect user setting. On Linux, when (some of) the restriction
+        # comes from CPU affinity, try to collapse SMT/hyper-threading
+        # sibling logical CPUs sharing the same physical core, so that e.g.
+        # pinning a process to 2 SMT siblings of a single physical core
+        # (`taskset -c 0,1`) is not mistaken for 2 physical cores. See
+        # https://github.com/joblib/loky/issues/639.
+        if sys.platform == "linux":
+            cpu_affinity_set = _cpu_count_affinity_set()
+            if (
+                cpu_affinity_set is not None
+                and len(cpu_affinity_set) < os_cpu_count
+            ):
+                cpu_count_physical, _ = _count_physical_cores_affinity(
+                    cpu_affinity_set
+                )
+                if cpu_count_physical != "not found":
+                    return max(min(cpu_count_physical, cpu_count_user), 1)
+
         return max(cpu_count_user, 1)
 
     cpu_count_physical, exception = _count_physical_cores()
@@ -224,6 +252,32 @@ def _cpu_count_affinity(os_cpu_count):
     return os_cpu_count
 
 
+def _cpu_count_affinity_set():
+    """Return the current CPU affinity mask as a set of logical CPU ids.
+
+    Return None if the affinity mask cannot be determined on this platform,
+    for instance because neither `os.sched_getaffinity` nor `psutil` are
+    available.
+    """
+    if hasattr(os, "sched_getaffinity"):
+        try:
+            return os.sched_getaffinity(0)
+        except NotImplementedError:
+            pass
+
+    try:
+        import psutil
+
+        p = psutil.Process()
+        if hasattr(p, "cpu_affinity"):
+            return set(p.cpu_affinity())
+
+    except ImportError:  # pragma: no cover
+        pass
+
+    return None
+
+
 def _cpu_count_user(os_cpu_count):
     """Number of user defined available CPUs"""
     cpu_count_affinity = _cpu_count_affinity(os_cpu_count)
@@ -295,6 +349,89 @@ def _count_physical_cores_linux():
     cpu_info = cpu_info.stdout.splitlines()
     cpu_info = {line for line in cpu_info if line.startswith("core id")}
     return len(cpu_info)
+
+
+def _count_physical_cores_affinity(cpu_set):
+    """Return a tuple (number of physical cores, exception) for the
+    logical CPUs in `cpu_set` (typically derived from the process CPU
+    affinity mask).
+
+    Same semantics as `_count_physical_cores`, but the count only accounts
+    for the logical CPUs in `cpu_set`, collapsing SMT/hyper-threading
+    siblings that share the same physical core. Only implemented for Linux,
+    where per-CPU topology information is readily available.
+    """
+    exception = None
+    cache_key = frozenset(cpu_set)
+
+    # First check if the value is cached
+    if cache_key in physical_cores_affinity_cache:
+        return physical_cores_affinity_cache[cache_key], exception
+
+    try:
+        if sys.platform == "linux":
+            cpu_count_physical = _count_physical_cores_linux_affinity(
+                cache_key
+            )
+        else:
+            raise NotImplementedError(f"unsupported platform: {sys.platform}")
+
+        # if cpu_count_physical < 1, we did not find a valid value
+        if cpu_count_physical < 1:
+            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
+
+    except Exception as e:
+        exception = e
+        cpu_count_physical = "not found"
+
+    # Put the result in cache
+    physical_cores_affinity_cache[cache_key] = cpu_count_physical
+
+    return cpu_count_physical, exception
+
+
+def _count_physical_cores_linux_affinity(cpu_set):
+    try:
+        cpu_info = subprocess.run(
+            "lscpu --parse=CPU,CORE,SOCKET".split(),
+            capture_output=True,
+            text=True,
+        )
+        lines = [
+            line
+            for line in cpu_info.stdout.splitlines()
+            if line and not line.startswith("#")
+        ]
+        if not lines:
+            raise ValueError("no output from lscpu")
+
+        cores = set()
+        for line in lines:
+            cpu_str, core_str, socket_str = line.split(",")[:3]
+            if int(cpu_str) in cpu_set:
+                cores.add((socket_str, core_str))
+        return len(cores)
+    except Exception:
+        pass  # fallback to /proc/cpuinfo
+
+    cpu_info = subprocess.run(
+        "cat /proc/cpuinfo".split(), capture_output=True, text=True
+    )
+    cores = set()
+    processor = core_id = physical_id = None
+    for line in cpu_info.stdout.splitlines() + [""]:
+        if line.startswith("processor"):
+            processor = int(line.split(":")[1].strip())
+        elif line.startswith("core id"):
+            core_id = line.split(":")[1].strip()
+        elif line.startswith("physical id"):
+            physical_id = line.split(":")[1].strip()
+        elif not line.strip():
+            # blank line: end of the current logical CPU block
+            if processor in cpu_set and core_id is not None:
+                cores.add((physical_id, core_id))
+            processor = core_id = physical_id = None
+    return len(cores)
 
 
 def _count_physical_cores_win32():

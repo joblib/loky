@@ -1,5 +1,10 @@
 ### 3.6.0 - In development
 
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to collapse
+  hyper-threading/SMT sibling logical CPUs sharing the same physical core
+  when the process CPU affinity (e.g. set via ``taskset``) is restricted to
+  a subset of the machine's logical CPUs. (#639)
+
 - Support detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
 

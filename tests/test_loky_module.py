@@ -252,13 +252,129 @@ def test_only_physical_cores_error():
 
 def test_only_physical_cores_with_user_limitation():
     # Check that user limitation for the available number of cores is
-    # respected even if only_physical_cores == True
+    # respected even if only_physical_cores == True. On Linux, if the
+    # restriction comes from CPU affinity and some of the affinity-pinned
+    # logical CPUs are SMT siblings of the same physical core, the physical
+    # core count can be strictly lower than the user limitation (see
+    # test_cpu_count_only_physical_cores_smt_siblings_affinity below).
     cpu_count_mp = mp.cpu_count()
     cpu_count_user = _cpu_count_user(cpu_count_mp)
 
     if cpu_count_user < cpu_count_mp:
         assert cpu_count() == cpu_count_user
-        assert cpu_count(only_physical_cores=True) == cpu_count_user
+        assert cpu_count(only_physical_cores=True) <= cpu_count_user
+
+
+def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
+    # Regression test for https://github.com/joblib/loky/issues/639:
+    # only_physical_cores=True should collapse SMT/hyper-threading sibling
+    # logical CPUs sharing the same physical core when the usable CPUs are
+    # restricted through CPU affinity (e.g. `taskset`), instead of just
+    # returning the (affinity-restricted) logical CPU count unchanged.
+    if sys.platform != "linux":
+        pytest.skip("Linux specific test")
+
+    import loky.backend.context as context
+
+    # Simulate a 4 logical CPU machine: CPU 0 and 1 are SMT siblings of
+    # physical core 0; CPU 2 and 3 are SMT siblings of physical core 1.
+    fake_lscpu_stdout = "0,0,0\n1,0,0\n2,1,0\n3,1,0\n"
+
+    old_run = subprocess.run
+
+    def mock_run(args, **kwargs):
+        if isinstance(args, list) and args[:1] == ["lscpu"]:
+            return subprocess.CompletedProcess(
+                args, 0, stdout=fake_lscpu_stdout, stderr=""
+            )
+        return old_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    monkeypatch.setattr(os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(
+        os, "sched_getaffinity", lambda pid: {0, 1}, raising=False
+    )
+    context.physical_cores_affinity_cache = {}
+
+    # taskset -c 0,1 pins the process to 2 logical CPUs that are SMT
+    # siblings of a single physical core.
+    assert context.cpu_count() == 2
+    assert context.cpu_count(only_physical_cores=True) == 1
+
+
+def test_cpu_count_os_sched_getaffinity_smt_siblings():
+    # End-to-end version of the test above: actually use taskset to pin the
+    # current process to 2 SMT sibling logical CPUs of the same physical
+    # core (if such a pair can be found on the machine running the test)
+    # and check that only_physical_cores=True correctly reports 1 physical
+    # core while the plain logical CPU count reports 2.
+    if sys.platform != "linux":
+        pytest.skip("Linux specific test")
+
+    if not hasattr(os, "sched_getaffinity") or not hasattr(shutil, "which"):
+        pytest.skip()
+
+    taskset_bin = shutil.which("taskset")
+    python_bin = shutil.which("python")
+    if taskset_bin is None or python_bin is None:
+        pytest.skip()
+
+    def _expand(cpu_range):
+        if "-" in cpu_range:
+            start, end = cpu_range.split("-")
+            return list(range(int(start), int(end) + 1))
+        return [int(cpu_range)]
+
+    smt_pair = None
+    for cpu in range(os.cpu_count() or 0):
+        siblings_path = (
+            f"/sys/devices/system/cpu/cpu{cpu}/topology/thread_siblings_list"
+        )
+        try:
+            with open(siblings_path) as f:
+                content = f.read().strip()
+        except OSError:
+            pytest.skip("CPU topology information not available")
+
+        siblings = sorted(
+            {c for part in content.split(",") for c in _expand(part)}
+        )
+        if len(siblings) >= 2:
+            smt_pair = siblings[:2]
+            break
+
+    if smt_pair is None:
+        pytest.skip(
+            "could not find 2 SMT sibling logical CPUs on this machine"
+        )
+
+    cpu_list = ",".join(str(c) for c in smt_pair)
+
+    res = check_output(
+        [
+            taskset_bin,
+            "-c",
+            cpu_list,
+            python_bin,
+            "-c",
+            cpu_count_cmd.format(args=""),
+        ],
+        text=True,
+    )
+    res_physical = check_output(
+        [
+            taskset_bin,
+            "-c",
+            cpu_list,
+            python_bin,
+            "-c",
+            cpu_count_cmd.format(args="only_physical_cores=True"),
+        ],
+        text=True,
+    )
+
+    assert res.strip() == "2"
+    assert res_physical.strip() == "1"
 
 
 @pytest.mark.parametrize(
