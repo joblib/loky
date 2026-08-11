@@ -21,6 +21,8 @@
   hardcoded to 300 MB. The reference it is compared against is measured after
   the worker's first task and never updated, so a workload whose tasks differ
   a lot in memory footprint can cross that threshold without leaking anything.
+- Drop support for Python 3.9, as it is no longer receiving security
+  updates. (#647)
 
 ### 3.5.6 - 2025-08-27
 
