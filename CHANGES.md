@@ -5,6 +5,11 @@
   when the process CPU affinity (e.g. set via ``taskset``) is restricted to
   a subset of the machine's logical CPUs. (#639)
 
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to identify physical
+  cores by their ``(socket, core id)`` pair instead of ``core id`` alone,
+  which could under-count physical cores on multi-socket machines where
+  ``core id`` is not unique across sockets.
+
 - Support detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
 

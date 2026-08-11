@@ -325,23 +325,61 @@ def _count_physical_cores():
     return cpu_count_physical, exception
 
 
-def _count_physical_cores_linux():
+def _count_physical_cores_linux(cpu_set=None):
+    """Return the number of distinct physical cores on Linux.
+
+    A physical core is identified by its (socket, core id) pair: core id
+    alone is only guaranteed unique within a socket, so a multi-socket
+    machine can otherwise under-count cores that share the same core id
+    across sockets.
+
+    If `cpu_set` is not None, only the logical CPUs it contains are
+    considered, which also collapses SMT/hyper-threading sibling logical
+    CPUs that share the same physical core.
+    """
     try:
         cpu_info = subprocess.run(
-            "lscpu --parse=core".split(), capture_output=True, text=True
+            "lscpu --parse=CPU,CORE,SOCKET".split(),
+            capture_output=True,
+            text=True,
         )
-        cpu_info = cpu_info.stdout.splitlines()
-        cpu_info = {line for line in cpu_info if not line.startswith("#")}
-        return len(cpu_info)
+        lines = [
+            line
+            for line in cpu_info.stdout.splitlines()
+            if line and not line.startswith("#")
+        ]
+        if not lines:
+            raise ValueError("no output from lscpu")
+
+        cores = set()
+        for line in lines:
+            cpu_str, core_str, socket_str = line.split(",")[:3]
+            if cpu_set is None or int(cpu_str) in cpu_set:
+                cores.add((socket_str, core_str))
+        return len(cores)
     except Exception:
         pass  # fallback to /proc/cpuinfo
 
     cpu_info = subprocess.run(
         "cat /proc/cpuinfo".split(), capture_output=True, text=True
     )
-    cpu_info = cpu_info.stdout.splitlines()
-    cpu_info = {line for line in cpu_info if line.startswith("core id")}
-    return len(cpu_info)
+    cores = set()
+    processor = core_id = physical_id = None
+    for line in cpu_info.stdout.splitlines() + [""]:
+        if line.startswith("processor"):
+            processor = int(line.split(":")[1].strip())
+        elif line.startswith("core id"):
+            core_id = line.split(":")[1].strip()
+        elif line.startswith("physical id"):
+            physical_id = line.split(":")[1].strip()
+        elif not line.strip():
+            # blank line: end of the current logical CPU block
+            if core_id is not None and (
+                cpu_set is None or processor in cpu_set
+            ):
+                cores.add((physical_id, core_id))
+            processor = core_id = physical_id = None
+    return len(cores)
 
 
 def _count_physical_cores_affinity(cpu_set):
@@ -363,9 +401,7 @@ def _count_physical_cores_affinity(cpu_set):
 
     try:
         if sys.platform == "linux":
-            cpu_count_physical = _count_physical_cores_linux_affinity(
-                cache_key
-            )
+            cpu_count_physical = _count_physical_cores_linux(cache_key)
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
@@ -381,50 +417,6 @@ def _count_physical_cores_affinity(cpu_set):
     physical_cores_affinity_cache[cache_key] = cpu_count_physical
 
     return cpu_count_physical, exception
-
-
-def _count_physical_cores_linux_affinity(cpu_set):
-    try:
-        cpu_info = subprocess.run(
-            "lscpu --parse=CPU,CORE,SOCKET".split(),
-            capture_output=True,
-            text=True,
-        )
-        lines = [
-            line
-            for line in cpu_info.stdout.splitlines()
-            if line and not line.startswith("#")
-        ]
-        if not lines:
-            raise ValueError("no output from lscpu")
-
-        cores = set()
-        for line in lines:
-            cpu_str, core_str, socket_str = line.split(",")[:3]
-            if int(cpu_str) in cpu_set:
-                cores.add((socket_str, core_str))
-        return len(cores)
-    except Exception:
-        pass  # fallback to /proc/cpuinfo
-
-    cpu_info = subprocess.run(
-        "cat /proc/cpuinfo".split(), capture_output=True, text=True
-    )
-    cores = set()
-    processor = core_id = physical_id = None
-    for line in cpu_info.stdout.splitlines() + [""]:
-        if line.startswith("processor"):
-            processor = int(line.split(":")[1].strip())
-        elif line.startswith("core id"):
-            core_id = line.split(":")[1].strip()
-        elif line.startswith("physical id"):
-            physical_id = line.split(":")[1].strip()
-        elif not line.strip():
-            # blank line: end of the current logical CPU block
-            if processor in cpu_set and core_id is not None:
-                cores.add((physical_id, core_id))
-            processor = core_id = physical_id = None
-    return len(cores)
 
 
 def _count_physical_cores_win32():

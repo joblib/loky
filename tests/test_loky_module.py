@@ -12,7 +12,11 @@ import pytest
 
 import loky
 from loky import cpu_count
-from loky.backend.context import _cpu_count_user, _MAX_WINDOWS_WORKERS
+from loky.backend.context import (
+    _cpu_count_affinity,
+    _cpu_count_user,
+    _MAX_WINDOWS_WORKERS,
+)
 
 
 def test_version():
@@ -220,11 +224,14 @@ def test_only_physical_cores_error():
         pytest.skip()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        # Write bad lscpu program
-        lscpu_path = f"{tmp_dir}/lscpu"
-        with open(lscpu_path, "w") as f:
-            f.write("#!/bin/sh\n" "exit(1)")
-        os.chmod(lscpu_path, 0o777)
+        # Write bad lscpu and cat programs so that both the primary lscpu
+        # based method and the /proc/cpuinfo fallback fail to find the
+        # number of physical cores.
+        for cmd in ["lscpu", "cat"]:
+            cmd_path = f"{tmp_dir}/{cmd}"
+            with open(cmd_path, "w") as f:
+                f.write("#!/bin/sh\n" "exit(1)")
+            os.chmod(cmd_path, 0o777)
 
         try:
             old_path = os.environ["PATH"]
@@ -262,7 +269,17 @@ def test_only_physical_cores_with_user_limitation():
 
     if cpu_count_user < cpu_count_mp:
         assert cpu_count() == cpu_count_user
-        assert cpu_count(only_physical_cores=True) <= cpu_count_user
+
+        if _cpu_count_affinity(cpu_count_mp) < cpu_count_mp:
+            # The restriction includes a CPU affinity component: the SMT
+            # collapsing logic may legitimately kick in and report fewer
+            # physical cores than cpu_count_user.
+            assert cpu_count(only_physical_cores=True) <= cpu_count_user
+        else:
+            # The restriction only comes from Cgroup/LOKY_MAX_CPU_COUNT:
+            # only_physical_cores must not be enforced, see cpu_count's
+            # docstring.
+            assert cpu_count(only_physical_cores=True) == cpu_count_user
 
 
 def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
@@ -294,7 +311,7 @@ def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
     monkeypatch.setattr(
         os, "sched_getaffinity", lambda pid: {0, 1}, raising=False
     )
-    context.physical_cores_affinity_cache = {}
+    monkeypatch.setattr(context, "physical_cores_affinity_cache", {})
 
     # taskset -c 0,1 pins the process to 2 logical CPUs that are SMT
     # siblings of a single physical core.
