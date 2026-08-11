@@ -100,7 +100,9 @@ _MEMORY_LEAK_CHECK_DELAY = 1.0
 # Workloads whose tasks differ a lot in size can legitimately exceed the default
 # without leaking, so it is configurable; it is read in the worker processes,
 # which inherit the environment of the process that created the executor.
-_MAX_MEMORY_LEAK_SIZE = int(os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE", int(3e8)))
+_MAX_MEMORY_LEAK_SIZE = int(
+    os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE", int(3e8))
+)
 
 
 try:
