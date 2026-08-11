@@ -141,11 +141,12 @@ def cpu_count(only_physical_cores=False):
                 cpu_affinity_set is not None
                 and len(cpu_affinity_set) < os_cpu_count
             ):
-                cpu_count_physical, _ = _count_physical_cores_affinity(
+                cpu_count_physical, exception = _count_physical_cores_affinity(
                     cpu_affinity_set
                 )
                 if cpu_count_physical != "not found":
                     return max(min(cpu_count_physical, cpu_count_user), 1)
+                _warn_physical_cores_not_found(exception)
 
         return max(cpu_count_user, 1)
 
@@ -154,6 +155,12 @@ def cpu_count(only_physical_cores=False):
         return cpu_count_physical
 
     # Fallback to default behavior
+    _warn_physical_cores_not_found(exception)
+
+    return aggregate_cpu_count
+
+
+def _warn_physical_cores_not_found(exception):
     if exception is not None:
         # warns only the first time
         warnings.warn(
@@ -164,8 +171,6 @@ def cpu_count(only_physical_cores=False):
             "the number of cores you want to use."
         )
         traceback.print_tb(exception.__traceback__)
-
-    return aggregate_cpu_count
 
 
 def _cpu_count_cgroup(os_cpu_count):
@@ -218,37 +223,12 @@ def _cpu_count_cgroup(os_cpu_count):
 
 def _cpu_count_affinity(os_cpu_count):
     # Number of available CPUs given affinity settings
-    if hasattr(os, "sched_getaffinity"):
-        try:
-            return len(os.sched_getaffinity(0))
-        except NotImplementedError:
-            pass
-
-    # On some platforms, os.sched_getaffinity does not exist or raises
-    # NotImplementedError, let's try with the psutil if installed.
-    try:
-        import psutil
-
-        p = psutil.Process()
-        if hasattr(p, "cpu_affinity"):
-            return len(p.cpu_affinity())
-
-    except ImportError:  # pragma: no cover
-        if (
-            sys.platform == "linux"
-            and os.environ.get("LOKY_MAX_CPU_COUNT") is None
-        ):
-            # Some platforms don't implement os.sched_getaffinity on Linux which
-            # can cause severe oversubscription problems. Better warn the
-            # user in this particularly pathological case which can wreck
-            # havoc, typically on CI workers.
-            warnings.warn(
-                "Failed to inspect CPU affinity constraints on this system. "
-                "Please install psutil or explictly set LOKY_MAX_CPU_COUNT."
-            )
+    cpu_affinity_set = _cpu_count_affinity_set()
+    if cpu_affinity_set is not None:
+        return len(cpu_affinity_set)
 
     # This can happen for platforms that do not implement any kind of CPU
-    # infinity such as macOS-based platforms.
+    # affinity such as macOS-based platforms.
     return os_cpu_count
 
 
@@ -265,6 +245,8 @@ def _cpu_count_affinity_set():
         except NotImplementedError:
             pass
 
+    # On some platforms, os.sched_getaffinity does not exist or raises
+    # NotImplementedError, let's try with the psutil if installed.
     try:
         import psutil
 
@@ -273,7 +255,18 @@ def _cpu_count_affinity_set():
             return set(p.cpu_affinity())
 
     except ImportError:  # pragma: no cover
-        pass
+        if (
+            sys.platform == "linux"
+            and os.environ.get("LOKY_MAX_CPU_COUNT") is None
+        ):
+            # Some platforms don't implement os.sched_getaffinity on Linux which
+            # can cause severe oversubscription problems. Better warn the
+            # user in this particularly pathological case which can wreck
+            # havoc, typically on CI workers.
+            warnings.warn(
+                "Failed to inspect CPU affinity constraints on this system. "
+                "Please install psutil or explictly set LOKY_MAX_CPU_COUNT."
+            )
 
     return None
 
