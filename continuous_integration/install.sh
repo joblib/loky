@@ -31,6 +31,10 @@ if [[ -z "$NO_PSUTIL" ]]; then
     PIP_INSTALL_PACKAGES="$PIP_INSTALL_PACKAGES psutil"
 fi
 
+if [[ "$PYINSTALLER_TESTS" == "true" ]]; then
+    PIP_INSTALL_PACKAGES="$PIP_INSTALL_PACKAGES pyinstaller"
+fi
+
 pip install $PIP_INSTALL_PACKAGES
 
 pip install -v .

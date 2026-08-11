@@ -8,6 +8,7 @@ import re
 import signal
 import subprocess
 import sys
+import textwrap
 import time
 import warnings
 import weakref
@@ -97,6 +98,50 @@ class TestResourceTracker:
 
         pattern = f"KeyError: '{filename}'"
         assert pattern not in p.stderr
+
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="Windows specific test"
+    )
+    def test_resource_tracker_does_not_inherit_unrelated_handles(self):
+        cmd = textwrap.dedent("""
+            import _winapi
+            import os
+            import sys
+
+            from loky.backend import resource_tracker
+
+            rhandle, whandle = _winapi.CreatePipe(None, 0)
+            try:
+                os.set_handle_inheritable(whandle, True)
+                resource_tracker.ensure_running()
+                _winapi.CloseHandle(whandle)
+                whandle = None
+
+                try:
+                    _winapi.PeekNamedPipe(rhandle, 0)
+                except BrokenPipeError:
+                    pass
+                else:
+                    raise RuntimeError(
+                        "resource tracker inherited an unrelated handle"
+                    )
+            finally:
+                try:
+                    resource_tracker._resource_tracker._stop()
+                finally:
+                    if whandle is not None:
+                        _winapi.CloseHandle(whandle)
+                    _winapi.CloseHandle(rhandle)
+            """)
+
+        p = subprocess.run(
+            [sys.executable, "-c", cmd],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30,
+        )
+        assert p.returncode == 0, p.stderr
 
     # The following four tests are inspired from cpython _test_multiprocessing
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])

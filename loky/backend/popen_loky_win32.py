@@ -9,7 +9,6 @@ from multiprocessing.popen_spawn_win32 import Popen as _Popen
 
 from . import reduction, spawn
 
-
 __all__ = ["Popen"]
 
 #
@@ -65,16 +64,24 @@ class Popen(_Popen):
         # terminated before it could steal the handle from the parent process.
         rhandle, whandle = _winapi.CreatePipe(None, 0)
         wfd = msvcrt.open_osfhandle(whandle, 0)
-        cmd = get_command_line(parent_pid=os.getpid(), pipe_handle=rhandle)
-
-        python_exe = spawn.get_executable()
+        cmd = spawn.get_command_line(
+            self.__module__,
+            extra_args=("--multiprocessing-fork",),
+            parent_pid=os.getpid(),
+            pipe_handle=rhandle,
+        )
+        python_exe = cmd[0]
 
         # copy the environment variables to set in the child process
         child_env = {**os.environ, **process_obj.env}
 
         # bpo-35797: When running in a venv, we bypass the redirect
         # executor and launch our base Python.
-        if WINENV and _path_eq(python_exe, sys.executable):
+        if (
+            not getattr(sys, "frozen", False)
+            and WINENV
+            and _path_eq(python_exe, sys.executable)
+        ):
             cmd[0] = python_exe = sys._base_executable
             child_env["__PYVENV_LAUNCHER__"] = sys.executable
 
@@ -117,25 +124,6 @@ class Popen(_Popen):
                 set_spawning_popen(None)
 
 
-def get_command_line(pipe_handle, parent_pid, **kwds):
-    """Returns prefix of command line used for spawning a child process."""
-    if getattr(sys, "frozen", False):
-        return [sys.executable, "--multiprocessing-fork", pipe_handle]
-    else:
-        prog = (
-            "from loky.backend.popen_loky_win32 import main; "
-            f"main(pipe_handle={pipe_handle}, parent_pid={parent_pid})"
-        )
-        opts = util._args_from_interpreter_flags()
-        return [
-            spawn.get_executable(),
-            *opts,
-            "-c",
-            prog,
-            "--multiprocessing-fork",
-        ]
-
-
 def is_forking(argv):
     """Return whether commandline indicates we are forking."""
     if len(argv) >= 2 and argv[1] == "--multiprocessing-fork":
@@ -146,7 +134,13 @@ def is_forking(argv):
 
 def main(pipe_handle, parent_pid=None):
     """Run code specified by data received over pipe."""
-    assert is_forking(sys.argv), "Not forking"
+    assert is_forking(sys.argv) or spawn._is_loky_forking(
+        sys.argv
+    ), "Not forking"
+
+    pipe_handle = int(pipe_handle)
+    if parent_pid is not None:
+        parent_pid = int(parent_pid)
 
     if parent_pid is not None:
         source_process = _winapi.OpenProcess(
