@@ -45,7 +45,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-
+          - name: windows-py314
+            os: windows-latest
+            PYTHON_VERSION: "3.14"
           - name: windows-py313
             os: windows-latest
             PYTHON_VERSION: "3.13"
@@ -54,6 +56,9 @@ jobs:
             PYTHON_VERSION: "3.10"
             LOKY_TEST_NO_CIM: "true"
 
+          - name: macos-py314
+            os: macos-latest
+            PYTHON_VERSION: "3.14"
           - name: macos-py313
             os: macos-latest
             PYTHON_VERSION: "3.13"
@@ -63,8 +68,7 @@ jobs:
 
           - name: linux-py314-free-threading
             os: ubuntu-latest
-            PYTHON_VERSION: "3.14.0rc2"
-            CONDA_CHANNEL: "conda-forge/label/python_rc"
+            PYTHON_VERSION: "3.14"
             FREE_THREADING: "true"
           - name: linux-py313
             os: ubuntu-latest
