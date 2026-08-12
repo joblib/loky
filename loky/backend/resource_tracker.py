@@ -166,7 +166,6 @@ class ResourceTracker(_ResourceTracker):
         # This is copied from Python 3.14.7 with loky additions/modifications
         # mostly for Windows support and logging.
         # Added or changed lines have a comment that starts with "# loky:"
-        # TODO what changes, maybe add comments on the line that changes
         fds_to_pass = []
         try:
             fds_to_pass.append(sys.stderr.fileno())
@@ -179,8 +178,6 @@ class ResourceTracker(_ResourceTracker):
             os.close(r)
             r = _r
 
-        # loky: use loky main function rather than stdlib one
-        cmd = f"from {main.__module__} import main; main({r}, {VERBOSE})"
         try:
             fds_to_pass.append(r)
             # process will out live us, so no need to wait on pid
@@ -188,8 +185,9 @@ class ResourceTracker(_ResourceTracker):
             args = [
                 exe,
                 *util._args_from_interpreter_flags(),
-                "-c",
-                cmd,
+                '-c',
+                # loky: use loky main function rather than stdlib one
+                f'from {main.__module__} import main; main({r}, {VERBOSE})'
             ]
             # loky: logging
             util.debug(f"launching resource tracker: {args}")
@@ -202,10 +200,8 @@ class ResourceTracker(_ResourceTracker):
             prev_sigmask = None
             try:
                 if _HAVE_SIGMASK:
-                    prev_sigmask = signal.pthread_sigmask(
-                        signal.SIG_BLOCK, _IGNORED_SIGNALS
-                    )
-                pid = spawnv_passfds(exe, args, fds_to_pass)
+                    prev_sigmask = signal.pthread_sigmask(signal.SIG_BLOCK, _IGNORED_SIGNALS)
+                pid = util.spawnv_passfds(exe, args, fds_to_pass)
             finally:
                 if prev_sigmask is not None:
                     signal.pthread_sigmask(signal.SIG_SETMASK, prev_sigmask)
