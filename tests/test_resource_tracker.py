@@ -439,6 +439,12 @@ class TestResourceTracker:
         # SYNCHRONIZE, which is what turns the inherited teardown into
         # PermissionError. A value naming a live never-signalled object would
         # hang instead, so this is the variant that is safe to assert on.
+        base = resource_tracker._ResourceTracker
+        if not hasattr(base, "__del__"):
+            # Without one to override there is no teardown to reach, so the
+            # bug is not reachable either
+            pytest.skip("this Python version has no ResourceTracker.__del__")
+
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.OpenProcess.restype = wintypes.HANDLE
         kernel32.OpenProcess.argtypes = [
