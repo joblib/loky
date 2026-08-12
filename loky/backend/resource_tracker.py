@@ -141,7 +141,6 @@ class ResourceTracker(_ResourceTracker):
             else:
                 # Python 3.10 doesn't have _teardown_dead_process copy implementation,
                 # this is copied from Python 3.14.7
-                # TODO There may be Windows-specific things to handle here ...
                 os.close(self._fd)
 
                 # Clean-up to avoid dangling processes.
