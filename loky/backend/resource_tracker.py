@@ -105,7 +105,7 @@ VERBOSE = False
 class ResourceTracker(_ResourceTracker):
     """Resource tracker with refcounting scheme.
 
-    This class is a modified copy of the multiprocessing ResourceTracker class
+    This class is an extension of the multiprocessing ResourceTracker class
     and implements a reference counting scheme to avoid unlinking shared
     resources still in use in other processes.
 
@@ -117,29 +117,16 @@ class ResourceTracker(_ResourceTracker):
     function, which is run in a dedicated process.
     """
 
-    def __del__(self):
-        # Python 3.10 ResourceTracker does not have a __del__
-        if not PY_GREATER_THAN_311:
-            return
-
-        if os.name == "posix":
-            super().__del__()
-        else:
-            # TODO What is the right thing to do on Windows? Probably larsoner PR has some answers
-            try:
-                # use timeout=None which avoids WNOHANG which doesn't exist on Windows
-                self._stop(use_blocking_lock=False)
-            except ChildProcessError:
-                # ignore error due to trying to clean up child process which has already been
-                # shutdown on windows. See https://github.com/joblib/loky/pull/450
-                pass
+    def maybe_unlink(self, name, rtype):
+        """Decrement the refcount of a resource, and delete it if it hits 0"""
+        self._send("MAYBE_UNLINK", name, rtype)
 
     def _teardown_dead_process(self):
         if os.name == "posix":
             if PY_GREATER_THAN_311:
                 super()._teardown_dead_process()
             else:
-                # Python 3.10 doesn't have _teardown_dead_process copy implementation,
+                # Python 3.10 doesn't have _teardown_dead_process,
                 # this is copied from Python 3.14.7
                 os.close(self._fd)
 
@@ -161,7 +148,7 @@ class ResourceTracker(_ResourceTracker):
                     "relaunching.  Some resources might leak."
                 )
         else:
-            # Windows
+            # TODO what is the right thing to do Windows? Probably larsoner PR has some answers.
             os.close(self._fd)
             # All 3 lines copied from stdlib _teardown_dead_processes
             self._fd = None
@@ -272,9 +259,22 @@ class ResourceTracker(_ResourceTracker):
                     self._launch()
     # fmt: on
 
-    def maybe_unlink(self, name, rtype):
-        """Decrement the refcount of a resource, and delete it if it hits 0"""
-        self._send("MAYBE_UNLINK", name, rtype)
+    def __del__(self):
+        # Python 3.10 ResourceTracker does not have a __del__
+        if not PY_GREATER_THAN_311:
+            return
+
+        if os.name == "posix":
+            super().__del__()
+        else:
+            # TODO What is the right thing to do on Windows? Probably larsoner PR has some answers
+            try:
+                # use timeout=None which avoids WNOHANG which doesn't exist on Windows
+                self._stop(use_blocking_lock=False)
+            except ChildProcessError:
+                # ignore error due to trying to clean up child process which has already been
+                # shutdown on windows. See https://github.com/joblib/loky/pull/450
+                pass
 
 
 _resource_tracker = ResourceTracker()
