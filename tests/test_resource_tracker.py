@@ -157,12 +157,12 @@ class TestResourceTracker:
         if sys.platform == "win32":
             errno_map = {"file": 2, "folder": 3}
             expected = (
-                f"resource_tracker: '{re.escape(name1)}': "
+                f"resource_tracker: {re.escape(name1)}: "
                 f"(WindowsError\\(({errno_map[rtype]})|FileNotFoundError)"
             )
         else:
             expected = (
-                f"resource_tracker: '{re.escape(name1)}': "
+                f"resource_tracker: {re.escape(name1)}: "
                 f"(OSError\\({errno.ENOENT}|FileNotFoundError)"
             )
         assert re.search(expected, err) is not None

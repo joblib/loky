@@ -118,7 +118,7 @@ class ResourceTracker(_ResourceTracker):
     """
 
     def __del__(self):
-        # Python 3.10 does not have a __del__
+        # Python 3.10 ResourceTracker does not have a __del__
         if not PY_GREATER_THAN_311:
             return
 
@@ -143,8 +143,9 @@ class ResourceTracker(_ResourceTracker):
             if PY_GREATER_THAN_311:
                 super()._teardown_dead_process()
             else:
-                # Python 3.10 doesn't have _teardown_dead_process copy implementation
-                # TODO so this is copied from ???
+                # Python 3.10 doesn't have _teardown_dead_process copy implementation,
+                # this is copied from Python 3.14.7
+                # TODO There may be Windows-specific things to handle here ...
                 os.close(self._fd)
 
                 # Clean-up to avoid dangling processes.
@@ -177,13 +178,12 @@ class ResourceTracker(_ResourceTracker):
                 "relaunching.  Some resources might leak."
             )
 
-    # To minimize the diff with stdlib _launch
+    # To minimize the diff with stdlib ResourceTracker._launch
     # fmt: off
     def _launch(self):
-        # This is the modified part of the resource tracker, which launches
-        # loky's version, which is compatible with windows and allow to track
-        # folders with external ref counting.
-        # TODO which version is is copied from (likely 3.14.7)
+        # This is copied from Python 3.14.7 with loky additions/modifications
+        # mostly for Windows support and logging.
+        # Added or changed lines have a comment that starts with "# loky:"
         # TODO what changes, maybe add comments on the line that changes
         fds_to_pass = []
         try:
@@ -191,11 +191,13 @@ class ResourceTracker(_ResourceTracker):
         except Exception:
             pass
         r, w = os.pipe()
+        # loky: Windows support
         if sys.platform == "win32":
             _r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
             os.close(r)
             r = _r
 
+        # loky: use loky main function rather than stdlib one
         cmd = f"from {main.__module__} import main; main({r}, {VERBOSE})"
         try:
             fds_to_pass.append(r)
@@ -207,6 +209,7 @@ class ResourceTracker(_ResourceTracker):
                 "-c",
                 cmd,
             ]
+            # loky: logging
             util.debug(f"launching resource tracker: {args}")
             # bpo-33613: Register a signal mask that will block the signals.
             # This signal mask will be inherited by the child that is going
@@ -231,6 +234,7 @@ class ResourceTracker(_ResourceTracker):
             self._fd = w
             self._pid = pid
         finally:
+            # loky: Windows support
             if sys.platform == "win32":
                 _winapi.CloseHandle(r)
             else:
@@ -312,14 +316,14 @@ def _decode_message(line):
 # fmt: on
 
 # fmt: off
-# Added by loky: verbose argument for logging
+# The main function has been copied from Python 3.14.7 and modified, mostly for
+# Windows support, logging and refcount functionality.
+# Added or changed lines have a comment that starts with "# loky:"
+# loky: add verbose argument for logging
 def main(fd, verbose=0):
     '''Run resource tracker.'''
-    # The main function has been copied from Python 3.14.7. Loky adds Windows
-    # support + logging. Added lines have a comment that starts with # Added by loky
-    # TODO harmonize with py314 main and add comment
 
-    # Added by loky: logging
+    # loky: logging
     if verbose:
         util.log_to_stderr(level=util.DEBUG)
 
@@ -336,18 +340,18 @@ def main(fd, verbose=0):
         except Exception:
             pass
 
-    # Added by loky: logging
+    # loky: logging
     if verbose:
         util.debug("Main resource tracker is running")
 
-    # Changed by loky: for refcount functionality we want a dict[str, dict]
-    # rather than a dict[str, set] so that cache[folder]['resource'] is the
-    # refcount associated with it
+    # loky: change for refcount functionality we want a dict[str, dict] rather
+    # than a dict[str, set] so that cache[folder]['resource'] is the refcount
+    # associated with it
     cache = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
     exit_code = 0
 
     try:
-        # Added by loky: Windows support
+        # loky: Windows support
         if sys.platform == "win32":
             fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
         # keep track of registered/unregistered resources
@@ -360,19 +364,19 @@ def main(fd, verbose=0):
                         raise ValueError(
                             f'Cannot register {name} for automatic cleanup: '
                             f'unknown resource type ({rtype})'
-                            # Added by loky: additional info
+                            # loky: additional info for possible keys
                             '. Resource type should be one of the following: '
                             f'{list(_CLEANUP_FUNCS.keys())}'
                         )
 
                     if cmd == 'REGISTER':
-                        # Changed by loky: refcount functionality
+                        # loky: refcount functionality
                         if name not in cache[rtype]:
                             cache[rtype][name] = 1
                         else:
                             cache[rtype][name] += 1
 
-                        # Added by loky: logging
+                        # loky: logging
                         if verbose:
                             util.debug(
                                 '[ResourceTracker] incremented refcount of '
@@ -380,9 +384,9 @@ def main(fd, verbose=0):
                                 f'(current {cache[rtype][name]})'
                             )
                     elif cmd == 'UNREGISTER':
-                        # Changed by loky: refcount functionality
+                        # loky: refcount functionality
                         del cache[rtype][name]
-                        # Added by loky: logging
+                        # loky: logging
                         if verbose:
                             util.debug(
                                 f'[ResourceTracker] unregister {name} {rtype}: '
@@ -391,7 +395,7 @@ def main(fd, verbose=0):
                             )
                     elif cmd == 'PROBE':
                         pass
-                    # Added by loky: refcount functionality with logging
+                    # loky: refcount functionality with logging
                     elif cmd == 'MAYBE_UNLINK':
                         cache[rtype][name] -= 1
                         if verbose:
@@ -426,7 +430,7 @@ def main(fd, verbose=0):
     finally:
         # all processes have terminated; cleanup any remaining resources
 
-        # Added by loky: loky wants to clean ressources first and folder last because there can be tracked resources inside tracked folders.
+        # loky: loky wants to clean ressources first and folder last because there can be tracked resources inside tracked folders.
         # _unlink_resources is the stdlib code with some additional logging, it
         # is called for all resources except folders and then at the end for
         # all folders
@@ -454,13 +458,16 @@ def main(fd, verbose=0):
                     try:
                         try:
                             _CLEANUP_FUNCS[rtype](name)
-                            # Added by loky: logging
+                            # loky: logging
                             if verbose:
                                 util.debug(f'[ResourceTracker] unlink {name}')
                         except Exception as e:
                             exit_code = 2
-                            # Changed by loky: %r instead of %s for exception logging
-                            warnings.warn('resource_tracker: %r: %r' % (name, e))
+                            # loky: %r instead of %s for exception logging and
+                            # (TODO is this really necessary, I guess you get
+                            # the exact exception type with %r)
+                            # also %s instead of %r for, probably an historic change in CPython
+                            warnings.warn('resource_tracker: %s: %r' % (name, e))
                     finally:
                         pass
 
@@ -472,7 +479,7 @@ def main(fd, verbose=0):
         if 'folder' in cache:
             _unlink_resources(cache['folder'], 'folder')
 
-    # Added by loky: logging
+    # loky: logging
     if verbose:
         util.debug("resource tracker shut down")
 
