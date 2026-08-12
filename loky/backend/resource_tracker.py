@@ -49,11 +49,15 @@ import threading
 PY_GREATER_THAN_311 = sys.version_info[:2] >= (3, 11)
 
 if PY_GREATER_THAN_311:
-    from .py314_resource_tracker import ResourceTracker as _ResourceTracker
+    from .stdlib_py314_resource_tracker import (
+        ResourceTracker as _ResourceTracker,
+    )
 else:
     # CPython >= 3.11 re-entrancy support code relies on
     # threading.RLock._recursion_count which does not exist for Python <= 3.10
-    from .py310_resource_tracker import ResourceTracker as _ResourceTracker
+    from .stdlib_py310_resource_tracker import (
+        ResourceTracker as _ResourceTracker,
+    )
 
 from . import spawn
 
