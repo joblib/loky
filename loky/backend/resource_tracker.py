@@ -106,7 +106,7 @@ class ResourceTracker(_ResourceTracker):
     """Resource tracker with refcounting scheme.
 
     This class is an extension of the multiprocessing ResourceTracker class
-    and implements a reference counting scheme to avoid unlinking shared
+    which implements a reference counting scheme to avoid unlinking shared
     resources still in use in other processes.
 
     This feature is notably used by `joblib.Parallel` to share temporary
@@ -201,7 +201,8 @@ class ResourceTracker(_ResourceTracker):
             try:
                 if _HAVE_SIGMASK:
                     prev_sigmask = signal.pthread_sigmask(signal.SIG_BLOCK, _IGNORED_SIGNALS)
-                pid = util.spawnv_passfds(exe, args, fds_to_pass)
+                # loky: call loky spawnv_passfds which supports Windows
+                pid = spawnv_passfds(exe, args, fds_to_pass)
             finally:
                 if prev_sigmask is not None:
                     signal.pthread_sigmask(signal.SIG_SETMASK, prev_sigmask)
@@ -381,8 +382,7 @@ def main(fd, verbose=0):
                         if verbose:
                             util.debug(
                                 f'[ResourceTracker] unregister {name} {rtype}: '
-                                # TODO do I want to keep registry name here, or switch to cache?
-                                f'registry({len(cache)})'
+                                f'cache({len(cache)})'
                             )
                     elif cmd == 'PROBE':
                         pass
@@ -412,8 +412,10 @@ def main(fd, verbose=0):
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
-                    # TODO look at this closer maybe there was a reason to
-                    # always print the back-trace even in BaseException case???
+                    # TODO I change the exception class to be Exception instead
+                    # of BaseException and follow stdlib but look at this
+                    # closer. Maybe loky had a reason to always print the
+                    # back-trace even in BaseException case???
                     exit_code = 3
                     try:
                         sys.excepthook(*sys.exc_info())
@@ -459,7 +461,9 @@ def main(fd, verbose=0):
                             # loky: %r instead of %s for exception logging and
                             # (TODO is this really necessary, I guess you get
                             # the exact exception type with %r)
-                            # also %s instead of %r for, probably an historic change in CPython
+                            # also %s instead of %r for name, one reason may be
+                            # for Windows %r doubles the backslashes for path
+                            # ressources
                             warnings.warn('resource_tracker: %s: %r' % (name, e))
                     finally:
                         pass
@@ -483,15 +487,19 @@ def main(fd, verbose=0):
         util.debug("resource tracker shut down")
 
     # TODO add exit_code to _unlink_resource + exit_code management with 2-stage clean-up
+    # This can be done in a further PR, since we didn't have any kind of exit_code before
 # fmt: on
 
 
 def spawnv_passfds(path, args, passfds):
     if sys.platform != "win32":
+        # loky: TODO not sure why encoding is needed ... git blame points at
+        # https://github.com/joblib/loky/pull/429 but couldn't find any clear reason
         args = [arg.encode("utf-8") for arg in args]
         path = path.encode("utf-8")
         return util.spawnv_passfds(path, args, passfds)
     else:
+        # loky: Windows support
         passfds = sorted(passfds)
         cmd = " ".join(f'"{x}"' for x in args)
         try:
