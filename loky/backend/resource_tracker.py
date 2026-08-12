@@ -421,7 +421,8 @@ def main(fd, verbose=0):
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
-                    # TODO look at this closer maybe there was a reason to always print the back-trace even in BaseException case???
+                    # TODO look at this closer maybe there was a reason to
+                    # always print the back-trace even in BaseException case???
                     exit_code = 3
                     try:
                         sys.excepthook(*sys.exc_info())
@@ -430,7 +431,8 @@ def main(fd, verbose=0):
     finally:
         # all processes have terminated; cleanup any remaining resources
 
-        # loky: loky wants to clean ressources first and folder last because there can be tracked resources inside tracked folders.
+        # loky: loky wants to clean ressources first and folder last because
+        # there can be tracked resources inside tracked folders.
         # _unlink_resources is the stdlib code with some additional logging, it
         # is called for all resources except folders and then at the end for
         # all folders
@@ -471,6 +473,12 @@ def main(fd, verbose=0):
                     finally:
                         pass
 
+        # The default cleanup routine for folders deletes everything inside
+        # those folders recursively, which can include other resources tracked
+        # by the resource tracker). To limit the risk of the resource tracker
+        # attempting to delete twice a resource (once as part of a tracked
+        # folder, and once as a resource), we delete the folders after all
+        # other resource types.
         for rtype, rtype_cache in cache.items():
             if rtype == 'folder':
                 continue
