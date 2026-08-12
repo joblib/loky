@@ -220,29 +220,18 @@ class ResourceTracker(_ResourceTracker):
                 os.close(r)
 
     if not PY_GREATER_THAN_311:
-        # for Python 3.10 need to override ensure_running since _launch does not exist and so overriding _launch doesn't do anything
+        # for Python 3.10 need to override ensure_running since _launch does
+        # not exist and overriding _launch doesn't do anything
         def ensure_running(self):
             self._ensure_running_and_write()
 
-        def _write(self, msg):
-            nbytes = os.write(self._fd, msg)
-            assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
-
+        # Copied from Python 3.14.7 except that re-entrant code has been removed
         def _ensure_running_and_write(self, msg=None):
-            """Make sure that resource tracker process is running.
-
-            This can be run from any process.  Usually a child process will use
-            the resource created by its parent.
-
-
-            This function is added for compatibility with python version before 3.13.7.
-            """
             with self._lock:
-                if (
-                    self._fd is not None
-                ):  # resource tracker was launched before, is it still running?
+                # resource tracker was launched before, is it still running?
+                if self._fd is not None:
                     if msg is None:
-                        to_send = b"PROBE:0:noop\n"
+                        to_send = self._make_probe_message()
                     else:
                         to_send = msg
                     try:
@@ -254,6 +243,20 @@ class ResourceTracker(_ResourceTracker):
                     msg = None  # message was sent in probe
                 else:
                     self._launch()
+
+            if msg is not None:
+                self._write(msg)
+
+        # Helper function for _ensure_running_and_write copied from Python 3.14.7
+        def _write(self, msg):
+            nbytes = os.write(self._fd, msg)
+            assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
+
+        # Helper function for _ensure_running_and_write copied from Python
+        # 3.14.7 and simplified since Python 3.10 use the simplest message
+        # format
+        def _make_probe_message(self):
+            return b'PROBE:0:noop\n'
     # fmt: on
 
     def __del__(self):
