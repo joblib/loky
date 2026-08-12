@@ -16,6 +16,7 @@
   passing the pid waits on whatever unrelated object happens to share that
   value: this either raises ``PermissionError: [Errno 13]`` or blocks the
   interpreter forever. This also stops leaking the tracker's process handle.
+  (#643)
 
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
