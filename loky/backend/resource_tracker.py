@@ -125,7 +125,7 @@ class ResourceTracker(_ResourceTracker):
         if os.name == "posix":
             super().__del__()
         else:
-            # TODO What is the right thing to do on Windows?
+            # TODO What is the right thing to do on Windows? Probably larsoner PR has some answers
             try:
                 # use timeout=None which avoids WNOHANG which doesn't exist on Windows
                 self._stop(use_blocking_lock=False)
@@ -144,6 +144,7 @@ class ResourceTracker(_ResourceTracker):
                 super()._teardown_dead_process()
             else:
                 # Python 3.10 doesn't have _teardown_dead_process copy implementation
+                # TODO so this is copied from ???
                 os.close(self._fd)
 
                 # Clean-up to avoid dangling processes.
@@ -182,6 +183,8 @@ class ResourceTracker(_ResourceTracker):
         # This is the modified part of the resource tracker, which launches
         # loky's version, which is compatible with windows and allow to track
         # folders with external ref counting.
+        # TODO which version is is copied from (likely 3.14.7)
+        # TODO what changes, maybe add comments on the line that changes
         fds_to_pass = []
         try:
             fds_to_pass.append(sys.stderr.fileno())
@@ -234,7 +237,7 @@ class ResourceTracker(_ResourceTracker):
                 os.close(r)
 
     if not PY_GREATER_THAN_311:
-        # for Python 3.10 need to override ensure_running since _launch is not used ...
+        # for Python 3.10 need to override ensure_running since _launch does not exist and so overriding _launch doesn't do anything
         def ensure_running(self):
             self._ensure_running_and_write()
 
@@ -282,10 +285,41 @@ maybe_unlink = _resource_tracker.maybe_unlink
 unregister = _resource_tracker.unregister
 getfd = _resource_tracker.getfd
 
+# Copied from Python 3.14.7
+# fmt: off
+def _decode_message(line):
+    if line.startswith(b'{'):
+        try:
+            obj = json.loads(line.decode('ascii'))
+        except Exception as e:
+            raise ValueError("malformed resource_tracker message: %r" % (line,)) from e
 
+        cmd = obj["cmd"]
+        rtype = obj["rtype"]
+        b64  = obj.get("base64_name", "")
+
+        if not isinstance(cmd, str) or not isinstance(rtype, str) or not isinstance(b64, str):
+            raise ValueError("malformed resource_tracker fields: %r" % (obj,))
+
+        try:
+            name = base64.urlsafe_b64decode(b64).decode('utf-8', 'surrogateescape')
+        except ValueError as e:
+            raise ValueError("malformed resource_tracker base64_name: %r" % (b64,)) from e
+    else:
+        cmd, rest = line.strip().decode('ascii').split(':', maxsplit=1)
+        name, rtype = rest.rsplit(':', maxsplit=1)
+    return cmd, rtype, name
+# fmt: on
+
+# fmt: off
+# Added by loky: verbose argument for logging
 def main(fd, verbose=0):
-    """Run resource tracker."""
-    # TODO harmonize with py314 main
+    '''Run resource tracker.'''
+    # The main function has been copied from Python 3.14.7. Loky adds Windows
+    # support + logging. Added lines have a comment that starts with # Added by loky
+    # TODO harmonize with py314 main and add comment
+
+    # Added by loky: logging
     if verbose:
         util.log_to_stderr(level=util.DEBUG)
 
@@ -302,71 +336,77 @@ def main(fd, verbose=0):
         except Exception:
             pass
 
+    # Added by loky: logging
     if verbose:
         util.debug("Main resource tracker is running")
 
-    registry = {rtype: {} for rtype in _CLEANUP_FUNCS.keys()}
+    # Changed by loky: for refcount functionality we want a dict[str, dict]
+    # rather than a dict[str, set] so that cache[folder]['resource'] is the
+    # refcount associated with it
+    cache = {rtype: dict() for rtype in _CLEANUP_FUNCS.keys()}
+    exit_code = 0
 
     try:
+        # Added by loky: Windows support
         if sys.platform == "win32":
             fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
         # keep track of registered/unregistered resources
-        with open(fd, "rb") as f:
+        with open(fd, 'rb') as f:
             for line in f:
                 try:
-                    splitted = line.strip().decode("ascii").split(":")
-                    # name can potentially contain separator symbols (for
-                    # instance folders on Windows)
-                    cmd, name, rtype = (
-                        splitted[0],
-                        ":".join(splitted[1:-1]),
-                        splitted[-1],
-                    )
-
-                    if rtype not in _CLEANUP_FUNCS:
+                    cmd, rtype, name = _decode_message(line)
+                    cleanup_func = _CLEANUP_FUNCS.get(rtype, None)
+                    if cleanup_func is None:
                         raise ValueError(
-                            f"Cannot register {name} for automatic cleanup: "
-                            f"unknown resource type ({rtype}). Resource type "
-                            "should be one of the following: "
-                            f"{list(_CLEANUP_FUNCS.keys())}"
+                            f'Cannot register {name} for automatic cleanup: '
+                            f'unknown resource type ({rtype})'
+                            # Added by loky: additional info
+                            '. Resource type should be one of the following: '
+                            f'{list(_CLEANUP_FUNCS.keys())}'
                         )
 
-                    if cmd == "PROBE":
-                        pass
-                    elif cmd == "REGISTER":
-                        if name not in registry[rtype]:
-                            registry[rtype][name] = 1
+                    if cmd == 'REGISTER':
+                        # Changed by loky: refcount functionality
+                        if name not in cache[rtype]:
+                            cache[rtype][name] = 1
                         else:
-                            registry[rtype][name] += 1
+                            cache[rtype][name] += 1
 
+                        # Added by loky: logging
                         if verbose:
                             util.debug(
-                                "[ResourceTracker] incremented refcount of "
-                                f"{rtype} {name} "
-                                f"(current {registry[rtype][name]})"
+                                '[ResourceTracker] incremented refcount of '
+                                f'{rtype} {name} '
+                                f'(current {cache[rtype][name]})'
                             )
-                    elif cmd == "UNREGISTER":
-                        del registry[rtype][name]
+                    elif cmd == 'UNREGISTER':
+                        # Changed by loky: refcount functionality
+                        del cache[rtype][name]
+                        # Added by loky: logging
                         if verbose:
                             util.debug(
-                                f"[ResourceTracker] unregister {name} {rtype}: "
-                                f"registry({len(registry)})"
+                                f'[ResourceTracker] unregister {name} {rtype}: '
+                                # TODO do I want to keep registry name here, or switch to cache?
+                                f'registry({len(cache)})'
                             )
-                    elif cmd == "MAYBE_UNLINK":
-                        registry[rtype][name] -= 1
+                    elif cmd == 'PROBE':
+                        pass
+                    # Added by loky: refcount functionality with logging
+                    elif cmd == 'MAYBE_UNLINK':
+                        cache[rtype][name] -= 1
                         if verbose:
                             util.debug(
-                                "[ResourceTracker] decremented refcount of "
-                                f"{rtype} {name} "
-                                f"(current {registry[rtype][name]})"
+                                '[ResourceTracker] decremented refcount of '
+                                f'{rtype} {name} '
+                                f'(current {cache[rtype][name]})'
                             )
 
-                        if registry[rtype][name] == 0:
-                            del registry[rtype][name]
+                        if cache[rtype][name] == 0:
+                            del cache[rtype][name]
                             try:
                                 if verbose:
                                     util.debug(
-                                        f"[ResourceTracker] unlink {name}"
+                                        f'[ResourceTracker] unlink {name}'
                                     )
                                 _CLEANUP_FUNCS[rtype](name)
                             except Exception as e:
@@ -375,52 +415,69 @@ def main(fd, verbose=0):
                                 )
 
                     else:
-                        raise RuntimeError(f"unrecognized command {cmd!r}")
-                except BaseException:
+                        raise RuntimeError('unrecognized command %r' % cmd)
+                except Exception:
+                    # TODO look at this closer maybe there was a reason to always print the back-trace even in BaseException case???
+                    exit_code = 3
                     try:
                         sys.excepthook(*sys.exc_info())
-                    except BaseException:
+                    except:
                         pass
     finally:
         # all processes have terminated; cleanup any remaining resources
-        def _unlink_resources(rtype_registry, rtype):
-            if rtype_registry:
-                try:
-                    warnings.warn(
-                        "resource_tracker: There appear to be "
-                        f"{len(rtype_registry)} leaked {rtype} objects to "
-                        "clean up at shutdown"
-                    )
-                except Exception:
-                    pass
-            for name in rtype_registry:
-                # For some reason the process which created and registered this
-                # resource has failed to unregister it. Presumably it has
-                # died.  We therefore clean it up.
-                try:
-                    _CLEANUP_FUNCS[rtype](name)
-                    if verbose:
-                        util.debug(f"[ResourceTracker] unlink {name}")
-                except Exception as e:
-                    warnings.warn(f"resource_tracker: {name}: {e!r}")
 
-        for rtype, rtype_registry in registry.items():
-            if rtype == "folder":
+        # Added by loky: loky wants to clean ressources first and folder last because there can be tracked resources inside tracked folders.
+        # _unlink_resources is the stdlib code with some additional logging, it
+        # is called for all resources except folders and then at the end for
+        # all folders
+        def _unlink_resources(rtype_cache, rtype):
+            for rtype, rtype_cache in cache.items():
+                if rtype_cache:
+                    try:
+                        exit_code = 1
+                        if rtype == 'dummy':
+                            # The test 'dummy' resource is expected to leak.
+                            # We skip the warning (and *only* the warning) for it.
+                            pass
+                        else:
+                            warnings.warn(
+                                f'resource_tracker: There appear to be '
+                                f'{len(rtype_cache)} leaked {rtype} objects to '
+                                f'clean up at shutdown: {rtype_cache}'
+                            )
+                    except Exception:
+                        pass
+                for name in rtype_cache:
+                    # For some reason the process which created and registered this
+                    # resource has failed to unregister it. Presumably it has
+                    # died.  We therefore unlink it.
+                    try:
+                        try:
+                            _CLEANUP_FUNCS[rtype](name)
+                            # Added by loky: logging
+                            if verbose:
+                                util.debug(f'[ResourceTracker] unlink {name}')
+                        except Exception as e:
+                            exit_code = 2
+                            # Changed by loky: %r instead of %s for exception logging
+                            warnings.warn('resource_tracker: %r: %r' % (name, e))
+                    finally:
+                        pass
+
+        for rtype, rtype_cache in cache.items():
+            if rtype == 'folder':
                 continue
-            else:
-                _unlink_resources(rtype_registry, rtype)
+            _unlink_resources(rtype_cache, rtype)
 
-        # The default cleanup routine for folders deletes everything inside
-        # those folders recursively, which can include other resources tracked
-        # by the resource tracker). To limit the risk of the resource tracker
-        # attempting to delete twice a resource (once as part of a tracked
-        # folder, and once as a resource), we delete the folders after all
-        # other resource types.
-        if "folder" in registry:
-            _unlink_resources(registry["folder"], "folder")
+        if 'folder' in cache:
+            _unlink_resources(cache['folder'], 'folder')
 
+    # Added by loky: logging
     if verbose:
         util.debug("resource tracker shut down")
+
+    # TODO add exit_code to _unlink_resource + exit_code management with 2-stage clean-up
+# fmt: on
 
 
 def spawnv_passfds(path, args, passfds):
