@@ -12,10 +12,10 @@
 
 - Wait on the tracker's process handle instead of its pid when stopping the
   ``resource_tracker`` on Windows. The inherited teardown ends in
-  ``os.waitpid``, which resolves the pid through ``OpenProcess``: once the
-  tracker has exited that either raises ``PermissionError: [Errno 13]`` or, if
-  the pid has been recycled, blocks the interpreter forever waiting on an
-  unrelated process.
+  ``os.waitpid``, which on Windows takes a process handle rather than a pid, so
+  passing the pid waits on whatever unrelated object happens to share that
+  value: this either raises ``PermissionError: [Errno 13]`` or blocks the
+  interpreter forever. This also stops leaking the tracker's process handle.
 
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)

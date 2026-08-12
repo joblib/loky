@@ -1,5 +1,6 @@
 """Tests for the ResourceTracker class"""
 
+import ctypes
 import errno
 import gc
 import os
@@ -11,6 +12,7 @@ import sys
 import time
 import warnings
 import weakref
+from ctypes import wintypes
 
 from loky import ProcessPoolExecutor
 import loky.backend.resource_tracker as resource_tracker
@@ -353,9 +355,9 @@ class TestResourceTracker:
         os.close(w)
 
     def test_resource_tracker_stop_win32_waits_on_handle(self, monkeypatch):
-        # The point of the fix: reap through the CreateProcess handle, bounded,
-        # rather than through the pid, which OpenProcess can resolve to a
-        # recycled and unrelated process.
+        # The point of the fix: wait on the CreateProcess handle, bounded,
+        # rather than on the pid, which os.waitpid reinterprets as a handle
+        # value naming some unrelated object.
         winapi = _RecordingWinapi()
         monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
         tracker, w = _make_stopped_tracker()
@@ -403,8 +405,9 @@ class TestResourceTracker:
         self, monkeypatch
     ):
         # Non-regression test: the inherited teardown ends in os.waitpid, which
-        # on Windows resolves the pid through OpenProcess and then either fails
-        # or blocks forever on a recycled pid, so it must not be reached there.
+        # on Windows takes a process handle, so passing the pid waits on an
+        # unrelated object and either fails or blocks forever. It must not be
+        # reached there.
         base = resource_tracker._ResourceTracker
         if not hasattr(base, "__del__"):
             pytest.skip("this Python version has no ResourceTracker.__del__")
@@ -424,6 +427,43 @@ class TestResourceTracker:
         with pytest.raises(OSError):
             # the "alive" fd must have been closed to stop the tracker
             os.close(w)
+
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="win32-only teardown path"
+    )
+    def test_resource_tracker_del_survives_a_foreign_pid_value(self):
+        # End-to-end regression test for #642 against a real running tracker.
+        # os.waitpid takes a process handle on Windows, so _pid is
+        # reinterpreted as a handle value in our own table; CI hit that
+        # collision by chance. Force it with a handle that is live but lacks
+        # SYNCHRONIZE, which is what turns the inherited teardown into
+        # PermissionError. A value naming a live never-signalled object would
+        # hang instead, so this is the variant that is safe to assert on.
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = [
+            wintypes.DWORD,
+            wintypes.BOOL,
+            wintypes.DWORD,
+        ]
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION, False, os.getpid()
+        )
+        assert handle, ctypes.WinError(ctypes.get_last_error())
+
+        try:
+            tracker = resource_tracker.ResourceTracker()
+            tracker.ensure_running()
+            tracker._pid = int(handle)
+            # Must not raise PermissionError, and must not reap by pid
+            tracker.__del__()
+
+            assert tracker._fd is None
+            assert tracker._proc_handle is None
+        finally:
+            kernel32.CloseHandle(handle)
 
     def test_loky_process_inherit_multiprocessing_resource_tracker(self):
         cmd = """if 1:

@@ -265,11 +265,14 @@ class ResourceTracker(_ResourceTracker):
     def _stop_win32(self, close=os.close):
         """Stop the tracker without reaping it by pid.
 
-        The inherited teardown ends in ``os.waitpid(self._pid, 0)``, which on
-        Windows resolves the pid through ``OpenProcess``. Once the tracker has
-        exited that either fails with ``PermissionError`` or, if the pid has
-        been recycled, blocks forever on an unrelated process. Wait on the
-        handle from ``CreateProcess`` instead, which no recycling can alias.
+        The inherited teardown ends in ``os.waitpid(self._pid, 0)``. On Windows
+        that reaches the CRT's ``_cwait``, whose first argument is a process
+        *handle*, not a pid, so the pid is reinterpreted as a handle value in
+        this process's own table. Pids and handles are both multiples of four,
+        so it lands on an unrelated object often enough to matter: one without
+        SYNCHRONIZE access fails with ``PermissionError``, and a live one that
+        never signals blocks forever. Wait on the handle from ``CreateProcess``
+        instead, which actually names the tracker.
         """
         fd, self._fd = self._fd, None
         handle, self._proc_handle = self._proc_handle, None
@@ -444,14 +447,11 @@ def spawnv_passfds(path, args, passfds):
     else:
         passfds = sorted(passfds)
         cmd = " ".join(f'"{x}"' for x in args)
-        try:
-            hp, ht, pid, _ = _winapi.CreateProcess(
-                path, cmd, None, None, True, 0, None, None, None
-            )
-            _winapi.CloseHandle(ht)
-        except BaseException:
-            pass
-        # The process handle is kept rather than closed: waiting on the pid
-        # instead goes through OpenProcess, which is unsafe as soon as the pid
-        # can have been recycled.
+        hp, ht, pid, _ = _winapi.CreateProcess(
+            path, cmd, None, None, True, 0, None, None, None
+        )
+        _winapi.CloseHandle(ht)
+        # The process handle is kept rather than closed: os.waitpid needs a
+        # handle on Windows, and a pid passed in its place names whatever
+        # unrelated object shares that value in our handle table.
         return pid, hp
