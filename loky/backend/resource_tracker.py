@@ -134,10 +134,6 @@ class ResourceTracker(_ResourceTracker):
                 # shutdown on windows. See https://github.com/joblib/loky/pull/450
                 pass
 
-    def getfd(self):
-        self.ensure_running()
-        return self._fd
-
     def _teardown_dead_process(self):
         if os.name == "posix":
             if PY_GREATER_THAN_311:
