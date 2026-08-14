@@ -332,7 +332,7 @@ def _count_physical_cores_win32_powershell():
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     cpu_info = cpu_info.stdout.splitlines()
-    return int(cpu_info[0])
+    return sum(map(int, cpu_info))
 
 
 def _count_physical_cores_win32_ctypes():
@@ -377,6 +377,10 @@ def _count_physical_cores_win32_ctypes():
         physical_core_count += 1
         offset += processor_core_info.Size
 
+    if physical_core_count < 1:
+        raise RuntimeError(
+            "GetLogicalProcessorInformationEx returned no physical cores"
+        )
     return physical_core_count
 
 
