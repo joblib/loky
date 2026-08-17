@@ -67,24 +67,26 @@ if sys.platform == "win32":
     import msvcrt
     from multiprocessing.reduction import duplicate
 
+# To minimize diff vs stdlib
+# fmt:off
+__all__ = ['ensure_running', 'register', 'unregister']
 
-__all__ = ["ensure_running", "register", "unregister"]
-
-_HAVE_SIGMASK = hasattr(signal, "pthread_sigmask")
+_HAVE_SIGMASK = hasattr(signal, 'pthread_sigmask')
 _IGNORED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
-
 def cleanup_noop(name):
-    raise RuntimeError("noop should never be registered or cleaned up")
+    raise RuntimeError('noop should never be registered or cleaned up')
 
 
 _CLEANUP_FUNCS = {
-    "noop": cleanup_noop,
-    "folder": shutil.rmtree,
-    "file": os.unlink,
+    'noop': cleanup_noop,
+    'dummy': lambda name: None,  # Dummy resource used in tests
+    # loky: add 'folder' and 'file' resources
+    'folder': shutil.rmtree,
+    'file': os.unlink,
 }
 
-if os.name == "posix":
+if os.name == 'posix':
     import _multiprocessing
 
     # Use sem_unlink() to clean up named semaphores.
@@ -92,14 +94,15 @@ if os.name == "posix":
     # sem_unlink() may be missing if the Python build process detected the
     # absence of POSIX named semaphores. In that case, no named semaphores were
     # ever opened, so no cleanup would be necessary.
-    if hasattr(_multiprocessing, "sem_unlink"):
+    if hasattr(_multiprocessing, 'sem_unlink'):
         _CLEANUP_FUNCS.update(
             {
-                "semlock": _multiprocessing.sem_unlink,
+                'semlock': _multiprocessing.sem_unlink,
             }
         )
+# fmt: on
 
-
+# loky: logging
 VERBOSE = False
 
 
@@ -495,6 +498,7 @@ def main(fd, verbose=0):
 
 
 def spawnv_passfds(path, args, passfds):
+    # This is loky version of multiprocessing.util.spawnv_passfds with added Windows support
     if sys.platform != "win32":
         # loky: TODO not sure why encoding is needed since stdlib does not do
         # it, maybe Windows ... git blame points at
