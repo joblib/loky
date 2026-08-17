@@ -54,7 +54,7 @@ version = {attr = "loky.__version__"}
 line-length = 79
 include = '\.pyi?$'
 exclude = '''
-(
+/(
     \.git
   | \.hg
   | \.mypy_cache
@@ -64,7 +64,7 @@ exclude = '''
   | buck-out
   | build
   | dist
-)
+)/
 '''
 
 # Because pre-commit uses explicit filenames, you need to use force-exclude in
