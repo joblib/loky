@@ -415,10 +415,10 @@ def main(fd, verbose=0):
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
-                    # TODO I change the exception class to be Exception instead
-                    # of BaseException and follow stdlib but look at this
-                    # closer. Maybe loky had a reason to always print the
-                    # back-trace even in BaseException case???
+                    # TODO I followed the stdlib here and changed the exception
+                    # class to be Exception instead of BaseException. Maybe
+                    # loky had a reason to always print the back-trace even in
+                    # BaseException case???
                     exit_code = 3
                     try:
                         sys.excepthook(*sys.exc_info())
@@ -496,8 +496,10 @@ def main(fd, verbose=0):
 
 def spawnv_passfds(path, args, passfds):
     if sys.platform != "win32":
-        # loky: TODO not sure why encoding is needed ... git blame points at
-        # https://github.com/joblib/loky/pull/429 but couldn't find any clear reason
+        # loky: TODO not sure why encoding is needed since stdlib does not do
+        # it, maybe Windows ... git blame points at
+        # https://github.com/joblib/loky/pull/429 but couldn't find any clear
+        # reason
         args = [arg.encode("utf-8") for arg in args]
         path = path.encode("utf-8")
         return util.spawnv_passfds(path, args, passfds)
