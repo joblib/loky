@@ -44,7 +44,8 @@ import sys
 import signal
 import warnings
 from multiprocessing import util
-import threading
+import base64
+import json
 
 PY_GREATER_THAN_311 = sys.version_info[:2] >= (3, 11)
 
@@ -433,43 +434,42 @@ def main(fd, verbose=0):
         # is called for all resources except folders and then at the end for
         # all folders
         def _unlink_resources(rtype_cache, rtype):
-            for rtype, rtype_cache in cache.items():
-                if rtype_cache:
-                    try:
-                        exit_code = 1
-                        if rtype == 'dummy':
-                            # The test 'dummy' resource is expected to leak.
-                            # We skip the warning (and *only* the warning) for it.
-                            pass
-                        else:
-                            warnings.warn(
-                                f'resource_tracker: There appear to be '
-                                f'{len(rtype_cache)} leaked {rtype} objects to '
-                                f'clean up at shutdown: {rtype_cache}'
-                            )
-                    except Exception:
+            if rtype_cache:
+                try:
+                    exit_code = 1
+                    if rtype == 'dummy':
+                        # The test 'dummy' resource is expected to leak.
+                        # We skip the warning (and *only* the warning) for it.
                         pass
-                for name in rtype_cache:
-                    # For some reason the process which created and registered this
-                    # resource has failed to unregister it. Presumably it has
-                    # died.  We therefore unlink it.
+                    else:
+                        warnings.warn(
+                            f'resource_tracker: There appear to be '
+                            f'{len(rtype_cache)} leaked {rtype} objects to '
+                            f'clean up at shutdown: {rtype_cache}'
+                        )
+                except Exception:
+                    pass
+            for name in rtype_cache:
+                # For some reason the process which created and registered this
+                # resource has failed to unregister it. Presumably it has
+                # died.  We therefore unlink it.
+                try:
                     try:
-                        try:
-                            _CLEANUP_FUNCS[rtype](name)
-                            # loky: logging
-                            if verbose:
-                                util.debug(f'[ResourceTracker] unlink {name}')
-                        except Exception as e:
-                            exit_code = 2
-                            # loky: %r instead of %s for exception logging and
-                            # (TODO is this really necessary, I guess you get
-                            # the exact exception type with %r)
-                            # also %s instead of %r for name, one reason may be
-                            # for Windows %r doubles the backslashes for path
-                            # ressources
-                            warnings.warn('resource_tracker: %s: %r' % (name, e))
-                    finally:
-                        pass
+                        _CLEANUP_FUNCS[rtype](name)
+                        # loky: logging
+                        if verbose:
+                            util.debug(f'[ResourceTracker] unlink {name}')
+                    except Exception as e:
+                        exit_code = 2
+                        # loky: %r instead of %s for exception logging and
+                        # (TODO is this really necessary, I guess you get
+                        # the exact exception type with %r)
+                        # also %s instead of %r for name, one reason may be
+                        # for Windows %r doubles the backslashes for path
+                        # ressources
+                        warnings.warn('resource_tracker: %s: %r' % (name, e))
+                finally:
+                    pass
 
         # The default cleanup routine for folders deletes everything inside
         # those folders recursively, which can include other resources tracked

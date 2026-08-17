@@ -1,7 +1,9 @@
 """Tests for the ResourceTracker class"""
 
+import base64
 import errno
 import gc
+import json
 import os
 import pytest
 import re
@@ -324,3 +326,54 @@ class TestResourceTracker:
         )
         assert not p.stdout, p.stdout
         assert not p.stderr, p.stderr
+
+
+def test_shutdown_cleans_resources_once_and_folders_last(tmp_path):
+    folder = tmp_path / "tracked-folder"
+    folder.mkdir()
+    filename = folder / "tracked-file"
+    filename.touch()
+
+    cmd = "\n".join(
+        [
+            "from loky.backend import resource_tracker",
+            "",
+            f"resource_tracker.register({str(folder)!r}, 'folder')",
+            f"resource_tracker.register({str(filename)!r}, 'file')",
+        ]
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", cmd],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert not folder.exists()
+    assert not filename.exists()
+    assert "FileNotFoundError" not in result.stderr
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 11),
+    reason="JSON resource-tracker messages require Python 3.11+",
+)
+def test_decode_json_message_with_newline_in_name():
+    name = "folder/name\nwith-newline"
+    encoded_name = base64.urlsafe_b64encode(name.encode("utf-8")).decode(
+        "ascii"
+    )
+    message = json.dumps(
+        {
+            "cmd": "REGISTER",
+            "rtype": "file",
+            "base64_name": encoded_name,
+        }
+    ).encode("ascii")
+
+    assert resource_tracker._decode_message(message) == (
+        "REGISTER",
+        "file",
+        name,
+    )
