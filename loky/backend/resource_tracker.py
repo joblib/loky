@@ -46,19 +46,11 @@ import warnings
 from multiprocessing import util
 import base64
 import json
+from threading import _RLock
 
-PY_GREATER_THAN_311 = sys.version_info[:2] >= (3, 11)
-
-if PY_GREATER_THAN_311:
-    from .stdlib_py314_resource_tracker import (
-        ResourceTracker as _ResourceTracker,
-    )
-else:
-    # CPython >= 3.11 re-entrancy support code relies on
-    # threading.RLock._recursion_count which does not exist for Python <= 3.10
-    from .stdlib_py310_resource_tracker import (
-        ResourceTracker as _ResourceTracker,
-    )
+from .stdlib_py314_resource_tracker import (
+    ResourceTracker as StdLibResourceTracker,
+)
 
 from . import spawn
 
@@ -106,7 +98,18 @@ if os.name == 'posix':
 VERBOSE = False
 
 
-class ResourceTracker(_ResourceTracker):
+# loky: compatibility for CPython versions that don't have _RLock._recursion_count
+# This was done in CPython 3.13 in
+# 'Fix reentrancy issue in multiprocessing resource_tracker'
+# https://github.com/python/cpython/pull/109629
+# This was back-ported in 3.11.6 and 3.12.1
+# TODO Remove work-around when Python 3.13 is our minimum supported version
+class LokyRLock(_RLock):
+    def _recursion_count(self):
+        return 1
+
+
+class ResourceTracker(StdLibResourceTracker):
     """Resource tracker with refcounting scheme.
 
     This class is an extension of the multiprocessing ResourceTracker class
@@ -121,36 +124,20 @@ class ResourceTracker(_ResourceTracker):
     function, which is run in a dedicated process.
     """
 
+    # TODO Remove function when Python 3.13 is our minimum supported version
+    # see above comment about _recursion_count
+    def __init__(self):
+        super().__init__()
+        if not hasattr(self._lock, "_recursion_count"):
+            self._lock = LokyRLock()
+
     def maybe_unlink(self, name, rtype):
         """Decrement the refcount of a resource, and delete it if it hits 0"""
         self._send("MAYBE_UNLINK", name, rtype)
 
     def _teardown_dead_process(self):
         if os.name == "posix":
-            if PY_GREATER_THAN_311:
-                super()._teardown_dead_process()
-            else:
-                # Python 3.10 doesn't have _teardown_dead_process,
-                # this is copied from Python 3.14.7
-                os.close(self._fd)
-
-                # Clean-up to avoid dangling processes.
-                try:
-                    # _pid can be None if this process is a child from another
-                    # python process, which has started the resource_tracker.
-                    if self._pid is not None:
-                        os.waitpid(self._pid, 0)
-                except ChildProcessError:
-                    # The resource_tracker has already been terminated.
-                    pass
-                self._fd = None
-                self._pid = None
-                self._exitcode = None
-
-                warnings.warn(
-                    "resource_tracker: process died unexpectedly, "
-                    "relaunching.  Some resources might leak."
-                )
+            super()._teardown_dead_process()
         else:
             # TODO what is the right thing to do Windows? Probably larsoner PR has some answers.
             os.close(self._fd)
@@ -222,55 +209,16 @@ class ResourceTracker(_ResourceTracker):
                 _winapi.CloseHandle(r)
             else:
                 os.close(r)
-
-    if not PY_GREATER_THAN_311:
-        # for Python 3.10 need to override ensure_running since _launch does
-        # not exist and overriding _launch doesn't do anything
-        def ensure_running(self):
-            self._ensure_running_and_write()
-
-        # Copied from Python 3.14.7 except that re-entrant code has been removed
-        def _ensure_running_and_write(self, msg=None):
-            with self._lock:
-                # resource tracker was launched before, is it still running?
-                if self._fd is not None:
-                    if msg is None:
-                        to_send = self._make_probe_message()
-                    else:
-                        to_send = msg
-                    try:
-                        self._write(to_send)
-                    except OSError:
-                        self._teardown_dead_process()
-                        self._launch()
-
-                    msg = None  # message was sent in probe
-                else:
-                    self._launch()
-
-            if msg is not None:
-                self._write(msg)
-
-        # Helper function for _ensure_running_and_write copied from Python 3.14.7
-        def _write(self, msg):
-            nbytes = os.write(self._fd, msg)
-            assert nbytes == len(msg), f"{nbytes=} != {len(msg)=}"
-
-        # Helper function for _ensure_running_and_write copied from Python
-        # 3.14.7 and simplified since Python 3.10 use the simplest message
-        # format
-        def _make_probe_message(self):
-            return b'PROBE:0:noop\n'
     # fmt: on
 
-    def __del__(self):
-        # Python 3.10 ResourceTracker does not have a __del__
-        if not PY_GREATER_THAN_311:
-            return
+    # Need some special treatment of __del__ on Windows since stdlib
+    # implementation is posix-only. The "if os.name" check is outside the
+    # function rather than inside the function on purpose. You can not use
+    # 'os.name' inside __del__ because it looks like it can be called late
+    # (maybe interpreter exit?) and os is None.
+    if os.name != "posix":
 
-        if os.name == "posix":
-            super().__del__()
-        else:
+        def __del__(self):
             # TODO What is the right thing to do on Windows? Probably larsoner PR has some answers
             try:
                 # use timeout=None which avoids WNOHANG which doesn't exist on Windows
