@@ -383,15 +383,15 @@ class ResourceTracker(object):
 # popen_fork.Popen._launch() at once from clobbering eachothers intent.
 _fork_intent = threading.local()
 
-_resource_tracker = ResourceTracker()
-ensure_running = _resource_tracker.ensure_running
-register = _resource_tracker.register
-unregister = _resource_tracker.unregister
-getfd = _resource_tracker.getfd
+# _resource_tracker = ResourceTracker()
+# ensure_running = _resource_tracker.ensure_running
+# register = _resource_tracker.register
+# unregister = _resource_tracker.unregister
+# getfd = _resource_tracker.getfd
 
-# gh-146313: See _after_fork_in_child docstring.
-if hasattr(os, 'register_at_fork'):
-    os.register_at_fork(after_in_child=_resource_tracker._after_fork_in_child)
+# # gh-146313: See _after_fork_in_child docstring.
+# if hasattr(os, 'register_at_fork'):
+#     os.register_at_fork(after_in_child=_resource_tracker._after_fork_in_child)
 
 
 def _decode_message(line):
