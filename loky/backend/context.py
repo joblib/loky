@@ -371,7 +371,7 @@ def _count_physical_cores_win32_ctypes():
     while offset < bsz.value:
         processor_core_info = ctypes.cast(
             ctypes.byref(buf, offset),
-            ctypes.POINTER(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)
+            ctypes.POINTER(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX),
         ).contents
 
         physical_core_count += 1
