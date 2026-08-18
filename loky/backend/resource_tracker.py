@@ -230,12 +230,20 @@ class ResourceTracker(StdLibResourceTracker):
                 pass
 
 
+# fmt: off
+# Copied from Python 3.14.7
 _resource_tracker = ResourceTracker()
 ensure_running = _resource_tracker.ensure_running
 register = _resource_tracker.register
 maybe_unlink = _resource_tracker.maybe_unlink
 unregister = _resource_tracker.unregister
 getfd = _resource_tracker.getfd
+
+# gh-146313: See _after_fork_in_child docstring.
+if hasattr(os, 'register_at_fork'):
+    os.register_at_fork(after_in_child=_resource_tracker._after_fork_in_child)
+# fmt: on
+
 
 # fmt: off
 # The main function has been copied from Python 3.14.7 and modified, mostly for
