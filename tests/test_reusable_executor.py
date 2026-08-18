@@ -18,6 +18,7 @@ from packaging.version import Version
 import loky
 from loky import cpu_count
 from loky import get_reusable_executor
+from loky import process_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 from loky.reusable_executor import _ReusablePoolExecutor
@@ -1000,6 +1001,28 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
         assert len(pids) == 1, "the worker was recycled despite the threshold"
         assert not [w for w in record if "memory leak" in str(w.message)]
+
+    def test_manager_thread_failure_does_not_hang(self):
+        # The manager thread is the only one draining the result queue, so
+        # letting it die leaves the workers blocked on their exit lock and
+        # every caller waiting forever. A warning filter turning one of the
+        # warnings it emits into an error is enough to get there.
+        executor = get_reusable_executor(max_workers=2)
+        executor.submit(id, 42).result()  # make sure the workers are started
+
+        manager = process_executor._ExecutorManagerThread
+        original = manager.process_result_item
+
+        def _boom(self, result_item):
+            raise ValueError("manager thread boom")
+
+        manager.process_result_item = _boom
+        try:
+            with pytest.raises(BrokenProcessPool) as excinfo:
+                executor.submit(id, 42).result(timeout=30)
+        finally:
+            manager.process_result_item = original
+        assert isinstance(excinfo.value.__cause__, ValueError)
 
     def test_reusable_executor_reuse_true(self):
         executor = get_reusable_executor(max_workers=3, timeout=42)

@@ -10,6 +10,12 @@
   submissions after executor replacement could raise
   ``ShutdownExecutorError``. (#632)
 
+- Do not let an exception in the executor manager thread hang every caller.
+  The thread is the only one draining the result queue, so it dying left the
+  workers blocked on their exit lock and the callers waiting forever; the
+  executor is now flagged as broken instead. A warning filter turning one of
+  the warnings the thread emits into an error was enough to trigger this.
+
 - Report a worker that is recycled because of a suspected memory leak with a
   message that says so, and only once per executor instead of once per restart.
   Such a restart used to repeatedly emit the generic "A worker stopped while
@@ -21,6 +27,7 @@
   hardcoded to 300 MB. The reference it is compared against is measured after
   the worker's first task and never updated, so a workload whose tasks differ
   a lot in memory footprint can cross that threshold without leaking anything.
+
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
 

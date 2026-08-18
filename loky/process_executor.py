@@ -634,7 +634,20 @@ class _ExecutorManagerThread(threading.Thread):
 
     def run(self):
         # Main loop for the executor manager thread.
+        try:
+            self._run()
+        except BaseException as e:
+            # Without this the thread would die silently, leaving the workers
+            # blocked on their exit lock and every caller waiting forever for
+            # results that nobody is left to deliver. A warning filter turning
+            # one of the warnings below into an error is enough to get here.
+            bpe = BrokenProcessPool(
+                "The executor manager thread failed unexpectedly."
+            )
+            bpe.__cause__ = e
+            self.terminate_broken(bpe)
 
+    def _run(self):
         while True:
             self.add_call_item_to_queue()
 
@@ -797,6 +810,11 @@ class _ExecutorManagerThread(threading.Thread):
                     executor is not None
                     and len(self.processes) < executor._max_workers
                 ):
+                    with executor._processes_management_lock:
+                        executor._adjust_process_count()
+                    executor = None
+                    # Warn only once the pool is back to full strength, so
+                    # that a filter turning this into an error costs no worker
                     if not isinstance(result_item, _RecycledWorkerPid):
                         warnings.warn(
                             "A worker stopped while some jobs were given to "
@@ -818,9 +836,6 @@ class _ExecutorManagerThread(threading.Thread):
                             "will not be reported.",
                             UserWarning,
                         )
-                    with executor._processes_management_lock:
-                        executor._adjust_process_count()
-                    executor = None
         else:
             # Received a _ResultItem so mark the future as completed.
             work_item = self.pending_work_items.pop(result_item.work_id, None)
