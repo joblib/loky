@@ -355,10 +355,6 @@ def test_shutdown_cleans_resources_once_and_folders_last(tmp_path):
     assert "FileNotFoundError" not in result.stderr
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 11),
-    reason="JSON resource-tracker messages require Python 3.11+",
-)
 def test_decode_json_message_with_newline_in_name():
     name = "folder/name\nwith-newline"
     encoded_name = base64.urlsafe_b64encode(name.encode("utf-8")).decode(

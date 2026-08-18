@@ -50,6 +50,7 @@ from threading import _RLock
 
 from .stdlib_py314_resource_tracker import (
     ResourceTracker as StdLibResourceTracker,
+    _decode_message,
 )
 
 from . import spawn
@@ -236,32 +237,6 @@ maybe_unlink = _resource_tracker.maybe_unlink
 unregister = _resource_tracker.unregister
 getfd = _resource_tracker.getfd
 
-# Copied from Python 3.14.7
-# fmt: off
-def _decode_message(line):
-    if line.startswith(b'{'):
-        try:
-            obj = json.loads(line.decode('ascii'))
-        except Exception as e:
-            raise ValueError("malformed resource_tracker message: %r" % (line,)) from e
-
-        cmd = obj["cmd"]
-        rtype = obj["rtype"]
-        b64  = obj.get("base64_name", "")
-
-        if not isinstance(cmd, str) or not isinstance(rtype, str) or not isinstance(b64, str):
-            raise ValueError("malformed resource_tracker fields: %r" % (obj,))
-
-        try:
-            name = base64.urlsafe_b64decode(b64).decode('utf-8', 'surrogateescape')
-        except ValueError as e:
-            raise ValueError("malformed resource_tracker base64_name: %r" % (b64,)) from e
-    else:
-        cmd, rest = line.strip().decode('ascii').split(':', maxsplit=1)
-        name, rtype = rest.rsplit(':', maxsplit=1)
-    return cmd, rtype, name
-# fmt: on
-
 # fmt: off
 # The main function has been copied from Python 3.14.7 and modified, mostly for
 # Windows support, logging and refcount functionality.
@@ -441,7 +416,9 @@ def main(fd, verbose=0):
         util.debug("resource tracker shut down")
 
     # TODO add exit_code to _unlink_resource + exit_code management with 2-stage clean-up
-    # This can be done in a further PR, since we didn't have any kind of exit_code before
+    # This can be done in a further PR, since we didn't have any kind of
+    # exit_code in loky before
+    # sys.exit(exit_code)
 # fmt: on
 
 
