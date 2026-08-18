@@ -46,7 +46,7 @@ import warnings
 from multiprocessing import util
 import base64
 import json
-from threading import _RLock
+import threading
 
 from .stdlib_py314_resource_tracker import (
     ResourceTracker as StdLibResourceTracker,
@@ -105,7 +105,7 @@ VERBOSE = False
 # https://github.com/python/cpython/pull/109629
 # This was back-ported in 3.11.6 and 3.12.1
 # TODO Remove work-around when Python 3.13 is our minimum supported version
-class LokyRLock(_RLock):
+class LokyRLock(type(threading.RLock())):
     def _recursion_count(self):
         return 1
 
