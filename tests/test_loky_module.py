@@ -75,6 +75,34 @@ def test_windows_physical_cores_ctypes_matches_powershell():
     assert ctypes_count == powershell_count
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
+def test_windows_physical_cores_powershell():
+    from loky.backend.context import _count_physical_cores_win32_powershell
+
+    count = _count_physical_cores_win32_powershell()
+
+    assert isinstance(count, int)
+    assert count >= 1
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
+def test_windows_physical_cores_falls_back_to_powershell():
+    from loky.backend.context import _count_physical_cores_win32
+
+    with patch(
+        "loky.backend.context._count_physical_cores_win32_ctypes",
+        side_effect=RuntimeError("ctypes failed"),
+    ):
+        with patch(
+            "loky.backend.context._count_physical_cores_win32_powershell",
+            return_value=8,
+        ) as mock_powershell:
+            count = _count_physical_cores_win32()
+
+    assert count == 8
+    mock_powershell.assert_called_once()
+
+
 cpu_count_cmd = (
     "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
 )
