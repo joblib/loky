@@ -98,6 +98,9 @@ if os.name == 'posix':
 # loky: logging
 VERBOSE = False
 
+# Windows process waits use milliseconds.
+_WIN32_STOP_TIMEOUT_MS = 1000
+
 
 # loky: compatibility for CPython versions that don't have _RLock._recursion_count
 # This was done in CPython 3.13 in
@@ -129,6 +132,10 @@ class ResourceTracker(StdLibResourceTracker):
     # see above comment about _recursion_count
     def __init__(self):
         super().__init__()
+        # Windows process handle returned by CreateProcess.  A pid cannot be
+        # passed to os.waitpid on Windows because the underlying _cwait expects
+        # a process handle.
+        self._proc_handle = None
         if not hasattr(self._lock, "_recursion_count"):
             self._lock = LokyRLock()
 
@@ -140,12 +147,14 @@ class ResourceTracker(StdLibResourceTracker):
         if os.name == "posix":
             super()._teardown_dead_process()
         else:
-            # TODO what is the right thing to do Windows? Probably larsoner PR has some answers.
             os.close(self._fd)
+            if (proc_handle := self._proc_handle) is not None:
+                _winapi.CloseHandle(proc_handle)
             # All 3 lines copied from stdlib _teardown_dead_processes
             self._fd = None
             self._pid = None
             self._exitcode = None
+            self._proc_handle = None
 
             warnings.warn(
                 "resource_tracker: process died unexpectedly, "
@@ -194,7 +203,7 @@ class ResourceTracker(StdLibResourceTracker):
                 if _HAVE_SIGMASK:
                     prev_sigmask = signal.pthread_sigmask(signal.SIG_BLOCK, _IGNORED_SIGNALS)
                 # loky: call loky spawnv_passfds which supports Windows
-                pid = spawnv_passfds(exe, args, fds_to_pass)
+                pid, proc_handle = spawnv_passfds(exe, args, fds_to_pass)
             finally:
                 if prev_sigmask is not None:
                     signal.pthread_sigmask(signal.SIG_SETMASK, prev_sigmask)
@@ -204,6 +213,7 @@ class ResourceTracker(StdLibResourceTracker):
         else:
             self._fd = w
             self._pid = pid
+            self._proc_handle = proc_handle
         finally:
             # loky: Windows support
             if sys.platform == "win32":
@@ -212,22 +222,38 @@ class ResourceTracker(StdLibResourceTracker):
                 os.close(r)
     # fmt: on
 
-    # Need some special treatment of __del__ on Windows since stdlib
-    # implementation is posix-only. The "if os.name" check is outside the
-    # function rather than inside the function on purpose. You can not use
-    # 'os.name' inside __del__ because it looks like it can be called late
-    # (maybe interpreter exit?) and os is None.
-    if os.name != "posix":
+    def _stop_locked_win32(self, close=os.close, wait_timeout=None):
+        """Stop the tracker using its process handle rather than its pid."""
+        if self._lock._recursion_count() > 1:
+            raise self._reentrant_call_error()
+        if self._fd is None or self._pid is None:
+            return
 
-        def __del__(self):
-            # TODO What is the right thing to do on Windows? Probably larsoner PR has some answers
+        fd, self._fd = self._fd, None
+        proc_handle, self._proc_handle = self._proc_handle, None
+        self._pid = None
+        self._exitcode = None
+
+        # Closing the "alive" file descriptor asks the tracker to stop.
+        close(fd)
+
+        # _winapi can already be torn down when called by a finalizer.
+        if proc_handle is not None and _winapi is not None:
+            timeout_ms = (
+                _winapi.INFINITE
+                if wait_timeout is None
+                else round(wait_timeout * 1000)
+            )
             try:
-                # use timeout=None which avoids WNOHANG which doesn't exist on Windows
-                self._stop(use_blocking_lock=False)
-            except ChildProcessError:
-                # ignore error due to trying to clean up child process which has already been
-                # shutdown on windows. See https://github.com/joblib/loky/pull/450
-                pass
+                _winapi.WaitForSingleObject(proc_handle, timeout_ms)
+            finally:
+                _winapi.CloseHandle(proc_handle)
+
+    # The vendored __del__ calls _stop(..., wait_timeout=1.0). Override its
+    # POSIX waitpid implementation on Windows while retaining its locking and
+    # reentrancy handling.
+    if os.name != "posix":
+        _stop_locked = _stop_locked_win32
 
 
 # fmt: off
@@ -431,7 +457,7 @@ def main(fd, verbose=0):
 
 
 def spawnv_passfds(path, args, passfds):
-    # This is loky version of multiprocessing.util.spawnv_passfds with added Windows support
+    """Spawn the tracker and return its ``(pid, process_handle)``."""
     if sys.platform != "win32":
         # loky: TODO not sure why encoding is needed since stdlib does not do
         # it, maybe Windows ... git blame points at
@@ -439,16 +465,15 @@ def spawnv_passfds(path, args, passfds):
         # reason
         args = [arg.encode("utf-8") for arg in args]
         path = path.encode("utf-8")
-        return util.spawnv_passfds(path, args, passfds)
+        return util.spawnv_passfds(path, args, passfds), None
     else:
         # loky: Windows support
         passfds = sorted(passfds)
         cmd = " ".join(f'"{x}"' for x in args)
-        try:
-            _, ht, pid, _ = _winapi.CreateProcess(
-                path, cmd, None, None, True, 0, None, None, None
-            )
-            _winapi.CloseHandle(ht)
-        except BaseException:
-            pass
-        return pid
+        hp, ht, pid, _ = _winapi.CreateProcess(
+            path, cmd, None, None, True, 0, None, None, None
+        )
+        _winapi.CloseHandle(ht)
+        # Keep the process handle for a safe wait during teardown.  Pids and
+        # handles are different namespaces on Windows.
+        return pid, hp

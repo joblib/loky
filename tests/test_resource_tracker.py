@@ -30,6 +30,34 @@ def get_rtracker_fd():
     return resource_tracker._resource_tracker._fd
 
 
+class _RecordingWinapi:
+    """Stand-in for _winapi so Windows paths can be tested everywhere."""
+
+    INFINITE = 0xFFFFFFFF
+
+    def __init__(self, create_process=None):
+        self.waited = []
+        self.closed = []
+        self._create_process = create_process
+
+    def WaitForSingleObject(self, handle, timeout):
+        self.waited.append((handle, timeout))
+
+    def CloseHandle(self, handle):
+        self.closed.append(handle)
+
+    def CreateProcess(self, *args):
+        return self._create_process
+
+
+def _make_stopped_tracker(handle=42):
+    tracker = resource_tracker.ResourceTracker()
+    r, w = os.pipe()
+    os.close(r)
+    tracker._fd, tracker._pid, tracker._proc_handle = w, 123456, handle
+    return tracker, w
+
+
 class TestResourceTracker:
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
     def test_resource_utils(self, rtype):
@@ -290,6 +318,52 @@ class TestResourceTracker:
     def test_resource_tracker_sigkill(self):
         # Uncatchable signal.
         self.check_resource_tracker_death(signal.SIGKILL, True)
+
+    def test_resource_tracker_keeps_process_handle(self):
+        resource_tracker.ensure_running()
+        handle = resource_tracker._resource_tracker._proc_handle
+        assert (handle is not None) == (sys.platform == "win32")
+
+    def test_resource_tracker_stop_win32_waits_on_handle(self, monkeypatch):
+        winapi = _RecordingWinapi()
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        tracker, w = _make_stopped_tracker()
+
+        tracker._stop_locked_win32(wait_timeout=1.0)
+
+        assert winapi.waited == [(42, resource_tracker._WIN32_STOP_TIMEOUT_MS)]
+        assert winapi.closed == [42]
+        assert tracker._fd is None
+        assert tracker._pid is None
+        assert tracker._proc_handle is None
+        with pytest.raises(OSError):
+            os.close(w)
+
+    @pytest.mark.parametrize("handle", [42, None])
+    def test_resource_tracker_relaunch_closes_handle(
+        self, monkeypatch, handle
+    ):
+        winapi = _RecordingWinapi()
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(os, "name", "nt")
+        tracker, _ = _make_stopped_tracker(handle=handle)
+
+        with pytest.warns(UserWarning, match="died unexpectedly"):
+            tracker._teardown_dead_process()
+
+        assert winapi.closed == ([] if handle is None else [handle])
+        assert tracker._proc_handle is None
+
+    def test_spawnv_passfds_keeps_process_handle(self, monkeypatch):
+        winapi = _RecordingWinapi(create_process=(42, 43, 123456, 0))
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(sys, "platform", "win32")
+
+        assert resource_tracker.spawnv_passfds("exe", ["exe"], []) == (
+            123456,
+            42,
+        )
+        assert winapi.closed == [43]
 
     def test_loky_process_inherit_multiprocessing_resource_tracker(self):
         cmd = """if 1:

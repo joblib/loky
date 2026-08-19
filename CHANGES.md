@@ -10,6 +10,10 @@
   submissions after executor replacement could raise
   ``ShutdownExecutorError``. (#632)
 
+- Wait on the resource tracker's process handle instead of its pid on Windows,
+  avoiding intermittent ``PermissionError`` exceptions and hangs during
+  interpreter shutdown. (#643)
+
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
 
