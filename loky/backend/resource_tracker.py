@@ -121,7 +121,9 @@ if os.name == 'posix':
 # loky: logging
 VERBOSE = False
 
+# loky: Windows support
 # Windows process waits use milliseconds.
+# TODO now: only used in tests???
 _WIN32_STOP_TIMEOUT_MS = 1000
 
 
@@ -151,14 +153,14 @@ class ResourceTracker(StdLibResourceTracker):
     function, which is run in a dedicated process.
     """
 
-    # TODO Remove function when Python 3.13 is our minimum supported version
-    # see above comment about _recursion_count
     def __init__(self):
         super().__init__()
         # Windows process handle returned by CreateProcess.  A pid cannot be
         # passed to os.waitpid on Windows because the underlying _cwait expects
         # a process handle.
         self._proc_handle = None
+        # TODO Remove block when Python 3.13 is our minimum supported version
+        # see above comment about _recursion_count
         if not hasattr(self._lock, "_recursion_count"):
             self._lock = LokyRLock()
 
@@ -245,38 +247,47 @@ class ResourceTracker(StdLibResourceTracker):
                 os.close(r)
     # fmt: on
 
-    def _stop_locked_win32(self, close=os.close, wait_timeout=None):
-        """Stop the tracker using its process handle rather than its pid."""
-        if self._lock._recursion_count() > 1:
-            raise self._reentrant_call_error()
-        if self._fd is None or self._pid is None:
-            return
+    if sys.platform == "win32":
+        # TODO now: Should we do a signature
+        # (wait_for_single_object=_winapi.WaitForSingleObject,
+        # closehandle=_winapi.CloseHandle) similarly for close=os.close?
+        # TODO now: tweak comment
+        # The vendored __del__ calls _stop(..., wait_timeout=1.0). Override its
+        # POSIX waitpid implementation on Windows while retaining its locking and
+        # reentrancy handling.
+        # This is in part inspired from stdlib ResourceTracker._stop_locked and modified for Windows support
+        def _stop_locked(self, close=os.close, wait_timeout=None):
+            # This shouldn't happen (it might when called by a finalizer)
+            # so we check for it anyway.
+            if self._lock._recursion_count() > 1:
+                raise self._reentrant_call_error()
+            if self._fd is None or self._pid is None:
+                # not running
+                return
 
-        fd, self._fd = self._fd, None
-        proc_handle, self._proc_handle = self._proc_handle, None
-        self._pid = None
-        self._exitcode = None
+            # TODO now: Why this swap pattern seriously ???
+            fd, self._fd = self._fd, None
+            proc_handle, self._proc_handle = self._proc_handle, None
+            self._pid = None
+            self._exitcode = None
 
-        # Closing the "alive" file descriptor asks the tracker to stop.
-        close(fd)
+            # Closing the "alive" file descriptor asks the tracker to stop.
+            close(fd)
+            self._fd = None
 
-        # _winapi can already be torn down when called by a finalizer.
-        if proc_handle is not None and _winapi is not None:
-            timeout_ms = (
-                _winapi.INFINITE
-                if wait_timeout is None
-                else round(wait_timeout * 1000)
-            )
-            try:
-                _winapi.WaitForSingleObject(proc_handle, timeout_ms)
-            finally:
-                _winapi.CloseHandle(proc_handle)
+            # _winapi can already be torn down when called by a finalizer.
+            if proc_handle is not None and _winapi is not None:
+                timeout_ms = (
+                    _winapi.INFINITE
+                    if wait_timeout is None
+                    else round(wait_timeout * 1000)
+                )
+                try:
+                    _winapi.WaitForSingleObject(proc_handle, timeout_ms)
+                finally:
+                    _winapi.CloseHandle(proc_handle)
 
-    # The vendored __del__ calls _stop(..., wait_timeout=1.0). Override its
-    # POSIX waitpid implementation on Windows while retaining its locking and
-    # reentrancy handling.
-    if os.name != "posix":
-        _stop_locked = _stop_locked_win32
+            # TODO now: missing self._exitcode stuff, not sure what to do about it, maybe for later ...
 
 
 # fmt: off
@@ -399,10 +410,10 @@ def main(fd, verbose=0):
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
-                    # TODO I followed the stdlib here and changed the exception
-                    # class to be Exception instead of BaseException. Maybe
-                    # loky had a reason to always print the back-trace even in
-                    # BaseException case???
+                    # TODO now: closer look. I followed the stdlib here and
+                    # changed the exception class to be Exception instead of
+                    # BaseException. Maybe loky had a reason to always print
+                    # the back-trace even in BaseException case???
                     exit_code = 3
                     try:
                         sys.excepthook(*sys.exc_info())
@@ -444,16 +455,16 @@ def main(fd, verbose=0):
                             util.debug(f'[ResourceTracker] unlink {name}')
                     except Exception as e:
                         exit_code = 2
-                        # loky: %r instead of %s for exception logging and
-                        # (TODO is this really necessary, I guess you get
-                        # the exact exception type with %r)
-                        # also %s instead of %r for name, one reason may be
-                        # for Windows %r doubles the backslashes for path
-                        # ressources
+                        # loky: tweaked formatting ($r instead of %s for
+                        # exception and %s instead of %s for name) I guess you
+                        # get the exact exception type with %r. %s instead of
+                        # %r for name, may be because on Windows %r doubles the
+                        # backslashes for path-like ressources
                         warnings.warn('resource_tracker: %s: %r' % (name, e))
                 finally:
                     pass
 
+        # loky: 2 stage cleaning process
         # The default cleanup routine for folders deletes everything inside
         # those folders recursively, which can include other resources tracked
         # by the resource tracker). To limit the risk of the resource tracker
@@ -472,17 +483,22 @@ def main(fd, verbose=0):
     if verbose:
         util.debug("resource tracker shut down")
 
-    # TODO add exit_code to _unlink_resource + exit_code management with 2-stage clean-up
-    # This can be done in a further PR, since we didn't have any kind of
-    # exit_code in loky before
-    # sys.exit(exit_code)
+    # TODO not sure about exit_code management with 2-stage clean-up
+    # (first non-folder resources then folder resources) but seems good enough
+    # for now. We did not have any exit code management until
+    # https://github.com/joblib/loky/pull/472
+    sys.exit(exit_code)
 # fmt: on
 
 
 def spawnv_passfds(path, args, passfds):
-    """Spawn the tracker and return its ``(pid, process_handle)``."""
+    """Loky version multiprocessing.util.spawnv_passfds with added Windows support.
+
+    Returns (pid, process_handle) because os.waitpid needs handle on Windows.
+    On Linux process_handle is None.
+    """
     if sys.platform != "win32":
-        # loky: TODO not sure why encoding is needed since stdlib does not do
+        # loky: TODO now: not sure why encoding is needed since stdlib does not do
         # it, maybe Windows ... git blame points at
         # https://github.com/joblib/loky/pull/429 but couldn't find any clear
         # reason

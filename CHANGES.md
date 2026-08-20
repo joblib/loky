@@ -12,7 +12,9 @@
 
 - Wait on the resource tracker's process handle instead of its pid on Windows,
   avoiding intermittent ``PermissionError`` exceptions and hangs during
-  interpreter shutdown. (#643)
+  interpreter shutdown. (#472, original fix in #643)
+
+- Python 3.15 support. (#472)
 
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
