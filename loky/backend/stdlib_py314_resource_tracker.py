@@ -376,7 +376,8 @@ class ResourceTracker(object):
 
         self._ensure_running_and_write(msg)
 
-# loky: begin commented out section Remove module-level globals and logic which
+# loky: begin commented out section
+# Remove module-level globals and logic which
 # are unused and can cause confusing errors at interpreter exit because of
 # discrepancies in the code from vendored Python version and used Python
 # version
