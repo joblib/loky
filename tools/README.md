@@ -3,10 +3,9 @@
 For easier maintainability, the idea is that Loky resource tracker in
 `loky/backend/resource_tracker.py` derives from a minimally modified version of
 the stdlib resource tracker for a fixed CPython version in
-`/home/lesteve/dev/loky/loky/backend/stdlib_py314_resource_tracker.py`. Most of
-the Loky-specific features (like Windows support, logging, refcount
-functionality for shared folders and files, etc ...) should go as much as
-possible in `loky/backend/resource_tracker.py`.
+`loky/backend/stdlib_py314_resource_tracker.py`. Loky-specific features (like
+Windows support, logging, refcount functionality for shared folders and files,
+etc ...) should go as much as possible in `loky/backend/resource_tracker.py`.
 
 `vendor_stdlib_resource_tracker.sh` downloads the `resource_tracker.py` file
 from a fixed CPython version. Loky minimal changes to that file should be
