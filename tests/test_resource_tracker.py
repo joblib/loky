@@ -324,12 +324,15 @@ class TestResourceTracker:
         handle = resource_tracker._resource_tracker._proc_handle
         assert (handle is not None) == (sys.platform == "win32")
 
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="Windows-specific test"
+    )
     def test_resource_tracker_stop_win32_waits_on_handle(self, monkeypatch):
         winapi = _RecordingWinapi()
         monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
         tracker, w = _make_stopped_tracker()
 
-        tracker._stop_locked_win32(wait_timeout=1.0)
+        tracker._stop_locked(wait_timeout=1.0)
 
         assert winapi.waited == [(42, resource_tracker._WIN32_STOP_TIMEOUT_MS)]
         assert winapi.closed == [42]
