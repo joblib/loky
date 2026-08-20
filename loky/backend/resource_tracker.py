@@ -36,7 +36,30 @@
 # implements list of shared resources, and not a proper refcounting scheme.
 # Also, CPython's resource tracker will only attempt to cleanup those shared
 # resources once all processes connected to the resource tracker have exited.
-
+#
+# Source code organization and maintenance:
+#
+# This file is derived from the matching file in the standard library with
+# modifications to add the new features described above.
+#
+# It defines a subclass of a vendored copy of the ResourceTracker from the
+# standard library to make loky less likely to break when internals of
+# change in a new version of CPython.
+#
+# The new features are implemented in the overriden method of the ResourceTracker
+# class as well as in the custom `main` function.
+#
+# The vendored copy is minimally patched and should not be edited by hand.
+# Instead, it should be revendored from time to time using the script
+# in the `tools/` folder at the root of this repo.
+#
+# When vendoring a new copy of the resource_tracker module of the standard
+# library, it is important to check of the `main` function has evolved
+# upstream. If so, doing a diff of that particular function in the upstream
+# file and in the current file might be helpful.
+#
+# Make sure to update the inline comments to help future maintainers understand
+# what loky-specific changes where made.
 
 import os
 import shutil
