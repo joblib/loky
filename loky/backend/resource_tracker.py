@@ -405,10 +405,6 @@ def main(fd, verbose=0):
                     else:
                         raise RuntimeError('unrecognized command %r' % cmd)
                 except Exception:
-                    # TODO now: closer look. I followed the stdlib here and
-                    # changed the exception class to be Exception instead of
-                    # BaseException. Maybe loky had a reason to always print
-                    # the back-trace even in BaseException case???
                     exit_code = 3
                     try:
                         sys.excepthook(*sys.exc_info())
