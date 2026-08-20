@@ -22,9 +22,9 @@ the vendoring script will update
 
 - update the `curl` command to fetch `resource_tracker.py` from a more recent CPython version
 - run the vendoring script from the repository root:
-```bash
-bash tools/vendor_stdlib_resource_tracker.sh
-```
+  ```bash
+  bash tools/vendor_stdlib_resource_tracker.sh
+  ```
 
 ## Regenerating the patch
 
@@ -32,12 +32,12 @@ bash tools/vendor_stdlib_resource_tracker.sh
   (remember changes should be minimal to avoid diverging from the reference
   CPython code)
 - Download the Python reference file
-```bash
-curl -L \
-    https://raw.githubusercontent.com/python/cpython/refs/tags/v3.14.7/Lib/multiprocessing/resource_tracker.py \
-    -o loky/backend/stdlib_py314_resource_tracker.py.ref
-```
+  ```bash
+  curl -L \
+      https://raw.githubusercontent.com/python/cpython/refs/tags/v3.14.7/Lib/multiprocessing/resource_tracker.py \
+      -o loky/backend/stdlib_py314_resource_tracker.py.ref
+  ```
 - generate the patch
-```bash
-diff -u loky/backend/stdlib_py314_resource_tracker.py{.ref,} > tools/stdlib_py314_resource_tracker.patch
-```
+  ```bash
+  diff -u loky/backend/stdlib_py314_resource_tracker.py{.ref,} > tools/stdlib_py314_resource_tracker.patch
+  ```
