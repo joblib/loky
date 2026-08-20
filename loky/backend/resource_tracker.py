@@ -59,7 +59,7 @@
 # file and in the current file might be helpful.
 #
 # Make sure to update the inline comments to help future maintainers understand
-# what loky-specific changes where made.
+# what loky-specific changes were made.
 
 import os
 import shutil
