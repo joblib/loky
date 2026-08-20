@@ -376,19 +376,19 @@ class ResourceTracker(object):
 
         self._ensure_running_and_write(msg)
 
-# loky: begin commented out section
-# Remove module-level globals and logic which
-# are unused and can cause confusing errors at interpreter exit because of
-# discrepancies in the code from vendored Python version and used Python
-# version
 # gh-146313: Per-thread flag set by .popen_fork.Popen._launch() just before
 # os.fork(), telling _after_fork_in_child() to keep the inherited pipe fd so
 # the child can reuse this tracker (gh-80849).  Unset for raw os.fork() calls,
 # where the child instead closes the fd so the parent's __del__ can reap the
 # tracker.  Using threading.local() keeps multiple threads calling
 # popen_fork.Popen._launch() at once from clobbering eachothers intent.
-# _fork_intent = threading.local()
+_fork_intent = threading.local()
 
+# loky: begin commented out section
+# Remove module-level globals and logic which
+# are unused and can cause confusing errors at interpreter exit because of
+# discrepancies in the code from vendored Python version and used Python
+# version
 # _resource_tracker = ResourceTracker()
 # ensure_running = _resource_tracker.ensure_running
 # register = _resource_tracker.register
