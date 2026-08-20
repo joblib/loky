@@ -20,7 +20,7 @@ mirror the changes in CPython from 3.14.7 to 3.15.x. If the patch still applies
 the vendoring script will update
 `loky/backend/stdlib_py314_resource_tracker.py`.
 
-- update the CPython version we are fetching `resource_tracker.py` from
+- update the `curl` command to fetch `resource_tracker.py` from a more recent CPython version
 - run the vendoring script from the repository root:
 ```bash
 bash tools/vendor_stdlib_resource_tracker.sh
