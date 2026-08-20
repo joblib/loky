@@ -121,11 +121,6 @@ if os.name == 'posix':
 # loky: logging
 VERBOSE = False
 
-# loky: Windows support
-# Windows process waits use milliseconds.
-# TODO now: only used in tests???
-_WIN32_STOP_TIMEOUT_MS = 1000
-
 
 # loky: compatibility for CPython versions that don't have _RLock._recursion_count
 # This was done in CPython 3.13 in

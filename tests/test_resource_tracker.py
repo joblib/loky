@@ -332,9 +332,11 @@ class TestResourceTracker:
         monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
         tracker, w = _make_stopped_tracker()
 
-        tracker._stop_locked(wait_timeout=1.0)
+        timeout_in_seconds = 0.5
+        timeout_in_milliseconds = 1000 * timeout_in_seconds
+        tracker._stop_locked(wait_timeout=timeout_in_seconds)
 
-        assert winapi.waited == [(42, resource_tracker._WIN32_STOP_TIMEOUT_MS)]
+        assert winapi.waited == [(42, timeout_in_milliseconds)]
         assert winapi.closed == [42]
         assert tracker._fd is None
         assert tracker._pid is None
