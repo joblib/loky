@@ -489,6 +489,10 @@ def spawnv_passfds(path, args, passfds):
     On Linux process_handle is None.
     """
     if sys.platform != "win32":
+        # loky: additional encoding needed here
+        # TODO We should fix loky.backend.spawn.get_executable to return bytes
+        # on POSIX so that this can be removed
+        path = path.encode("utf-8")
         return util.spawnv_passfds(path, args, passfds), None
     else:
         # loky: Windows support
