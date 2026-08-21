@@ -49,7 +49,10 @@ def _direct_children_with_cmdline(p):
                 # when the process is being terminated by the OS.
                 continue
             children_with_cmdline.append((c, cmdline))
-        except (OSError,) + psutil_exceptions:
+        # SystemError is needed for psutil <= 7.2.2, which on macOS returns a
+        # result with a pending exception when the process exits mid-call, see
+        # https://github.com/giampaolo/psutil/pull/2854.
+        except (OSError, SystemError) + psutil_exceptions:
             # These errors indicate that the process has terminated while
             # we were processing the info. Just discard it.
             pass
