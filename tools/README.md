@@ -8,10 +8,12 @@ Windows support, logging, refcount functionality for shared folders and files,
 etc ...) should go as much as possible in `loky/backend/resource_tracker.py`.
 
 `vendor_stdlib_resource_tracker.sh` downloads the `resource_tracker.py` file
-from a fixed CPython version. Loky minimal changes to that file should be
-stored as a patch in `tools/stdlib_py314_resource_tracker.patch`. As a patch, it
-has more chances to still apply if the CPython code change and we want to
-update the vendored stdlib copy.
+from a fixed CPython version. Loky-specific minimal changes to that file should
+be stored as a patch in `tools/stdlib_py314_resource_tracker.patch`.
+
+As a minimal patch, it has more chances to still apply when re-vendorig a newer
+versions of the CPython resource tracker module with some code changes, e.g. to
+benefit from upstream bug fixes.
 
 ## Running the vendoring script
 
