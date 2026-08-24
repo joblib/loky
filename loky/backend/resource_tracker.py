@@ -243,46 +243,51 @@ class ResourceTracker(StdLibResourceTracker):
     # fmt: on
 
     if sys.platform == "win32":
-        # TODO now: Should we do a signature
-        # (wait_for_single_object=_winapi.WaitForSingleObject,
-        # closehandle=_winapi.CloseHandle) similarly for close=os.close?
-        # TODO now: tweak comment
-        # The vendored __del__ calls _stop(..., wait_timeout=1.0). Override its
-        # POSIX waitpid implementation on Windows while retaining its locking and
-        # reentrancy handling.
-        # This is in part inspired from stdlib ResourceTracker._stop_locked and modified for Windows support
-        def _stop_locked(self, close=os.close, wait_timeout=None):
+        # stdlib ResourceTracker._stop_locked is POSIX-specific, so we override
+        # to be able to use Windows-specific primitives.
+        # This is loosely inspired from stdlib ResourceTracker._stop_locked but
+        # there are a number of changes. TODO: could the structure be closer?
+        def _stop_locked(
+            self,
+            close=os.close,
+            wait_for_single_object=_winapi.WaitForSingleObject,
+            close_handle=_winapi.CloseHandle,
+            winapi_infinite=_winapi.INFINITE,
+            wait_timeout=None,
+        ):
             # This shouldn't happen (it might when called by a finalizer)
             # so we check for it anyway.
             if self._lock._recursion_count() > 1:
                 raise self._reentrant_call_error()
-            if self._fd is None or self._pid is None:
+            if self._fd is None:
                 # not running
                 return
-
-            # TODO now: Why this swap pattern seriously ???
-            fd, self._fd = self._fd, None
-            proc_handle, self._proc_handle = self._proc_handle, None
-            self._pid = None
-            self._exitcode = None
+            if self._pid is None:
+                return
 
             # Closing the "alive" file descriptor asks the tracker to stop.
-            close(fd)
+            close(self._fd)
             self._fd = None
 
-            # _winapi can already be torn down when called by a finalizer.
-            if proc_handle is not None and _winapi is not None:
-                timeout_ms = (
-                    _winapi.INFINITE
-                    if wait_timeout is None
-                    else round(wait_timeout * 1000)
-                )
+            proc_handle = self._proc_handle
+            try:
+                if proc_handle is not None:
+                    timeout_ms = (
+                        winapi_infinite
+                        if wait_timeout is None
+                        else round(wait_timeout * 1000)
+                    )
+                    wait_for_single_object(proc_handle, timeout_ms)
+            finally:
                 try:
-                    _winapi.WaitForSingleObject(proc_handle, timeout_ms)
+                    if proc_handle is not None:
+                        close_handle(proc_handle)
                 finally:
-                    _winapi.CloseHandle(proc_handle)
+                    self._proc_handle = None
+                    self._pid = None
+                    self._exitcode = None
 
-            # TODO now: missing self._exitcode stuff, not sure what to do about it, maybe for later ...
+            # TODO: add missing self._exitcode handling mirroring stdlib POSIX handling
 
 
 # fmt: off
@@ -446,7 +451,7 @@ def main(fd, verbose=0):
                             util.debug(f'[ResourceTracker] unlink {name}')
                     except Exception as e:
                         exit_code = 2
-                        # loky: tweaked formatting (%r instead of %s for
+                        # loky: tweaked formatting ($r instead of %s for
                         # exception and %s instead of %s for name) I guess you
                         # get the exact exception type with %r. %s instead of
                         # %r for name, may be because on Windows %r doubles the
