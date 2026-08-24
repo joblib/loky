@@ -250,10 +250,12 @@ class ResourceTracker(StdLibResourceTracker):
         def _stop_locked(
             self,
             close=os.close,
+            wait_timeout=None,
             wait_for_single_object=_winapi.WaitForSingleObject,
+            get_exit_code_process=_winapi.GetExitCodeProcess,
             close_handle=_winapi.CloseHandle,
             winapi_infinite=_winapi.INFINITE,
-            wait_timeout=None,
+            wait_timeout_code=_winapi.WAIT_TIMEOUT,
         ):
             # This shouldn't happen (it might when called by a finalizer)
             # so we check for it anyway.
@@ -277,17 +279,24 @@ class ResourceTracker(StdLibResourceTracker):
                         if wait_timeout is None
                         else round(wait_timeout * 1000)
                     )
-                    wait_for_single_object(proc_handle, timeout_ms)
-            finally:
-                try:
-                    if proc_handle is not None:
-                        close_handle(proc_handle)
-                finally:
-                    self._proc_handle = None
+                    wait_result = wait_for_single_object(
+                        proc_handle, timeout_ms
+                    )
+                    if wait_result == wait_timeout_code:
+                        self._pid = None
+                        self._exitcode = None
+                        self._waitpid_timed_out = True
+                        return
+
+                    self._pid = None
+                    self._exitcode = get_exit_code_process(proc_handle)
+                else:
                     self._pid = None
                     self._exitcode = None
-
-            # TODO: add missing self._exitcode handling mirroring stdlib POSIX handling
+            finally:
+                if proc_handle is not None:
+                    close_handle(proc_handle)
+                self._proc_handle = None
 
 
 # fmt: off

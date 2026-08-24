@@ -34,14 +34,27 @@ class _RecordingWinapi:
     """Stand-in for _winapi so Windows paths can be tested everywhere."""
 
     INFINITE = 0xFFFFFFFF
+    WAIT_OBJECT_0 = 0
+    WAIT_TIMEOUT = 258
 
-    def __init__(self, create_process=None):
+    def __init__(
+        self,
+        create_process=None,
+        wait_result=WAIT_OBJECT_0,
+        exit_code=0,
+    ):
         self.waited = []
         self.closed = []
         self._create_process = create_process
+        self._wait_result = wait_result
+        self._exit_code = exit_code
 
     def WaitForSingleObject(self, handle, timeout):
         self.waited.append((handle, timeout))
+        return self._wait_result
+
+    def GetExitCodeProcess(self, handle):
+        return self._exit_code
 
     def CloseHandle(self, handle):
         self.closed.append(handle)
@@ -328,14 +341,16 @@ class TestResourceTracker:
         sys.platform != "win32", reason="Windows-specific test"
     )
     def test_resource_tracker_stop_win32_waits_on_handle(self):
-        winapi = _RecordingWinapi()
+        winapi = _RecordingWinapi(exit_code=7)
         tracker, w = _make_stopped_tracker()
 
         timeout_in_seconds = 0.5
         timeout_in_milliseconds = 1000 * timeout_in_seconds
         tracker._stop_locked(
             wait_for_single_object=winapi.WaitForSingleObject,
+            get_exit_code_process=winapi.GetExitCodeProcess,
             close_handle=winapi.CloseHandle,
+            wait_timeout_code=winapi.WAIT_TIMEOUT,
             wait_timeout=timeout_in_seconds,
         )
 
@@ -343,9 +358,31 @@ class TestResourceTracker:
         assert winapi.closed == [42]
         assert tracker._fd is None
         assert tracker._pid is None
+        assert tracker._exitcode == 7
         assert tracker._proc_handle is None
         with pytest.raises(OSError):
             os.close(w)
+
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="Windows-specific test"
+    )
+    def test_resource_tracker_stop_win32_timeout(self):
+        winapi = _RecordingWinapi(wait_result=_RecordingWinapi.WAIT_TIMEOUT)
+        tracker, _ = _make_stopped_tracker()
+
+        tracker._stop_locked(
+            wait_for_single_object=winapi.WaitForSingleObject,
+            get_exit_code_process=winapi.GetExitCodeProcess,
+            close_handle=winapi.CloseHandle,
+            wait_timeout_code=winapi.WAIT_TIMEOUT,
+            wait_timeout=0.5,
+        )
+
+        assert tracker._pid is None
+        assert tracker._exitcode is None
+        assert tracker._waitpid_timed_out
+        assert tracker._proc_handle is None
+        assert winapi.closed == [42]
 
     @pytest.mark.parametrize("handle", [42, None])
     def test_resource_tracker_relaunch_closes_handle(
