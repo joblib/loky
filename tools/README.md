@@ -39,5 +39,8 @@ the vendoring script will update
   ```
 - generate the patch
   ```bash
-  diff -u loky/backend/stdlib_py314_resource_tracker.py{.ref,} > tools/stdlib_py314_resource_tracker.patch
+  diff -u \
+     --label stdlib-ref --label loky-vendored \
+     loky/backend/stdlib_py314_resource_tracker.py{.ref,} \
+     >| tools/stdlib_py314_resource_tracker.patch
   ```
