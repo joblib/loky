@@ -33,7 +33,7 @@ the vendoring script will update
 - modify `loky/backend/stdlib_py314_resource_tracker.py` if really needed
   (remember changes should be minimal to avoid diverging from the reference
   CPython code)
-- Download the Python reference file
+- download the Python reference file:
   ```bash
   curl -L \
       https://raw.githubusercontent.com/python/cpython/refs/tags/v3.14.7/Lib/multiprocessing/resource_tracker.py \
