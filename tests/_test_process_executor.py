@@ -76,6 +76,17 @@ def sleep_and_write(t, filename, msg):
         f.write(str(msg))
 
 
+class FalseyError(Exception):
+    """An exception that is falsey, to check it is not mistaken for a result."""
+
+    def __bool__(self):
+        return False
+
+
+def raise_falsey_error():
+    raise FalseyError("falsey errors must still propagate")
+
+
 class MyObject:
     def __init__(self, value=0):
         self.value = value
@@ -383,6 +394,28 @@ class ExecutorShutdownTest:
         # Make sure the executor is eventually shutdown and do not leave
         # dangling threads
         executor_manager.join()
+
+    def test_hang_gh94440(self):
+        """shutdown(wait=True) doesn't hang when a submitted future is
+        cancelled right before shutdown.
+
+        See https://github.com/python/cpython/issues/94440.
+        """
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
+        code = f"""if True:
+            from loky.process_executor import {executor_type}
+            from loky.backend import get_context
+
+            context = get_context("{start_method}")
+            e = {executor_type}(1, context=context)
+
+            e.submit(int).result()
+            e.submit(int).cancel()
+            e.shutdown(wait=True)
+        """
+        # stderr is not checked here: only the hang matters (see #642 noise)
+        check_subprocess_call([sys.executable, "-c", code], timeout=30)
 
     def test_hang_issue39205(self):
         """shutdown(wait=False) doesn't hang at exit with running futures.
@@ -736,6 +769,47 @@ class ExecutorTest:
         # Submitting other jobs fails as well.
         with pytest.raises(TerminatedWorkerError, match=match):
             self.executor.submit(pow, 2, 8)
+
+    @pytest.mark.broken_pool
+    def test_killed_child_with_cancelled_work_items(self):
+        # A cancelled work item must not stop the executor manager thread from
+        # failing the remaining ones, see
+        # https://github.com/python/cpython/issues/107219.
+        futures = [
+            self.executor.submit(time.sleep, 30)
+            for _ in range(2 * self.worker_count + 50)
+        ]
+        # Wait for the manager thread to fill the bounded call queue and settle
+        # back into wait(): only then do the leftovers stay in
+        # pending_work_items long enough to be cancelled behind its back.
+        deadline = time.time() + 30
+        while (
+            len(self.executor._running_work_items) < self.worker_count
+            and time.time() < deadline
+        ):
+            time.sleep(0.01)
+        assert sum(f.cancel() for f in futures), "expected pending work items"
+
+        p = next(iter(self.executor._processes.values()))
+        p.terminate()
+        match = filter_match("SIGTERM")
+        with pytest.raises(TerminatedWorkerError, match=match):
+            futures[0].result(timeout=60)
+
+        # Without the fix the manager thread dies on the first cancelled work
+        # item, so the work items behind it are never failed and callers
+        # waiting on them block forever.
+        self.executor._executor_manager_thread.join(60)
+        assert not self.executor._pending_work_items
+
+    def test_falsey_exception(self):
+        # An exception is an exception even if it is falsey, see
+        # https://github.com/python/cpython/issues/132063.
+        future = self.executor.submit(raise_falsey_error)
+        # Checked with exception() rather than result(): Future.__get_result()
+        # has the same truthiness bug and was only fixed in CPython 3.13, so on
+        # older versions result() returns None whatever loky does.
+        assert isinstance(future.exception(), FalseyError)
 
     def test_map_chunksize(self):
         def bad_map():
