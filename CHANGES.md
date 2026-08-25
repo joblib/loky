@@ -27,6 +27,11 @@
   hardcoded to 300 MB. The reference it is compared against is measured after
   the worker's first task and never updated, so a workload whose tasks differ
   a lot in memory footprint can cross that threshold without leaking anything.
+- Wait on the resource tracker's process handle instead of its pid on Windows,
+  avoiding intermittent ``PermissionError`` exceptions and hangs during
+  interpreter shutdown. (#472, original fix in #643)
+
+- Python 3.15 support. (#472)
 
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)

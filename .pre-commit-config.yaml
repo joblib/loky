@@ -1,11 +1,13 @@
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.3.0
-    hooks:
-    -   id: check-yaml
-    -   id: end-of-file-fixer
-    -   id: trailing-whitespace
--   repo: https://github.com/psf/black
-    rev: 25.1.0
-    hooks:
-    -   id: black
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.3.0
+  hooks:
+  - id: check-yaml
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+    # patch files have trailing whitespaces and we want to leave them like this
+    exclude: '\.patch$'
+- repo: https://github.com/psf/black
+  rev: 25.1.0
+  hooks:
+  - id: black
