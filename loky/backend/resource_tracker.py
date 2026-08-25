@@ -460,7 +460,7 @@ def main(fd, verbose=0):
                             util.debug(f'[ResourceTracker] unlink {name}')
                     except Exception as e:
                         exit_code = 2
-                        # loky: tweaked formatting ($r instead of %s for
+                        # loky: tweaked formatting (%r instead of %s for
                         # exception and %s instead of %s for name) I guess you
                         # get the exact exception type with %r. %s instead of
                         # %r for name, may be because on Windows %r doubles the
