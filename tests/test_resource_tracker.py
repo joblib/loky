@@ -436,6 +436,7 @@ class TestResourceTracker:
         winapi = _RecordingWinapi()
         monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
         monkeypatch.setattr(os, "name", "nt")
+        monkeypatch.setattr(sys, "platform", "win32")
         tracker, _ = _make_stopped_tracker(handle=handle)
 
         with pytest.warns(UserWarning, match="died unexpectedly"):
