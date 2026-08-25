@@ -432,6 +432,7 @@ def main(fd, verbose=0):
         # is called for all resources except folders and then at the end for
         # all folders
         def _unlink_resources(rtype_cache, rtype):
+            nonlocal exit_code
             if rtype_cache:
                 try:
                     exit_code = 1

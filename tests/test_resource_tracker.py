@@ -519,6 +519,27 @@ def test_shutdown_cleans_resources_once_and_folders_last(tmp_path):
     assert "FileNotFoundError" not in result.stderr
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="pass_fds is POSIX-only")
+def test_shutdown_cleanup_failure_sets_exit_code():
+    read_fd, write_fd = os.pipe()
+    cmd = "from loky.backend.resource_tracker import main; " f"main({read_fd})"
+    process = subprocess.Popen(
+        [sys.executable, "-c", cmd],
+        pass_fds=(read_fd,),
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    os.close(read_fd)
+    try:
+        os.write(write_fd, b"REGISTER:test-resource:noop\n")
+    finally:
+        os.close(write_fd)
+
+    _, stderr = process.communicate()
+
+    assert process.returncode == 2, stderr
+
+
 def test_decode_json_message_with_newline_in_name():
     name = "folder/name\nwith-newline"
     encoded_name = base64.urlsafe_b64encode(name.encode("utf-8")).decode(
