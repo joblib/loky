@@ -23,6 +23,7 @@ import threading
 import time
 import warnings
 from collections import deque
+from types import SimpleNamespace
 
 import json
 
@@ -376,13 +377,21 @@ class ResourceTracker(object):
 
         self._ensure_running_and_write(msg)
 
-# gh-146313: Per-thread flag set by .popen_fork.Popen._launch() just before
-# os.fork(), telling _after_fork_in_child() to keep the inherited pipe fd so
-# the child can reuse this tracker (gh-80849).  Unset for raw os.fork() calls,
-# where the child instead closes the fd so the parent's __del__ can reap the
-# tracker.  Using threading.local() keeps multiple threads calling
-# popen_fork.Popen._launch() at once from clobbering eachothers intent.
-_fork_intent = threading.local()
+
+# loky: We want to use multiprocessing.resource_tracker._fork_intent rather
+# than create a separate variable.
+# multiprocessing.resource_tracker._fork_intent is used by
+# multiprocessing.popen_fork to distinguish raw forks from multiprocessing
+# forks.
+try:
+    from multiprocessing.resource_tracker import _fork_intent
+except ImportError:
+    # Older Python versions cannot distinguish multiprocessing forks from raw
+    # os.fork() calls. Preserve the inherited tracker fd in both cases.
+    # TODO remove when Python 3.15 is the minimum supported version. For more details about preserve_fd see
+    # https://github.com/python/cpython/pull/146316
+    # which has been merged in Python 3.15 and backported in 3.14.5 and 3.13.14
+    _fork_intent = SimpleNamespace(preserve_fd=True)
 
 # loky: begin commented out section
 # Remove module-level globals and logic which

@@ -4,6 +4,7 @@ import base64
 import errno
 import gc
 import json
+import multiprocessing
 import os
 import pytest
 import re
@@ -28,6 +29,11 @@ def _resource_unlink(name, rtype):
 def get_rtracker_fd():
     resource_tracker.ensure_running()
     return resource_tracker._resource_tracker._fd
+
+
+def get_rtracker_fd_identity():
+    stat = os.fstat(get_rtracker_fd())
+    return stat.st_dev, stat.st_ino
 
 
 class _RecordingWinapi:
@@ -336,6 +342,45 @@ class TestResourceTracker:
         resource_tracker.ensure_running()
         handle = resource_tracker._resource_tracker._proc_handle
         assert (handle is not None) == (sys.platform == "win32")
+
+    @pytest.mark.skipif(
+        not hasattr(os, "register_at_fork"),
+        reason="os.register_at_fork unavailable",
+    )
+    def test_resource_tracker_at_fork_callback_is_registered(self):
+        resource_tracker.ensure_running()
+        assert resource_tracker._resource_tracker._pid is not None
+
+        read_fd, write_fd = os.pipe()
+        pid = os.fork()
+        if pid == 0:
+            os.close(read_fd)
+            child_pid = resource_tracker._resource_tracker._pid
+            os.write(write_fd, str(child_pid).encode("ascii"))
+            os.close(write_fd)
+            os._exit(0)
+
+        os.close(write_fd)
+        try:
+            child_pid = os.read(read_fd, 32)
+        finally:
+            os.close(read_fd)
+            os.waitpid(pid, 0)
+
+        assert child_pid == b"None"
+
+    @pytest.mark.skipif(
+        "fork" not in multiprocessing.get_all_start_methods(),
+        reason="fork start method unavailable",
+    )
+    def test_multiprocessing_fork_preserves_resource_tracker_fd(self):
+        parent_fd_identity = get_rtracker_fd_identity()
+        ctx = multiprocessing.get_context("fork")
+
+        with ctx.Pool(1) as pool:
+            child_fd_identity = pool.apply(get_rtracker_fd_identity)
+
+        assert child_fd_identity == parent_fd_identity
 
     @pytest.mark.skipif(
         sys.platform != "win32", reason="Windows-specific test"

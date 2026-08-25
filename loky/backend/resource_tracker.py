@@ -299,8 +299,8 @@ class ResourceTracker(StdLibResourceTracker):
                 self._proc_handle = None
 
 
-# fmt: off
 # Copied from Python 3.14.7
+# fmt: off
 _resource_tracker = ResourceTracker()
 ensure_running = _resource_tracker.ensure_running
 register = _resource_tracker.register
@@ -312,7 +312,6 @@ getfd = _resource_tracker.getfd
 if hasattr(os, 'register_at_fork'):
     os.register_at_fork(after_in_child=_resource_tracker._after_fork_in_child)
 # fmt: on
-
 
 # fmt: off
 # The main function has been copied from Python 3.14.7 and modified, mostly for
