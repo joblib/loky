@@ -166,7 +166,7 @@ class ResourceTracker(StdLibResourceTracker):
     def _teardown_dead_process(self):
         if os.name == "posix":
             super()._teardown_dead_process()
-        else:
+        elif sys.platform == "win32":
             os.close(self._fd)
             if (proc_handle := self._proc_handle) is not None:
                 _winapi.CloseHandle(proc_handle)
