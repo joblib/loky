@@ -348,6 +348,14 @@ class TestResourceTracker:
         reason="os.register_at_fork unavailable",
     )
     def test_resource_tracker_at_fork_callback_is_registered(self):
+        # Ensure that `_resource_tracker._after_fork_in_child` is called to
+        # perform the fd handling specified when the `_fork_intent` module-level
+        # variable from the multiprocessing module of the stdlib (rather than
+        # the loky vendored copy) is set to False.
+        #
+        # After a raw os.fork(), the child's ResourceTracker._pid must be None.
+        # That only happens if os.register_at_fork registered
+        # _resource_tracker._after_fork_in_child
         resource_tracker.ensure_running()
         assert resource_tracker._resource_tracker._pid is not None
 
@@ -374,6 +382,7 @@ class TestResourceTracker:
         reason="fork start method unavailable",
     )
     def test_multiprocessing_fork_preserves_resource_tracker_fd(self):
+        # Check that multiprocessing's `preserve_fd=True` is respected.
         parent_fd_identity = get_rtracker_fd_identity()
         ctx = multiprocessing.get_context("fork")
 
