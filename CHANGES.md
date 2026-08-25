@@ -23,6 +23,11 @@
 - Fix an exception raised by a worker being reported as a ``None`` result
   instead of being raised, when the exception evaluates as falsey. Ports the
   upstream fix for https://github.com/python/cpython/issues/132063. (#653)
+- Wait on the resource tracker's process handle instead of its pid on Windows,
+  avoiding intermittent ``PermissionError`` exceptions and hangs during
+  interpreter shutdown. (#472, original fix in #643)
+
+- Python 3.15 support. (#472)
 
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
