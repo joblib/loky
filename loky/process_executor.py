@@ -687,7 +687,12 @@ class _ExecutorManagerThread(threading.Thread):
             except queue.Empty:
                 return
             else:
-                work_item = self.pending_work_items[work_id]
+                work_item = self.pending_work_items.get(work_id)
+                if work_item is None:
+                    # flag_executor_shutting_down(kill_workers=True) drops the
+                    # pending work items but leaves their ids in
+                    # work_ids_queue.
+                    continue
 
                 if work_item.future.set_running_or_notify_cancel():
                     self.running_work_items += [work_id]
