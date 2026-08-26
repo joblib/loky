@@ -64,25 +64,20 @@ def test_windows_max_cpu_count():
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
-def test_windows_physical_cores_ctypes_matches_powershell():
-    from loky.backend.context import (
-        _count_physical_cores_win32_ctypes,
-        _count_physical_cores_win32_powershell,
-    )
+@pytest.mark.parametrize(
+    "implementation_name",
+    [
+        "_count_physical_cores_win32_ctypes",
+        "_count_physical_cores_win32_powershell",
+    ],
+)
+def test_windows_physical_cores(implementation_name):
+    psutil = pytest.importorskip("psutil")
+    implementation = getattr(loky.backend.context, implementation_name)
 
-    ctypes_count = _count_physical_cores_win32_ctypes()
-    powershell_count = _count_physical_cores_win32_powershell()
-    assert ctypes_count == powershell_count
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
-def test_windows_physical_cores_powershell():
-    from loky.backend.context import _count_physical_cores_win32_powershell
-
-    count = _count_physical_cores_win32_powershell()
-
-    assert isinstance(count, int)
-    assert count >= 1
+    expected = psutil.cpu_count(logical=False)
+    assert expected is not None
+    assert implementation() == expected
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
