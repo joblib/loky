@@ -32,8 +32,8 @@
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
 
-- Make `cpu_count(only_physical=True)` faster by using Windows C API through
-  ctypes. (#649)
+- Make `cpu_count(only_physical=True)` faster on Windows by using Windows C API
+  through ctypes. (#649)
 
 ### 3.5.6 - 2025-08-27
 
