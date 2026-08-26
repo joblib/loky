@@ -67,6 +67,12 @@ exclude = '''
 )/
 '''
 
+# Because pre-commit uses explicit filenames, you need to use force-exclude in
+# order for pre-commit black to leave the stdlib files untouched
+force-exclude = '''
+  loky/backend/stdlib_py.*resource_tracker\.py
+'''
+
 [tool.pytest.ini_options]
 # No test should last longer than 1 minute, even on the CI. Otherwise, dump
 # per-thread tracebacks. Note that this value can be overriden from the

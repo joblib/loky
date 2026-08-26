@@ -20,6 +20,25 @@
   submissions after executor replacement could raise
   ``ShutdownExecutorError``. (#632)
 
+- Fix ``ProcessPoolExecutor.shutdown(wait=True)`` hanging forever when the
+  only work items left are cancelled ones, as happens after abandoning an
+  ``Executor.map`` iterator or cancelling a submitted future. Ports the
+  upstream fix for https://github.com/python/cpython/issues/94440. (#653)
+
+- Fix the executor manager thread dying with ``InvalidStateError`` when a
+  cancelled work item is still pending as the pool breaks, which left the
+  remaining futures unresolved forever. Ports the upstream fix for
+  https://github.com/python/cpython/issues/107219. (#653)
+
+- Fix an exception raised by a worker being reported as a ``None`` result
+  instead of being raised, when the exception evaluates as falsey. Ports the
+  upstream fix for https://github.com/python/cpython/issues/132063. (#653)
+- Wait on the resource tracker's process handle instead of its pid on Windows,
+  avoiding intermittent ``PermissionError`` exceptions and hangs during
+  interpreter shutdown. (#472, original fix in #643)
+
+- Python 3.15 support. (#472)
+
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
 
