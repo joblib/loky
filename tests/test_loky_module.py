@@ -14,6 +14,7 @@ import loky
 from loky import cpu_count
 from loky.backend.context import (
     _cpu_count_affinity,
+    _cpu_count_affinity_set,
     _cpu_count_user,
     _MAX_WINDOWS_WORKERS,
 )
@@ -220,7 +221,8 @@ def test_only_physical_cores_error():
     # that value and no warning is issued even if only_physical_cores == True.
     # (tested in another test: test_only_physical_cores_with_user_limitation
     cpu_count_mp = mp.cpu_count()
-    if _cpu_count_user(cpu_count_mp) < cpu_count_mp:
+    cpu_affinity_set = _cpu_count_affinity_set()
+    if _cpu_count_user(cpu_count_mp, cpu_affinity_set) < cpu_count_mp:
         pytest.skip()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -265,12 +267,13 @@ def test_only_physical_cores_with_user_limitation():
     # core count can be strictly lower than the user limitation (see
     # test_cpu_count_only_physical_cores_smt_siblings_affinity below).
     cpu_count_mp = mp.cpu_count()
-    cpu_count_user = _cpu_count_user(cpu_count_mp)
+    cpu_affinity_set = _cpu_count_affinity_set()
+    cpu_count_user = _cpu_count_user(cpu_count_mp, cpu_affinity_set)
 
     if cpu_count_user < cpu_count_mp:
         assert cpu_count() == cpu_count_user
 
-        if _cpu_count_affinity(cpu_count_mp) < cpu_count_mp:
+        if _cpu_count_affinity(cpu_count_mp, cpu_affinity_set) < cpu_count_mp:
             # The restriction includes a CPU affinity component: the SMT
             # collapsing logic may legitimately kick in and report fewer
             # physical cores than cpu_count_user.

@@ -221,18 +221,6 @@ def _cpu_count_cgroup(os_cpu_count):
             return os_cpu_count
 
 
-def _cpu_count_affinity(os_cpu_count, cpu_affinity_set=None):
-    # Number of available CPUs given affinity settings
-    if cpu_affinity_set is None:
-        cpu_affinity_set = _cpu_count_affinity_set()
-    if cpu_affinity_set is not None:
-        return len(cpu_affinity_set)
-
-    # This can happen for platforms that do not implement any kind of CPU
-    # affinity such as macOS-based platforms.
-    return os_cpu_count
-
-
 def _cpu_count_affinity_set():
     """Return the current CPU affinity mask as a set of logical CPU ids.
 
@@ -282,6 +270,16 @@ def _cpu_count_user(os_cpu_count, cpu_affinity_set):
     cpu_count_loky = int(os.environ.get("LOKY_MAX_CPU_COUNT", os_cpu_count))
 
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
+
+
+# this function is not inlined to make tests easier to write:
+def _cpu_count_affinity(os_cpu_count, cpu_affinity_set):
+    # `cpu_affinity_set` can be None for platforms that do not implement
+    # any kind of CPU affinity such as macOS-based platforms.
+    if cpu_affinity_set is not None:
+        return len(cpu_affinity_set)
+
+    return os_cpu_count
 
 
 def _run_physical_cores_probe(compute):
