@@ -269,9 +269,7 @@ def test_only_physical_cores_with_user_limitation():
     if cpu_count_user < cpu_count_mp:
         cpu_affinity_set = _cpu_count_affinity_set()
         affinity_cpu_count = (
-            cpu_count_mp
-            if cpu_affinity_set is None
-            else len(cpu_affinity_set)
+            cpu_count_mp if cpu_affinity_set is None else len(cpu_affinity_set)
         )
         if affinity_cpu_count < cpu_count_mp:
             # The restriction includes a CPU affinity component: the SMT
