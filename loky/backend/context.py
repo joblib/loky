@@ -122,7 +122,8 @@ def cpu_count(only_physical_cores=False):
         # does not look easy.
         os_cpu_count = min(os_cpu_count, _MAX_WINDOWS_WORKERS)
 
-    cpu_count_user = _cpu_count_user(os_cpu_count)
+    cpu_affinity_set = _cpu_count_affinity_set()
+    cpu_count_user = _cpu_count_user(os_cpu_count, cpu_affinity_set)
     aggregate_cpu_count = max(min(os_cpu_count, cpu_count_user), 1)
 
     if not only_physical_cores:
@@ -135,18 +136,17 @@ def cpu_count(only_physical_cores=False):
         # pinning a process to 2 SMT siblings of a single physical core
         # (`taskset -c 0,1`) is not mistaken for 2 physical cores. See
         # https://github.com/joblib/loky/issues/639.
-        if sys.platform == "linux":
-            cpu_affinity_set = _cpu_count_affinity_set()
-            if (
-                cpu_affinity_set is not None
-                and len(cpu_affinity_set) < os_cpu_count
-            ):
-                cpu_count_physical, exception = _count_physical_cores_affinity(
-                    cpu_affinity_set
-                )
-                if cpu_count_physical != "not found":
-                    return max(min(cpu_count_physical, cpu_count_user), 1)
-                _warn_physical_cores_not_found(exception)
+        if (
+            sys.platform == "linux"
+            and cpu_affinity_set is not None
+            and len(cpu_affinity_set) < os_cpu_count
+        ):
+            cpu_count_physical, exception = _count_physical_cores_affinity(
+                cpu_affinity_set
+            )
+            if cpu_count_physical != "not found":
+                return max(min(cpu_count_physical, cpu_count_user), 1)
+            _warn_physical_cores_not_found(exception)
 
         return max(cpu_count_user, 1)
 
@@ -221,9 +221,10 @@ def _cpu_count_cgroup(os_cpu_count):
             return os_cpu_count
 
 
-def _cpu_count_affinity(os_cpu_count):
+def _cpu_count_affinity(os_cpu_count, cpu_affinity_set=None):
     # Number of available CPUs given affinity settings
-    cpu_affinity_set = _cpu_count_affinity_set()
+    if cpu_affinity_set is None:
+        cpu_affinity_set = _cpu_count_affinity_set()
     if cpu_affinity_set is not None:
         return len(cpu_affinity_set)
 
@@ -271,9 +272,9 @@ def _cpu_count_affinity_set():
     return None
 
 
-def _cpu_count_user(os_cpu_count):
+def _cpu_count_user(os_cpu_count, cpu_affinity_set):
     """Number of user defined available CPUs"""
-    cpu_count_affinity = _cpu_count_affinity(os_cpu_count)
+    cpu_count_affinity = _cpu_count_affinity(os_cpu_count, cpu_affinity_set)
 
     cpu_count_cgroup = _cpu_count_cgroup(os_cpu_count)
 
@@ -281,6 +282,23 @@ def _cpu_count_user(os_cpu_count):
     cpu_count_loky = int(os.environ.get("LOKY_MAX_CPU_COUNT", os_cpu_count))
 
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
+
+
+def _run_physical_cores_probe(compute):
+    """Run `compute` and return a tuple (number of physical cores, exception)
+
+    If the number of physical cores is found, exception is set to None.
+    If it has not been found (`compute` raised or returned a value < 1),
+    return ("not found", exception).
+    """
+    try:
+        cpu_count_physical = compute()
+        # if cpu_count_physical < 1, we did not find a valid value
+        if cpu_count_physical < 1:
+            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
+        return cpu_count_physical, None
+    except Exception as e:
+        return "not found", e
 
 
 def _count_physical_cores():
@@ -291,33 +309,25 @@ def _count_physical_cores():
 
     The number of physical cores is cached to avoid repeating subprocess calls.
     """
-    exception = None
-
     # First check if the value is cached
     global physical_cores_cache
     if physical_cores_cache is not None:
-        return physical_cores_cache, exception
+        return physical_cores_cache, None
 
     # Not cached yet, find it
-    try:
+    def compute():
         if sys.platform == "linux":
-            cpu_count_physical = _count_physical_cores_linux()
+            return _count_physical_cores_linux()
         elif sys.platform == "win32":
-            cpu_count_physical = _count_physical_cores_win32()
+            return _count_physical_cores_win32()
         elif sys.platform == "darwin":
-            cpu_count_physical = _count_physical_cores_darwin()
+            return _count_physical_cores_darwin()
         elif sys.platform.startswith("freebsd"):
-            cpu_count_physical = _count_physical_cores_freebsd()
+            return _count_physical_cores_freebsd()
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
-        # if cpu_count_physical < 1, we did not find a valid value
-        if cpu_count_physical < 1:
-            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
-
-    except Exception as e:
-        exception = e
-        cpu_count_physical = "not found"
+    cpu_count_physical, exception = _run_physical_cores_probe(compute)
 
     # Put the result in cache
     physical_cores_cache = cpu_count_physical
@@ -390,28 +400,18 @@ def _count_physical_cores_affinity(cpu_set):
     Same semantics as `_count_physical_cores`, but the count only accounts
     for the logical CPUs in `cpu_set`, collapsing SMT/hyper-threading
     siblings that share the same physical core. Only implemented for Linux,
-    where per-CPU topology information is readily available.
+    where per-CPU topology information is readily available; callers are
+    expected to only invoke this on Linux.
     """
-    exception = None
     cache_key = frozenset(cpu_set)
 
     # First check if the value is cached
     if cache_key in physical_cores_affinity_cache:
-        return physical_cores_affinity_cache[cache_key], exception
+        return physical_cores_affinity_cache[cache_key], None
 
-    try:
-        if sys.platform == "linux":
-            cpu_count_physical = _count_physical_cores_linux(cache_key)
-        else:
-            raise NotImplementedError(f"unsupported platform: {sys.platform}")
-
-        # if cpu_count_physical < 1, we did not find a valid value
-        if cpu_count_physical < 1:
-            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
-
-    except Exception as e:
-        exception = e
-        cpu_count_physical = "not found"
+    cpu_count_physical, exception = _run_physical_cores_probe(
+        lambda: _count_physical_cores_linux(cache_key)
+    )
 
     # Put the result in cache
     physical_cores_affinity_cache[cache_key] = cpu_count_physical
