@@ -1,3 +1,5 @@
+### 3.7.0 - In development
+
 ### 3.6.0 - 2026-08-31
 
 - Support detection of the number of physical cores in
