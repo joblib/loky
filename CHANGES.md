@@ -1,7 +1,5 @@
 ### 3.7.0 - In development
 
-### 3.6.0 - 2026-08-31
-
 - Fix ``cpu_count(only_physical_cores=True)`` on Linux to collapse
   hyper-threading/SMT sibling logical CPUs sharing the same physical core
   when the process CPU affinity (e.g. set via ``taskset``) is restricted to
@@ -11,6 +9,8 @@
   cores by their ``(socket, core id)`` pair instead of ``core id`` alone,
   which could under-count physical cores on multi-socket machines where
   ``core id`` is not unique across sockets.
+
+### 3.6.0 - 2026-08-31
 
 - Support detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
