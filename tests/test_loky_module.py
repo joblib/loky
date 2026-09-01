@@ -66,6 +66,53 @@ def test_windows_max_cpu_count():
     assert cpu_count() <= _MAX_WINDOWS_WORKERS
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
+@pytest.mark.parametrize(
+    "implementation_name",
+    [
+        "_count_physical_cores_win32_ctypes",
+        "_count_physical_cores_win32_powershell",
+    ],
+)
+def test_windows_physical_cores(implementation_name):
+    psutil = pytest.importorskip("psutil")
+    implementation = getattr(loky.backend.context, implementation_name)
+
+    expected = psutil.cpu_count(logical=False)
+    assert expected is not None
+    assert implementation() == expected
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows specific test")
+def test_windows_physical_cores_falls_back_to_powershell():
+    from loky.backend.context import _count_physical_cores_win32
+
+    with patch(
+        "loky.backend.context._count_physical_cores_win32_ctypes",
+        side_effect=RuntimeError("ctypes failed"),
+    ):
+        with patch(
+            "loky.backend.context._count_physical_cores_win32_powershell",
+            return_value=8,
+        ) as mock_powershell:
+            count = _count_physical_cores_win32()
+
+    assert count == 8
+    mock_powershell.assert_called_once()
+
+
+def test_windows_physical_cores_powershell_sums_sockets_mine(monkeypatch):
+    from loky.backend.context import _count_physical_cores_win32_powershell
+
+    completed_process = subprocess.CompletedProcess([], 0, stdout="4\n4\n")
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0, raising=False)
+    monkeypatch.setattr(
+        subprocess, "run", lambda *args, **kwargs: completed_process
+    )
+
+    assert _count_physical_cores_win32_powershell() == 8
+
+
 cpu_count_cmd = (
     "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
 )

@@ -1,4 +1,6 @@
-### 3.6.0 - In development
+### 3.7.0 - In development
+
+### 3.6.0 - 2026-08-31
 
 - Fix ``cpu_count(only_physical_cores=True)`` on Linux to collapse
   hyper-threading/SMT sibling logical CPUs sharing the same physical core
@@ -41,6 +43,9 @@
 
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
+
+- Make `cpu_count(only_physical=True)` faster on Windows by using Windows C API
+  through ctypes. (#649)
 
 ### 3.5.6 - 2025-08-27
 
