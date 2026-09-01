@@ -97,7 +97,12 @@ _CURRENT_DEPTH = 0
 _MEMORY_LEAK_CHECK_DELAY = 1.0
 
 # Number of bytes of memory usage allowed over the reference process size.
-_MAX_MEMORY_LEAK_SIZE = int(3e8)
+# Workloads whose tasks differ a lot in size can legitimately exceed the default
+# without leaking, so it is configurable; it is read in the worker processes,
+# which inherit the environment of the process that created the executor.
+_MAX_MEMORY_LEAK_SIZE = int(
+    os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE", int(3e8))
+)
 
 
 try:
@@ -115,6 +120,15 @@ try:
 
 except ImportError:
     _USE_PSUTIL = False
+
+
+class _RecycledWorkerPid(int):
+    """PID of a worker that the executor itself decided to shut down.
+
+    Behaves like the plain PID the workers usually send back, but lets the
+    manager thread tell a recycling it triggered on purpose from a worker that
+    stopped on its own.
+    """
 
 
 class _ThreadWakeup:
@@ -524,7 +538,7 @@ def _process_worker(
                 # The process is leaking memory: let the master process
                 # know that we need to start a new worker.
                 mp.util.info("Memory leak detected: shutting down worker")
-                result_queue.put(pid)
+                result_queue.put(_RecycledWorkerPid(pid))
                 with worker_exit_lock:
                     mp.util.debug("Exit due to memory leak")
                     return
@@ -610,13 +624,30 @@ class _ExecutorManagerThread(threading.Thread):
         # of new processes or shut down
         self.processes_management_lock = executor._processes_management_lock
 
+        # Long-running executors can recycle workers many times over their
+        # lifetime; the user only needs to hear about it once.
+        self.recycling_warned = False
+
         super().__init__(name="ExecutorManagerThread")
         if sys.version_info < (3, 9):
             self.daemon = True
 
     def run(self):
         # Main loop for the executor manager thread.
+        try:
+            self._run()
+        except BaseException as e:
+            # Without this the thread would die silently, leaving the workers
+            # blocked on their exit lock and every caller waiting forever for
+            # results that nobody is left to deliver. A warning filter turning
+            # one of the warnings below into an error is enough to get here.
+            bpe = BrokenProcessPool(
+                "The executor manager thread failed unexpectedly."
+            )
+            bpe.__cause__ = e
+            self.terminate_broken(bpe)
 
+    def _run(self):
         while True:
             self.add_call_item_to_queue()
 
@@ -656,7 +687,12 @@ class _ExecutorManagerThread(threading.Thread):
             except queue.Empty:
                 return
             else:
-                work_item = self.pending_work_items[work_id]
+                work_item = self.pending_work_items.get(work_id)
+                if work_item is None:
+                    # flag_executor_shutting_down(kill_workers=True) drops the
+                    # pending work items but leaves their ids in
+                    # work_ids_queue.
+                    continue
 
                 if work_item.future.set_running_or_notify_cancel():
                     self.running_work_items += [work_id]
@@ -784,15 +820,32 @@ class _ExecutorManagerThread(threading.Thread):
                     executor is not None
                     and len(self.processes) < executor._max_workers
                 ):
-                    warnings.warn(
-                        "A worker stopped while some jobs were given to the "
-                        "executor. This can be caused by a too short worker "
-                        "timeout or by a memory leak.",
-                        UserWarning,
-                    )
                     with executor._processes_management_lock:
                         executor._adjust_process_count()
                     executor = None
+                    # Warn only once the pool is back to full strength, so
+                    # that a filter turning this into an error costs no worker
+                    if not isinstance(result_item, _RecycledWorkerPid):
+                        warnings.warn(
+                            "A worker stopped while some jobs were given to "
+                            "the executor. This can be caused by a too short "
+                            "worker timeout or by a memory leak.",
+                            UserWarning,
+                        )
+                    elif not self.recycling_warned:
+                        # Recycling is a deliberate decision of the executor and
+                        # it is transparent to the caller, so repeating it for
+                        # every worker of a long-running executor is just noise.
+                        self.recycling_warned = True
+                        warnings.warn(
+                            "A worker was restarted while some jobs were given "
+                            "to the executor because it was using more than "
+                            f"{_MAX_MEMORY_LEAK_SIZE / 1e6:.0f} MB more memory "
+                            "than when it started, which usually indicates a "
+                            "memory leak. Further restarts of this executor "
+                            "will not be reported.",
+                            UserWarning,
+                        )
         else:
             # Received a _ResultItem so mark the future as completed.
             work_item = self.pending_work_items.pop(result_item.work_id, None)
