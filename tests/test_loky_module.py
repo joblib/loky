@@ -287,7 +287,7 @@ def test_only_physical_cores_error(monkeypatch):
     # clear the cache otherwise the warning is not triggered
     import loky.backend.context
 
-    loky.backend.context.physical_cores_cache = {}
+    monkeypatch.setattr(loky.backend.context, "physical_cores_cache", {})
 
     with pytest.warns(
         UserWarning,
