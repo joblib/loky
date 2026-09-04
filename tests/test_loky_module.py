@@ -3,7 +3,6 @@ import os
 import sys
 import shutil
 import subprocess
-import tempfile
 import warnings
 from subprocess import check_output
 from unittest.mock import patch, mock_open
@@ -26,17 +25,11 @@ def test_version():
 
 def test_cpu_count(monkeypatch):
 
-    # Monkeypatch subprocess.run to simulate the absence of lscpu on linux or CIM on
-    # windows to test the different code paths in _cpu_count_physical.
+    # Monkeypatch subprocess.run to simulate the absence of CIM on windows to
+    # test the different code paths in _cpu_count_physical.
     old_run = subprocess.run
 
     def mock_run(*args, **kwargs):
-        if (
-            "lscpu" in args[0]
-            and os.environ.get("LOKY_TEST_NO_LSCPU") == "true"
-        ):
-            raise RuntimeError("lscpu not available")
-
         if (
             "powershell.exe" in args[0]
             and os.environ.get("LOKY_TEST_NO_CIM") == "true"
@@ -116,6 +109,22 @@ def test_windows_physical_cores_powershell_sums_sockets_mine(monkeypatch):
 cpu_count_cmd = (
     "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
 )
+
+
+def _patch_proc_cpuinfo(monkeypatch, content=None, error=None):
+    # Monkeypatch open() so that reading /proc/cpuinfo returns `content` (or
+    # raises `error`), without disturbing other files opened while computing
+    # cpu_count() (e.g. Cgroup files).
+    real_open = open
+
+    def fake_open(path, *args, **kwargs):
+        if path == "/proc/cpuinfo":
+            if error is not None:
+                raise error
+            return mock_open(read_data=content)()
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", fake_open)
 
 
 def test_cpu_count_os_sched_getaffinity():
@@ -256,7 +265,7 @@ def test_cpu_count_cgroup_limit():
     assert res_default >= res_1500_mCPU
 
 
-def test_only_physical_cores_error():
+def test_only_physical_cores_error(monkeypatch):
     # Check the warning issued by cpu_count(only_physical_cores=True) when
     # unable to retrieve the number of physical cores.
     if sys.platform != "linux":
@@ -269,38 +278,27 @@ def test_only_physical_cores_error():
     if cpu_count() < cpu_count_mp:
         pytest.skip()
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Write bad lscpu and cat programs so that both the primary lscpu
-        # based method and the /proc/cpuinfo fallback fail to find the
-        # number of physical cores.
-        for cmd in ["lscpu", "cat"]:
-            cmd_path = f"{tmp_dir}/{cmd}"
-            with open(cmd_path, "w") as f:
-                f.write("#!/bin/sh\n" "exit(1)")
-            os.chmod(cmd_path, 0o777)
+    # Simulate /proc/cpuinfo being unreadable so that the physical core
+    # count cannot be found.
+    _patch_proc_cpuinfo(
+        monkeypatch, error=OSError("simulated /proc/cpuinfo read failure")
+    )
 
-        try:
-            old_path = os.environ["PATH"]
-            os.environ["PATH"] = f"{tmp_dir}:{old_path}"
+    # clear the cache otherwise the warning is not triggered
+    import loky.backend.context
 
-            # clear the cache otherwise the warning is not triggered
-            import loky.backend.context
+    loky.backend.context.physical_cores_cache = None
 
-            loky.backend.context.physical_cores_cache = None
+    with pytest.warns(
+        UserWarning,
+        match="Could not find the number of" " physical cores",
+    ):
+        cpu_count(only_physical_cores=True)
 
-            with pytest.warns(
-                UserWarning,
-                match="Could not find the number of" " physical cores",
-            ):
-                cpu_count(only_physical_cores=True)
-
-            # Should not warn the second time
-            with warnings.catch_warnings():
-                warnings.simplefilter("error")
-                cpu_count(only_physical_cores=True)
-
-        finally:
-            os.environ["PATH"] = old_path
+    # Should not warn the second time
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        cpu_count(only_physical_cores=True)
 
 
 def test_only_physical_cores_with_user_limitation():
@@ -343,18 +341,12 @@ def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
 
     # Simulate a 4 logical CPU machine: CPU 0 and 1 are SMT siblings of
     # physical core 0; CPU 2 and 3 are SMT siblings of physical core 1.
-    fake_lscpu_stdout = "0,0,0\n1,0,0\n2,1,0\n3,1,0\n"
+    fake_cpuinfo = "".join(
+        f"processor\t: {cpu}\nphysical id\t: 0\ncore id\t: {cpu // 2}\n\n"
+        for cpu in range(4)
+    )
 
-    old_run = subprocess.run
-
-    def mock_run(args, **kwargs):
-        if isinstance(args, list) and args[:1] == ["lscpu"]:
-            return subprocess.CompletedProcess(
-                args, 0, stdout=fake_lscpu_stdout, stderr=""
-            )
-        return old_run(args, **kwargs)
-
-    monkeypatch.setattr(subprocess, "run", mock_run)
+    _patch_proc_cpuinfo(monkeypatch, content=fake_cpuinfo)
     monkeypatch.setattr(os, "cpu_count", lambda: 4)
     monkeypatch.setattr(
         os, "sched_getaffinity", lambda pid: {0, 1}, raising=False
@@ -368,21 +360,21 @@ def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
 
 
 def test_cpu_count_os_sched_getaffinity_smt_siblings():
-    # End-to-end version of the test above: actually use taskset to pin the
-    # current process to 2 SMT sibling logical CPUs of the same physical
-    # core (if such a pair can be found on the machine running the test)
-    # and check that only_physical_cores=True correctly reports 1 physical
-    # core while the plain logical CPU count reports 2.
+    # End-to-end version of the test above: actually pin the current
+    # process to 2 SMT sibling logical CPUs of the same physical core (if
+    # such a pair can be found on the machine running the test) and check
+    # that only_physical_cores=True correctly reports 1 physical core while
+    # the plain logical CPU count reports 2.
     if sys.platform != "linux":
         pytest.skip("Linux specific test")
 
-    if not hasattr(os, "sched_getaffinity") or not hasattr(shutil, "which"):
+    if not hasattr(os, "sched_getaffinity"):
         pytest.skip()
 
-    taskset_bin = shutil.which("taskset")
-    python_bin = shutil.which("python")
-    if taskset_bin is None or python_bin is None:
-        pytest.skip()
+    psutil = pytest.importorskip("psutil")
+    p = psutil.Process()
+    if not hasattr(p, "cpu_affinity"):
+        pytest.skip("psutil does not provide cpu_affinity on this platform")
 
     def _expand(cpu_range):
         if "-" in cpu_range:
@@ -413,33 +405,13 @@ def test_cpu_count_os_sched_getaffinity_smt_siblings():
             "could not find 2 SMT sibling logical CPUs on this machine"
         )
 
-    cpu_list = ",".join(str(c) for c in smt_pair)
-
-    res = check_output(
-        [
-            taskset_bin,
-            "-c",
-            cpu_list,
-            python_bin,
-            "-c",
-            cpu_count_cmd.format(args=""),
-        ],
-        text=True,
-    )
-    res_physical = check_output(
-        [
-            taskset_bin,
-            "-c",
-            cpu_list,
-            python_bin,
-            "-c",
-            cpu_count_cmd.format(args="only_physical_cores=True"),
-        ],
-        text=True,
-    )
-
-    assert res.strip() == "2"
-    assert res_physical.strip() == "1"
+    original_affinity = p.cpu_affinity()
+    try:
+        p.cpu_affinity(smt_pair)
+        assert cpu_count() == 2
+        assert cpu_count(only_physical_cores=True) == 1
+    finally:
+        p.cpu_affinity(original_affinity)
 
 
 @pytest.mark.parametrize(

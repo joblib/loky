@@ -43,7 +43,7 @@ physical_cores_cache = None
 
 # Similar cache for the number of physical cores restricted to a given CPU
 # affinity mask (as a frozenset of logical CPU ids), see
-# `_count_physical_cores_affinity`.
+# `_count_physical_cores`.
 physical_cores_affinity_cache = {}
 
 
@@ -138,13 +138,15 @@ def cpu_count(only_physical_cores=False):
         # sibling logical CPUs sharing the same physical core, so that e.g.
         # pinning a process to 2 SMT siblings of a single physical core
         # (`taskset -c 0,1`) is not mistaken for 2 physical cores. See
-        # https://github.com/joblib/loky/issues/639.
+        # https://github.com/joblib/loky/issues/639. On other platforms we
+        # lack easy access to CPU topology info to refine an
+        # affinity-restricted count, so just bail out.
         if (
             sys.platform == "linux"
             and cpu_affinity_set is not None
             and len(cpu_affinity_set) < os_cpu_count
         ):
-            cpu_count_physical, exception = _count_physical_cores_affinity(
+            cpu_count_physical, exception = _count_physical_cores(
                 cpu_affinity_set
             )
             if cpu_count_physical != "not found":
@@ -279,139 +281,115 @@ def _cpu_count_user(os_cpu_count, cpu_affinity_set):
     return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
 
-def _run_physical_cores_probe(compute):
-    """Run `compute` and return a tuple (number of physical cores, exception)
-
-    If the number of physical cores is found, exception is set to None.
-    If it has not been found (`compute` raised or returned a value < 1),
-    return ("not found", exception).
-    """
-    try:
-        cpu_count_physical = compute()
-        # if cpu_count_physical < 1, we did not find a valid value
-        if cpu_count_physical < 1:
-            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
-        return cpu_count_physical, None
-    except Exception as e:
-        return "not found", e
-
-
-def _count_physical_cores():
+def _count_physical_cores(cpu_set=None):
     """Return a tuple (number of physical cores, exception)
 
     If the number of physical cores is found, exception is set to None.
     If it has not been found, return ("not found", exception).
 
-    The number of physical cores is cached to avoid repeating subprocess calls.
+    If `cpu_set` is not None, only the logical CPUs it contains are
+    considered when counting physical cores, which also collapses
+    SMT/hyper-threading sibling logical CPUs that share the same physical
+    core. Only implemented for Linux, where per-CPU topology information is
+    readily available; callers are expected to only pass a non-None
+    `cpu_set` on Linux.
+
+    The number of physical cores is cached (per distinct `cpu_set` when one
+    is passed) to avoid repeating subprocess calls or re-parsing
+    /proc/cpuinfo.
     """
+    exception = None
+
     # First check if the value is cached
     global physical_cores_cache
-    if physical_cores_cache is not None:
-        return physical_cores_cache, None
+    if cpu_set is None:
+        if physical_cores_cache is not None:
+            return physical_cores_cache, None
+        cache_key = None
+    else:
+        cache_key = frozenset(cpu_set)
+        if cache_key in physical_cores_affinity_cache:
+            return physical_cores_affinity_cache[cache_key], None
 
     # Not cached yet, find it
-    def compute():
+    try:
         if sys.platform == "linux":
-            return _count_physical_cores_linux()
+            cpu_count_physical = _count_physical_cores_linux(cpu_set)
+        elif cpu_set is not None:
+            raise NotImplementedError(
+                "affinity-aware physical core counting is only "
+                "implemented on Linux"
+            )
         elif sys.platform == "win32":
-            return _count_physical_cores_win32()
+            cpu_count_physical = _count_physical_cores_win32()
         elif sys.platform == "darwin":
-            return _count_physical_cores_darwin()
+            cpu_count_physical = _count_physical_cores_darwin()
         elif sys.platform.startswith("freebsd"):
-            return _count_physical_cores_freebsd()
+            cpu_count_physical = _count_physical_cores_freebsd()
         else:
             raise NotImplementedError(f"unsupported platform: {sys.platform}")
 
-    cpu_count_physical, exception = _run_physical_cores_probe(compute)
+        # if cpu_count_physical < 1, we did not find a valid value
+        if cpu_count_physical < 1:
+            raise ValueError(f"found {cpu_count_physical} physical cores < 1")
+
+    except Exception as e:
+        exception = e
+        cpu_count_physical = "not found"
 
     # Put the result in cache
-    physical_cores_cache = cpu_count_physical
+    if cache_key is None:
+        physical_cores_cache = cpu_count_physical
+    else:
+        physical_cores_affinity_cache[cache_key] = cpu_count_physical
 
     return cpu_count_physical, exception
 
 
 def _count_physical_cores_linux(cpu_set=None):
-    """Return the number of distinct physical cores on Linux.
+    """Return the number of distinct physical cores on Linux, by parsing
+    /proc/cpuinfo.
 
-    A physical core is identified by its (socket, core id) pair: core id
-    alone is only guaranteed unique within a socket, so a multi-socket
-    machine can otherwise under-count cores that share the same core id
-    across sockets.
+    A physical core is identified by its (physical id, core id) pair: core
+    id alone is only guaranteed unique within a physical package, so a
+    multi-socket machine can otherwise under-count cores that share the
+    same core id across sockets.
 
     If `cpu_set` is not None, only the logical CPUs it contains are
     considered, which also collapses SMT/hyper-threading sibling logical
     CPUs that share the same physical core.
     """
-    try:
-        cpu_info = subprocess.run(
-            "lscpu --parse=CPU,CORE,SOCKET".split(),
-            capture_output=True,
-            text=True,
-        )
-        lines = [
-            line
-            for line in cpu_info.stdout.splitlines()
-            if line and not line.startswith("#")
-        ]
-        if not lines:
-            raise ValueError("no output from lscpu")
+    with open("/proc/cpuinfo") as f:
+        cpuinfo = f.read()
 
-        cores = set()
-        for line in lines:
-            cpu_str, core_str, socket_str = line.split(",")[:3]
-            if cpu_set is None or int(cpu_str) in cpu_set:
-                cores.add((socket_str, core_str))
-        return len(cores)
-    except Exception:
-        pass  # fallback to /proc/cpuinfo
-
-    cpu_info = subprocess.run(
-        "cat /proc/cpuinfo".split(), capture_output=True, text=True
-    )
     cores = set()
     processor = core_id = physical_id = None
-    for line in cpu_info.stdout.splitlines() + [""]:
-        if line.startswith("processor"):
-            processor = int(line.split(":")[1].strip())
-        elif line.startswith("core id"):
-            core_id = line.split(":")[1].strip()
-        elif line.startswith("physical id"):
-            physical_id = line.split(":")[1].strip()
-        elif not line.strip():
+    for line in cpuinfo.splitlines() + [""]:
+        if not line.strip():
             # blank line: end of the current logical CPU block
             if core_id is not None and (
                 cpu_set is None or processor in cpu_set
             ):
                 cores.add((physical_id, core_id))
             processor = core_id = physical_id = None
+            continue
+
+        key, sep, value = line.partition(":")
+        if not sep:
+            continue
+        key = key.strip()
+        value = value.strip()
+        if key == "processor":
+            processor = int(value)
+        elif key == "core id":
+            core_id = value
+        elif key == "physical id":
+            physical_id = value
+
+    if not cores:
+        raise ValueError("could not find any physical core in /proc/cpuinfo")
+
     return len(cores)
-
-
-def _count_physical_cores_affinity(cpu_set):
-    """Return a tuple (number of physical cores, exception) for the
-    logical CPUs in `cpu_set` (typically derived from the process CPU
-    affinity mask).
-
-    Same semantics as `_count_physical_cores`, but the count only accounts
-    for the logical CPUs in `cpu_set`, collapsing SMT/hyper-threading
-    siblings that share the same physical core. Only implemented for Linux,
-    where per-CPU topology information is readily available; callers are
-    expected to only invoke this on Linux.
-    """
-    cache_key = frozenset(cpu_set)
-
-    # First check if the value is cached
-    if cache_key in physical_cores_affinity_cache:
-        return physical_cores_affinity_cache[cache_key], None
-
-    cpu_count_physical, exception = _run_physical_cores_probe(
-        lambda: _count_physical_cores_linux(cache_key)
-    )
-
-    # Put the result in cache
-    physical_cores_affinity_cache[cache_key] = cpu_count_physical
-
-    return cpu_count_physical, exception
 
 
 def _count_physical_cores_win32():
