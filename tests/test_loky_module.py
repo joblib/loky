@@ -287,7 +287,7 @@ def test_only_physical_cores_error(monkeypatch):
     # clear the cache otherwise the warning is not triggered
     import loky.backend.context
 
-    loky.backend.context.physical_cores_cache = None
+    loky.backend.context.physical_cores_cache = {}
 
     with pytest.warns(
         UserWarning,
@@ -351,7 +351,7 @@ def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
     monkeypatch.setattr(
         os, "sched_getaffinity", lambda pid: {0, 1}, raising=False
     )
-    monkeypatch.setattr(context, "physical_cores_affinity_cache", {})
+    monkeypatch.setattr(context, "physical_cores_cache", {})
 
     # taskset -c 0,1 pins the process to 2 logical CPUs that are SMT
     # siblings of a single physical core.

@@ -37,14 +37,11 @@ if sys.platform != "win32":
 
 _DEFAULT_START_METHOD = None
 
-# Cache for the number of physical cores to avoid repeating subprocess calls.
-# It should not change during the lifetime of the program.
-physical_cores_cache = None
-
-# Similar cache for the number of physical cores restricted to a given CPU
-# affinity mask (as a frozenset of logical CPU ids), see
-# `_count_physical_cores`.
-physical_cores_affinity_cache = {}
+# Cache for the number of physical cores, to avoid repeating subprocess
+# calls or re-parsing /proc/cpuinfo. Keyed by None for the whole machine, or
+# by a frozenset of logical CPU ids when restricted to a CPU affinity mask,
+# see `_count_physical_cores`.
+physical_cores_cache = {}
 
 
 def get_context(method=None):
@@ -302,14 +299,9 @@ def _count_physical_cores(cpu_set=None):
 
     # First check if the value is cached
     global physical_cores_cache
-    if cpu_set is None:
-        if physical_cores_cache is not None:
-            return physical_cores_cache, None
-        cache_key = None
-    else:
-        cache_key = frozenset(cpu_set)
-        if cache_key in physical_cores_affinity_cache:
-            return physical_cores_affinity_cache[cache_key], None
+    cache_key = None if cpu_set is None else frozenset(cpu_set)
+    if cache_key in physical_cores_cache:
+        return physical_cores_cache[cache_key], None
 
     # Not cached yet, find it
     try:
@@ -338,10 +330,7 @@ def _count_physical_cores(cpu_set=None):
         cpu_count_physical = "not found"
 
     # Put the result in cache
-    if cache_key is None:
-        physical_cores_cache = cpu_count_physical
-    else:
-        physical_cores_affinity_cache[cache_key] = cpu_count_physical
+    physical_cores_cache[cache_key] = cpu_count_physical
 
     return cpu_count_physical, exception
 
