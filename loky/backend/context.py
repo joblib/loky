@@ -104,7 +104,11 @@ def cpu_count(only_physical_cores=False):
     affinity (e.g. via ``taskset``), ``only_physical_cores=True`` still
     collapses hyper-threading / SMT sibling logical CPUs that share the
     same physical core, so that e.g. pinning a process to 2 SMT siblings
-    of a single physical core is reported as 1 physical core.
+    of a single physical core is reported as 1 physical core. On other
+    platforms, this refinement is not implemented, so a CPU affinity
+    restriction on those platforms causes ``only_physical_cores=True`` to
+    be effectively ignored, similarly to the Cgroup / LOKY_MAX_CPU_COUNT
+    case above.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
     Python < 3.10), see:

@@ -291,14 +291,16 @@ def test_only_physical_cores_error(monkeypatch):
 
     with pytest.warns(
         UserWarning,
-        match="Could not find the number of" " physical cores",
+        match="Could not find the number of physical cores",
     ):
-        cpu_count(only_physical_cores=True)
+        # Falls back to the logical CPU count when the physical core count
+        # cannot be found.
+        assert cpu_count(only_physical_cores=True) == cpu_count_mp
 
     # Should not warn the second time
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        cpu_count(only_physical_cores=True)
+        assert cpu_count(only_physical_cores=True) == cpu_count_mp
 
 
 def test_only_physical_cores_with_user_limitation():
@@ -357,6 +359,45 @@ def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
     # siblings of a single physical core.
     assert context.cpu_count() == 2
     assert context.cpu_count(only_physical_cores=True) == 1
+
+    # Changing the affinity to 2 logical CPUs that belong to different
+    # physical cores (0 and 2) must not collapse them, and must use a
+    # separate cache entry than the previous affinity set.
+    monkeypatch.setattr(
+        os, "sched_getaffinity", lambda pid: {0, 2}, raising=False
+    )
+    assert context.cpu_count() == 2
+    assert context.cpu_count(only_physical_cores=True) == 2
+
+    # Lifting the affinity restriction entirely must report the 2 physical
+    # cores of the whole machine, going through the un-keyed cache entry.
+    monkeypatch.setattr(
+        os, "sched_getaffinity", lambda pid: {0, 1, 2, 3}, raising=False
+    )
+    assert context.cpu_count() == 4
+    assert context.cpu_count(only_physical_cores=True) == 2
+
+
+def test_count_physical_cores_linux_multi_socket(monkeypatch):
+    # Regression test: a physical core must be identified by its
+    # (physical id, core id) pair, not by core id alone, otherwise cores
+    # sharing the same core id across sockets on a multi-socket machine
+    # get under-counted.
+    if sys.platform != "linux":
+        pytest.skip("Linux specific test")
+
+    from loky.backend.context import _count_physical_cores_linux
+
+    # Simulate a 2-socket machine with 2 physical cores per socket, where
+    # each socket reuses core id 0 and 1.
+    fake_cpuinfo = "".join(
+        f"processor\t: {cpu}\nphysical id\t: {cpu // 2}\ncore id\t: {cpu % 2}\n\n"
+        for cpu in range(4)
+    )
+
+    _patch_proc_cpuinfo(monkeypatch, content=fake_cpuinfo)
+
+    assert _count_physical_cores_linux() == 4
 
 
 def test_cpu_count_os_sched_getaffinity_smt_siblings():
