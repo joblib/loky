@@ -1,0 +1,77 @@
+[workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[pypi-dependencies]
+loky = { path = ".", editable = true }
+
+[feature.test.dependencies]
+coverage = "*"
+numpy = "*"
+pytest = "*"
+pytest-cov = "*"
+pytest-timeout = "*"
+tblib = "*"
+
+[feature.test.tasks]
+test = "bash continuous_integration/runtests.sh"
+test-high-memory = { cmd = "bash continuous_integration/runtests.sh", env = { RUN_MEMORY = "true" } }
+
+[feature.psutil.dependencies]
+psutil = "*"
+
+[feature.py310.dependencies]
+python = "3.10.*"
+
+[feature.py313.dependencies]
+python = "3.13.*"
+
+[feature.py314.dependencies]
+python = "3.14.*"
+
+[feature.free-threaded]
+platforms = ["linux-64"]
+
+[feature.free-threaded.dependencies]
+python-freethreading = "3.14.*"
+
+[feature.viztracer]
+platforms = ["linux-64"]
+
+[feature.viztracer.dependencies]
+viztracer = "*"
+
+[feature.joblib]
+platforms = ["linux-64"]
+
+[feature.joblib.dependencies]
+git = "*"
+numpy = "*"
+pip = "*"
+pytest = "*"
+pytest-asyncio = "*"
+tblib = "*"
+threadpoolctl = "*"
+
+[feature.joblib.tasks]
+test-joblib = { cmd = "bash continuous_integration/runtests.sh", env = { JOBLIB_TESTS = "true" } }
+
+[feature.lint]
+platforms = ["linux-64"]
+
+[feature.lint.dependencies]
+black = "25.1.0.*"
+
+[feature.lint.tasks]
+lint = "black --check --diff ."
+
+[environments]
+default = ["test", "psutil", "py313"]
+lint = { features = ["lint"], no-default-feature = true }
+py310 = ["test", "psutil", "py310"]
+py310-no-psutil = ["test", "py310"]
+py313 = ["test", "psutil", "py313"]
+py313-viztracer = ["test", "psutil", "py313", "viztracer"]
+py314 = ["test", "psutil", "py314"]
+py314-free-threaded = ["test", "psutil", "free-threaded"]
+joblib-py310 = ["joblib", "py310"]

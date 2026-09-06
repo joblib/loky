@@ -25,17 +25,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@v0.10.0
         with:
-          python-version: "3.12"
-      - name: Install black
-        run: |
-          pip install black==25.1.0
+          pixi-version: v0.76.2
+          environments: lint
+          cache: true
+          locked: true
       - name: Run black
-        run: |
-          black --check --diff .
+        run: pixi run --locked --environment lint lint
 
   testing:
     name: Testing
@@ -47,45 +46,53 @@ jobs:
         include:
           - name: windows-py314
             os: windows-latest
-            PYTHON_VERSION: "3.14"
+            PIXI_ENVIRONMENT: py314
+            PIXI_TASK: test
           - name: windows-py313
             os: windows-latest
-            PYTHON_VERSION: "3.13"
+            PIXI_ENVIRONMENT: py313
+            PIXI_TASK: test
           - name: windows-py310
             os: windows-latest
-            PYTHON_VERSION: "3.10"
+            PIXI_ENVIRONMENT: py310
+            PIXI_TASK: test
             LOKY_TEST_NO_CIM: "true"
 
           - name: macos-py314
             os: macos-latest
-            PYTHON_VERSION: "3.14"
+            PIXI_ENVIRONMENT: py314
+            PIXI_TASK: test
           - name: macos-py313
             os: macos-latest
-            PYTHON_VERSION: "3.13"
+            PIXI_ENVIRONMENT: py313
+            PIXI_TASK: test
           - name: macos-py310
             os: macos-latest
-            PYTHON_VERSION: "3.10"
+            PIXI_ENVIRONMENT: py310
+            PIXI_TASK: test
 
           - name: linux-py314-free-threading
             os: ubuntu-latest
-            PYTHON_VERSION: "3.14"
-            FREE_THREADING: "true"
+            PIXI_ENVIRONMENT: py314-free-threaded
+            PIXI_TASK: test
           - name: linux-py313
             os: ubuntu-latest
-            PYTHON_VERSION: "3.13"
+            PIXI_ENVIRONMENT: py313-viztracer
+            PIXI_TASK: test
             LOKY_TEST_NO_LSCPU: "true"
-            EXTRA_PACKAGES: "viztracer"
           - name: linux-py310-joblib-tests
             os: ubuntu-latest
-            PYTHON_VERSION: "3.10"
+            PIXI_ENVIRONMENT: joblib-py310
+            PIXI_TASK: test-joblib
             JOBLIB_TESTS: "true"
           - name: linux-python-py310-high-memory
             os: ubuntu-latest
-            PYTHON_VERSION: "3.10"
-            RUN_MEMORY: "true"
+            PIXI_ENVIRONMENT: py310
+            PIXI_TASK: test-high-memory
           - name: linux-py310
             os: ubuntu-latest
-            PYTHON_VERSION: "3.10"
+            PIXI_ENVIRONMENT: py310-no-psutil
+            PIXI_TASK: test
             # Do not install psutil on Python 3.10 to have some CI runs that
             # tests that loky has no hard dependency on psutil.
             NO_PSUTIL: "true"
@@ -94,31 +101,20 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    defaults:
-      run:
-        # Need to use this shell to get conda working properly.
-        # See https://github.com/marketplace/actions/setup-miniconda#important
-        shell: ${{ matrix.os == 'windows-latest' && 'cmd /C CALL {0}' || 'bash -el {0}' }}
-
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup conda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@v0.10.0
         with:
-          auto-activate-base: true
-          auto-update-conda: true
-          miniforge-version: latest
-
-      - name: Install dependencies
-        run: |
-          bash -el continuous_integration/install.sh
+          pixi-version: v0.76.2
+          environments: ${{ matrix.PIXI_ENVIRONMENT }}
+          cache: true
+          locked: true
 
       - name: Run tests
-        run: |
-          bash -el continuous_integration/runtests.sh
+        run: pixi run --locked --environment ${{ matrix.PIXI_ENVIRONMENT }} ${{ matrix.PIXI_TASK }}
 
       - name: Upload to Codecov
         # always upload coverage even if tests fail

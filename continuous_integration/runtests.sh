@@ -4,8 +4,6 @@
 
 set -xe
 
-conda activate testenv
-
 which python
 python -V
 python -c "import struct; print('platform: %d' % (8 * struct.calcsize('P')))"
@@ -20,10 +18,7 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
 
     git clone https://github.com/joblib/joblib.git src_joblib
     cd src_joblib
-    pip install pytest
-    pip install threadpoolctl pytest-asyncio  # required by some joblib tests
-
-    pip install -e .
+    python -m pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
     # Need to copy root conftest.py to inside joblib package since we are using
     # pytest --pyargs joblib a few lines below
