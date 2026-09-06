@@ -1,7 +1,0 @@
-numpy
-psutil
-cython
-coverage
-pytest
-pytest-coverage
-pytest-timeout
