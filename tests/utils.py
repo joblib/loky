@@ -194,6 +194,7 @@ except ImportError:
 # A decorator to run tests only when numpy is available
 try:
     from ._openmp_test_helper.parallel_sum import parallel_sum  # noqa F401
+    
     def with_parallel_sum(func):
         """A decorator to skip tests if parallel_sum is not compiled."""
         return func

@@ -38,6 +38,6 @@ pip install -v .
 if [[ -z "$JOBLIB_TESTS" ]]; then
     pip install cython setuptools
     cd tests/_openmp_test_helper
-    python setup.py build_ext -i
+    python setup.py build_ext -i || echo 'No openmp'
     cd ../..
 fi
