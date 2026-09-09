@@ -35,7 +35,7 @@ pip install $PIP_INSTALL_PACKAGES
 
 pip install -v .
 
-if [[ -z "$JOBLIB_TESTS" ]]; then
+if [[ -z "$JOBLIB_TESTS" && "$FREE_THREADING" != "true" ]]; then
     pip install cython setuptools
     cd tests/_openmp_test_helper
     python setup.py build_ext -i || echo 'No openmp'
