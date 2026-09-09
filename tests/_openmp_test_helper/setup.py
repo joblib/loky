@@ -1,8 +1,11 @@
+"""Helper module to test OpenMP support on Continuous Integration"""
+
 import os
 import sys
-from setuptools import setup, Extension
-from Cython.Build import cythonize
 
+from Cython.Build import cythonize
+from setuptools import setup
+from setuptools.extension import Extension
 
 if sys.platform == "darwin":
     os.environ["CC"] = "gcc-4.9"
@@ -25,6 +28,6 @@ ext_modules = [
 ]
 
 setup(
-    name="_openmp",
+    name="_openmp_test_helper",
     ext_modules=cythonize(ext_modules),
 )
