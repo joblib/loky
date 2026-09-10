@@ -11,7 +11,10 @@ from setuptools.extension import Extension
 #     os.environ["CC"] = "gcc-13"
 #     os.environ["CXX"] = "g++-13"
 
-if sys.platform != "win32":
+if sys.platform == "darwin":
+    extra_compile_args = ["-ffast-math", "-Xpreprocessor", "-fopenmp"]
+    extra_link_args = ["-lomp"]
+elif sys.platform != "win32":
     extra_compile_args = ["-ffast-math", "-fopenmp"]
     extra_link_args = ["-fopenmp"]
 else:
