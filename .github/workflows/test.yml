@@ -120,6 +120,13 @@ jobs:
         run: |
           bash -el continuous_integration/runtests.sh
 
+      - name: Open SSH debug session
+        uses: owenthereal/action-upterm@v1
+        if: ${{ contains(matrix.os, 'macos') }}
+        with:
+          limit-access-to-actor: true
+          wait-timeout-minutes: 60
+
       - name: Upload to Codecov
         # always upload coverage even if tests fail
         if: ${{ matrix.JOBLIB_TESTS != 'true' && (success() || failure()) }}
