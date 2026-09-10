@@ -5,6 +5,10 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 [pypi-dependencies]
 loky = { path = ".", editable = true }
 
+
+[feature.macos-windows]
+platforms = ["osx-arm64", "win-64"]
+
 [feature.test.dependencies]
 coverage = "*"
 numpy = "*"
@@ -72,6 +76,6 @@ py310 = ["test", "psutil", "py310"]
 py310-no-psutil = ["test", "py310"]
 py313 = ["test", "psutil", "py313"]
 py313-viztracer = ["test", "psutil", "py313", "viztracer"]
-py314 = ["test", "psutil", "py314"]
+py314 = ["test", "psutil", "py314", "macos-windows"]
 py314-free-threaded = ["test", "psutil", "free-threaded"]
 joblib-py310 = ["joblib", "py310"]
