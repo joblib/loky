@@ -94,21 +94,17 @@ def cpu_count(only_physical_cores=False):
     and is given as the minimum of these constraints.
 
     If ``only_physical_cores`` is True, return the number of physical cores
-    instead of the number of logical cores (hyperthreading / SMT). Note that
-    this option is not enforced if the number of usable cores is controlled
-    by a Cgroup restricted CPU bandwidth or the LOKY_MAX_CPU_COUNT
-    environment variable. If the number of physical cores is not found,
-    return the number of logical cores.
+    instead of the number of logical cores (hyperthreading / SMT), computed
+    as the minimum of:
+     * the Cgroup CPU bandwidth limit, which does not distinguish physical
+       from logical CPUs;
+     * the number of physical cores reachable through the current CPU
+       affinity mask, after collapsing hyper-threading / SMT siblings.
+     * the LOKY_MAX_CPU_COUNT environment variable, if defined.
 
-    On Linux, when the number of usable cores is restricted by process
-    affinity (e.g. via ``taskset``), ``only_physical_cores=True`` still
-    collapses hyper-threading / SMT sibling logical CPUs that share the
-    same physical core, so that e.g. pinning a process to 2 SMT siblings
-    of a single physical core is reported as 1 physical core. On other
-    platforms, this refinement is not implemented, so a CPU affinity
-    restriction on those platforms causes ``only_physical_cores=True`` to
-    be effectively ignored, similarly to the Cgroup / LOKY_MAX_CPU_COUNT
-    case above.
+    The SMT-collapsing refinement itself only ever runs on Linux, and only
+    when CPU affinity is (part of) what restricts the usable core count below
+    the machine's total logical CPU count.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
     Python < 3.10), see:
