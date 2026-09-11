@@ -19,6 +19,10 @@ if [[ -z "$CONDA_CHANNEL" ]]; then
 fi
 
 to_install="$PYTHON_PACKAGE=$PYTHON_VERSION pip numpy tblib $EXTRA_PACKAGES"
+if [[ "$(uname)" == "Darwin" ]]; then
+    # This is needed for enabling openmp support on macos platforms
+    to_install="$to_install llvm-openmp compilers"
+fi
 conda create -n testenv --yes -c $CONDA_CHANNEL $to_install
 conda activate testenv
 
@@ -34,3 +38,10 @@ fi
 pip install $PIP_INSTALL_PACKAGES
 
 pip install -v .
+
+if [[ -z "$JOBLIB_TESTS" ]]; then
+    pip install cython setuptools
+    cd tests/_openmp_test_helper
+    python setup.py build_ext -i
+    cd ../..
+fi
