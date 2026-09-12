@@ -57,10 +57,18 @@ processes memory usage. :code:`gc.collect()` events will still be called
 periodially [#periodically_fn]_ inside each workers, but there is no guarantee that a leak is
 not happening.
 
+The reference is measured after the first task only and is never updated
+afterwards, so a workload whose tasks differ a lot in memory footprint can cross
+the threshold without leaking anything, and pay for a worker restart every time
+it does. Setting the environment variable :code:`LOKY_MAX_MEMORY_LEAK_SIZE` to a
+number of bytes raises, or lowers, that threshold. It is read when
+:code:`loky.process_executor` is imported, in the workers as well as in the
+parent process, so it has to be set before the workers are started.
+
 .. rubric:: Footnotes
 
 .. [#periodically_fn] every 1 second. This constant is defined in :code:`loky.process_executor._MEMORY_LEAK_CHECK_DELAY`
-.. [#psutil_unusual_fn] an increase of 300MB compared to a reference, which is defined as the residual memory usage of the worker after it completed its first task. This constant is defined in :code:`loky.process_executor._MAX_MEMORY_LEAK_SIZE`
+.. [#psutil_unusual_fn] an increase of 300MB compared to a reference, which is defined as the residual memory usage of the worker after it completed its first task. This constant is defined in :code:`loky.process_executor._MAX_MEMORY_LEAK_SIZE` and can be overridden with the :code:`LOKY_MAX_MEMORY_LEAK_SIZE` environment variable.
 
 
 
