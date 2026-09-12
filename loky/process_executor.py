@@ -616,7 +616,29 @@ class _ExecutorManagerThread(threading.Thread):
 
     def run(self):
         # Main loop for the executor manager thread.
+        try:
+            self._run_loop()
+        except BaseException as exc:
+            # Nothing in the loop is expected to raise, so this is a bug or a
+            # failure of the runtime itself, such as a queue that cannot
+            # start its feeder thread while the interpreter is shutting down
+            # (gh-109047). Letting the exception kill this thread would leave
+            # every pending future unresolved and the executor looking
+            # healthy, so a caller waiting on a result would hang forever.
+            # Flag the executor as broken instead, with the error as cause.
+            bpe = BrokenProcessPool(
+                "The executor manager thread crashed: the executor is broken "
+                "and the pending tasks have been cancelled."
+            )
+            tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+            bpe.__cause__ = _RemoteTraceback("".join(tb))
+            # Also log it: with no pending future, nothing else reports it
+            LOGGER.critical(
+                "Exception in executor manager thread:", exc_info=True
+            )
+            self.terminate_broken(bpe)
 
+    def _run_loop(self):
         while True:
             self.add_call_item_to_queue()
 
@@ -854,6 +876,13 @@ class _ExecutorManagerThread(threading.Thread):
 
         # Cancel pending work items if requested.
         if self.executor_flags.kill_workers:
+            # Drain the queued ids first: add_call_item_to_queue runs again
+            # right after this and looks each of them up in pending_work_items
+            while True:
+                try:
+                    self.work_ids_queue.get(block=False)
+                except queue.Empty:
+                    break
             while self.pending_work_items:
                 _, work_item = self.pending_work_items.popitem()
                 work_item.future.set_exception(

@@ -1,5 +1,14 @@
 ### 3.7.0 - In development
 
+- Fix an unexpected error in the executor manager thread killing it silently,
+  which left every pending future unresolved so that waiting on a result hung
+  forever. The executor is now flagged as broken and the error is reported as
+  the cause of the ``BrokenProcessPool`` raised by the futures. (#663)
+
+- Fix ``shutdown(kill_workers=True)`` crashing the executor manager thread
+  with a ``KeyError`` when tasks were still queued, which skipped the cleanup
+  of the executor's queues and processes. (#663)
+
 ### 3.6.0 - 2026-08-31
 
 - Support detection of the number of physical cores in
