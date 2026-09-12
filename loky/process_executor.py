@@ -307,16 +307,25 @@ class _SafeQueue(Queue):
         running_work_items=None,
         thread_wakeup=None,
         shutdown_lock=None,
+        executor_flags=None,
         reducers=None,
     ):
         self.thread_wakeup = thread_wakeup
         self.shutdown_lock = shutdown_lock
+        self.executor_flags = executor_flags
         self.pending_work_items = pending_work_items
         self.running_work_items = running_work_items
         super().__init__(max_size, reducers=reducers, ctx=ctx)
 
     def _on_queue_feeder_error(self, e, obj):
-        if isinstance(obj, _CallItem):
+        if not isinstance(obj, _CallItem):
+            super()._on_queue_feeder_error(e, obj)
+            return
+        # work_item can be None if another process terminated. In this
+        # case, the executor_manager_thread fails all work_items with
+        # BrokenProcessPool
+        work_item = self.pending_work_items.pop(obj.work_id, None)
+        try:
             # format traceback only works on python3
             if isinstance(e, struct.error):
                 raised_error = RuntimeError(
@@ -331,18 +340,27 @@ class _SafeQueue(Queue):
                 type(e), e, getattr(e, "__traceback__", None)
             )
             raised_error.__cause__ = _RemoteTraceback("".join(tb))
-            work_item = self.pending_work_items.pop(obj.work_id, None)
             self.running_work_items.remove(obj.work_id)
-            # work_item can be None if another process terminated. In this
-            # case, the executor_manager_thread fails all work_items with
-            # BrokenProcessPool
-            if work_item is not None:
-                work_item.future.set_exception(raised_error)
-                del work_item
-            with self.shutdown_lock:
-                self.thread_wakeup.wakeup()
-        else:
-            super()._on_queue_feeder_error(e, obj)
+        except BaseException as hook_exc:
+            # An error here would kill the feeder thread silently and leave
+            # every later task unsent: flag the executor as broken instead
+            raised_error = BrokenProcessPool(
+                "The call queue feeder thread crashed: the executor is "
+                "broken and the pending tasks have been cancelled."
+            )
+            tb = traceback.format_exception(
+                type(hook_exc), hook_exc, hook_exc.__traceback__
+            )
+            raised_error.__cause__ = _RemoteTraceback("".join(tb))
+            LOGGER.critical(
+                "Exception in call queue feeder error hook:", exc_info=True
+            )
+            self.executor_flags.flag_as_broken(raised_error)
+        if work_item is not None:
+            work_item.future.set_exception(raised_error)
+            del work_item
+        with self.shutdown_lock:
+            self.thread_wakeup.wakeup()
 
 
 def _get_chunks(chunksize, *iterables):
@@ -622,9 +640,10 @@ class _ExecutorManagerThread(threading.Thread):
             # Nothing in the loop is expected to raise, so this is a bug or a
             # failure of the runtime itself, such as a queue that cannot
             # start its feeder thread while the interpreter is shutting down
-            # (gh-109047). Letting the exception kill this thread would leave
-            # every pending future unresolved and the executor looking
-            # healthy, so a caller waiting on a result would hang forever.
+            # (python/cpython#109047). Letting the exception kill this thread
+            # would leave every pending future unresolved and the executor
+            # looking healthy, so a caller waiting on a result would hang
+            # forever.
             # Flag the executor as broken instead, with the error as cause.
             bpe = BrokenProcessPool(
                 "The executor manager thread crashed: the executor is broken "
@@ -644,6 +663,10 @@ class _ExecutorManagerThread(threading.Thread):
 
             result_item, is_broken, bpe = self.wait_result_broken_or_wakeup()
 
+            # The call queue feeder thread flags the executor broken and
+            # wakes us up when it cannot report a task failure itself
+            if not is_broken and self.executor_flags.broken is not None:
+                is_broken, bpe = True, self.executor_flags.broken
             if is_broken:
                 self.terminate_broken(bpe)
                 return
@@ -1212,6 +1235,7 @@ class ProcessPoolExecutor(Executor):
             running_work_items=self._running_work_items,
             thread_wakeup=self._executor_manager_thread_wakeup,
             shutdown_lock=self._shutdown_lock,
+            executor_flags=self._flags,
             reducers=job_reducers,
             ctx=self._context,
         )

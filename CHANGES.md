@@ -9,6 +9,12 @@
   with a ``KeyError`` when tasks were still queued, which skipped the cleanup
   of the executor's queues and processes. (#663)
 
+- Fix an error while reporting a task that failed to be sent to the workers
+  killing the call queue feeder thread silently, which left every later task
+  unsent so that waiting on a result hung forever. The executor is now flagged
+  as broken and the error is reported as the cause of the ``BrokenProcessPool``
+  raised by the futures. (#663)
+
 ### 3.6.0 - 2026-08-31
 
 - Support detection of the number of physical cores in
