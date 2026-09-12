@@ -101,7 +101,7 @@ _MEMORY_LEAK_CHECK_DELAY = 1.0
 # without leaking, so it is configurable; it is read in the worker processes,
 # which inherit the environment of the process that created the executor.
 _MAX_MEMORY_LEAK_SIZE = int(
-    os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE", int(3e8))
+    float(os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE", 3e8))
 )
 
 
@@ -321,16 +321,25 @@ class _SafeQueue(Queue):
         running_work_items=None,
         thread_wakeup=None,
         shutdown_lock=None,
+        executor_flags=None,
         reducers=None,
     ):
         self.thread_wakeup = thread_wakeup
         self.shutdown_lock = shutdown_lock
+        self.executor_flags = executor_flags
         self.pending_work_items = pending_work_items
         self.running_work_items = running_work_items
         super().__init__(max_size, reducers=reducers, ctx=ctx)
 
     def _on_queue_feeder_error(self, e, obj):
-        if isinstance(obj, _CallItem):
+        if not isinstance(obj, _CallItem):
+            super()._on_queue_feeder_error(e, obj)
+            return
+        # work_item can be None if another process terminated. In this
+        # case, the executor_manager_thread fails all work_items with
+        # BrokenProcessPool
+        work_item = self.pending_work_items.pop(obj.work_id, None)
+        try:
             # format traceback only works on python3
             if isinstance(e, struct.error):
                 raised_error = RuntimeError(
@@ -345,18 +354,27 @@ class _SafeQueue(Queue):
                 type(e), e, getattr(e, "__traceback__", None)
             )
             raised_error.__cause__ = _RemoteTraceback("".join(tb))
-            work_item = self.pending_work_items.pop(obj.work_id, None)
             self.running_work_items.remove(obj.work_id)
-            # work_item can be None if another process terminated. In this
-            # case, the executor_manager_thread fails all work_items with
-            # BrokenProcessPool
-            if work_item is not None:
-                work_item.future.set_exception(raised_error)
-                del work_item
-            with self.shutdown_lock:
-                self.thread_wakeup.wakeup()
-        else:
-            super()._on_queue_feeder_error(e, obj)
+        except BaseException as hook_exc:
+            # An error here would kill the feeder thread silently and leave
+            # every later task unsent: flag the executor as broken instead
+            raised_error = BrokenProcessPool(
+                "The call queue feeder thread crashed: the executor is "
+                "broken and the pending tasks have been cancelled."
+            )
+            tb = traceback.format_exception(
+                type(hook_exc), hook_exc, hook_exc.__traceback__
+            )
+            raised_error.__cause__ = _RemoteTraceback("".join(tb))
+            LOGGER.critical(
+                "Exception in call queue feeder error hook:", exc_info=True
+            )
+            self.executor_flags.flag_as_broken(raised_error)
+        if work_item is not None:
+            work_item.future.set_exception(raised_error)
+            del work_item
+        with self.shutdown_lock:
+            self.thread_wakeup.wakeup()
 
 
 def _get_chunks(chunksize, *iterables):
@@ -635,24 +653,39 @@ class _ExecutorManagerThread(threading.Thread):
     def run(self):
         # Main loop for the executor manager thread.
         try:
-            self._run()
-        except BaseException as e:
-            # Without this the thread would die silently, leaving the workers
-            # blocked on their exit lock and every caller waiting forever for
-            # results that nobody is left to deliver. A warning filter turning
-            # one of the warnings below into an error is enough to get here.
+            self._run_loop()
+        except BaseException as exc:
+            # Nothing in the loop is expected to raise, so this is a bug, a
+            # warning filter turning one of the warnings below into an error,
+            # or a failure of the runtime itself, such as a queue that cannot
+            # start its feeder thread while the interpreter is shutting down
+            # (python/cpython#109047). Letting the exception kill this thread
+            # would leave every pending future unresolved and the executor
+            # looking healthy, so a caller waiting on a result would hang
+            # forever.
+            # Flag the executor as broken instead, with the error as cause.
             bpe = BrokenProcessPool(
-                "The executor manager thread failed unexpectedly."
+                "The executor manager thread crashed: the executor is broken "
+                "and the pending tasks have been cancelled."
             )
-            bpe.__cause__ = e
+            tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+            bpe.__cause__ = _RemoteTraceback("".join(tb))
+            # Also log it: with no pending future, nothing else reports it
+            LOGGER.critical(
+                "Exception in executor manager thread:", exc_info=True
+            )
             self.terminate_broken(bpe)
 
-    def _run(self):
+    def _run_loop(self):
         while True:
             self.add_call_item_to_queue()
 
             result_item, is_broken, bpe = self.wait_result_broken_or_wakeup()
 
+            # The call queue feeder thread flags the executor broken and
+            # wakes us up when it cannot report a task failure itself
+            if not is_broken and self.executor_flags.broken is not None:
+                is_broken, bpe = True, self.executor_flags.broken
             if is_broken:
                 self.terminate_broken(bpe)
                 return
@@ -687,12 +720,7 @@ class _ExecutorManagerThread(threading.Thread):
             except queue.Empty:
                 return
             else:
-                work_item = self.pending_work_items.get(work_id)
-                if work_item is None:
-                    # flag_executor_shutting_down(kill_workers=True) drops the
-                    # pending work items but leaves their ids in
-                    # work_ids_queue.
-                    continue
+                work_item = self.pending_work_items[work_id]
 
                 if work_item.future.set_running_or_notify_cancel():
                     self.running_work_items += [work_id]
@@ -907,6 +935,13 @@ class _ExecutorManagerThread(threading.Thread):
 
         # Cancel pending work items if requested.
         if self.executor_flags.kill_workers:
+            # Drain the queued ids first: add_call_item_to_queue runs again
+            # right after this and looks each of them up in pending_work_items
+            while True:
+                try:
+                    self.work_ids_queue.get(block=False)
+                except queue.Empty:
+                    break
             while self.pending_work_items:
                 _, work_item = self.pending_work_items.popitem()
                 work_item.future.set_exception(
@@ -1236,6 +1271,7 @@ class ProcessPoolExecutor(Executor):
             running_work_items=self._running_work_items,
             thread_wakeup=self._executor_manager_thread_wakeup,
             shutdown_lock=self._shutdown_lock,
+            executor_flags=self._flags,
             reducers=job_reducers,
             ctx=self._context,
         )

@@ -1,5 +1,35 @@
 ### 3.7.0 - In development
 
+- Fix an unexpected error in the executor manager thread killing it silently,
+  which left every pending future unresolved so that waiting on a result hung
+  forever. A warning filter turning one of the warnings the thread emits into
+  an error was enough to trigger this. The executor is now flagged as broken
+  and the error is reported as the cause of the ``BrokenProcessPool`` raised
+  by the futures. (#641)
+
+- Fix ``shutdown(kill_workers=True)`` crashing the executor manager thread
+  with a ``KeyError`` when tasks were still queued, which skipped the cleanup
+  of the executor's queues and processes. (#641)
+
+- Fix an error while reporting a task that failed to be sent to the workers
+  killing the call queue feeder thread silently, which left every later task
+  unsent so that waiting on a result hung forever. The executor is now flagged
+  as broken and the error is reported as the cause of the ``BrokenProcessPool``
+  raised by the futures. (#641)
+
+- Report a worker that is recycled because of a suspected memory leak with a
+  message that says so, and only once per executor instead of once per restart.
+  Such a restart used to repeatedly emit the generic "A worker stopped while
+  some jobs were given to the executor" warning for the whole life of a
+  long-running executor. (#641)
+
+- Add the ``LOKY_MAX_MEMORY_LEAK_SIZE`` environment variable to configure how
+  much memory growth is tolerated before a worker is recycled, previously
+  hardcoded to 300 MB. The reference it is compared against is measured after
+  the worker's first task and never updated, so a workload whose tasks differ
+  a lot in memory footprint can cross that threshold without leaking
+  anything. (#641)
+
 ### 3.6.0 - 2026-08-31
 
 - Support detection of the number of physical cores in
@@ -12,23 +42,6 @@
   submissions after executor replacement could raise
   ``ShutdownExecutorError``. (#632)
 
-- Do not let an exception in the executor manager thread hang every caller.
-  The thread is the only one draining the result queue, so it dying left the
-  workers blocked on their exit lock and the callers waiting forever; the
-  executor is now flagged as broken instead. A warning filter turning one of
-  the warnings the thread emits into an error was enough to trigger this.
-
-- Report a worker that is recycled because of a suspected memory leak with a
-  message that says so, and only once per executor instead of once per restart.
-  Such a restart used to repeatedly emit the generic "A worker stopped while
-  some jobs were given to the executor" warning for the whole life of a
-  long-running executor.
-
-- Add the ``LOKY_MAX_MEMORY_LEAK_SIZE`` environment variable to configure how
-  much memory growth is tolerated before a worker is recycled, previously
-  hardcoded to 300 MB. The reference it is compared against is measured after
-  the worker's first task and never updated, so a workload whose tasks differ
-  a lot in memory footprint can cross that threshold without leaking anything.
 - Fix ``ProcessPoolExecutor.shutdown(wait=True)`` hanging forever when the
   only work items left are cancelled ones, as happens after abandoning an
   ``Executor.map`` iterator or cancelling a submitted future. Ports the

@@ -29,6 +29,7 @@ from concurrent.futures._base import (
 import loky
 from loky.process_executor import (
     LokyRecursionError,
+    BrokenProcessPool,
     ShutdownExecutorError,
     TerminatedWorkerError,
 )
@@ -1284,6 +1285,52 @@ class ExecutorTest:
             assert len(w) == 0, [w.message for w in w]
         finally:
             _end_spawned_pthread()
+
+    @pytest.mark.broken_pool
+    def test_manager_thread_crash_breaks_executor(self):
+        """An unexpected error in the manager thread breaks the executor
+        rather than leaving the submitted futures pending forever."""
+        self.executor.submit(int).result()  # starts the manager thread
+        manager = self.executor._executor_manager_thread
+
+        def crash():
+            raise RuntimeError("manager thread bug")
+
+        # The manager thread may crash before or after the submit below
+        # depending on scheduling: both paths raise the same exception.
+        manager.wait_result_broken_or_wakeup = crash
+        with pytest.raises(
+            BrokenProcessPool, match="manager thread crashed"
+        ) as exc_info:
+            self.executor.submit(int).result(timeout=_executor_mixin.TIMEOUT)
+        assert "manager thread bug" in str(exc_info.value.__cause__)
+        manager.join(_executor_mixin.TIMEOUT)
+        assert not manager.is_alive()
+        with pytest.raises(BrokenProcessPool):
+            self.executor.submit(int)
+
+    @pytest.mark.broken_pool
+    def test_feeder_error_hook_crash_breaks_executor(self):
+        """A failure in the call queue's feeder error hook breaks the
+        executor rather than leaving the submitted futures pending forever."""
+        self.executor.submit(int).result()  # starts the feeder thread
+        manager = self.executor._executor_manager_thread
+
+        # Make the hook itself fail when it handles the pickling error, as
+        # when the manager thread already dropped the work id: the ``remove``
+        # of the id from this list then raises ValueError
+        self.executor._call_queue.running_work_items = []
+        with pytest.raises(
+            BrokenProcessPool, match="feeder thread crashed"
+        ) as exc_info:
+            self.executor.submit(id, ErrorAtPickle()).result(
+                timeout=_executor_mixin.TIMEOUT
+            )
+        assert "ValueError" in str(exc_info.value.__cause__)
+        manager.join(_executor_mixin.TIMEOUT)
+        assert not manager.is_alive()
+        with pytest.raises(BrokenProcessPool):
+            self.executor.submit(int)
 
 
 def _custom_initializer():
