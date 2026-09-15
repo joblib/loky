@@ -300,6 +300,32 @@ def test_only_physical_cores_error(monkeypatch):
         assert cpu_count(only_physical_cores=True) == cpu_count_mp
 
 
+def test_only_physical_cores_enforced_non_linux(monkeypatch):
+    # On non-Linux platforms, only_physical_cores=True is enforced by taking
+    # the minimum with the whole-machine physical core count, even when
+    # another constraint (here, a Cgroup CPU bandwidth limit) already
+    # restricts the usable CPU count below the machine's total logical CPU
+    # count. Unlike on Linux, CPU affinity is not taken into account there:
+    # _count_physical_cores is called with cpu_set=None.
+    import loky.backend.context as context
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(os, "cpu_count", lambda: 8)
+    monkeypatch.setattr(context, "_cpu_count_affinity_set", lambda: None)
+    monkeypatch.setattr(context, "_cpu_count_cgroup", lambda os_cpu_count: 6)
+
+    def _fake_count_physical_cores(cpu_set=None):
+        assert cpu_set is None
+        return 4, None
+
+    monkeypatch.setattr(
+        context, "_count_physical_cores", _fake_count_physical_cores
+    )
+
+    assert context.cpu_count() == 6
+    assert context.cpu_count(only_physical_cores=True) == 4
+
+
 def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
     # Regression test for https://github.com/joblib/loky/issues/639:
     # only_physical_cores=True should collapse SMT/hyper-threading sibling
