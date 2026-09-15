@@ -94,17 +94,13 @@ def cpu_count(only_physical_cores=False):
     and is given as the minimum of these constraints.
 
     If ``only_physical_cores`` is True, return the number of physical cores
-    instead of the number of logical cores (hyperthreading / SMT), computed
-    as the minimum of:
-     * the Cgroup CPU bandwidth limit, which does not distinguish physical
-       from logical CPUs;
-     * the number of physical cores reachable through the current CPU
-       affinity mask, after collapsing hyper-threading / SMT siblings.
-     * the LOKY_MAX_CPU_COUNT environment variable, if defined.
-
-    The SMT-collapsing refinement itself only ever runs on Linux, and impacts
-    returned value only when CPU affinity is (part of) what restricts the
-    usable core count below the machine's total logical CPU count.
+    instead of the number of logical cores (hyperthreading / SMT): this is
+    given as the minimum of the same constraints as above, together with the
+    number of physical cores.
+    On Linux, the computed number of physical cores is restrained to the
+    physical cores reachable through the CPU affinity mask.
+    On other platforms, it's the number of physical cores on the whole
+    machine, since the affinity mask cannot be taken into account there.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
     Python < 3.10), see:
@@ -129,26 +125,30 @@ def cpu_count(only_physical_cores=False):
     cpu_count_cgroup = _cpu_count_cgroup(os_cpu_count)
     cpu_count_loky = int(os.environ.get("LOKY_MAX_CPU_COUNT", os_cpu_count))
 
+    aggregate_cpu_count = max(
+        1,
+        min(
+            os_cpu_count,
+            cpu_count_affinity,
+            cpu_count_cgroup,
+            cpu_count_loky,
+        ),
+    )
+
     if not only_physical_cores:
-        return max(
-            1,
-            min(
-                os_cpu_count,
-                cpu_count_affinity,
-                cpu_count_cgroup,
-                cpu_count_loky,
-            ),
-        )
+        return aggregate_cpu_count
+
+    if sys.platform != "linux" and aggregate_cpu_count < os_cpu_count:
+        # On non-Linux platforms we lack easy access to CPU topology info to
+        # refine an already-restricted count, so only_physical_cores is not
+        # enforced in that case.
+        return aggregate_cpu_count
 
     cpu_count_physical, exception = _count_physical_cores(
         # On Linux, try to collapse SMT/hyper-threading sibling logical CPUs
         # reachable through the current CPU affinity mask that share the same
         # physical core. See https://github.com/joblib/loky/issues/639.
-        # On other platforms we lack easy access to CPU topology info to refine
-        # the count, so just pass None for `cpu_affinity_set`.
-        cpu_affinity_set
-        if sys.platform == "linux"
-        else None
+        cpu_affinity_set if sys.platform == "linux" else None
     )
     if cpu_count_physical == "not found":
         cpu_count_physical = os_cpu_count
