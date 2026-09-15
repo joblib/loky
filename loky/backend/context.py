@@ -130,12 +130,15 @@ def cpu_count(only_physical_cores=False):
     cpu_count_loky = int(os.environ.get("LOKY_MAX_CPU_COUNT", os_cpu_count))
 
     if not only_physical_cores:
-        return max(1, min(
-            os_cpu_count,
-            cpu_count_affinity,
-            cpu_count_cgroup,
-            cpu_count_loky,
-        ))
+        return max(
+            1,
+            min(
+                os_cpu_count,
+                cpu_count_affinity,
+                cpu_count_cgroup,
+                cpu_count_loky,
+            ),
+        )
 
     cpu_count_physical, exception = _count_physical_cores(
         # On Linux, try to collapse SMT/hyper-threading sibling logical CPUs
@@ -143,20 +146,25 @@ def cpu_count(only_physical_cores=False):
         # physical core. See https://github.com/joblib/loky/issues/639.
         # On other platforms we lack easy access to CPU topology info to refine
         # the count, so just pass None for `cpu_affinity_set`.
-        cpu_affinity_set if sys.platform == "linux" else None
+        cpu_affinity_set
+        if sys.platform == "linux"
+        else None
     )
     if cpu_count_physical == "not found":
         cpu_count_physical = os_cpu_count
 
     _warn_physical_cores_not_found(exception)
 
-    return max(1, min(
-        os_cpu_count,
-        cpu_count_physical,
-        cpu_count_affinity,
-        cpu_count_cgroup,
-        cpu_count_loky,
-    ))
+    return max(
+        1,
+        min(
+            os_cpu_count,
+            cpu_count_physical,
+            cpu_count_affinity,
+            cpu_count_cgroup,
+            cpu_count_loky,
+        ),
+    )
 
 
 def _warn_physical_cores_not_found(exception):
