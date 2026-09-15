@@ -102,9 +102,9 @@ def cpu_count(only_physical_cores=False):
        affinity mask, after collapsing hyper-threading / SMT siblings.
      * the LOKY_MAX_CPU_COUNT environment variable, if defined.
 
-    The SMT-collapsing refinement itself only ever runs on Linux, and only
-    when CPU affinity is (part of) what restricts the usable core count below
-    the machine's total logical CPU count.
+    The SMT-collapsing refinement itself only ever runs on Linux, and impacts
+    returned value only when CPU affinity is (part of) what restricts the
+    usable core count below the machine's total logical CPU count.
 
     Note that on Windows, the returned number of CPUs cannot exceed 61 (or 60 for
     Python < 3.10), see:
@@ -123,43 +123,40 @@ def cpu_count(only_physical_cores=False):
         os_cpu_count = min(os_cpu_count, _MAX_WINDOWS_WORKERS)
 
     cpu_affinity_set = _cpu_count_affinity_set()
-    cpu_count_user = _cpu_count_user(os_cpu_count, cpu_affinity_set)
-    aggregate_cpu_count = max(min(os_cpu_count, cpu_count_user), 1)
+    cpu_count_affinity = (
+        os_cpu_count if cpu_affinity_set is None else len(cpu_affinity_set)
+    )
+    cpu_count_cgroup = _cpu_count_cgroup(os_cpu_count)
+    cpu_count_loky = int(os.environ.get("LOKY_MAX_CPU_COUNT", os_cpu_count))
 
     if not only_physical_cores:
-        return aggregate_cpu_count
+        return max(1, min(
+            os_cpu_count,
+            cpu_count_affinity,
+            cpu_count_cgroup,
+            cpu_count_loky,
+        ))
 
-    if cpu_count_user < os_cpu_count:
-        # Respect user setting. On Linux, when (some of) the restriction
-        # comes from CPU affinity, try to collapse SMT/hyper-threading
-        # sibling logical CPUs sharing the same physical core, so that e.g.
-        # pinning a process to 2 SMT siblings of a single physical core
-        # (`taskset -c 0,1`) is not mistaken for 2 physical cores. See
-        # https://github.com/joblib/loky/issues/639. On other platforms we
-        # lack easy access to CPU topology info to refine an
-        # affinity-restricted count, so just bail out.
-        if (
-            sys.platform == "linux"
-            and cpu_affinity_set is not None
-            and len(cpu_affinity_set) < os_cpu_count
-        ):
-            cpu_count_physical, exception = _count_physical_cores(
-                cpu_affinity_set
-            )
-            if cpu_count_physical != "not found":
-                return max(min(cpu_count_physical, cpu_count_user), 1)
-            _warn_physical_cores_not_found(exception)
+    cpu_count_physical, exception = _count_physical_cores(
+        # On Linux, try to collapse SMT/hyper-threading sibling logical CPUs
+        # reachable through the current CPU affinity mask that share the same
+        # physical core. See https://github.com/joblib/loky/issues/639.
+        # On other platforms we lack easy access to CPU topology info to refine
+        # the count, so just pass None for `cpu_affinity_set`.
+        cpu_affinity_set if sys.platform == "linux" else None
+    )
+    if cpu_count_physical == "not found":
+        cpu_count_physical = os_cpu_count
 
-        return max(cpu_count_user, 1)
-
-    cpu_count_physical, exception = _count_physical_cores()
-    if cpu_count_physical != "not found":
-        return cpu_count_physical
-
-    # Fallback to default behavior
     _warn_physical_cores_not_found(exception)
 
-    return aggregate_cpu_count
+    return max(1, min(
+        os_cpu_count,
+        cpu_count_physical,
+        cpu_count_affinity,
+        cpu_count_cgroup,
+        cpu_count_loky,
+    ))
 
 
 def _warn_physical_cores_not_found(exception):
@@ -260,22 +257,6 @@ def _cpu_count_affinity_set():
             )
 
     return None
-
-
-def _cpu_count_user(os_cpu_count, cpu_affinity_set):
-    """Number of user defined available CPUs"""
-    # `cpu_affinity_set` is None for platforms that do not implement any
-    # kind of CPU affinity, such as macOS-based platforms.
-    cpu_count_affinity = (
-        os_cpu_count if cpu_affinity_set is None else len(cpu_affinity_set)
-    )
-
-    cpu_count_cgroup = _cpu_count_cgroup(os_cpu_count)
-
-    # User defined soft-limit passed as a loky specific environment variable.
-    cpu_count_loky = int(os.environ.get("LOKY_MAX_CPU_COUNT", os_cpu_count))
-
-    return min(cpu_count_affinity, cpu_count_cgroup, cpu_count_loky)
 
 
 def _count_physical_cores(cpu_set=None):

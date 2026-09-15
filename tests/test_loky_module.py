@@ -11,10 +11,7 @@ import pytest
 
 import loky
 from loky import cpu_count
-from loky.backend.context import (
-    _cpu_count_affinity_set,
-    _MAX_WINDOWS_WORKERS,
-)
+from loky.backend.context import _MAX_WINDOWS_WORKERS
 
 
 def test_version():
@@ -303,33 +300,6 @@ def test_only_physical_cores_error(monkeypatch):
         assert cpu_count(only_physical_cores=True) == cpu_count_mp
 
 
-def test_only_physical_cores_with_user_limitation():
-    # Check that user limitation for the available number of cores is
-    # respected even if only_physical_cores == True. On Linux, if the
-    # restriction comes from CPU affinity and some of the affinity-pinned
-    # logical CPUs are SMT siblings of the same physical core, the physical
-    # core count can be strictly lower than the user limitation (see
-    # test_cpu_count_only_physical_cores_smt_siblings_affinity below).
-    cpu_count_mp = mp.cpu_count()
-    cpu_count_user = cpu_count()
-
-    if cpu_count_user < cpu_count_mp:
-        cpu_affinity_set = _cpu_count_affinity_set()
-        affinity_cpu_count = (
-            cpu_count_mp if cpu_affinity_set is None else len(cpu_affinity_set)
-        )
-        if affinity_cpu_count < cpu_count_mp:
-            # The restriction includes a CPU affinity component: the SMT
-            # collapsing logic may legitimately kick in and report fewer
-            # physical cores than cpu_count_user.
-            assert cpu_count(only_physical_cores=True) <= cpu_count_user
-        else:
-            # The restriction only comes from Cgroup/LOKY_MAX_CPU_COUNT:
-            # only_physical_cores must not be enforced, see cpu_count's
-            # docstring.
-            assert cpu_count(only_physical_cores=True) == cpu_count_user
-
-
 def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
     # Regression test for https://github.com/joblib/loky/issues/639:
     # only_physical_cores=True should collapse SMT/hyper-threading sibling
@@ -341,24 +311,35 @@ def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
 
     import loky.backend.context as context
 
+    cpu_count = context.cpu_count
+
     # Simulate a 4 logical CPU machine: CPU 0 and 1 are SMT siblings of
     # physical core 0; CPU 2 and 3 are SMT siblings of physical core 1.
-    fake_cpuinfo = "".join(
-        f"processor\t: {cpu}\nphysical id\t: 0\ncore id\t: {cpu // 2}\n\n"
-        for cpu in range(4)
+    fake_cpuinfo = (
+        "processor\t: 0\nphysical id\t: 0\ncore id\t: 0\n\n"
+        "processor\t: 1\nphysical id\t: 0\ncore id\t: 0\n\n"
+        "processor\t: 2\nphysical id\t: 0\ncore id\t: 1\n\n"
+        "processor\t: 3\nphysical id\t: 0\ncore id\t: 1\n\n"
     )
-
     _patch_proc_cpuinfo(monkeypatch, content=fake_cpuinfo)
     monkeypatch.setattr(os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(context, "physical_cores_cache", {})
+
+    # With unconstrained affinity, cpu_count should report
+    # 2 physical cores and 4 logical cpus:
+    monkeypatch.setattr(
+        os, "sched_getaffinity", lambda pid: {0, 1, 2, 3}, raising=False
+    )
+    assert cpu_count() == 4
+    assert cpu_count(only_physical_cores=True) == 2
+
     monkeypatch.setattr(
         os, "sched_getaffinity", lambda pid: {0, 1}, raising=False
     )
-    monkeypatch.setattr(context, "physical_cores_cache", {})
-
     # taskset -c 0,1 pins the process to 2 logical CPUs that are SMT
     # siblings of a single physical core.
-    assert context.cpu_count() == 2
-    assert context.cpu_count(only_physical_cores=True) == 1
+    assert cpu_count() == 2
+    assert cpu_count(only_physical_cores=True) == 1
 
     # Changing the affinity to 2 logical CPUs that belong to different
     # physical cores (0 and 2) must not collapse them, and must use a
@@ -366,16 +347,31 @@ def test_cpu_count_only_physical_cores_smt_siblings_affinity(monkeypatch):
     monkeypatch.setattr(
         os, "sched_getaffinity", lambda pid: {0, 2}, raising=False
     )
-    assert context.cpu_count() == 2
-    assert context.cpu_count(only_physical_cores=True) == 2
+    assert cpu_count() == cpu_count(only_physical_cores=True) == 2
 
-    # Lifting the affinity restriction entirely must report the 2 physical
-    # cores of the whole machine, going through the un-keyed cache entry.
+    # Back to unconstrained affinity:
     monkeypatch.setattr(
         os, "sched_getaffinity", lambda pid: {0, 1, 2, 3}, raising=False
     )
-    assert context.cpu_count() == 4
-    assert context.cpu_count(only_physical_cores=True) == 2
+
+    # Restrict solely through LOKY_MAX_CPU_COUNT
+    monkeypatch.setenv("LOKY_MAX_CPU_COUNT", "3")
+    assert cpu_count() == 3
+    assert cpu_count(only_physical_cores=True) == 2
+
+    monkeypatch.setenv("LOKY_MAX_CPU_COUNT", "1")
+    assert cpu_count() == cpu_count(only_physical_cores=True) == 1
+
+    monkeypatch.delenv("LOKY_MAX_CPU_COUNT")
+
+    # Same as above, but the restriction now comes solely from a Cgroup CPU
+    # bandwidth limit instead of LOKY_MAX_CPU_COUNT.
+    monkeypatch.setattr(context, "_cpu_count_cgroup", lambda os_cpu_count: 3)
+    assert cpu_count() == 3
+    assert cpu_count(only_physical_cores=True) == 2
+
+    monkeypatch.setattr(context, "_cpu_count_cgroup", lambda os_cpu_count: 1)
+    assert cpu_count() == cpu_count(only_physical_cores=True) == 1
 
 
 def test_count_physical_cores_linux_multi_socket(monkeypatch):
@@ -426,7 +422,7 @@ def test_cpu_count_os_sched_getaffinity_smt_siblings():
     smt_pair = None
     for cpu in range(os.cpu_count() or 0):
         siblings_path = (
-            f"/sys/devices/system/cpu/cpu{cpu}/topology/thread_siblings_list"
+            f"/sys/devices/system/cpu/cpu{cpu}/topology/core_cpus_list"
         )
         try:
             with open(siblings_path) as f:
