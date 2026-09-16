@@ -1,9 +1,14 @@
 ### 3.7.0 - In development
 
-- Fix ``cpu_count(only_physical_cores=True)`` on Linux to collapse
-  hyper-threading/SMT sibling logical CPUs sharing the same physical core
-  when the process CPU affinity (e.g. set via ``taskset``) is restricted to
-  a subset of the machine's logical CPUs. (#651)
+- Fix ``cpu_count(only_physical_cores=True)`` to always take the number of
+  physical cores into account, even when the usable CPU count is already
+  restricted by CPU affinity, Cgroup, or ``LOKY_MAX_CPU_COUNT``. Previously,
+  the physical core count was ignored whenever another restriction already
+  applied. (#651)
+
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to always collapse
+  hyper-threading/SMT sibling logical CPUs reachable through the CPU affinity
+  mask (e.g. set via ``taskset``). (#651)
 
 - Fix ``cpu_count(only_physical_cores=True)`` on Linux to identify physical
   cores by their ``(socket, core id)`` pair instead of ``core id`` alone,
