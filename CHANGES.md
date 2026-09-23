@@ -1,4 +1,51 @@
-### 3.6.0 - In development
+### 3.7.0 - In development
+
+- Fix ``cpu_count(only_physical_cores=True)`` to always take the number of
+  physical cores into account, even when the usable CPU count is already
+  restricted by CPU affinity, Cgroup, or ``LOKY_MAX_CPU_COUNT``. Previously,
+  the physical core count was ignored whenever another restriction already
+  applied. (#651)
+
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to always collapse
+  hyper-threading/SMT sibling logical CPUs reachable through the CPU affinity
+  mask (e.g. set via ``taskset``). (#651)
+
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to identify physical
+  cores by their ``(socket, core id)`` pair instead of ``core id`` alone,
+  which could under-count physical cores on multi-socket machines where
+  ``core id`` is not unique across sockets. (#651)
+
+- Fix an unexpected error in the executor manager thread killing it silently,
+  which left every pending future unresolved so that waiting on a result hung
+  forever. A warning filter turning one of the warnings the thread emits into
+  an error was enough to trigger this. The executor is now flagged as broken
+  and the error is reported as the cause of the ``BrokenProcessPool`` raised
+  by the futures. (#641)
+
+- Fix ``shutdown(kill_workers=True)`` crashing the executor manager thread
+  with a ``KeyError`` when tasks were still queued, which skipped the cleanup
+  of the executor's queues and processes. (#641)
+
+- Fix an error while reporting a task that failed to be sent to the workers
+  killing the call queue feeder thread silently, which left every later task
+  unsent so that waiting on a result hung forever. The executor is now flagged
+  as broken and the error is reported as the cause of the ``BrokenProcessPool``
+  raised by the futures. (#641)
+
+- Report a worker that is recycled because of a suspected memory leak with a
+  message that says so, and only once per executor instead of once per restart.
+  Such a restart used to repeatedly emit the generic "A worker stopped while
+  some jobs were given to the executor" warning for the whole life of a
+  long-running executor. (#641)
+
+- Add the ``LOKY_MAX_MEMORY_LEAK_SIZE`` environment variable to configure how
+  much memory growth is tolerated before a worker is recycled, previously
+  hardcoded to 300 MB. The reference it is compared against is measured after
+  the worker's first task and never updated, so a workload whose tasks differ
+  a lot in memory footprint can cross that threshold without leaking
+  anything. (#641)
+
+### 3.6.0 - 2026-08-31
 
 - Support detection of the number of physical cores in
   `cpu_count(only_physical_cores=True)` on FreeBSD. (#457)
@@ -10,8 +57,30 @@
   submissions after executor replacement could raise
   ``ShutdownExecutorError``. (#632)
 
+- Fix ``ProcessPoolExecutor.shutdown(wait=True)`` hanging forever when the
+  only work items left are cancelled ones, as happens after abandoning an
+  ``Executor.map`` iterator or cancelling a submitted future. Ports the
+  upstream fix for https://github.com/python/cpython/issues/94440. (#653)
+
+- Fix the executor manager thread dying with ``InvalidStateError`` when a
+  cancelled work item is still pending as the pool breaks, which left the
+  remaining futures unresolved forever. Ports the upstream fix for
+  https://github.com/python/cpython/issues/107219. (#653)
+
+- Fix an exception raised by a worker being reported as a ``None`` result
+  instead of being raised, when the exception evaluates as falsey. Ports the
+  upstream fix for https://github.com/python/cpython/issues/132063. (#653)
+- Wait on the resource tracker's process handle instead of its pid on Windows,
+  avoiding intermittent ``PermissionError`` exceptions and hangs during
+  interpreter shutdown. (#472, original fix in #643)
+
+- Python 3.15 support. (#472)
+
 - Drop support for Python 3.9, as it is no longer receiving security
   updates. (#647)
+
+- Make `cpu_count(only_physical=True)` faster on Windows by using Windows C API
+  through ctypes. (#649)
 
 ### 3.5.6 - 2025-08-27
 

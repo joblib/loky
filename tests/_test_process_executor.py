@@ -29,6 +29,7 @@ from concurrent.futures._base import (
 import loky
 from loky.process_executor import (
     LokyRecursionError,
+    BrokenProcessPool,
     ShutdownExecutorError,
     TerminatedWorkerError,
 )
@@ -74,6 +75,17 @@ def sleep_and_write(t, filename, msg):
     time.sleep(t)
     with open(filename, "w") as f:
         f.write(str(msg))
+
+
+class FalseyError(Exception):
+    """An exception that is falsey, to check it is not mistaken for a result."""
+
+    def __bool__(self):
+        return False
+
+
+def raise_falsey_error():
+    raise FalseyError("falsey errors must still propagate")
 
 
 class MyObject:
@@ -383,6 +395,28 @@ class ExecutorShutdownTest:
         # Make sure the executor is eventually shutdown and do not leave
         # dangling threads
         executor_manager.join()
+
+    def test_hang_gh94440(self):
+        """shutdown(wait=True) doesn't hang when a submitted future is
+        cancelled right before shutdown.
+
+        See https://github.com/python/cpython/issues/94440.
+        """
+        executor_type = self.executor_type.__name__
+        start_method = self.context.get_start_method()
+        code = f"""if True:
+            from loky.process_executor import {executor_type}
+            from loky.backend import get_context
+
+            context = get_context("{start_method}")
+            e = {executor_type}(1, context=context)
+
+            e.submit(int).result()
+            e.submit(int).cancel()
+            e.shutdown(wait=True)
+        """
+        # stderr is not checked here: only the hang matters (see #642 noise)
+        check_subprocess_call([sys.executable, "-c", code], timeout=30)
 
     def test_hang_issue39205(self):
         """shutdown(wait=False) doesn't hang at exit with running futures.
@@ -737,6 +771,47 @@ class ExecutorTest:
         with pytest.raises(TerminatedWorkerError, match=match):
             self.executor.submit(pow, 2, 8)
 
+    @pytest.mark.broken_pool
+    def test_killed_child_with_cancelled_work_items(self):
+        # A cancelled work item must not stop the executor manager thread from
+        # failing the remaining ones, see
+        # https://github.com/python/cpython/issues/107219.
+        futures = [
+            self.executor.submit(time.sleep, 30)
+            for _ in range(2 * self.worker_count + 50)
+        ]
+        # Wait for the manager thread to fill the bounded call queue and settle
+        # back into wait(): only then do the leftovers stay in
+        # pending_work_items long enough to be cancelled behind its back.
+        deadline = time.time() + 30
+        while (
+            len(self.executor._running_work_items) < self.worker_count
+            and time.time() < deadline
+        ):
+            time.sleep(0.01)
+        assert sum(f.cancel() for f in futures), "expected pending work items"
+
+        p = next(iter(self.executor._processes.values()))
+        p.terminate()
+        match = filter_match("SIGTERM")
+        with pytest.raises(TerminatedWorkerError, match=match):
+            futures[0].result(timeout=60)
+
+        # Without the fix the manager thread dies on the first cancelled work
+        # item, so the work items behind it are never failed and callers
+        # waiting on them block forever.
+        self.executor._executor_manager_thread.join(60)
+        assert not self.executor._pending_work_items
+
+    def test_falsey_exception(self):
+        # An exception is an exception even if it is falsey, see
+        # https://github.com/python/cpython/issues/132063.
+        future = self.executor.submit(raise_falsey_error)
+        # Checked with exception() rather than result(): Future.__get_result()
+        # has the same truthiness bug and was only fixed in CPython 3.13, so on
+        # older versions result() returns None whatever loky does.
+        assert isinstance(future.exception(), FalseyError)
+
     def test_map_chunksize(self):
         def bad_map():
             list(self.executor.map(pow, range(40), range(40), chunksize=-1))
@@ -1012,7 +1087,7 @@ class ExecutorTest:
             leaked_size = sum(len(buffer) for buffer in os._loky_leak)
             return os.getpid(), leaked_size
 
-        with pytest.warns(UserWarning, match="memory leak"):
+        with pytest.warns(UserWarning, match="memory leak") as record:
             # Total run time should be 3s which is way over the 1s cooldown
             # period between two consecutive memory checks in the worker.
             futures = [executor.submit(_leak_some_memory) for _ in range(300)]
@@ -1029,6 +1104,9 @@ class ExecutorTest:
             # memory check.
             for _, leak_size in results:
                 assert leak_size / 1e6 < 650
+
+        # The worker gets recycled repeatedly but that is only reported once
+        assert sum("memory leak" in str(w.message) for w in record) == 1
 
     def test_reference_cycle_collection(self):
         # make the parallel call create a reference cycle and make
@@ -1207,6 +1285,52 @@ class ExecutorTest:
             assert len(w) == 0, [w.message for w in w]
         finally:
             _end_spawned_pthread()
+
+    @pytest.mark.broken_pool
+    def test_manager_thread_crash_breaks_executor(self):
+        """An unexpected error in the manager thread breaks the executor
+        rather than leaving the submitted futures pending forever."""
+        self.executor.submit(int).result()  # starts the manager thread
+        manager = self.executor._executor_manager_thread
+
+        def crash():
+            raise RuntimeError("manager thread bug")
+
+        # The manager thread may crash before or after the submit below
+        # depending on scheduling: both paths raise the same exception.
+        manager.wait_result_broken_or_wakeup = crash
+        with pytest.raises(
+            BrokenProcessPool, match="manager thread crashed"
+        ) as exc_info:
+            self.executor.submit(int).result(timeout=_executor_mixin.TIMEOUT)
+        assert "manager thread bug" in str(exc_info.value.__cause__)
+        manager.join(_executor_mixin.TIMEOUT)
+        assert not manager.is_alive()
+        with pytest.raises(BrokenProcessPool):
+            self.executor.submit(int)
+
+    @pytest.mark.broken_pool
+    def test_feeder_error_hook_crash_breaks_executor(self):
+        """A failure in the call queue's feeder error hook breaks the
+        executor rather than leaving the submitted futures pending forever."""
+        self.executor.submit(int).result()  # starts the feeder thread
+        manager = self.executor._executor_manager_thread
+
+        # Make the hook itself fail when it handles the pickling error, as
+        # when the manager thread already dropped the work id: the ``remove``
+        # of the id from this list then raises ValueError
+        self.executor._call_queue.running_work_items = []
+        with pytest.raises(
+            BrokenProcessPool, match="feeder thread crashed"
+        ) as exc_info:
+            self.executor.submit(id, ErrorAtPickle()).result(
+                timeout=_executor_mixin.TIMEOUT
+            )
+        assert "ValueError" in str(exc_info.value.__cause__)
+        manager.join(_executor_mixin.TIMEOUT)
+        assert not manager.is_alive()
+        with pytest.raises(BrokenProcessPool):
+            self.executor.submit(int)
 
 
 def _custom_initializer():
