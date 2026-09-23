@@ -1,5 +1,20 @@
 ### 3.7.0 - In development
 
+- Fix ``cpu_count(only_physical_cores=True)`` to always take the number of
+  physical cores into account, even when the usable CPU count is already
+  restricted by CPU affinity, Cgroup, or ``LOKY_MAX_CPU_COUNT``. Previously,
+  the physical core count was ignored whenever another restriction already
+  applied. (#651)
+
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to always collapse
+  hyper-threading/SMT sibling logical CPUs reachable through the CPU affinity
+  mask (e.g. set via ``taskset``). (#651)
+
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to identify physical
+  cores by their ``(socket, core id)`` pair instead of ``core id`` alone,
+  which could under-count physical cores on multi-socket machines where
+  ``core id`` is not unique across sockets. (#651)
+
 - Fix an unexpected error in the executor manager thread killing it silently,
   which left every pending future unresolved so that waiting on a result hung
   forever. A warning filter turning one of the warnings the thread emits into

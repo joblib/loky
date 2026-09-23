@@ -73,7 +73,6 @@ jobs:
           - name: linux-py313
             os: ubuntu-latest
             PYTHON_VERSION: "3.13"
-            LOKY_TEST_NO_LSCPU: "true"
             EXTRA_PACKAGES: "viztracer"
           - name: linux-py310-joblib-tests
             os: ubuntu-latest
