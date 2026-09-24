@@ -45,6 +45,9 @@
   a lot in memory footprint can cross that threshold without leaking
   anything. (#641)
 
+- ``get_reusable_executor()`` is now thread-local: each thread has its own
+  reusable executor. This means the API is now thread-safe. (#640)
+
 ### 3.6.0 - 2026-08-31
 
 - Support detection of the number of physical cores in

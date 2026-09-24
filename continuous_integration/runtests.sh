@@ -18,8 +18,16 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
     # and run the joblib tests with pytest.
     LOKY_PATH=$(pwd)
 
-    git clone https://github.com/joblib/joblib.git src_joblib
+    # Temporary fix until joblib https://github.com/joblib/joblib/pull/1834 is
+    # merged:
+    git clone https://github.com/itamarst/joblib.git src_joblib
     cd src_joblib
+    git checkout 1833-thread-local-reusable-executor
+
+    # Restore this once the joblib PR is merged:
+    # git clone https://github.com/joblib/joblib.git src_joblib
+    # cd src_joblib
+
     pip install pytest
     pip install threadpoolctl pytest-asyncio  # required by some joblib tests
 
