@@ -1,4 +1,4 @@
-### 3.7.0 - In development
+### 3.7.0 - 2026-09-29
 
 - Fix ``cpu_count(only_physical_cores=True)`` to always take the number of
   physical cores into account, even when the usable CPU count is already
