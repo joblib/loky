@@ -21,6 +21,13 @@ from time import time as _time
 from multiprocessing import process, util
 from multiprocessing.context import assert_spawning
 
+# Import Python's stdlib resource_tracker to unregister semaphores from it
+# This prevents "leaked semaphore" warnings on Python 3.13+ when loky manages cleanup
+try:
+    from multiprocessing import resource_tracker as stdlib_resource_tracker
+except ImportError:
+    stdlib_resource_tracker = None
+
 from . import resource_tracker
 
 __all__ = [
@@ -72,6 +79,14 @@ class SemLock:
                     self._semlock = _SemLock(
                         kind, value, maxvalue, SemLock._make_name(), unlink_now
                     )
+                    # FIX: Unregister from stdlib resource_tracker immediately after creation
+                    # to prevent "leaked semaphore" warnings on Python 3.13+
+                    if stdlib_resource_tracker is not None:
+                        try:
+                            stdlib_resource_tracker.unregister(self._semlock.name, "semlock")
+                        except (KeyError, ValueError):
+                            # Semaphore wasn't registered in stdlib tracker, that's fine
+                            pass
                 except FileExistsError:  # pragma: no cover
                     pass
                 else:
@@ -80,6 +95,14 @@ class SemLock:
                 raise FileExistsError("cannot find name for semaphore")
         else:
             self._semlock = _SemLock(kind, value, maxvalue, name, unlink_now)
+            # FIX: Unregister from stdlib resource_tracker immediately after creation
+            # to prevent "leaked semaphore" warnings on Python 3.13+
+            if stdlib_resource_tracker is not None:
+                try:
+                    stdlib_resource_tracker.unregister(self._semlock.name, "semlock")
+                except (KeyError, ValueError):
+                    # Semaphore wasn't registered in stdlib tracker, that's fine
+                    pass
         self.name = name
         util.debug(
             f"created semlock with handle {self._semlock.handle} and name "
@@ -96,6 +119,7 @@ class SemLock:
         # When the object is garbage collected or the
         # process shuts down we unlink the semaphore name
         resource_tracker.register(self._semlock.name, "semlock")
+
         util.Finalize(
             self, SemLock._cleanup, (self._semlock.name,), exitpriority=0
         )
