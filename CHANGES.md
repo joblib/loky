@@ -1,5 +1,8 @@
 ### 3.7.0 - In development
 
+- Start dispatching submitted work as soon as the first worker is available,
+  instead of waiting for every worker in the executor to finish starting.
+
 - Fix ``cpu_count(only_physical_cores=True)`` to always take the number of
   physical cores into account, even when the usable CPU count is already
   restricted by CPU affinity, Cgroup, or ``LOKY_MAX_CPU_COUNT``. Previously,
