@@ -1,5 +1,9 @@
 ### 3.8.0 - In development
 
+- Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
+  real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
+  runs out of file descriptors (``EMFILE``). (#668)
+
 ### 3.7.0 - 2026-09-29
 
 - Fix ``cpu_count(only_physical_cores=True)`` to always take the number of
