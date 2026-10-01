@@ -14,6 +14,8 @@ def cgroup_files(tmp_path, monkeypatch):
     def local_path(path):
         path = os.fspath(path)
         if path.startswith(("/proc/self/", "/sys/")):
+            if os.name == "nt" and any(c in path for c in "\t\n\r\\"):
+                pytest.skip("Fixture uses POSIX-only filename characters")
             return tmp_path / path.lstrip("/")
         return path
 
@@ -29,10 +31,10 @@ def cgroup_files(tmp_path, monkeypatch):
     def write(path, content):
         target = local_path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(content, bytes):
-            target.write_bytes(content)
-        else:
-            target.write_text(content)
+        if isinstance(content, str):
+            content = os.fsencode(content)
+        # Procfs emits literal LF bytes, even when tests run on Windows.
+        target.write_bytes(content)
 
     return write
 
