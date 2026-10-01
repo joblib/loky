@@ -13,6 +13,8 @@ import ctypes
 import math
 import multiprocessing as mp
 import os
+import posixpath
+import re
 import subprocess
 import sys
 import traceback
@@ -176,52 +178,160 @@ def _warn_physical_cores_not_found(exception):
         traceback.print_tb(exception.__traceback__)
 
 
+def _cgroup_v2_cpu_max_paths():
+    """Find the current cgroup and its ancestors within visible v2 mounts."""
+    fallback = ["/sys/fs/cgroup/cpu.max"]
+    if not os.path.exists("/proc/self/cgroup"):
+        return fallback
+    try:
+        with open(
+            "/proc/self/cgroup",
+            encoding=sys.getfilesystemencoding(),
+            errors="surrogateescape",
+            newline="\n",
+        ) as fh:
+            entries = [
+                line.split(":", 2)
+                for line in fh.read().removesuffix("\n").split("\n")
+            ]
+        # Do not trust a truncated path if membership has continuation lines
+        # or more than one unified-hierarchy record.
+        if any(
+            len(entry) != 3
+            or not entry[0].isdigit()
+            or not entry[2].startswith("/")
+            for entry in entries
+        ):
+            return fallback
+        cgroups = [entry[2] for entry in entries if entry[:2] == ["0", ""]]
+        if len(cgroups) != 1:
+            return fallback
+        cgroup = cgroups[0]
+        # A cgroup outside the namespace can be reported as /../... . Do not
+        # resolve that path outside the visible mount.
+        if ".." in cgroup.split("/"):
+            return fallback
+        with open(
+            "/proc/self/mountinfo",
+            encoding=sys.getfilesystemencoding(),
+            errors="surrogateescape",
+            newline="\n",
+        ) as fh:
+            mounts = fh.readlines()
+    except OSError:
+        return fallback
+
+    mount_by_id = {}
+    for mount in mounts:
+        fields, separator, filesystem = mount.partition(" - ")
+        fields = fields.split(" ")
+        if not separator or len(fields) < 6:
+            continue
+        # mountinfo octal-escapes space, tab, newline and backslash in paths.
+        root, mountpoint = (
+            re.sub(
+                r"\\(040|011|012|134)",
+                lambda match: chr(int(match[1], 8)),
+                path,
+            )
+            for path in fields[3:5]
+        )
+        if not all(path.startswith("/") for path in (root, mountpoint)):
+            continue
+        if any(".." in path.split("/") for path in (root, mountpoint)):
+            continue
+        mount_by_id[fields[0]] = (
+            fields[1],
+            root.rstrip("/"),
+            mountpoint.rstrip("/") or "/",
+            filesystem.startswith("cgroup2 "),
+        )
+
+    paths = []
+    matched_mount = False
+    for mount_id, (
+        parent_id,
+        root,
+        mountpoint,
+        is_cgroup2,
+    ) in mount_by_id.items():
+        if not is_cgroup2:
+            continue
+        if cgroup != root and not cgroup.startswith(root + "/"):
+            continue
+        matched_mount = True
+        ancestors = set()
+        ancestor = mount_id
+        while ancestor in mount_by_id and ancestor not in ancestors:
+            ancestors.add(ancestor)
+            ancestor = mount_by_id[ancestor][0]
+        current = posixpath.join(mountpoint, cgroup[len(root) :].lstrip("/"))
+        current = current.rstrip("/") or "/"
+        while True:
+            cpu_max = posixpath.join(current, "cpu.max")
+            # Covered mounts remain in mountinfo. A different mount on this
+            # path can expose an unrelated cgroup, or even another filesystem.
+            if not any(
+                other_id not in ancestors
+                and (
+                    cpu_max == other[2]
+                    or cpu_max.startswith(other[2].rstrip("/") + "/")
+                )
+                for other_id, other in mount_by_id.items()
+            ):
+                paths.append(cpu_max)
+            if current == mountpoint:
+                break
+            current = posixpath.dirname(current)
+    return paths if matched_mount else fallback
+
+
 def _cpu_count_cgroup(os_cpu_count):
-    # Cgroup CPU bandwidth limit available in Linux since 2.6 kernel
-    cpu_max_fname = "/sys/fs/cgroup/cpu.max"
+    # cgroup v2 quotas can be attached to the process's cgroup or any parent.
+    # https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
+    found_v2 = False
+    cpu_counts = []
+    for cpu_max_fname in _cgroup_v2_cpu_max_paths():
+        if not os.path.exists(cpu_max_fname):
+            continue
+        try:
+            with open(cpu_max_fname) as fh:
+                parts = fh.read().strip().split()
+        except OSError:
+            # The CPU controller may be absent, or the cgroup inaccessible.
+            continue
+        if len(parts) != 2:
+            continue
+        found_v2 = True
+        cpu_quota_us, cpu_period_us = parts
+        if cpu_quota_us != "max":
+            cpu_quota_us = int(cpu_quota_us)
+            cpu_period_us = int(cpu_period_us)
+            if cpu_quota_us > 0 and cpu_period_us > 0:
+                cpu_counts.append(math.ceil(cpu_quota_us / cpu_period_us))
+    if found_v2:
+        return min(cpu_counts) if cpu_counts else os_cpu_count
+
+    # If we didn't get values from cgroup v2, try cgroup v1.
+    # https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
     cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
     cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
-
-    cpu_quota_us = None
-    cpu_period_us = None
-
-    if os.path.exists(cpu_max_fname):
-        # cgroup v2
-        # https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
-        with open(cpu_max_fname) as fh:
-            # Parse the quota and period values
-            parts = fh.read().strip().split()
-            if len(parts) == 2:
-                cpu_quota_us, cpu_period_us = parts
-            # If len(parts) != 2, leave as None and fall back to v1
-
-    # If we didn't get values from cgroup v2, try cgroup v1
-    if cpu_quota_us is None or cpu_period_us is None:
-        if os.path.exists(cfs_quota_fname) and os.path.exists(
-            cfs_period_fname
-        ):
-            # cgroup v1
-            # https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
-            with open(cfs_quota_fname) as fh:
-                cpu_quota_us = fh.read().strip()
-            with open(cfs_period_fname) as fh:
-                cpu_period_us = fh.read().strip()
-        else:
-            # No Cgroup CPU bandwidth limit (e.g. non-Linux platform)
-            cpu_quota_us = "max"
+    if os.path.exists(cfs_quota_fname) and os.path.exists(cfs_period_fname):
+        with open(cfs_quota_fname) as fh:
+            cpu_quota_us = fh.read().strip()
+        with open(cfs_period_fname) as fh:
+            cpu_period_us = fh.read().strip()
+    else:
+        cpu_quota_us = "max"
 
     if cpu_quota_us == "max":
-        # No active Cgroup quota on a Cgroup-capable platform
         return os_cpu_count
-    else:
-        cpu_quota_us = int(cpu_quota_us)
-        cpu_period_us = int(cpu_period_us)
-        if cpu_quota_us > 0 and cpu_period_us > 0:
-            return math.ceil(cpu_quota_us / cpu_period_us)
-        else:  # pragma: no cover
-            # Setting a negative cpu_quota_us value is a valid way to disable
-            # cgroup CPU bandwidth limits
-            return os_cpu_count
+    cpu_quota_us = int(cpu_quota_us)
+    cpu_period_us = int(cpu_period_us)
+    if cpu_quota_us > 0 and cpu_period_us > 0:
+        return math.ceil(cpu_quota_us / cpu_period_us)
+    # A negative quota disables cgroup CPU bandwidth limits.
+    return os_cpu_count
 
 
 def _cpu_count_affinity_set():
