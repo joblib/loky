@@ -31,6 +31,9 @@ else:
 
 
 def get_executable():
+    # Match CPython: POSIX spawn APIs take a bytes executable.
+    if sys.platform != "win32":
+        return os.fsencode(_python_exe)
     return _python_exe
 
 
