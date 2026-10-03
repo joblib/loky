@@ -321,6 +321,19 @@ if hasattr(os, 'register_at_fork'):
 def main(fd, verbose=0):
     '''Run resource tracker.'''
 
+    # loky: release the application's working directory on Windows, where a
+    # process's current directory cannot be removed while the process is alive.
+    initial_cwd = None
+    if sys.platform == "win32":
+        initial_cwd = os.getcwd()
+        os.chdir(os.path.abspath(os.sep))
+
+    # loky: keep relative resources anchored to the original working directory.
+    def _cleanup_resource(name, rtype):
+        if initial_cwd is not None and rtype in ("file", "folder"):
+            name = os.path.join(initial_cwd, name)
+        _CLEANUP_FUNCS[rtype](name)
+
     # loky: logging
     if verbose:
         util.log_to_stderr(level=util.DEBUG)
@@ -409,7 +422,7 @@ def main(fd, verbose=0):
                                     util.debug(
                                         f'[ResourceTracker] unlink {name}'
                                     )
-                                _CLEANUP_FUNCS[rtype](name)
+                                _cleanup_resource(name, rtype)
                             except Exception as e:
                                 warnings.warn(
                                     f"resource_tracker: {name}: {e!r}"
@@ -454,7 +467,7 @@ def main(fd, verbose=0):
                 # died.  We therefore unlink it.
                 try:
                     try:
-                        _CLEANUP_FUNCS[rtype](name)
+                        _cleanup_resource(name, rtype)
                         # loky: logging
                         if verbose:
                             util.debug(f'[ResourceTracker] unlink {name}')
@@ -511,9 +524,21 @@ def spawnv_passfds(path, args, passfds):
     else:
         # loky: Windows support
         passfds = sorted(passfds)
+        env = None
+        base_executable = getattr(sys, "_base_executable", None)
+        if (
+            base_executable is not None
+            and os.path.normcase(path) == os.path.normcase(sys.executable)
+            and os.path.normcase(path) != os.path.normcase(base_executable)
+        ):
+            # As in popen_loky_win32, bypass the venv launcher. Otherwise it
+            # keeps the original working directory locked after main chdirs.
+            path = base_executable
+            args = [path, *args[1:]]
+            env = {**os.environ, "__PYVENV_LAUNCHER__": sys.executable}
         cmd = " ".join(f'"{x}"' for x in args)
         hp, ht, pid, _ = _winapi.CreateProcess(
-            path, cmd, None, None, True, 0, None, None, None
+            path, cmd, None, None, True, 0, env, None, None
         )
         _winapi.CloseHandle(ht)
         # Keep the process handle for a safe wait during teardown.  Pids and
