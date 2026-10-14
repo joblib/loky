@@ -10,6 +10,8 @@ loky = { path = ".", editable = true }
 platforms = ["osx-arm64", "win-64"]
 
 [feature.test.dependencies]
+cython = "*"
+setuptools = "*"
 coverage = "*"
 numpy = "*"
 pytest = "*"
@@ -18,8 +20,13 @@ pytest-timeout = "*"
 tblib = "*"
 
 [feature.test.tasks]
-test = "bash continuous_integration/runtests.sh"
-test-high-memory = { cmd = "bash continuous_integration/runtests.sh", env = { RUN_MEMORY = "true" } }
+build-openmp = { cmd = "python setup.py build_ext -i", cwd = "tests/_openmp_test_helper" }
+test = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp"] }
+test-high-memory = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp"], env = { RUN_MEMORY = "true" } }
+
+[feature.test.target.osx-arm64.dependencies]
+llvm-openmp = "*"
+compilers = "*"
 
 [feature.psutil.dependencies]
 psutil = "*"
@@ -57,6 +64,9 @@ pytest-asyncio = "*"
 tblib = "*"
 threadpoolctl = "*"
 
+[feature.joblib.pypi-dependencies]
+joblib = { git = "https://github.com/itamarst/joblib.git", rev = "1833-thread-local-reusable-executor" }
+
 [feature.joblib.tasks]
 test-joblib = { cmd = "bash continuous_integration/runtests.sh", env = { JOBLIB_TESTS = "true" } }
 
@@ -78,4 +88,4 @@ py313 = ["test", "psutil", "py313"]
 py313-viztracer = ["test", "psutil", "py313", "viztracer"]
 py314 = ["test", "psutil", "py314", "macos-windows"]
 py314-free-threaded = ["test", "psutil", "free-threaded"]
-joblib-py310 = ["joblib", "py310"]
+joblib-py310 = ["joblib", "psutil", "py310"]
