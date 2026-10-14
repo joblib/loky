@@ -779,3 +779,29 @@ def test_default_subcontext(method):
 
     ctx_default = get_context()
     assert ctx_default.get_start_method() == "loky"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="posix Popen only")
+@pytest.mark.parametrize("failing_call", [1, 2])
+def test_launch_reports_pipe_error(monkeypatch, failing_call):
+    # If os.pipe() fails in Popen._launch (e.g. EMFILE when the process is
+    # out of file descriptors), that error must reach the caller rather than
+    # an UnboundLocalError from the cleanup code.
+    import errno
+    from loky.backend import popen_loky_posix
+
+    real_pipe = os.pipe
+    calls = []
+
+    def pipe():
+        if sys._getframe(1).f_code.co_filename == popen_loky_posix.__file__:
+            calls.append(None)
+            if len(calls) == failing_call:
+                raise OSError(errno.EMFILE, "Too many open files")
+        return real_pipe()
+
+    monkeypatch.setattr(popen_loky_posix.os, "pipe", pipe)
+    p = get_context("loky").Process(target=id, args=(None,))
+    with pytest.raises(OSError) as excinfo:
+        p.start()
+    assert excinfo.value.errno == errno.EMFILE

@@ -1,4 +1,58 @@
-### 3.7.0 - In development
+### 3.8.0 - In development
+
+- Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
+  real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
+  runs out of file descriptors (``EMFILE``). (#668)
+
+### 3.7.0 - 2026-09-29
+
+- Fix ``cpu_count(only_physical_cores=True)`` to always take the number of
+  physical cores into account, even when the usable CPU count is already
+  restricted by CPU affinity, Cgroup, or ``LOKY_MAX_CPU_COUNT``. Previously,
+  the physical core count was ignored whenever another restriction already
+  applied. (#651)
+
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to always collapse
+  hyper-threading/SMT sibling logical CPUs reachable through the CPU affinity
+  mask (e.g. set via ``taskset``). (#651)
+
+- Fix ``cpu_count(only_physical_cores=True)`` on Linux to identify physical
+  cores by their ``(socket, core id)`` pair instead of ``core id`` alone,
+  which could under-count physical cores on multi-socket machines where
+  ``core id`` is not unique across sockets. (#651)
+
+- Fix an unexpected error in the executor manager thread killing it silently,
+  which left every pending future unresolved so that waiting on a result hung
+  forever. A warning filter turning one of the warnings the thread emits into
+  an error was enough to trigger this. The executor is now flagged as broken
+  and the error is reported as the cause of the ``BrokenProcessPool`` raised
+  by the futures. (#641)
+
+- Fix ``shutdown(kill_workers=True)`` crashing the executor manager thread
+  with a ``KeyError`` when tasks were still queued, which skipped the cleanup
+  of the executor's queues and processes. (#641)
+
+- Fix an error while reporting a task that failed to be sent to the workers
+  killing the call queue feeder thread silently, which left every later task
+  unsent so that waiting on a result hung forever. The executor is now flagged
+  as broken and the error is reported as the cause of the ``BrokenProcessPool``
+  raised by the futures. (#641)
+
+- Report a worker that is recycled because of a suspected memory leak with a
+  message that says so, and only once per executor instead of once per restart.
+  Such a restart used to repeatedly emit the generic "A worker stopped while
+  some jobs were given to the executor" warning for the whole life of a
+  long-running executor. (#641)
+
+- Add the ``LOKY_MAX_MEMORY_LEAK_SIZE`` environment variable to configure how
+  much memory growth is tolerated before a worker is recycled, previously
+  hardcoded to 300 MB. The reference it is compared against is measured after
+  the worker's first task and never updated, so a workload whose tasks differ
+  a lot in memory footprint can cross that threshold without leaking
+  anything. (#641)
+
+- ``get_reusable_executor()`` is now thread-local: each thread has its own
+  reusable executor. This means the API is now thread-safe. (#640)
 
 ### 3.6.0 - 2026-08-31
 

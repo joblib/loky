@@ -106,6 +106,7 @@ class Popen:
         finally:
             set_spawning_popen(None)
 
+        parent_r = child_w = child_r = parent_w = None
         try:
             parent_r, child_w = os.pipe()
             child_r, parent_w = os.pipe()
