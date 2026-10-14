@@ -5,7 +5,6 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 [pypi-dependencies]
 loky = { path = ".", editable = true }
 
-
 [feature.macos-windows]
 platforms = ["osx-arm64", "win-64"]
 
@@ -65,7 +64,7 @@ tblib = "*"
 threadpoolctl = "*"
 
 [feature.joblib.pypi-dependencies]
-joblib = { git = "https://github.com/itamarst/joblib.git", rev = "1833-thread-local-reusable-executor" }
+joblib = { git = "https://github.com/joblib/joblib.git" }
 
 [feature.joblib.tasks]
 test-joblib = { cmd = "bash continuous_integration/runtests.sh", env = { JOBLIB_TESTS = "true" } }
