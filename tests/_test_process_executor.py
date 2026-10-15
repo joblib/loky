@@ -740,6 +740,16 @@ class ExecutorTest:
         assert consumed == 9
         assert list(results) == [value**2 for value in range(1, 12)]
 
+    @pytest.mark.skipif(
+        sys.version_info >= (3, 14),
+        reason="Executor.map buffersize was added in Python 3.14",
+    )
+    def test_map_buffersize_unsupported_before_314(self):
+        assert list(self.executor.map(pow, [2], [3], buffersize=None)) == [8]
+
+        with pytest.raises(TypeError, match="buffersize"):
+            self.executor.map(pow, [2], [3], buffersize=1)
+
     def test_map_exception(self):
         i = self.executor.map(divmod, [1, 1, 1, 1], [2, 3, 0, 5])
         assert next(i), 0 == 1
