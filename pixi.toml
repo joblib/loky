@@ -19,9 +19,9 @@ pytest-timeout = "*"
 tblib = "*"
 
 [feature.test.tasks]
-build-openmp = { cmd = "python setup.py build_ext -i", cwd = "tests/_openmp_test_helper" }
-test = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp"] }
-test-high-memory = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp"], env = { RUN_MEMORY = "true" } }
+build-openmp = { cmd = "python setup.py build_ext -i", cwd = "tests/_openmp_test_helper", default-environment = "py313" }
+test = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp"], default-environment = "py313" }
+test-high-memory = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp"], default-environment = "py313", env = { RUN_MEMORY = "true" } }
 
 [feature.test.target.osx-arm64.dependencies]
 llvm-openmp = "*"
@@ -79,7 +79,7 @@ black = "25.1.0.*"
 lint = "black --check --diff ."
 
 [environments]
-default = ["test", "psutil", "py313"]
+default = { features = [], no-default-feature = true }
 lint = { features = ["lint"], no-default-feature = true }
 py310 = ["test", "psutil", "py310"]
 py310-no-psutil = ["test", "py310"]

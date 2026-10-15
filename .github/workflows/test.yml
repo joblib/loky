@@ -33,7 +33,7 @@ jobs:
           environments: lint
           cache: true
           locked: true
-      - name: Run black
+      - name: Linting
         run: pixi run --locked --environment lint lint
 
   testing:
