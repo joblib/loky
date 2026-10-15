@@ -34,7 +34,7 @@ jobs:
           cache: true
           locked: true
       - name: Linting
-        run: pixi run --locked --environment lint lint
+        run: pixi run --locked lint
 
   testing:
     name: Testing
