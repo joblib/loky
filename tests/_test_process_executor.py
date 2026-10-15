@@ -695,6 +695,61 @@ class ExecutorTest:
             map(pow, range(10), range(10))
         )
 
+    @pytest.mark.skipif(
+        sys.version_info < (3, 14),
+        reason="Executor.map buffersize was added in Python 3.14",
+    )
+    def test_map_buffersize(self):
+        consumed = 0
+
+        def source():
+            nonlocal consumed
+            for value in range(10):
+                consumed += 1
+                yield value
+
+        with pytest.raises(ValueError, match="buffersize"):
+            self.executor.map(pow, [2], [3], buffersize=0)
+        with pytest.raises(TypeError, match="buffersize"):
+            self.executor.map(pow, [2], [3], buffersize=1.5)
+
+        results = self.executor.map(pow, source(), [2] * 10, buffersize=2)
+        assert consumed == 2
+        assert next(results) == 0
+        assert consumed == 3
+        assert list(results) == [value**2 for value in range(1, 10)]
+
+    @pytest.mark.skipif(
+        sys.version_info < (3, 14),
+        reason="Executor.map buffersize was added in Python 3.14",
+    )
+    def test_map_buffersize_with_chunksize(self):
+        consumed = 0
+
+        def source():
+            nonlocal consumed
+            for value in range(12):
+                consumed += 1
+                yield value
+
+        results = self.executor.map(
+            pow, source(), [2] * 12, chunksize=3, buffersize=2
+        )
+        assert consumed == 6
+        assert next(results) == 0
+        assert consumed == 9
+        assert list(results) == [value**2 for value in range(1, 12)]
+
+    @pytest.mark.skipif(
+        sys.version_info >= (3, 14),
+        reason="Executor.map buffersize was added in Python 3.14",
+    )
+    def test_map_buffersize_unsupported_before_314(self):
+        assert list(self.executor.map(pow, [2], [3], buffersize=None)) == [8]
+
+        with pytest.raises(TypeError, match="buffersize"):
+            self.executor.map(pow, [2], [3], buffersize=1)
+
     def test_map_exception(self):
         i = self.executor.map(divmod, [1, 1, 1, 1], [2, 3, 0, 5])
         assert next(i), 0 == 1
