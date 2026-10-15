@@ -19,9 +19,9 @@ pytest-timeout = "*"
 tblib = "*"
 
 [feature.test.tasks]
-build-openmp = { cmd = "python setup.py build_ext -i", cwd = "tests/_openmp_test_helper", default-environment = "py313" }
-test = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp"], default-environment = "py313" }
-test-high-memory = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp"], default-environment = "py313", env = { RUN_MEMORY = "true" } }
+build-openmp-test-helper = { cmd = "python setup.py build_ext -i", cwd = "tests/_openmp_test_helper", default-environment = "py313" }
+test = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp-test-helper"], default-environment = "py313" }
+test-high-memory = { cmd = "bash continuous_integration/runtests.sh", depends-on = ["build-openmp-test-helper"], default-environment = "py313", env = { RUN_MEMORY = "true" } }
 
 [feature.test.target.osx-arm64.dependencies]
 llvm-openmp = "*"
