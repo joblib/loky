@@ -74,9 +74,9 @@ jobs:
             os: ubuntu-latest
             PYTHON_VERSION: "3.13"
             EXTRA_PACKAGES: "viztracer"
-          - name: linux-py310-joblib-tests
+          - name: linux-py312-joblib-tests
             os: ubuntu-latest
-            PYTHON_VERSION: "3.10"
+            PYTHON_VERSION: "3.12"
             JOBLIB_TESTS: "true"
           - name: linux-python-py310-high-memory
             os: ubuntu-latest
