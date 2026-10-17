@@ -114,25 +114,13 @@ repository.
 
 ### Running the test suite
 
-The development and CI environments are managed with
-[Pixi](https://pixi.sh/). After installing Pixi, run the default test suite
-from the root of the project with:
+To run the test suite, you need the `pytest` (version >= 3) and `psutil`
+modules. From the root of the project, run the test suite using:
 
 ```sh
-pixi run test
+    pip install -e .
+    pytest .
 ```
-
-Other useful development commands are:
-
-```sh
-pixi run lint
-pixi run --environment py310 test-high-memory
-pixi run --environment py314-free-threaded test
-pixi run --environment joblib-py310 test-joblib
-```
-
-The available environments are defined in `pixi.toml`. When changing
-their dependencies, run `pixi lock` and commit the updated `pixi.lock`.
 
 ### Why was the project named `loky`?
 
