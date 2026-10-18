@@ -1,7 +1,7 @@
 ### 3.8.0 - In development
 
 - Copy the requested worker environment before caching reusable executor
-  arguments, so in-place changes to an ``env`` dictionary recreate the executor.
+  arguments, so automatic reuse detects in-place changes to an ``env`` dictionary.
 
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
