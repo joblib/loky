@@ -1272,7 +1272,7 @@ def test_reusable_executor_env_change(in_place):
         executor = get_reusable_executor(max_workers=1, env=env)
         assert executor.submit(os.getenv, key).result(timeout=10) == "second"
     finally:
-        executor.shutdown(wait=True, kill_workers=True)
+        executor.shutdown(wait=True)
 
 
 def test_reusable_executor_same_env():
@@ -1285,7 +1285,7 @@ def test_reusable_executor_same_env():
             assert reused is executor
             assert reused.submit(os.getpid).result(timeout=10) == pid
     finally:
-        executor.shutdown(wait=True, kill_workers=True)
+        executor.shutdown(wait=True)
 
 
 def test_thread_local() -> None:
