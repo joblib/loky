@@ -1259,6 +1259,35 @@ def test_no_crash_max_workers_on_windows():
     executor.shutdown()
 
 
+@pytest.mark.parametrize("in_place", [False, True])
+def test_reusable_executor_env_change(in_place):
+    key = "LOKY_TEST_REUSABLE_ENV_CHANGE"
+    env = {key: "first"}
+    executor = get_reusable_executor(max_workers=1, env=env)
+    try:
+        assert executor.submit(os.getenv, key).result(timeout=10) == "first"
+        if not in_place:
+            env = env.copy()
+        env[key] = "second"
+        executor = get_reusable_executor(max_workers=1, env=env)
+        assert executor.submit(os.getenv, key).result(timeout=10) == "second"
+    finally:
+        executor.shutdown(wait=True, kill_workers=True)
+
+
+def test_reusable_executor_same_env():
+    env = {"LOKY_TEST_REUSABLE_ENV_CHANGE": "first"}
+    executor = get_reusable_executor(max_workers=1, env=env)
+    try:
+        pid = executor.submit(os.getpid).result(timeout=10)
+        for current_env in (env, env.copy()):
+            reused = get_reusable_executor(max_workers=1, env=current_env)
+            assert reused is executor
+            assert reused.submit(os.getpid).result(timeout=10) == pid
+    finally:
+        executor.shutdown(wait=True, kill_workers=True)
+
+
 def test_thread_local() -> None:
     """``get_reusable_executor()`` returns a thread-local executor."""
 
