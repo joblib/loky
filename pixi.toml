@@ -46,6 +46,9 @@ psutil = "*"
 [feature.py310.dependencies]
 python = "3.10.*"
 
+[feature.py311.dependencies]
+python = "3.11.*"
+
 [feature.py313.dependencies]
 python = "3.13.*"
 
@@ -100,4 +103,4 @@ py313 = ["test", "psutil", "py313"]
 py313-viztracer = ["test", "psutil", "py313", "viztracer"]
 py314 = ["test", "psutil", "py314", "macos-windows"]
 py314-free-threaded = ["test", "psutil", "free-threaded"]
-joblib-py310 = ["joblib", "psutil", "py310"]
+joblib-py311 = ["joblib", "psutil", "py311"]
