@@ -16,16 +16,6 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
     # and run the joblib tests with pytest.
     LOKY_PATH=$(pwd)
 
-    # Temporary fix until joblib https://github.com/joblib/joblib/pull/1834 is
-    # merged:
-    git clone https://github.com/itamarst/joblib.git src_joblib
-    cd src_joblib
-    git checkout 1833-thread-local-reusable-executor
-
-    # Restore this once the joblib PR is merged:
-    # git clone https://github.com/joblib/joblib.git src_joblib
-    # cd src_joblib
-
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
     # Need to copy root conftest.py to inside joblib package since we are using
     # pytest --pyargs joblib a few lines below
