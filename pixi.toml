@@ -79,9 +79,6 @@ pytest-asyncio = "*"
 tblib = "*"
 threadpoolctl = "*"
 
-[feature.joblib.pypi-dependencies]
-joblib = { git = "https://github.com/joblib/joblib.git" }
-
 [feature.joblib.tasks]
 test-joblib = { cmd = "bash continuous_integration/runtests.sh", env = { JOBLIB_TESTS = "true" } }
 

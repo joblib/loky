@@ -80,7 +80,7 @@ jobs:
             PIXI_ENVIRONMENT: py313-viztracer
             PIXI_TASK: test
             LOKY_TEST_NO_LSCPU: "true"
-          - name: linux-py310-joblib-tests
+          - name: linux-py311-joblib-tests
             os: ubuntu-latest
             PIXI_ENVIRONMENT: joblib-py311
             PIXI_TASK: test-joblib

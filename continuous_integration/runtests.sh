@@ -16,6 +16,10 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
     # and run the joblib tests with pytest.
     LOKY_PATH=$(pwd)
 
+    git clone https://github.com/joblib/joblib.git src_joblib
+    cd src_joblib
+    pip install --no-deps -e .
+
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
     # Need to copy root conftest.py to inside joblib package since we are using
     # pytest --pyargs joblib a few lines below
