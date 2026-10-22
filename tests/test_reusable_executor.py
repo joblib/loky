@@ -17,7 +17,7 @@ from packaging.version import Version
 
 import loky
 from loky import cpu_count
-from loky import get_reusable_executor
+from loky import get_reusable_executor, shutdown_reusable_executor
 from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
 from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
 from loky.reusable_executor import _ReusablePoolExecutor
@@ -483,6 +483,21 @@ class TestTerminateExecutor(ReusableExecutorMixin):
         # all the results from the long running operation.
         with pytest.raises(ShutdownExecutorError):
             list(res2)
+
+    def test_shutdown_reusable_executor_kill_workers(self):
+        # Executors of subclasses, such as joblib's, are found as well.
+        class CustomReusablePoolExecutor(_ReusablePoolExecutor):
+            pass
+
+        shutdown_reusable_executor()
+        executor, _ = CustomReusablePoolExecutor.get_reusable_executor()
+        future = executor.submit(id_sleep, 1, 10)
+
+        shutdown = TimingWrapper(shutdown_reusable_executor)
+        assert shutdown(kill_workers=True)
+        assert shutdown.elapsed < 5
+        with pytest.raises(ShutdownExecutorError):
+            future.result()
 
     def test_shutdown_deadlock(self):
         """Test recovery if killed after resize call"""
@@ -1021,6 +1036,33 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
 
         executor4 = get_reusable_executor()
         assert executor4 is executor3
+
+    def test_shutdown_reusable_executor(self):
+        executor = get_reusable_executor(max_workers=1)
+        executor.submit(id, 42).result()
+
+        # Another thread has no executor: nothing is created or shut down.
+        def in_thread():
+            next_id = loky.reusable_executor._next_executor_id
+            results.append(shutdown_reusable_executor())
+            results.append(loky.reusable_executor._next_executor_id - next_id)
+
+        results = []
+        t = threading.Thread(target=in_thread)
+        t.start()
+        t.join()
+        assert results == [False, 0]
+        assert get_reusable_executor(max_workers=1) is executor
+
+        assert shutdown_reusable_executor()
+        assert executor._flags.shutdown
+        assert not executor._processes
+        assert not shutdown_reusable_executor()
+
+        # The executor is forgotten, so reuse=True falls back to cpu_count().
+        new_executor = get_reusable_executor(reuse=True)
+        assert new_executor.executor_id > executor.executor_id
+        assert new_executor._max_workers == cpu_count()
 
     def test_no_crash_on_stdin_access_in_child_subprocess_run(self):
         # non-regression test for #420.

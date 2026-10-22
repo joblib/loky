@@ -28,7 +28,9 @@ cross-version implementation of the `ProcessPoolExecutor` class of
     dynamically resized if necessary) across consecutive calls to limit
     spawning and shutdown overhead. The worker processes can be shutdown
     automatically after a configurable idling timeout to free system
-    resources.
+    resources. When you know you are done with it, for instance before a
+    memory-hungry phase, `shutdown_reusable_executor()` releases the
+    workers right away.
 
   * __Transparent cloudpickle integration__: to call interactively
     defined functions and lambda expressions in parallel. It is also
@@ -76,7 +78,7 @@ re-spawned depending on the context.
 ```python
 import os
 from time import sleep
-from loky import get_reusable_executor
+from loky import get_reusable_executor, shutdown_reusable_executor
 
 
 def say_hello(k):
@@ -97,6 +99,9 @@ results = executor.map(say_hello, range(50))
 n_workers = len(set(results))
 print("Number of used processes:", n_workers)
 assert n_workers == 4
+
+# Release the worker processes now rather than after the idle timeout.
+shutdown_reusable_executor()
 ```
 
 For more advanced usage, see our
