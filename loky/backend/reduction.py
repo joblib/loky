@@ -63,7 +63,7 @@ register(type(int.__add__), _reduce_method_descriptor)
 
 # Make partial func pickable
 def _reduce_partial(p):
-    return _rebuild_partial, (p.func, p.args, p.keywords or {})
+    return p.__reduce__()
 
 
 def _rebuild_partial(func, args, keywords):
