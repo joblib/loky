@@ -32,27 +32,6 @@ def register(type_, reduce_function):
 # Registers extra pickling routines to improve picklization  for loky
 
 
-# make methods picklable
-def _reduce_method(m):
-    if m.__self__ is None:
-        return getattr, (m.__class__, m.__func__.__name__)
-    else:
-        return getattr, (m.__self__, m.__func__.__name__)
-
-
-class _C:
-    def f(self):
-        pass
-
-    @classmethod
-    def h(cls):
-        pass
-
-
-register(type(_C().f), _reduce_method)
-register(type(_C.h), _reduce_method)
-
-
 def _reduce_method_descriptor(m):
     return getattr, (m.__objclass__, m.__name__)
 
