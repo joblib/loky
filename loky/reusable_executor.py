@@ -16,7 +16,7 @@ from .process_executor import ProcessPoolExecutor, EXTRA_QUEUED_CALLS
 from .backend.context import cpu_count
 from .backend import get_context
 
-__all__ = ["get_reusable_executor"]
+__all__ = ["get_reusable_executor", "shutdown_reusable_executor"]
 
 
 class _ExecutorStorage(threading.local):
@@ -112,6 +112,33 @@ def get_reusable_executor(
         env=env,
     )
     return _executor
+
+
+def shutdown_reusable_executor(wait=True, kill_workers=False):
+    """Shut down the reusable executor of the current thread, if any.
+
+    Return ``True`` if the current thread had a reusable executor, which is
+    shut down, and ``False`` otherwise, in which case nothing is created. This
+    releases the worker processes, and the resources they hold, right away
+    instead of waiting for them to reach their idle ``timeout``.
+
+    Like :func:`get_reusable_executor`, this only affects the executor of the
+    calling thread: the executors of other threads are left untouched and must
+    be shut down from the threads that own them.
+
+    The executor is forgotten, so that the next call to
+    :func:`get_reusable_executor` from this thread starts a fresh one, sized
+    from its own arguments, even with ``reuse=True``.
+
+    ``wait`` and ``kill_workers`` have the same meaning as for
+    :meth:`ProcessPoolExecutor.shutdown`.
+    """
+    executor = _executor_storage.executor
+    if executor is None:
+        return False
+    _executor_storage.executor = _executor_storage.executor_kwargs = None
+    executor.shutdown(wait=wait, kill_workers=kill_workers)
+    return True
 
 
 class _ReusablePoolExecutor(ProcessPoolExecutor):
