@@ -52,9 +52,9 @@ jobs:
             os: windows-latest
             PIXI_ENVIRONMENT: py313
             PIXI_TASK: test
-          - name: windows-py310
+          - name: windows-py311
             os: windows-latest
-            PIXI_ENVIRONMENT: py310
+            PIXI_ENVIRONMENT: py311
             PIXI_TASK: test
             LOKY_TEST_NO_CIM: "true"
 
@@ -66,9 +66,9 @@ jobs:
             os: macos-latest
             PIXI_ENVIRONMENT: py313
             PIXI_TASK: test
-          - name: macos-py310
+          - name: macos-py311
             os: macos-latest
-            PIXI_ENVIRONMENT: py310
+            PIXI_ENVIRONMENT: py311
             PIXI_TASK: test
 
           - name: linux-py314-free-threading
@@ -85,15 +85,15 @@ jobs:
             PIXI_ENVIRONMENT: joblib-py311
             PIXI_TASK: test-joblib
             JOBLIB_TESTS: "true"
-          - name: linux-python-py310-high-memory
+          - name: linux-python-py311-high-memory
             os: ubuntu-latest
-            PIXI_ENVIRONMENT: py310
+            PIXI_ENVIRONMENT: py311
             PIXI_TASK: test-high-memory
-          - name: linux-py310
+          - name: linux-py311
             os: ubuntu-latest
-            PIXI_ENVIRONMENT: py310-no-psutil
+            PIXI_ENVIRONMENT: py311-no-psutil
             PIXI_TASK: test
-            # Do not install psutil on Python 3.10 to have some CI runs that
+            # Do not install psutil on Python 3.11 to have some CI runs that
             # tests that loky has no hard dependency on psutil.
             NO_PSUTIL: "true"
 
