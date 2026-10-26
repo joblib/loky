@@ -25,112 +25,113 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v7
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@v0.11.2
         with:
-          python-version: "3.12"
-      - name: Install black
-        run: |
-          pip install black==25.1.0
-      - name: Run black
-        run: |
-          black --check --diff .
+          pixi-version: v0.82.0
+          environments: lint
+          cache: true
+          locked: true
+      - name: Linting
+        run: pixi run --locked lint
 
   testing:
-    name: Testing
+    name: ${{ matrix.name }}
     needs: linting
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
-
+          - name: windows-py314
+            os: windows-latest
+            PIXI_ENVIRONMENT: py314
+            PIXI_TASK: test
           - name: windows-py313
             os: windows-latest
-            PYTHON_VERSION: "3.13"
-          - name: windows-py39
+            PIXI_ENVIRONMENT: py313
+            PIXI_TASK: test
+          - name: windows-py310
             os: windows-latest
-            PYTHON_VERSION: "3.9"
+            PIXI_ENVIRONMENT: py310
+            PIXI_TASK: test
             LOKY_TEST_NO_CIM: "true"
 
+          - name: macos-py314
+            os: macos-latest
+            PIXI_ENVIRONMENT: py314
+            PIXI_TASK: test
           - name: macos-py313
             os: macos-latest
-            PYTHON_VERSION: "3.13"
-          - name: macos-py39
+            PIXI_ENVIRONMENT: py313
+            PIXI_TASK: test
+          - name: macos-py310
             os: macos-latest
-            PYTHON_VERSION: "3.9"
+            PIXI_ENVIRONMENT: py310
+            PIXI_TASK: test
 
           - name: linux-py314-free-threading
             os: ubuntu-latest
-            PYTHON_VERSION: "3.14.0rc2"
-            CONDA_CHANNEL: "conda-forge/label/python_rc"
-            FREE_THREADING: "true"
+            PIXI_ENVIRONMENT: py314-free-threaded
+            PIXI_TASK: test
           - name: linux-py313
             os: ubuntu-latest
-            PYTHON_VERSION: "3.13"
+            PIXI_ENVIRONMENT: py313-viztracer
+            PIXI_TASK: test
             LOKY_TEST_NO_LSCPU: "true"
-            EXTRA_PACKAGES: "viztracer"
-          - name: linux-py39-joblib-tests
+          - name: linux-py311-joblib-tests
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
+            PIXI_ENVIRONMENT: joblib-py311
+            PIXI_TASK: test-joblib
             JOBLIB_TESTS: "true"
-          - name: linux-python-py39-high-memory
+          - name: linux-python-py310-high-memory
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
-            RUN_MEMORY: "true"
-          - name: linux-py39
+            PIXI_ENVIRONMENT: py310
+            PIXI_TASK: test-high-memory
+          - name: linux-py310
             os: ubuntu-latest
-            PYTHON_VERSION: "3.9"
-            # Do not install psutil on Python 3.9 to have some CI runs that
+            PIXI_ENVIRONMENT: py310-no-psutil
+            PIXI_TASK: test
+            # Do not install psutil on Python 3.10 to have some CI runs that
             # tests that loky has no hard dependency on psutil.
             NO_PSUTIL: "true"
           - name: windows-py313-pyinstaller
             os: windows-latest
-            PYTHON_VERSION: "3.13"
-            PYINSTALLER_TESTS: "true"
+            PIXI_ENVIRONMENT: py313-pyinstaller
+            PIXI_TASK: test-pyinstaller
           - name: macos-py313-pyinstaller
             os: macos-latest
-            PYTHON_VERSION: "3.13"
-            PYINSTALLER_TESTS: "true"
+            PIXI_ENVIRONMENT: py313-pyinstaller
+            PIXI_TASK: test-pyinstaller
           - name: linux-py313-pyinstaller
             os: ubuntu-latest
-            PYTHON_VERSION: "3.13"
-            PYINSTALLER_TESTS: "true"
+            PIXI_ENVIRONMENT: py313-pyinstaller
+            PIXI_TASK: test-pyinstaller
 
     env: ${{ matrix }}
 
     runs-on: ${{ matrix.os }}
 
-    defaults:
-      run:
-        # Need to use this shell to get conda working properly.
-        # See https://github.com/marketplace/actions/setup-miniconda#important
-        shell: ${{ matrix.os == 'windows-latest' && 'cmd /C CALL {0}' || 'bash -el {0}' }}
-
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
-      - name: Setup conda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@v0.11.2
         with:
-          auto-activate-base: true
-          auto-update-conda: true
-          miniforge-version: latest
-
-      - name: Install dependencies
-        run: |
-          bash -el continuous_integration/install.sh
+          pixi-version: v0.82.0
+          environments: ${{ matrix.PIXI_ENVIRONMENT }}
+          cache: true
+          locked: true
 
       - name: Run tests
-        run: |
-          bash -el continuous_integration/runtests.sh
+        run: pixi run --locked --environment ${{ matrix.PIXI_ENVIRONMENT }} ${{ matrix.PIXI_TASK }}
 
       - name: Upload to Codecov
         # always upload coverage even if tests fail
         if: ${{ matrix.JOBLIB_TESTS != 'true' && (success() || failure()) }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}

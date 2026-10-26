@@ -4,8 +4,6 @@
 
 set -xe
 
-conda activate testenv
-
 which python
 python -V
 python -c "import struct; print('platform: %d' % (8 * struct.calcsize('P')))"
@@ -20,11 +18,13 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
 
     git clone https://github.com/joblib/joblib.git src_joblib
     cd src_joblib
-    pip install "pytest<7.0"  # Need to update remove occurrences of pytest.warns(None)
-    pip install threadpoolctl  # required by some joblib tests
+    pip install --no-deps -e .
 
-    pip install -e .
     export JOBLIB=`python -c "import joblib; print(joblib.__path__[0])"`
+    # Need to copy root conftest.py to inside joblib package since we are using
+    # pytest --pyargs joblib a few lines below
+    cp conftest.py $JOBLIB/conftest.py
+    # Update vendored loky code inside joblib
     cp "$LOKY_PATH"/continuous_integration/copy_loky.sh $JOBLIB/externals
     (cd $JOBLIB/externals && bash copy_loky.sh "$LOKY_PATH")
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib

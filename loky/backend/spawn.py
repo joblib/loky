@@ -97,7 +97,9 @@ def freeze_support():
 
 def _check_not_importing_main():
     if getattr(process.current_process(), "_inheriting", False):
-        raise RuntimeError(textwrap.dedent("""\
+        raise RuntimeError(
+            textwrap.dedent(
+                """\
             An attempt has been made to start a new process before the
             current process has finished its bootstrapping phase.
 
@@ -110,7 +112,9 @@ def _check_not_importing_main():
                     ...
 
             The "freeze_support()" line can be omitted if the program
-            is not going to be frozen to produce an executable."""))
+            is not going to be frozen to produce an executable."""
+            )
+        )
 
 
 def get_preparation_data(name, init_main_module=True):

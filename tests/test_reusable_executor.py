@@ -3,6 +3,7 @@ import subprocess
 import sys
 import gc
 import ctypes
+from concurrent.futures import ThreadPoolExecutor
 from tempfile import NamedTemporaryFile
 import pytest
 import warnings
@@ -924,6 +925,82 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
                 t.join()
         assert output_collector == ["ok"] * len(threads)
 
+    def test_reusable_executor_submit_during_shutdown_race(self):
+        resolved = threading.Event()
+        barrier = threading.Barrier(2)
+        results = []
+        errors = []
+
+        def submit_on_resolved_executor():
+            try:
+                executor = get_reusable_executor(max_workers=1, env={"a": "1"})
+                resolved.set()
+                barrier.wait(timeout=10)
+                results.append(
+                    executor.submit(id_sleep, 1, 0).result(timeout=10)
+                )
+            except Exception as e:
+                errors.append(e)
+
+        thread = threading.Thread(target=submit_on_resolved_executor)
+        thread.start()
+
+        assert resolved.wait(timeout=10)
+        get_reusable_executor(max_workers=1, env={"a": "2"})
+        barrier.wait(timeout=10)
+        thread.join(timeout=10)
+
+        assert not thread.is_alive()
+        assert not any(isinstance(e, ShutdownExecutorError) for e in errors)
+        if errors:
+            raise errors[0]
+        assert results == [1]
+
+    @pytest.mark.parametrize("iteration", range(2))
+    def test_reusable_executor_submit_with_concurrent_env_changes(
+        self, iteration
+    ):
+        def submit_with_env(i):
+            executor = get_reusable_executor(
+                max_workers=1, env={"a": f"{iteration}-{i}"}
+            )
+            return executor.submit(id_sleep, i, 0).result(timeout=10)
+
+        n_submissions = 20
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            results = list(executor.map(submit_with_env, range(n_submissions)))
+
+        assert results == list(range(n_submissions))
+
+    def test_max_memory_leak_size_env_var(self):
+        pytest.importorskip("psutil")  # cannot work without psutil
+
+        def _leak_some_memory(size=int(3e6), delay=0.001):
+            """function that leaks some memory"""
+            from loky import process_executor
+
+            process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
+            if getattr(os, "_loky_leak", None) is None:
+                os._loky_leak = []
+
+            os._loky_leak.append(b"\x00" * size)
+            sleep(delay)
+            return os.getpid()
+
+        # These submissions leak far more than the 300 MB default, so the
+        # worker only survives them if the raised threshold reaches the worker.
+        executor = get_reusable_executor(
+            max_workers=1, env={"LOKY_MAX_MEMORY_LEAK_SIZE": str(int(2e9))}
+        )
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            futures = [executor.submit(_leak_some_memory) for _ in range(300)]
+            pids = {f.result() for f in futures}
+            executor.shutdown(wait=True)
+
+        assert len(pids) == 1, "the worker was recycled despite the threshold"
+        assert not [w for w in record if "memory leak" in str(w.message)]
+
     def test_reusable_executor_reuse_true(self):
         executor = get_reusable_executor(max_workers=3, timeout=42)
         executor.submit(id, 42).result()
@@ -1180,3 +1257,26 @@ def test_no_crash_max_workers_on_windows():
     assert len(executor._processes) == _MAX_WINDOWS_WORKERS
 
     executor.shutdown()
+
+
+def test_thread_local() -> None:
+    """``get_reusable_executor()`` returns a thread-local executor."""
+
+    def in_thread():
+        executors = set()
+        for _ in range(100):
+            executors.add(id(get_reusable_executor()))
+        assert len(executors) == 1
+        executor_ids.add(executors.pop())
+
+    executor_ids = set()
+    threads = []
+    for _ in range(10):
+        t = threading.Thread(target=in_thread)
+        threads.append(t)
+        t.start()
+    for t in threads:
+        t.join()
+
+    # Should have 10 different IDs:
+    assert len(executor_ids) == 10

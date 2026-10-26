@@ -65,7 +65,9 @@ The basic usage of :mod:`loky` relies on the :func:`~loky.get_reusable_executor`
 
 
     # Create an executor with 4 worker processes, that will
-    # automatically shutdown after idling for 2s
+    # automatically shutdown after idling for 2s. This executor
+    # can be reused, if get_reusable_executor() is called again
+    # from the same thread before 2 seconds are up.
     executor = get_reusable_executor(max_workers=4, timeout=2)
 
     res = executor.submit(say_hello, 1)
