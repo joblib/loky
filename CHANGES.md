@@ -1,5 +1,11 @@
 ### 3.8.0 - In development
 
+- Add ``loky.shutdown_reusable_executor()`` to shut down the reusable executor
+  of the calling thread, if any, without creating one when there is none. This
+  releases the worker processes, and the memory they hold, right away instead
+  of after the idle timeout, e.g. once a batch of jobs is done and before a
+  memory-hungry phase. (#678)
+
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
   runs out of file descriptors (``EMFILE``). (#668)

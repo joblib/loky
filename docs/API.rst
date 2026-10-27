@@ -3,7 +3,7 @@ API Reference
 
 
 .. automodule:: loky
-    :members: get_reusable_executor
+    :members: get_reusable_executor, shutdown_reusable_executor
 
 .. autoclass:: ProcessPoolExecutor
     :members:

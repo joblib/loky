@@ -19,7 +19,7 @@ cross-version implementation of the :class:`~concurrent.futures.ProcessPoolExecu
 
 -  **Consistent spawn behavior**: All processes are started using fork/exec on POSIX systems. This ensures safer interactions with third party libraries.
 
--  **Reusable executor**: strategy to avoid re-spawning a complete executor every time. A singleton executor instance can be reused (and dynamically resized if necessary) across consecutive calls to limit spawning and shutdown overhead. The worker processes can be shutdown automatically after a configurable idling timeout to free system resources.
+-  **Reusable executor**: strategy to avoid re-spawning a complete executor every time. A singleton executor instance can be reused (and dynamically resized if necessary) across consecutive calls to limit spawning and shutdown overhead. The worker processes can be shutdown automatically after a configurable idling timeout to free system resources. When you know you are done with it, for instance before a memory-hungry phase, :func:`~loky.shutdown_reusable_executor` releases the workers right away.
 
 -  **Transparent** |cloudpickle| **integration**: to call interactively defined functions and lambda expressions in parallel. It is also possible to register a custom pickler implementation to handle inter-process communications.
 
@@ -54,7 +54,7 @@ The basic usage of :mod:`loky` relies on the :func:`~loky.get_reusable_executor`
 
     import os
     from time import sleep
-    from loky import get_reusable_executor
+    from loky import get_reusable_executor, shutdown_reusable_executor
 
 
     def say_hello(k):
@@ -77,6 +77,9 @@ The basic usage of :mod:`loky` relies on the :func:`~loky.get_reusable_executor`
     n_workers = len(set(results))
     print("Number of used processes:", n_workers)
     assert n_workers == 4
+
+    # Release the worker processes now rather than after the idle timeout.
+    shutdown_reusable_executor()
 
 For more advance usage, see our documentation_.
 
