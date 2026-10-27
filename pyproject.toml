@@ -74,6 +74,7 @@ force-exclude = '''
 '''
 
 [tool.pytest.ini_options]
+addopts = "--ignore=docs"
 # No test should last longer than 1 minute, even on the CI. Otherwise, dump
 # per-thread tracebacks. Note that this value can be overriden from the
 # commandline using: pytest -o faulthandler_timeout=<seconds> ...
