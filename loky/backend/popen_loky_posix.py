@@ -4,11 +4,11 @@
 # author: Thomas Moreau and Olivier Grisel
 #
 import os
-import sys
-import signal
 import pickle
+import signal
+import sys
 from io import BytesIO
-from multiprocessing import util, process
+from multiprocessing import process, util
 from multiprocessing.connection import wait
 from multiprocessing.context import set_spawning_popen
 

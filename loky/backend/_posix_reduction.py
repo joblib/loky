@@ -6,9 +6,9 @@
 # adapted from multiprocessing/reduction.py (17/02/2017)
 #  * Add adapted reduction for LokyProcesses and socket/Connection
 #
+import _socket
 import os
 import socket
-import _socket
 from multiprocessing.connection import Connection
 from multiprocessing.context import get_spawning_popen
 

@@ -17,14 +17,12 @@ import subprocess
 import sys
 import traceback
 import warnings
-
+from concurrent.futures.process import _MAX_WINDOWS_WORKERS
 from ctypes import wintypes
 from multiprocessing import get_context as mp_get_context
 from multiprocessing.context import BaseContext
-from concurrent.futures.process import _MAX_WINDOWS_WORKERS
 
-
-from .process import LokyProcess, LokyInitMainProcess
+from .process import LokyInitMainProcess, LokyProcess
 
 # Apparently, on older Python versions, loky cannot work 61 workers on Windows
 # but instead 60: ¯\_(ツ)_/¯

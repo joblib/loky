@@ -12,14 +12,14 @@
 # multiprocessing.resource_tracker and therefore multiprocessing.synchronize
 # instead of a loky-specific fork.
 
+import _multiprocessing
 import os
 import sys
 import tempfile
 import threading
-import _multiprocessing
-from time import time as _time
 from multiprocessing import process, util
 from multiprocessing.context import assert_spawning
+from time import time as _time
 
 from . import resource_tracker
 

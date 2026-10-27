@@ -1,10 +1,10 @@
 import os
-import sys
-import time
-import pytest
 import signal
+import sys
 import threading
+import time
 
+import pytest
 from loky.backend import get_context
 
 from .utils import TimingWrapper

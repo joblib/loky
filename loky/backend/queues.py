@@ -7,19 +7,23 @@
 # * Add some custom reducers for the Queues/SimpleQueue to tweak the
 #   pickling process. (overload Queue._feed/SimpleQueue.put)
 #
+import errno
 import os
 import sys
-import errno
-import weakref
 import threading
+import weakref
 from multiprocessing import util
+from multiprocessing.context import assert_spawning
 from multiprocessing.queues import (
     Full,
-    Queue as mp_Queue,
-    SimpleQueue as mp_SimpleQueue,
     _sentinel,
 )
-from multiprocessing.context import assert_spawning
+from multiprocessing.queues import (
+    Queue as mp_Queue,
+)
+from multiprocessing.queues import (
+    SimpleQueue as mp_SimpleQueue,
+)
 
 from .reduction import dumps
 

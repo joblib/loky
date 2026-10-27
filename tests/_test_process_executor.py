@@ -1,44 +1,43 @@
-import sysconfig
-from loky import process_executor
-
-import os
+import faulthandler
 import gc
-import sys
-import time
-import shutil
+import os
 import platform
-import pytest
-import weakref
+import shutil
+import sys
 import tempfile
 import threading
-import faulthandler
+import time
 import warnings
-from math import sqrt
-from pickle import PicklingError
-from threading import Thread
+import weakref
 from collections import defaultdict
 from concurrent import futures
 from concurrent.futures._base import (
-    PENDING,
-    RUNNING,
     CANCELLED,
     CANCELLED_AND_NOTIFIED,
     FINISHED,
+    PENDING,
+    RUNNING,
 )
+from math import sqrt
+from pickle import PicklingError
+from threading import Thread
 
-import loky
+import pytest
+from loky._base import Future
 from loky.process_executor import (
-    LokyRecursionError,
     BrokenProcessPool,
+    LokyRecursionError,
     ShutdownExecutorError,
     TerminatedWorkerError,
     _get_max_memory_leak_size,
 )
-from loky._base import Future
+
+import loky
+from loky import process_executor
 
 from . import _executor_mixin
-from .utils import id_sleep, check_subprocess_call, filter_match
 from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
+from .utils import check_subprocess_call, filter_match, id_sleep
 
 
 def create_future(state=PENDING, exception=None, result=None):
@@ -1268,7 +1267,7 @@ class ExecutorTest:
         # `os.fork` (and `os.execve`) manually but instead using the compound
         # _posixsubprocess.fork_exec.
         try:
-            from _testcapi import _spawn_pthread_waiter, _end_spawned_pthread
+            from _testcapi import _end_spawned_pthread, _spawn_pthread_waiter
         except ImportError:
             pytest.skip("Cannot test without _testcapi module")
 

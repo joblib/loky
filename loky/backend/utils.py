@@ -1,11 +1,11 @@
+import errno
 import os
+import signal
+import subprocess
 import sys
 import time
-import errno
-import signal
-import warnings
-import subprocess
 import traceback
+import warnings
 
 try:
     import psutil

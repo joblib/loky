@@ -6,7 +6,6 @@ import gc
 import json
 import multiprocessing
 import os
-import pytest
 import re
 import signal
 import subprocess
@@ -15,11 +14,13 @@ import time
 import warnings
 import weakref
 
-from loky import ProcessPoolExecutor
 import loky.backend.resource_tracker as resource_tracker
+import pytest
 from loky.backend.context import get_context
 
-from .utils import resource_unlink, create_resource, resource_exists
+from loky import ProcessPoolExecutor
+
+from .utils import create_resource, resource_exists, resource_unlink
 
 
 def _resource_unlink(name, rtype):

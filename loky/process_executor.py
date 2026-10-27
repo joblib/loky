@@ -58,31 +58,31 @@ __author__ = "Thomas Moreau (thomas.moreau.2010@gmail.com)"
 
 
 import faulthandler
-import os
 import gc
-import sys
+import itertools
+import multiprocessing as mp
+import os
 import queue
 import struct
-import weakref
-import warnings
-import itertools
-import traceback
+import sys
 import threading
-from time import time, sleep
-import multiprocessing as mp
-from functools import partial
-from pickle import PicklingError
+import traceback
+import warnings
+import weakref
 from concurrent.futures import Executor, InvalidStateError
 from concurrent.futures._base import LOGGER
 from concurrent.futures.process import BrokenProcessPool as _BPPException
+from functools import partial
 from multiprocessing.connection import wait
+from pickle import PicklingError
+from time import sleep, time
 
 from ._base import Future
 from .backend import get_context
-from .backend.context import cpu_count, _MAX_WINDOWS_WORKERS
+from .backend.context import _MAX_WINDOWS_WORKERS, cpu_count
 from .backend.queues import Queue, SimpleQueue
-from .backend.reduction import set_loky_pickler, get_loky_pickler_name
-from .backend.utils import kill_process_tree, get_exitcodes_terminated_worker
+from .backend.reduction import get_loky_pickler_name, set_loky_pickler
+from .backend.utils import get_exitcodes_terminated_worker, kill_process_tree
 from .initializers import _prepare_initializer
 
 # Mechanism to prevent infinite process spawning. When a worker of a

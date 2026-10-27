@@ -16,6 +16,7 @@
 # resources.
 
 import base64
+import json
 import os
 import signal
 import sys
@@ -23,13 +24,10 @@ import threading
 import time
 import warnings
 from collections import deque
-from types import SimpleNamespace
-
-import json
 
 # loky: fix imports
-from multiprocessing import spawn
-from multiprocessing import util
+from multiprocessing import spawn, util
+from types import SimpleNamespace
 
 __all__ = ['ensure_running', 'register', 'unregister']
 

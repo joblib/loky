@@ -1,16 +1,16 @@
-import re
-import os
-import sys
-import time
-import pytest
-import warnings
-import threading
-import subprocess
 import contextlib
-from tempfile import mkstemp, mkdtemp, NamedTemporaryFile, _RandomNameSequence
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+import warnings
 from _multiprocessing import SemLock as _SemLock
 from _multiprocessing import sem_unlink
+from tempfile import NamedTemporaryFile, _RandomNameSequence, mkdtemp, mkstemp
 
+import pytest
 from loky.backend import resource_tracker
 
 _rand_name = _RandomNameSequence()

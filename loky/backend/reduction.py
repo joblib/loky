@@ -9,14 +9,13 @@
 #    on the fly.
 #
 import copyreg
-import io
 import functools
-import types
-import sys
+import io
 import os
-
+import sys
+import types
 from multiprocessing import util
-from pickle import loads, HIGHEST_PROTOCOL
+from pickle import HIGHEST_PROTOCOL, loads
 
 ###############################################################################
 # Enable custom pickling in Loky.

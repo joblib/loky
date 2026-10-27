@@ -63,20 +63,19 @@
 
 import os
 import shutil
-import sys
 import signal
+import sys
+import threading
 import warnings
 from multiprocessing import util
-import base64
-import json
-import threading
-
-from .stdlib_py314_resource_tracker import (
-    ResourceTracker as StdLibResourceTracker,
-    _decode_message,
-)
 
 from . import spawn
+from .stdlib_py314_resource_tracker import (
+    ResourceTracker as StdLibResourceTracker,
+)
+from .stdlib_py314_resource_tracker import (
+    _decode_message,
+)
 
 if sys.platform == "win32":
     import _winapi
