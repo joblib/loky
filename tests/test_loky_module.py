@@ -518,6 +518,13 @@ def test_freeze_support_with_pyinstaller(tmp_path):
     if pyinstaller is None:
         pytest.skip("PyInstaller is not installed")
 
+    try:
+        import coverage
+    except ImportError:
+        cov = None
+    else:
+        cov = coverage.Coverage.current()
+
     loky_project_path = os.path.abspath(
         os.path.join(os.path.dirname(loky.__file__), os.pardir)
     )
@@ -526,6 +533,28 @@ def test_freeze_support_with_pyinstaller(tmp_path):
         textwrap.dedent(
             """
             import argparse
+            import os
+
+            # Frozen interpreters do not load the environment's coverage .pth.
+            if os.environ.get("LOKY_FROZEN_COVERAGE"):
+                import atexit
+                import coverage
+
+                cov = coverage.Coverage(
+                    config_file=False,
+                    data_file=os.environ["LOKY_FROZEN_COVERAGE"],
+                    data_suffix=True,
+                    branch=os.environ["LOKY_FROZEN_COVERAGE_BRANCH"] == "true",
+                    source_pkgs=["loky"],
+                )
+                cov.start()
+
+                def save_coverage():
+                    cov.stop()
+                    cov.save()
+
+                atexit.register(save_coverage)
+
             import loky
 
 
@@ -588,8 +617,17 @@ def test_freeze_support_with_pyinstaller(tmp_path):
     if sys.platform == "win32":
         executable = executable.with_suffix(".exe")
 
+    frozen_env = os.environ.copy()
+    frozen_data_file = tmp_path / ".coverage.frozen"
+    if cov is not None:
+        frozen_env["LOKY_FROZEN_COVERAGE"] = str(frozen_data_file)
+        frozen_env["LOKY_FROZEN_COVERAGE_BRANCH"] = str(
+            cov.get_option("run:branch")
+        ).lower()
+
     frozen = subprocess.run(
         [str(executable), "--parent-process"],
+        env=frozen_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -600,3 +638,32 @@ def test_freeze_support_with_pyinstaller(tmp_path):
     expected_stdout = "45\n332833500\n"
     assert frozen.stdout == non_frozen.stdout == expected_stdout
     assert frozen.stderr == non_frozen.stderr == ""
+
+    if cov is not None:
+        import inspect
+
+        from loky.backend import spawn
+
+        frozen_cov = coverage.Coverage(
+            config_file=False, data_file=str(frozen_data_file)
+        )
+        # Report against checkout sources after the onefile bundle is removed.
+        frozen_cov.set_option(
+            "paths",
+            {
+                "loky": [
+                    os.path.join(loky_project_path, "loky"),
+                    "*/_MEI*/loky",
+                ]
+            },
+        )
+        frozen_cov.combine(strict=True)
+        frozen_data = frozen_cov.get_data()
+        # Only frozen children parse these arguments; the reference run cannot
+        # satisfy this assertion or contribute to this separate data file.
+        lines, first_line = inspect.getsourcelines(spawn.freeze_support)
+        parse_line = first_line + next(
+            i for i, line in enumerate(lines) if "kwargs[k] = v" in line
+        )
+        assert parse_line in (frozen_data.lines(spawn.__file__) or [])
+        cov.get_data().update(frozen_data)

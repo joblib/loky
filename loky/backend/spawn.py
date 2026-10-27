@@ -11,7 +11,6 @@ import sys
 import runpy
 import textwrap
 import types
-import ast
 import importlib
 from multiprocessing import process, util
 from multiprocessing import freeze_support as mp_freeze_support
@@ -39,18 +38,6 @@ def get_executable():
     return _python_exe
 
 
-def _format_arg(name, value):
-    return f"{name}={value!r}"
-
-
-def _parse_arg(arg):
-    name, value = arg.split("=", 1)
-    try:
-        return name, ast.literal_eval(value)
-    except (SyntaxError, ValueError):
-        return name, value
-
-
 def _is_loky_forking(argv):
     return len(argv) >= 3 and argv[1] == LOKY_FORK_MARKER
 
@@ -62,21 +49,26 @@ def get_command_line(main_module, *, extra_args=(), **kwargs):
     only works with a module exposing a main function.
     """
     if getattr(sys, "frozen", False):
-        return [
+        # For frozen executables, add flag '--loky-fork' to notify
+        # the `freeze_support` function and pass the arguments as 'key=value'
+        # so they can be used to call main.
+        list_kwargs = [f"{k}={v}" for k, v in kwargs.items()]
+        argv = [
             sys.executable,
             LOKY_FORK_MARKER,
             main_module,
-            *[_format_arg(name, value) for name, value in kwargs.items()],
+            *list_kwargs,
         ]
-
-    prog = (
-        f"from {main_module} import main; import sys; "
-        f"sys.exit(main("
-        f"{', '.join(_format_arg(name, value) for name, value in kwargs.items())}"
-        f"))"
-    )
-    opts = util._args_from_interpreter_flags()
-    return [get_executable(), *opts, "-c", prog, *extra_args]
+    else:
+        # Quote arguments as Python literals in the non-frozen command.
+        list_kwargs = [f"{k}={v!r}" for k, v in kwargs.items()]
+        prog = (
+            f"from {main_module} import main; import sys; "
+            f'sys.exit(main({", ".join(list_kwargs)}))'
+        )
+        opts = util._args_from_interpreter_flags()
+        argv = [get_executable(), *opts, "-c", prog, *extra_args]
+    return argv
 
 
 def freeze_support():
@@ -87,11 +79,14 @@ def freeze_support():
     avoid recursive process spawning.
     """
     if _is_loky_forking(sys.argv):
-        main_module = sys.argv[2]
-        kwargs = dict(_parse_arg(arg) for arg in sys.argv[3:])
-        main = importlib.import_module(main_module).main
-        sys.exit(main(**kwargs))
-
+        module_main = sys.argv[2]
+        main = importlib.import_module(module_main).main
+        kwargs = {}
+        for p in sys.argv[3:]:
+            k, v = p.split("=", 1)
+            kwargs[k] = v
+        exitcode = main(**kwargs)
+        sys.exit(exitcode)
     mp_freeze_support()
 
 

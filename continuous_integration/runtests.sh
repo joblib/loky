@@ -11,6 +11,20 @@ python -c "import loky; print('loky.cpu_count():', loky.cpu_count())"
 python -c "import os; print('os.cpu_count():', os.cpu_count())"
 
 
+run_pytest_with_coverage() {
+    local pytest_status=0 coverage_status=0
+    pytest "$@" || pytest_status=$?
+
+    # Trackers can save coverage during interpreter shutdown, after pytest's
+    # report. Regenerating XML also combines these late parallel data files.
+    python -m coverage xml || coverage_status=$?
+    if [[ "$pytest_status" -ne 0 ]]; then
+        return "$pytest_status"
+    fi
+    return "$coverage_status"
+}
+
+
 if [[ "$JOBLIB_TESTS" == "true" ]]; then
     # Install joblib from pip, patch it to use this version of loky
     # and run the joblib tests with pytest.
@@ -30,16 +44,13 @@ if [[ "$JOBLIB_TESTS" == "true" ]]; then
     pytest -vl --ignore $JOBLIB/externals --pyargs joblib
 elif [[ "$PYINSTALLER_TESTS" == "true" ]]; then
     PYTEST_ARGS="-vl --timeout=300 --maxfail=1 --cov=loky --cov-report xml"
-    pytest $PYTEST_ARGS tests/test_loky_module.py -k freeze
+    run_pytest_with_coverage $PYTEST_ARGS tests/test_loky_module.py -k freeze
 else
     # Make sure that we have the python docker image cached locally to avoid
     # a timeout in a test that needs it.
     if [[ "$(which docker)" != "" ]] && [[ "$(uname)" = "Linux" ]]; then
         docker pull python:3.10
     fi
-
-    # Enable coverage reporting from subprocesses.
-    python continuous_integration/install_coverage_subprocess_pth.py
 
     PYTEST_ARGS="-vl --timeout=120 --maxfail=5 --cov=loky --cov-report xml"
 
@@ -52,5 +63,5 @@ else
 
     # Run the tests and collect trace coverage data both in the subprocesses
     # and its subprocesses.
-    pytest $PYTEST_ARGS .
+    run_pytest_with_coverage $PYTEST_ARGS .
 fi
