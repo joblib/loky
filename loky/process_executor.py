@@ -746,7 +746,10 @@ class _ExecutorManagerThread(threading.Thread):
         result_reader = self.result_queue._reader
         wakeup_reader = self.thread_wakeup._reader
         readers = [result_reader, wakeup_reader]
-        worker_sentinels = [p.sentinel for p in list(self.processes.values())]
+        with self.processes_management_lock:
+            worker_sentinels = [
+                p.sentinel for p in list(self.processes.values())
+            ]
         ready = wait(readers + worker_sentinels)
 
         bpe = None
@@ -1289,7 +1292,8 @@ class ProcessPoolExecutor(Executor):
         if self._executor_manager_thread is None:
             mp.util.debug("_start_executor_manager_thread called")
 
-            # Start the processes so that their sentinels are known.
+            # At least one process must be started so that its sentinel is
+            # available to the executor manager thread.
             self._executor_manager_thread = _ExecutorManagerThread(self)
             self._executor_manager_thread.start()
 
@@ -1340,6 +1344,15 @@ class ProcessPoolExecutor(Executor):
             p._worker_exit_lock = worker_exit_lock
             p.start()
             self._processes[p.pid] = p
+            if (
+                self._executor_manager_thread is None
+                and self._context.get_start_method() != "fork"
+            ):
+                # Dispatch pending work as soon as the first worker can consume
+                # it, while the remaining workers are still being started. A
+                # fork context cannot safely start more processes after this
+                # creates the executor manager thread.
+                self._start_executor_manager_thread()
         mp.util.debug(
             f"Adjusted process count to {self._max_workers}: "
             f"{[(p.name, pid) for pid, p in self._processes.items()]}"
