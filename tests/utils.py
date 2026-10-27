@@ -13,7 +13,6 @@ from _multiprocessing import sem_unlink
 
 from loky.backend import resource_tracker
 
-
 _rand_name = _RandomNameSequence()
 
 

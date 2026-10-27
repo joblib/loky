@@ -23,7 +23,6 @@ from multiprocessing.context import assert_spawning
 
 from .reduction import dumps
 
-
 __all__ = ["Queue", "SimpleQueue", "Full"]
 
 

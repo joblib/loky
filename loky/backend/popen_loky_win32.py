@@ -9,7 +9,6 @@ from multiprocessing.popen_spawn_win32 import Popen as _Popen
 
 from . import reduction, spawn
 
-
 __all__ = ["Popen"]
 
 #

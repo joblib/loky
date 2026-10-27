@@ -14,7 +14,6 @@ from multiprocessing.context import set_spawning_popen
 
 from . import reduction, resource_tracker, spawn
 
-
 __all__ = ["Popen"]
 
 

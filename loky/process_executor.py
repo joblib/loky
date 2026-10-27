@@ -54,7 +54,6 @@ Process #1..n:
   _ResultItems in "Result Q"
 """
 
-
 __author__ = "Thomas Moreau (thomas.moreau.2010@gmail.com)"
 
 
@@ -85,7 +84,6 @@ from .backend.queues import Queue, SimpleQueue
 from .backend.reduction import set_loky_pickler, get_loky_pickler_name
 from .backend.utils import kill_process_tree, get_exitcodes_terminated_worker
 from .initializers import _prepare_initializer
-
 
 # Mechanism to prevent infinite process spawning. When a worker of a
 # ProcessPoolExecutor nested in MAX_DEPTH Executor tries to create a new

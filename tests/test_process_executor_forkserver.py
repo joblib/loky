@@ -5,7 +5,6 @@ from loky.backend import get_context
 
 from ._executor_mixin import ExecutorMixin
 
-
 if sys.platform != "win32":
     from ._test_process_executor import (
         AsCompletedTests,
