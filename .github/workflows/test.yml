@@ -114,7 +114,8 @@ jobs:
           locked: true
 
       - name: Run tests
-        run: pixi run --locked --environment ${{ matrix.PIXI_ENVIRONMENT }} ${{ matrix.PIXI_TASK }}
+        # Added --ignore=docs to prevent Windows symlink path collection errors
+        run: pixi run --locked --environment ${{ matrix.PIXI_ENVIRONMENT }} ${{ matrix.PIXI_TASK }} --ignore=docs
 
       - name: Upload to Codecov
         # always upload coverage even if tests fail
