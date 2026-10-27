@@ -3,7 +3,7 @@
 # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#package-ecosystem
 # According to https://github.com/scientific-python/specs/pull/325 release critical
 # workflows such as pypa/gh-action-pypi-publish should use hash-based versioning for
-# security reasons. 
+# security reasons.
 version: 2
 updates:
   - package-ecosystem: github-actions

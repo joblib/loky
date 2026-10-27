@@ -32,7 +32,12 @@ except ImportError:
     psutil = None
 
 from ._executor_mixin import ReusableExecutorMixin
-from .utils import TimingWrapper, check_python_subprocess_call, filter_match, id_sleep
+from .utils import (
+    TimingWrapper,
+    check_python_subprocess_call,
+    filter_match,
+    id_sleep,
+)
 
 cloudpickle_version = Version(cloudpickle.__version__)
 
