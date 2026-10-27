@@ -32,6 +32,7 @@ from loky.process_executor import (
     BrokenProcessPool,
     ShutdownExecutorError,
     TerminatedWorkerError,
+    _get_max_memory_leak_size,
 )
 from loky._base import Future
 
@@ -1340,3 +1341,43 @@ def _custom_initializer():
     use cloudpickle to pickle the initializer.
     """
     loky._custom_global_var = 42
+
+
+_MAX_MEMORY_LEAK_SIZE_ENV_VAR = "LOKY_MAX_MEMORY_LEAK_SIZE"
+_DEFAULT_MAX_MEMORY_LEAK_SIZE = 300 * 1024 * 1024
+
+
+def test_max_memory_leak_size_is_read_dynamically(monkeypatch):
+    # The value must be re-read from os.environ on every call, without
+    # re-importing the module.
+    monkeypatch.delenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, raising=False)
+    assert _get_max_memory_leak_size() == _DEFAULT_MAX_MEMORY_LEAK_SIZE
+
+    monkeypatch.setenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, "123456789")
+    assert _get_max_memory_leak_size() == 123456789
+
+    # Changing the variable again is picked up by the very next call.
+    monkeypatch.setenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, "42")
+    assert _get_max_memory_leak_size() == 42
+
+    # Float notation such as "3e8" keeps working.
+    monkeypatch.setenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, "3e8")
+    assert _get_max_memory_leak_size() == int(3e8)
+
+    # Removing the variable restores the default.
+    monkeypatch.delenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR)
+    assert _get_max_memory_leak_size() == _DEFAULT_MAX_MEMORY_LEAK_SIZE
+
+    # The helper is not a stale import-time snapshot: the old static
+    # constant is gone from the module.
+    assert not hasattr(process_executor, "_MAX_MEMORY_LEAK_SIZE")
+
+
+@pytest.mark.parametrize(
+    "bad_value", ["", "abc", "12MB", "nan", "inf", "-inf"]
+)
+def test_max_memory_leak_size_falls_back_on_malformed_value(
+    monkeypatch, bad_value
+):
+    monkeypatch.setenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, bad_value)
+    assert _get_max_memory_leak_size() == _DEFAULT_MAX_MEMORY_LEAK_SIZE
