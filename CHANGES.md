@@ -1,5 +1,8 @@
 ### 3.8.0 - In development
 
+- Preserve instance attributes and recursive state when sending
+  ``functools.partial`` callbacks to workers.
+
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
   runs out of file descriptors (``EMFILE``). (#668)
