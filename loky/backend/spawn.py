@@ -11,7 +11,11 @@ import sys
 import runpy
 import textwrap
 import types
+import importlib
 from multiprocessing import process, util
+from multiprocessing import freeze_support as mp_freeze_support
+
+LOKY_FORK_MARKER = "--loky-fork"
 
 
 if sys.platform != "win32":
@@ -32,6 +36,58 @@ else:
 
 def get_executable():
     return _python_exe
+
+
+def _is_loky_forking(argv):
+    return len(argv) >= 3 and argv[1] == LOKY_FORK_MARKER
+
+
+def get_command_line(main_module, *, extra_args=(), **kwargs):
+    """
+    Returns a command line used for spawning a child process.
+    This command provides supports for frozen executables and
+    only works with a module exposing a main function.
+    """
+    if getattr(sys, "frozen", False):
+        # For frozen executables, add flag '--loky-fork' to notify
+        # the `freeze_support` function and pass the arguments as 'key=value'
+        # so they can be used to call main.
+        list_kwargs = [f"{k}={v}" for k, v in kwargs.items()]
+        argv = [
+            sys.executable,
+            LOKY_FORK_MARKER,
+            main_module,
+            *list_kwargs,
+        ]
+    else:
+        # Quote arguments as Python literals in the non-frozen command.
+        list_kwargs = [f"{k}={v!r}" for k, v in kwargs.items()]
+        prog = (
+            f"from {main_module} import main; import sys; "
+            f'sys.exit(main({", ".join(list_kwargs)}))'
+        )
+        opts = util._args_from_interpreter_flags()
+        argv = [get_executable(), *opts, "-c", prog, *extra_args]
+    return argv
+
+
+def freeze_support():
+    """Run code for the child workers when necessary.
+    This helper allows the frozen executable to call the code for the child
+    workers when not in the main process.
+    It should be called right after the beginning of the programme, to
+    avoid recursive process spawning.
+    """
+    if _is_loky_forking(sys.argv):
+        module_main = sys.argv[2]
+        main = importlib.import_module(module_main).main
+        kwargs = {}
+        for p in sys.argv[3:]:
+            k, v = p.split("=", 1)
+            kwargs[k] = v
+        exitcode = main(**kwargs)
+        sys.exit(exitcode)
+    mp_freeze_support()
 
 
 def _check_not_importing_main():

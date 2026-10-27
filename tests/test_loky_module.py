@@ -3,6 +3,7 @@ import os
 import sys
 import shutil
 import subprocess
+import textwrap
 import warnings
 from subprocess import check_output
 from unittest.mock import patch, mock_open
@@ -507,3 +508,162 @@ def test_cpu_count_cgroup_invalid_content(read_data, description):
             assert (
                 result == os_cpu_count
             ), f"cpu.max with {description} should return os_cpu_count"
+
+
+def test_freeze_support_with_pyinstaller(tmp_path):
+    if sys.implementation.name != "cpython":
+        pytest.skip("PyInstaller support is only tested on CPython")
+
+    pyinstaller = shutil.which("pyinstaller")
+    if pyinstaller is None:
+        pytest.skip("PyInstaller is not installed")
+
+    try:
+        import coverage
+    except ImportError:
+        cov = None
+    else:
+        cov = coverage.Coverage.current()
+
+    loky_project_path = os.path.abspath(
+        os.path.join(os.path.dirname(loky.__file__), os.pardir)
+    )
+    source = tmp_path / "frozen_loky.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            import argparse
+            import os
+
+            # Frozen interpreters do not load the environment's coverage .pth.
+            if os.environ.get("LOKY_FROZEN_COVERAGE"):
+                import atexit
+                import coverage
+
+                cov = coverage.Coverage(
+                    config_file=False,
+                    data_file=os.environ["LOKY_FROZEN_COVERAGE"],
+                    data_suffix=True,
+                    branch=os.environ["LOKY_FROZEN_COVERAGE_BRANCH"] == "true",
+                    source_pkgs=["loky"],
+                )
+                cov.start()
+
+                def save_coverage():
+                    cov.stop()
+                    cov.save()
+
+                atexit.register(save_coverage)
+
+            import loky
+
+
+            def main():
+                parser = argparse.ArgumentParser()
+                parser.add_argument("--parent-process", action="store_true")
+                args = parser.parse_args()
+                if not args.parent_process:
+                    raise RuntimeError("main() was called in a child process")
+
+                executor = loky.get_reusable_executor(max_workers=2)
+                try:
+                    print(sum(executor.map(int, range(10))))
+                    print(sum(executor.map(lambda x: x ** 2, range(1000))))
+                finally:
+                    executor.shutdown(wait=True)
+
+
+            if __name__ == "__main__":
+                loky.freeze_support()
+                main()
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    python_cmd = [sys.executable, str(source), "--parent-process"]
+    non_frozen = subprocess.run(
+        python_cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+        timeout=60,
+    )
+
+    subprocess.run(
+        [
+            pyinstaller,
+            "--noconfirm",
+            "--onefile",
+            "--distpath",
+            str(tmp_path / "dist"),
+            "--workpath",
+            str(tmp_path / "build"),
+            "--specpath",
+            str(tmp_path),
+            "--paths",
+            loky_project_path,
+            str(source),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+        timeout=240,
+    )
+
+    executable = tmp_path / "dist" / "frozen_loky"
+    if sys.platform == "win32":
+        executable = executable.with_suffix(".exe")
+
+    frozen_env = os.environ.copy()
+    frozen_data_file = tmp_path / ".coverage.frozen"
+    if cov is not None:
+        frozen_env["LOKY_FROZEN_COVERAGE"] = str(frozen_data_file)
+        frozen_env["LOKY_FROZEN_COVERAGE_BRANCH"] = str(
+            cov.get_option("run:branch")
+        ).lower()
+
+    frozen = subprocess.run(
+        [str(executable), "--parent-process"],
+        env=frozen_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+
+    expected_stdout = "45\n332833500\n"
+    assert frozen.stdout == non_frozen.stdout == expected_stdout
+    assert frozen.stderr == non_frozen.stderr == ""
+
+    if cov is not None:
+        import inspect
+
+        from loky.backend import spawn
+
+        frozen_cov = coverage.Coverage(
+            config_file=False, data_file=str(frozen_data_file)
+        )
+        # Report against checkout sources after the onefile bundle is removed.
+        frozen_cov.set_option(
+            "paths",
+            {
+                "loky": [
+                    os.path.join(loky_project_path, "loky"),
+                    "*/_MEI*/loky",
+                ]
+            },
+        )
+        frozen_cov.combine(strict=True)
+        frozen_data = frozen_cov.get_data()
+        # Only frozen children parse these arguments; the reference run cannot
+        # satisfy this assertion or contribute to this separate data file.
+        lines, first_line = inspect.getsourcelines(spawn.freeze_support)
+        parse_line = first_line + next(
+            i for i, line in enumerate(lines) if "kwargs[k] = v" in line
+        )
+        assert parse_line in (frozen_data.lines(spawn.__file__) or [])
+        cov.get_data().update(frozen_data)

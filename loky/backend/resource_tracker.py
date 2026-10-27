@@ -150,6 +150,7 @@ class ResourceTracker(StdLibResourceTracker):
 
     def __init__(self):
         super().__init__()
+        self._read_handle = None
         # Windows process handle returned by CreateProcess.  A pid cannot be
         # passed to os.waitpid on Windows because the underlying _cwait expects
         # a process handle.
@@ -175,11 +176,23 @@ class ResourceTracker(StdLibResourceTracker):
             self._pid = None
             self._exitcode = None
             self._proc_handle = None
+            self._close_read_handle(_winapi.CloseHandle)
 
             warnings.warn(
                 "resource_tracker: process died unexpectedly, "
                 "relaunching.  Some resources might leak."
             )
+
+    def _close_read_handle(self, close_handle):
+        if self._read_handle is None:
+            return
+
+        try:
+            close_handle(self._read_handle)
+        except OSError:
+            pass
+        finally:
+            self._read_handle = None
 
     # To minimize the diff with stdlib ResourceTracker._launch
     # fmt: off
@@ -187,29 +200,24 @@ class ResourceTracker(StdLibResourceTracker):
         # This is copied from Python 3.14.7 with loky additions/modifications
         # mostly for Windows support and logging.
         # Added or changed lines have a comment that starts with "# loky:"
+        # loky: Windows children duplicate the pipe instead of inheriting handles.
+        if sys.platform == "win32":
+            return self._launch_win32()
+
         fds_to_pass = []
         try:
             fds_to_pass.append(sys.stderr.fileno())
         except Exception:
             pass
         r, w = os.pipe()
-        # loky: Windows support
-        if sys.platform == "win32":
-            _r = duplicate(msvcrt.get_osfhandle(r), inheritable=True)
-            os.close(r)
-            r = _r
-
         try:
             fds_to_pass.append(r)
             # process will out live us, so no need to wait on pid
-            exe = spawn.get_executable()
-            args = [
-                exe,
-                *util._args_from_interpreter_flags(),
-                '-c',
-                # loky: use loky main function rather than stdlib one
-                f'from {main.__module__} import main; main({r}, {VERBOSE})'
-            ]
+            # loky: dispatch helpers through freeze_support in frozen executables.
+            args = spawn.get_command_line(
+                main.__module__, fd=r, verbose=int(VERBOSE)
+            )
+            exe = args[0]
             # loky: logging
             util.debug(f"launching resource tracker: {args}")
             # bpo-33613: Register a signal mask that will block the signals.
@@ -235,12 +243,40 @@ class ResourceTracker(StdLibResourceTracker):
             self._pid = pid
             self._proc_handle = proc_handle
         finally:
-            # loky: Windows support
-            if sys.platform == "win32":
-                _winapi.CloseHandle(r)
-            else:
-                os.close(r)
+            os.close(r)
     # fmt: on
+
+    def _launch_win32(self):
+        self._close_read_handle(_winapi.CloseHandle)
+        rhandle = whandle = None
+        w = None
+        try:
+            rhandle, whandle = _winapi.CreatePipe(None, 0)
+            w = msvcrt.open_osfhandle(whandle, 0)
+            whandle = None
+
+            args = spawn.get_command_line(
+                main.__module__,
+                pipe_handle=rhandle,
+                parent_pid=os.getpid(),
+                verbose=int(VERBOSE),
+            )
+            util.debug(f"launching resource tracker: {args}")
+            pid, proc_handle = spawnv_passfds(args[0], args, [])
+        except BaseException:
+            if w is not None:
+                os.close(w)
+            if whandle is not None:
+                _winapi.CloseHandle(whandle)
+            if rhandle is not None:
+                _winapi.CloseHandle(rhandle)
+            raise
+        else:
+            self._fd = w
+            self._pid = pid
+            self._proc_handle = proc_handle
+            # Keep the read handle alive until the child can duplicate it.
+            self._read_handle = rhandle
 
     if sys.platform == "win32":
         # stdlib ResourceTracker._stop_locked is POSIX-specific, so we override
@@ -297,6 +333,7 @@ class ResourceTracker(StdLibResourceTracker):
                 if proc_handle is not None:
                     close_handle(proc_handle)
                 self._proc_handle = None
+                self._close_read_handle(close_handle)
 
 
 # Copied from Python 3.14.7
@@ -317,9 +354,31 @@ if hasattr(os, 'register_at_fork'):
 # The main function has been copied from Python 3.14.7 and modified, mostly for
 # Windows support, logging and refcount functionality.
 # Added or changed lines have a comment that starts with "# loky:"
-# loky: add verbose argument for logging
-def main(fd, verbose=0):
+# loky: accept named helper arguments for frozen executables and Windows pipes
+def main(fd=None, verbose=0, pipe_handle=None, parent_pid=None):
     '''Run resource tracker.'''
+
+    # loky: duplicate the parent's pipe without inheriting unrelated handles.
+    verbose = int(verbose)
+    if sys.platform == "win32":
+        if pipe_handle is None:
+            pipe_handle = fd
+        pipe_handle = int(pipe_handle)
+        if parent_pid is None:
+            fd = msvcrt.open_osfhandle(pipe_handle, os.O_RDONLY)
+        else:
+            source_process = _winapi.OpenProcess(
+                _winapi.SYNCHRONIZE | _winapi.PROCESS_DUP_HANDLE,
+                False,
+                int(parent_pid),
+            )
+            try:
+                handle = duplicate(pipe_handle, source_process=source_process)
+            finally:
+                _winapi.CloseHandle(source_process)
+            fd = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+    else:
+        fd = int(fd)
 
     # loky: logging
     if verbose:
@@ -349,9 +408,6 @@ def main(fd, verbose=0):
     exit_code = 0
 
     try:
-        # loky: Windows support
-        if sys.platform == "win32":
-            fd = msvcrt.open_osfhandle(fd, os.O_RDONLY)
         # keep track of registered/unregistered resources
         with open(fd, 'rb') as f:
             for line in f:
@@ -509,11 +565,10 @@ def spawnv_passfds(path, args, passfds):
         path = path.encode("utf-8")
         return util.spawnv_passfds(path, args, passfds), None
     else:
-        # loky: Windows support
-        passfds = sorted(passfds)
+        # The child duplicates its pipe from the parent process.
         cmd = " ".join(f'"{x}"' for x in args)
         hp, ht, pid, _ = _winapi.CreateProcess(
-            path, cmd, None, None, True, 0, None, None, None
+            path, cmd, None, None, False, 0, None, None, None
         )
         _winapi.CloseHandle(ht)
         # Keep the process handle for a safe wait during teardown.  Pids and

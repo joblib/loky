@@ -43,6 +43,16 @@ compilers = "*"
 [feature.psutil.dependencies]
 psutil = "*"
 
+[feature.pyinstaller.dependencies]
+pyinstaller = "*"
+
+[feature.pyinstaller.tasks]
+test-pyinstaller = {
+    cmd = "bash continuous_integration/runtests.sh",
+    default-environment = "py313-pyinstaller",
+    env = { PYINSTALLER_TESTS = "true" }
+}
+
 [feature.py310.dependencies]
 python = "3.10.*"
 
@@ -97,6 +107,7 @@ lint = { features = ["lint"], no-default-feature = true }
 py310 = ["test", "psutil", "py310"]
 py310-no-psutil = ["test", "py310"]
 py313 = ["test", "psutil", "py313"]
+py313-pyinstaller = ["test", "psutil", "py313", "pyinstaller"]
 py313-viztracer = ["test", "psutil", "py313", "viztracer"]
 py314 = ["test", "psutil", "py314", "macos-windows"]
 py314-free-threaded = ["test", "psutil", "free-threaded"]

@@ -11,9 +11,11 @@ import re
 import signal
 import subprocess
 import sys
+import textwrap
 import time
 import warnings
 import weakref
+from types import SimpleNamespace
 
 from loky import ProcessPoolExecutor
 import loky.backend.resource_tracker as resource_tracker
@@ -51,6 +53,7 @@ class _RecordingWinapi:
     ):
         self.waited = []
         self.closed = []
+        self.created = []
         self._create_process = create_process
         self._wait_result = wait_result
         self._exit_code = exit_code
@@ -66,14 +69,16 @@ class _RecordingWinapi:
         self.closed.append(handle)
 
     def CreateProcess(self, *args):
+        self.created.append(args)
         return self._create_process
 
 
-def _make_stopped_tracker(handle=42):
+def _make_stopped_tracker(handle=42, read_handle=None):
     tracker = resource_tracker.ResourceTracker()
     r, w = os.pipe()
     os.close(r)
     tracker._fd, tracker._pid, tracker._proc_handle = w, 123456, handle
+    tracker._read_handle = read_handle
     return tracker, w
 
 
@@ -146,6 +151,52 @@ class TestResourceTracker:
 
         pattern = f"KeyError: '{filename}'"
         assert pattern not in p.stderr
+
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="Windows specific test"
+    )
+    def test_resource_tracker_does_not_inherit_unrelated_handles(self):
+        cmd = textwrap.dedent(
+            """
+            import _winapi
+            import os
+            import sys
+
+            from loky.backend import resource_tracker
+
+            rhandle, whandle = _winapi.CreatePipe(None, 0)
+            try:
+                os.set_handle_inheritable(whandle, True)
+                resource_tracker.ensure_running()
+                _winapi.CloseHandle(whandle)
+                whandle = None
+
+                try:
+                    _winapi.PeekNamedPipe(rhandle, 0)
+                except BrokenPipeError:
+                    pass
+                else:
+                    raise RuntimeError(
+                        "resource tracker inherited an unrelated handle"
+                    )
+            finally:
+                try:
+                    resource_tracker._resource_tracker._stop()
+                finally:
+                    if whandle is not None:
+                        _winapi.CloseHandle(whandle)
+                    _winapi.CloseHandle(rhandle)
+            """
+        )
+
+        p = subprocess.run(
+            [sys.executable, "-c", cmd],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30,
+        )
+        assert p.returncode == 0, p.stderr
 
     # The following four tests are inspired from cpython _test_multiprocessing
     @pytest.mark.parametrize("rtype", ["file", "folder", "semlock"])
@@ -396,7 +447,7 @@ class TestResourceTracker:
     )
     def test_resource_tracker_stop_win32_waits_on_handle(self):
         winapi = _RecordingWinapi(exit_code=7)
-        tracker, w = _make_stopped_tracker()
+        tracker, w = _make_stopped_tracker(read_handle=44)
 
         timeout_in_seconds = 0.5
         timeout_in_milliseconds = 1000 * timeout_in_seconds
@@ -409,11 +460,12 @@ class TestResourceTracker:
         )
 
         assert winapi.waited == [(42, timeout_in_milliseconds)]
-        assert winapi.closed == [42]
+        assert winapi.closed == [42, 44]
         assert tracker._fd is None
         assert tracker._pid is None
         assert tracker._exitcode == 7
         assert tracker._proc_handle is None
+        assert tracker._read_handle is None
         with pytest.raises(OSError):
             os.close(w)
 
@@ -422,7 +474,7 @@ class TestResourceTracker:
     )
     def test_resource_tracker_stop_win32_timeout(self):
         winapi = _RecordingWinapi(wait_result=_RecordingWinapi.WAIT_TIMEOUT)
-        tracker, _ = _make_stopped_tracker()
+        tracker, _ = _make_stopped_tracker(read_handle=44)
 
         tracker._stop_locked(
             wait_for_single_object=winapi.WaitForSingleObject,
@@ -436,23 +488,30 @@ class TestResourceTracker:
         assert tracker._exitcode is None
         assert tracker._waitpid_timed_out
         assert tracker._proc_handle is None
-        assert winapi.closed == [42]
+        assert tracker._read_handle is None
+        assert winapi.closed == [42, 44]
 
     @pytest.mark.parametrize("handle", [42, None])
+    @pytest.mark.parametrize("read_handle", [44, None])
     def test_resource_tracker_relaunch_closes_handle(
-        self, monkeypatch, handle
+        self, monkeypatch, handle, read_handle
     ):
         winapi = _RecordingWinapi()
         monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
         monkeypatch.setattr(os, "name", "nt")
         monkeypatch.setattr(sys, "platform", "win32")
-        tracker, _ = _make_stopped_tracker(handle=handle)
+        tracker, _ = _make_stopped_tracker(
+            handle=handle, read_handle=read_handle
+        )
 
         with pytest.warns(UserWarning, match="died unexpectedly"):
             tracker._teardown_dead_process()
 
-        assert winapi.closed == ([] if handle is None else [handle])
+        assert winapi.closed == [
+            value for value in (handle, read_handle) if value is not None
+        ]
         assert tracker._proc_handle is None
+        assert tracker._read_handle is None
 
     def test_spawnv_passfds_keeps_process_handle(self, monkeypatch):
         winapi = _RecordingWinapi(create_process=(42, 43, 123456, 0))
@@ -464,6 +523,66 @@ class TestResourceTracker:
             42,
         )
         assert winapi.closed == [43]
+        assert winapi.created[0][4] is False
+
+    @pytest.mark.parametrize("spawn_fails", [False, True])
+    def test_resource_tracker_launch_win32_handles(
+        self, monkeypatch, spawn_fails
+    ):
+        tracker = resource_tracker.ResourceTracker()
+        winapi = _RecordingWinapi(create_process=(42, 43, 123456, 0))
+        monkeypatch.setattr(
+            winapi, "CreatePipe", lambda *args: (10, 11), raising=False
+        )
+        if spawn_fails:
+
+            def fail_create_process(*args):
+                raise OSError("process creation failed")
+
+            monkeypatch.setattr(winapi, "CreateProcess", fail_create_process)
+
+        closed_fds = []
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(
+            resource_tracker,
+            "msvcrt",
+            SimpleNamespace(open_osfhandle=lambda handle, flags: 12),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            resource_tracker,
+            "os",
+            SimpleNamespace(getpid=lambda: 123, close=closed_fds.append),
+        )
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+        try:
+            if spawn_fails:
+                with pytest.raises(OSError, match="process creation failed"):
+                    tracker._launch_win32()
+                assert winapi.closed == [10]
+                assert closed_fds == [12]
+                assert tracker._fd is None
+                assert tracker._pid is None
+                assert tracker._proc_handle is None
+                assert tracker._read_handle is None
+            else:
+                tracker._launch_win32()
+                assert tracker._fd == 12
+                assert tracker._pid == 123456
+                assert tracker._proc_handle == 42
+                assert tracker._read_handle == 10
+                assert winapi.closed == [43]
+                assert closed_fds == []
+                args = winapi.created[0]
+                assert args[4] is False
+                assert "--loky-fork" in args[1]
+                assert "pipe_handle=10" in args[1]
+                assert "parent_pid=123" in args[1]
+        finally:
+            # All handles above are stand-ins, not operating system resources.
+            tracker._fd = tracker._pid = None
+            tracker._proc_handle = tracker._read_handle = None
 
     def test_loky_process_inherit_multiprocessing_resource_tracker(self):
         cmd = """if 1:
