@@ -32,7 +32,7 @@ else
     # Make sure that we have the python docker image cached locally to avoid
     # a timeout in a test that needs it.
     if [[ "$(which docker)" != "" ]] && [[ "$(uname)" = "Linux" ]]; then
-        docker pull python:3.10
+        docker pull python:3.11
     fi
 
     # Enable coverage reporting from subprocesses.

@@ -202,7 +202,7 @@ def test_cpu_count_cgroup_limit():
     # Check if Docker can actually set cgroup CPU limits in this environment
     # by verifying that --cpus flag writes to cgroup files
     cgroup_check = check_output(
-        f'{docker_bin} run --rm --cpus 0.5 python:3.10 python3 -c "'
+        f'{docker_bin} run --rm --cpus 0.5 python:3.11 python3 -c "'
         "import os; "
         "v2 = '/sys/fs/cgroup/cpu.max'; "
         "v1_quota = '/sys/fs/cgroup/cpu/cpu.cfs_quota_us'; "
@@ -219,7 +219,7 @@ def test_cpu_count_cgroup_limit():
             "Docker doesn't properly set cgroup CPU limits in this environment"
         )
 
-    # The following will always run using the Python 3.10 docker image.
+    # The following will always run using the Python 3.11 docker image.
     # We mount the loky source as /loky inside the container,
     # so it can be imported when running commands under /
 
@@ -227,7 +227,7 @@ def test_cpu_count_cgroup_limit():
     # always detect 1 CPU because it rounds up to the next integer.
     res_500_mCPU = int(
         check_output(
-            f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.10 "
+            f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.11 "
             f"/bin/bash -c 'pip install --quiet -e /loky ; "
             f"python -c \"{cpu_count_cmd.format(args='')}\"'",
             shell=True,
@@ -240,7 +240,7 @@ def test_cpu_count_cgroup_limit():
     # 2 if there are 2 CPUs or more.
     res_1500_mCPU = int(
         check_output(
-            f"{docker_bin} run --rm --cpus 1.5 -v {loky_project_path}:/loky python:3.10 "
+            f"{docker_bin} run --rm --cpus 1.5 -v {loky_project_path}:/loky python:3.11 "
             f"/bin/bash -c 'pip install --quiet -e /loky ; "
             f"python -c \"{cpu_count_cmd.format(args='')}\"'",
             shell=True,
@@ -252,7 +252,7 @@ def test_cpu_count_cgroup_limit():
     # By default there is no limit: use all available CPUs.
     res_default = int(
         check_output(
-            f"{docker_bin} run --rm -v {loky_project_path}:/loky python:3.10 "
+            f"{docker_bin} run --rm -v {loky_project_path}:/loky python:3.11 "
             f"/bin/bash -c 'pip install --quiet -e /loky ; "
             f"python -c \"{cpu_count_cmd.format(args='')}\"'",
             shell=True,
