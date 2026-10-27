@@ -10,7 +10,6 @@
 #
 import copyreg
 import io
-import functools
 import types
 import sys
 import os
@@ -60,17 +59,6 @@ def _reduce_method_descriptor(m):
 register(type(list.append), _reduce_method_descriptor)
 register(type(int.__add__), _reduce_method_descriptor)
 
-
-# Make partial func pickable
-def _reduce_partial(p):
-    return p.__reduce__()
-
-
-def _rebuild_partial(func, args, keywords):
-    return functools.partial(func, *args, **keywords)
-
-
-register(functools.partial, _reduce_partial)
 
 if sys.platform != "win32":
     from ._posix_reduction import _mk_inheritable  # noqa: F401
