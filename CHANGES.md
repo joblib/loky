@@ -1,5 +1,12 @@
 ### 3.8.0 - In development
 
+- Fix unpickling dynamic classes that store references to their own bound
+  methods, such as Pydantic validation callbacks, by no longer registering a
+  loky-specific reducer for bound methods. With the default cloudpickle
+  pickler, a classmethod of an importable class is now pickled as
+  ``cloudpickle.dumps`` pickles it, with its function by value, so it no
+  longer sees module globals changed in the worker. (#672, joblib/joblib#1732)
+
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
   runs out of file descriptors (``EMFILE``). (#668)
