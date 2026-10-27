@@ -14,9 +14,12 @@ process.
 import sys
 import time
 import traceback
-from loky import set_loky_pickler
-from loky import get_reusable_executor
-from loky import wrap_non_picklable_objects
+
+from loky import (
+    get_reusable_executor,
+    set_loky_pickler,
+    wrap_non_picklable_objects,
+)
 
 ###############################################################################
 # First, define functions which cannot be pickled with the standard ``pickle``

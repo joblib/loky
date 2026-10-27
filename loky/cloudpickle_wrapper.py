@@ -1,7 +1,7 @@
 import inspect
 from functools import partial
-from cloudpickle import dumps, loads
 
+from cloudpickle import dumps, loads
 
 WRAP_CACHE = {}
 

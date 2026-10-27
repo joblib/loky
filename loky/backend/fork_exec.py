@@ -4,9 +4,9 @@
 #
 # author: Thomas Moreau and Olivier Grisel
 #
-import sys
 import os
 import subprocess
+import sys
 
 
 def fork_exec(cmd, keep_fds, env=None):

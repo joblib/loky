@@ -1,5 +1,6 @@
-from loky import process_executor
 from loky.backend import get_context
+
+from loky import process_executor
 
 from ._executor_mixin import ExecutorMixin
 from ._test_process_executor import (

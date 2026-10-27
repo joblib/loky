@@ -1,15 +1,14 @@
-import sys
-import time
-import pytest
-import threading
-import warnings
 import multiprocessing as mp
+import threading
+import time
+import warnings
 
+import pytest
 from loky.backend import get_context
-from loky import ProcessPoolExecutor
-from loky import get_reusable_executor
 from loky.backend.queues import SimpleQueue
 from loky.backend.reduction import dumps
+
+from loky import ProcessPoolExecutor, get_reusable_executor
 
 
 class SlowlyPickling:

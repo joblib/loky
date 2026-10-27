@@ -1,14 +1,14 @@
-import sys
-import time
 import math
-import pytest
-import threading
-from time import sleep
 import random
+import sys
+import threading
+import time
+from time import sleep
 
-from loky import TimeoutError, get_reusable_executor
+import pytest
 from loky.backend import get_context
 
+from loky import TimeoutError, get_reusable_executor
 
 try:
     import psutil

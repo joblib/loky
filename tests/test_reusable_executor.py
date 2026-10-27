@@ -1,27 +1,30 @@
+import ctypes
+import gc
 import os
 import subprocess
 import sys
-import gc
-import ctypes
-from concurrent.futures import ThreadPoolExecutor
-from tempfile import NamedTemporaryFile
-import pytest
-import warnings
 import threading
-from time import sleep
-from multiprocessing import util, current_process, Manager
+import warnings
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Manager, current_process, util
 from pickle import PicklingError, UnpicklingError
+from tempfile import NamedTemporaryFile
+from time import sleep
 
 import cloudpickle
+import pytest
+from loky.backend.context import _MAX_WINDOWS_WORKERS
+from loky.process_executor import (
+    BrokenProcessPool,
+    ShutdownExecutorError,
+    TerminatedWorkerError,
+    _RemoteTraceback,
+)
+from loky.reusable_executor import _ReusablePoolExecutor
 from packaging.version import Version
 
 import loky
-from loky import cpu_count
-from loky import get_reusable_executor
-from loky.process_executor import _RemoteTraceback, TerminatedWorkerError
-from loky.process_executor import BrokenProcessPool, ShutdownExecutorError
-from loky.reusable_executor import _ReusablePoolExecutor
-from loky.backend.context import _MAX_WINDOWS_WORKERS
+from loky import cpu_count, get_reusable_executor
 
 try:
     import psutil
@@ -29,8 +32,12 @@ except ImportError:
     psutil = None
 
 from ._executor_mixin import ReusableExecutorMixin
-from .utils import TimingWrapper, id_sleep, check_python_subprocess_call
-from .utils import filter_match
+from .utils import (
+    TimingWrapper,
+    check_python_subprocess_call,
+    filter_match,
+    id_sleep,
+)
 
 cloudpickle_version = Version(cloudpickle.__version__)
 
@@ -40,8 +47,8 @@ if sys.platform == "win32":
 
     libc = ctypes.cdll.msvcrt
 else:
-    from signal import SIGKILL
     from ctypes.util import find_library
+    from signal import SIGKILL
 
     libc = ctypes.CDLL(find_library("c"))
 

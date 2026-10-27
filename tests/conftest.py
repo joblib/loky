@@ -1,7 +1,8 @@
-import pytest
 import logging
 import warnings
 from multiprocessing.util import log_to_stderr
+
+import pytest
 
 
 def pytest_addoption(parser):

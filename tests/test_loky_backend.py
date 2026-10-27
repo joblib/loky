@@ -1,23 +1,23 @@
+import multiprocessing as mp
 import os
+import pickle
+import signal
+import socket
 import sys
 import time
-import pytest
-import signal
-import pickle
-import socket
-import multiprocessing as mp
 from multiprocessing.connection import wait
 from tempfile import mkstemp
 
+import pytest
 from loky.backend import get_context
 from loky.backend.context import START_METHODS
 from loky.backend.utils import kill_process_tree
 
 from .utils import (
     TimingWrapper,
+    _run_openmp_parallel_sum,
     check_subprocess_call,
     with_parallel_sum,
-    _run_openmp_parallel_sum,
 )
 
 if not hasattr(socket, "socketpair"):
@@ -788,6 +788,7 @@ def test_launch_reports_pipe_error(monkeypatch, failing_call):
     # out of file descriptors), that error must reach the caller rather than
     # an UnboundLocalError from the cleanup code.
     import errno
+
     from loky.backend import popen_loky_posix
 
     real_pipe = os.pipe

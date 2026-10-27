@@ -6,15 +6,15 @@
 
 from __future__ import annotations
 
+import multiprocessing as mp
+import threading
 import time
 import warnings
-import threading
-import multiprocessing as mp
 from typing import Any
 
-from .process_executor import ProcessPoolExecutor, EXTRA_QUEUED_CALLS
-from .backend.context import cpu_count
 from .backend import get_context
+from .backend.context import cpu_count
+from .process_executor import EXTRA_QUEUED_CALLS, ProcessPoolExecutor
 
 __all__ = ["get_reusable_executor"]
 

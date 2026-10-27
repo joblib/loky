@@ -1,43 +1,43 @@
-import sysconfig
-from loky import process_executor
-
-import os
+import faulthandler
 import gc
-import sys
-import time
-import shutil
+import os
 import platform
-import pytest
-import weakref
+import shutil
+import sys
 import tempfile
 import threading
-import faulthandler
+import time
 import warnings
-from math import sqrt
-from pickle import PicklingError
-from threading import Thread
+import weakref
 from collections import defaultdict
 from concurrent import futures
 from concurrent.futures._base import (
-    PENDING,
-    RUNNING,
     CANCELLED,
     CANCELLED_AND_NOTIFIED,
     FINISHED,
+    PENDING,
+    RUNNING,
+)
+from math import sqrt
+from pickle import PicklingError
+from threading import Thread
+
+import pytest
+from loky._base import Future
+from loky.process_executor import (
+    BrokenProcessPool,
+    LokyRecursionError,
+    ShutdownExecutorError,
+    TerminatedWorkerError,
+    _get_max_memory_leak_size,
 )
 
 import loky
-from loky.process_executor import (
-    LokyRecursionError,
-    BrokenProcessPool,
-    ShutdownExecutorError,
-    TerminatedWorkerError,
-)
-from loky._base import Future
+from loky import process_executor
 
 from . import _executor_mixin
-from .utils import id_sleep, check_subprocess_call, filter_match
 from .test_reusable_executor import ErrorAtPickle, ExitAtPickle, c_exit
+from .utils import check_subprocess_call, filter_match, id_sleep
 
 
 def create_future(state=PENDING, exception=None, result=None):
@@ -1267,7 +1267,7 @@ class ExecutorTest:
         # `os.fork` (and `os.execve`) manually but instead using the compound
         # _posixsubprocess.fork_exec.
         try:
-            from _testcapi import _spawn_pthread_waiter, _end_spawned_pthread
+            from _testcapi import _end_spawned_pthread, _spawn_pthread_waiter
         except ImportError:
             pytest.skip("Cannot test without _testcapi module")
 
@@ -1340,3 +1340,43 @@ def _custom_initializer():
     use cloudpickle to pickle the initializer.
     """
     loky._custom_global_var = 42
+
+
+_MAX_MEMORY_LEAK_SIZE_ENV_VAR = "LOKY_MAX_MEMORY_LEAK_SIZE"
+_DEFAULT_MAX_MEMORY_LEAK_SIZE = 300 * 1024 * 1024
+
+
+def test_max_memory_leak_size_is_read_dynamically(monkeypatch):
+    # The value must be re-read from os.environ on every call, without
+    # re-importing the module.
+    monkeypatch.delenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, raising=False)
+    assert _get_max_memory_leak_size() == _DEFAULT_MAX_MEMORY_LEAK_SIZE
+
+    monkeypatch.setenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, "123456789")
+    assert _get_max_memory_leak_size() == 123456789
+
+    # Changing the variable again is picked up by the very next call.
+    monkeypatch.setenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, "42")
+    assert _get_max_memory_leak_size() == 42
+
+    # Float notation such as "3e8" keeps working.
+    monkeypatch.setenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, "3e8")
+    assert _get_max_memory_leak_size() == int(3e8)
+
+    # Removing the variable restores the default.
+    monkeypatch.delenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR)
+    assert _get_max_memory_leak_size() == _DEFAULT_MAX_MEMORY_LEAK_SIZE
+
+    # The helper is not a stale import-time snapshot: the old static
+    # constant is gone from the module.
+    assert not hasattr(process_executor, "_MAX_MEMORY_LEAK_SIZE")
+
+
+@pytest.mark.parametrize(
+    "bad_value", ["", "abc", "12MB", "nan", "inf", "-inf"]
+)
+def test_max_memory_leak_size_falls_back_on_malformed_value(
+    monkeypatch, bad_value
+):
+    monkeypatch.setenv(_MAX_MEMORY_LEAK_SIZE_ENV_VAR, bad_value)
+    assert _get_max_memory_leak_size() == _DEFAULT_MAX_MEMORY_LEAK_SIZE

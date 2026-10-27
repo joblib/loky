@@ -7,8 +7,9 @@ using the parameter `reuse=True`, the executor is resized if needed but the
 arguments stay the same.
 """
 
-from time import sleep
 import multiprocessing as mp
+from time import sleep
+
 import loky
 from loky import get_reusable_executor
 

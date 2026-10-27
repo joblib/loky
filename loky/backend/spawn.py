@@ -7,12 +7,11 @@
 #  * Improve logging data
 #
 import os
-import sys
 import runpy
+import sys
 import textwrap
 import types
 from multiprocessing import process, util
-
 
 if sys.platform != "win32":
     WINEXE = False

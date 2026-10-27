@@ -54,38 +54,36 @@ Process #1..n:
   _ResultItems in "Result Q"
 """
 
-
 __author__ = "Thomas Moreau (thomas.moreau.2010@gmail.com)"
 
 
 import faulthandler
-import os
 import gc
-import sys
+import itertools
+import multiprocessing as mp
+import os
 import queue
 import struct
-import weakref
-import warnings
-import itertools
-import traceback
+import sys
 import threading
-from time import time, sleep
-import multiprocessing as mp
-from functools import partial
-from pickle import PicklingError
+import traceback
+import warnings
+import weakref
 from concurrent.futures import Executor, InvalidStateError
 from concurrent.futures._base import LOGGER
 from concurrent.futures.process import BrokenProcessPool as _BPPException
+from functools import partial
 from multiprocessing.connection import wait
+from pickle import PicklingError
+from time import sleep, time
 
 from ._base import Future
 from .backend import get_context
-from .backend.context import cpu_count, _MAX_WINDOWS_WORKERS
+from .backend.context import _MAX_WINDOWS_WORKERS, cpu_count
 from .backend.queues import Queue, SimpleQueue
-from .backend.reduction import set_loky_pickler, get_loky_pickler_name
-from .backend.utils import kill_process_tree, get_exitcodes_terminated_worker
+from .backend.reduction import get_loky_pickler_name, set_loky_pickler
+from .backend.utils import get_exitcodes_terminated_worker, kill_process_tree
 from .initializers import _prepare_initializer
-
 
 # Mechanism to prevent infinite process spawning. When a worker of a
 # ProcessPoolExecutor nested in MAX_DEPTH Executor tries to create a new
@@ -96,13 +94,32 @@ _CURRENT_DEPTH = 0
 # Minimum time interval between two consecutive memory leak protection checks.
 _MEMORY_LEAK_CHECK_DELAY = 1.0
 
-# Number of bytes of memory usage allowed over the reference process size.
-# Workloads whose tasks differ a lot in size can legitimately exceed the default
-# without leaking, so it is configurable; it is read in the worker processes,
-# which inherit the environment of the process that created the executor.
-_MAX_MEMORY_LEAK_SIZE = int(
-    float(os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE", 3e8))
-)
+# Default number of bytes of memory usage allowed over the reference process
+# size before a worker is considered to be leaking.
+_DEFAULT_MAX_MEMORY_LEAK_SIZE = 300 * 1024 * 1024
+
+
+def _get_max_memory_leak_size():
+    """Number of bytes of memory usage allowed over the reference process size.
+
+    Workloads whose tasks differ a lot in size can legitimately exceed the
+    default without leaking, so it is configurable with the
+    LOKY_MAX_MEMORY_LEAK_SIZE environment variable. The variable is read on
+    each call, so changes to os.environ are picked up dynamically. In worker
+    processes it reflects the environment inherited from the process that
+    created the executor (plus any `env` override).
+
+    Malformed values fall back to the default of 300MB.
+    """
+    value = os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE")
+    if value is None:
+        return _DEFAULT_MAX_MEMORY_LEAK_SIZE
+    try:
+        # Go through float to keep accepting values such as "3e8".
+        return int(float(value))
+    except (ValueError, TypeError, OverflowError):
+        # OverflowError covers values such as "inf".
+        return _DEFAULT_MAX_MEMORY_LEAK_SIZE
 
 
 try:
@@ -538,9 +555,11 @@ def _process_worker(
                 _last_memory_leak_check = time()
                 continue
             if time() - _last_memory_leak_check > _MEMORY_LEAK_CHECK_DELAY:
+                # Read once per check so both comparisons use the same limit.
+                max_memory_leak_size = _get_max_memory_leak_size()
                 mem_usage = _get_memory_usage(pid)
                 _last_memory_leak_check = time()
-                if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
+                if mem_usage - _process_reference_size < max_memory_leak_size:
                     # Memory usage stays within bounds: everything is fine.
                     continue
 
@@ -549,7 +568,7 @@ def _process_worker(
                 # cycles.
                 mem_usage = _get_memory_usage(pid, force_gc=True)
                 _last_memory_leak_check = time()
-                if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
+                if mem_usage - _process_reference_size < max_memory_leak_size:
                     # The GC managed to free the memory: everything is fine.
                     continue
 
@@ -869,7 +888,7 @@ class _ExecutorManagerThread(threading.Thread):
                         warnings.warn(
                             "A worker was restarted while some jobs were given "
                             "to the executor because it was using more than "
-                            f"{_MAX_MEMORY_LEAK_SIZE / 1e6:.0f} MB more memory "
+                            f"{_get_max_memory_leak_size() / 1e6:.0f} MB more memory "
                             "than when it started, which usually indicates a "
                             "memory leak. Further restarts of this executor "
                             "will not be reported.",

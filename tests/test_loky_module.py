@@ -1,17 +1,17 @@
 import multiprocessing as mp
 import os
-import sys
 import shutil
 import subprocess
+import sys
 import warnings
 from subprocess import check_output
-from unittest.mock import patch, mock_open
+from unittest.mock import mock_open, patch
 
 import pytest
+from loky.backend.context import _MAX_WINDOWS_WORKERS
 
 import loky
 from loky import cpu_count
-from loky.backend.context import _MAX_WINDOWS_WORKERS
 
 
 def test_version():
