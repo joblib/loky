@@ -172,6 +172,8 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
                 "Cannot use reusable executor with the 'fork' context"
             )
 
+        # Keep the cached configuration independent of the caller's dictionary.
+        env = env.copy() if env is not None else None
         kwargs = dict(
             context=context,
             timeout=timeout,
