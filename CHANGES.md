@@ -1,5 +1,9 @@
 ### 3.8.0 - In development
 
+- Fix ``cpu_count`` ignoring cgroup v2 CPU quotas in nested cgroups, such as
+  systemd scopes. Resolve the process cgroup through its visible mounts and
+  respect quotas imposed by visible parent cgroups. (#634)
+
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
   runs out of file descriptors (``EMFILE``). (#668)
