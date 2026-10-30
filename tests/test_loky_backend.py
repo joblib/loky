@@ -805,3 +805,29 @@ def test_launch_reports_pipe_error(monkeypatch, failing_call):
     with pytest.raises(OSError) as excinfo:
         p.start()
     assert excinfo.value.errno == errno.EMFILE
+
+
+def test_get_executable_type():
+    # Consistently with multiprocessing.spawn, the executable is stored as
+    # bytes on POSIX and as str on Windows (#655).
+    from loky.backend import spawn
+
+    exe = spawn.get_executable()
+    if sys.platform == "win32":
+        assert isinstance(exe, str)
+    else:
+        assert isinstance(exe, bytes)
+        assert exe == os.fsencode(sys.executable)
+
+
+def test_set_executable_roundtrip():
+    from loky.backend import spawn
+
+    old_exe = spawn.get_executable()
+    try:
+        spawn.set_executable(os.fsdecode(old_exe))
+        assert spawn.get_executable() == old_exe
+        spawn.set_executable(os.fsencode(old_exe))
+        assert spawn.get_executable() == old_exe
+    finally:
+        spawn.set_executable(old_exe)
