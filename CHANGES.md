@@ -1,5 +1,9 @@
 ### 3.8.0 - In development
 
+- Release the resource tracker's working directory on Windows so it does not
+  prevent removing an application's temporary directory after workers exit.
+  Preserve relative resource cleanup and virtual environment imports.
+
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
   runs out of file descriptors (``EMFILE``). (#668)

@@ -51,6 +51,7 @@ class _RecordingWinapi:
     ):
         self.waited = []
         self.closed = []
+        self.created = []
         self._create_process = create_process
         self._wait_result = wait_result
         self._exit_code = exit_code
@@ -66,6 +67,7 @@ class _RecordingWinapi:
         self.closed.append(handle)
 
     def CreateProcess(self, *args):
+        self.created.append(args)
         return self._create_process
 
 
@@ -464,6 +466,124 @@ class TestResourceTracker:
             42,
         )
         assert winapi.closed == [43]
+
+    def test_spawnv_passfds_bypasses_virtualenv_launcher(self, monkeypatch):
+        winapi = _RecordingWinapi(create_process=(42, 43, 123456, 0))
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(sys, "executable", "venv/python.exe")
+        monkeypatch.setattr(
+            sys, "_base_executable", "base/python.exe", raising=False
+        )
+        monkeypatch.delenv("__PYVENV_LAUNCHER__", raising=False)
+        monkeypatch.setenv("LOKY_TEST_ENV", "preserved")
+        args = [sys.executable, "-c", "pass"]
+
+        resource_tracker.spawnv_passfds(sys.executable, args, [])
+
+        application, command, _, _, _, _, env, cwd, _ = winapi.created[0]
+        assert application == sys._base_executable
+        assert command == '"base/python.exe" "-c" "pass"'
+        assert env["__PYVENV_LAUNCHER__"] == sys.executable
+        assert env["LOKY_TEST_ENV"] == "preserved"
+        assert cwd is None
+        assert args == [sys.executable, "-c", "pass"]
+        assert "__PYVENV_LAUNCHER__" not in os.environ
+
+    @pytest.mark.parametrize(
+        "base_executable, executable",
+        [
+            ("venv/python.exe", "venv/python.exe"),
+            ("base/python.exe", "custom.exe"),
+        ],
+    )
+    def test_spawnv_passfds_keeps_requested_executable(
+        self, monkeypatch, base_executable, executable
+    ):
+        winapi = _RecordingWinapi(create_process=(42, 43, 123456, 0))
+        monkeypatch.setattr(resource_tracker, "_winapi", winapi, raising=False)
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(sys, "executable", "venv/python.exe")
+        monkeypatch.setattr(
+            sys, "_base_executable", base_executable, raising=False
+        )
+
+        resource_tracker.spawnv_passfds(
+            executable, [executable, "-c", "pass"], []
+        )
+
+        application, command, _, _, _, _, env, cwd, _ = winapi.created[0]
+        assert application == executable
+        assert command == f'"{executable}" "-c" "pass"'
+        assert env is None
+        assert cwd is None
+
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="Windows directory locks"
+    )
+    @pytest.mark.parametrize("rtype", ["file", "folder"])
+    def test_resource_tracker_releases_working_directory(
+        self, tmp_path, rtype
+    ):
+        workdir = tmp_path / "working-directory"
+        workdir.mkdir()
+        cmd = """if 1:
+        import os
+        import sys
+        import time
+        import _winapi
+        from pathlib import Path
+        from loky.backend.resource_tracker import ResourceTracker
+
+        workdir, rtype = sys.argv[1:]
+        original_cwd = os.getcwd()
+        tracker = ResourceTracker()
+        try:
+            os.chdir(workdir)
+            resource = Path("tracked-resource")
+            if rtype == "file":
+                resource.touch()
+            else:
+                resource.mkdir()
+            tracker.register(str(resource), rtype)
+            tracker.maybe_unlink(str(resource), rtype)
+            deadline = time.monotonic() + 10
+            while resource.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert not resource.exists(), "tracker did not clean up the resource"
+            os.chdir(original_cwd)
+            status = _winapi.WaitForSingleObject(tracker._proc_handle, 0)
+            assert status == _winapi.WAIT_TIMEOUT
+            os.rmdir(workdir)
+        finally:
+            os.chdir(original_cwd)
+            tracker._stop()
+        """
+        result = subprocess.run(
+            [sys.executable, "-c", cmd, str(workdir), rtype],
+            capture_output=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stderr.decode(errors="replace")
+        assert not result.stderr
+
+    def test_worker_keeps_working_directory(self, tmp_path):
+        cmd = """if 1:
+        import os
+        import sys
+        from loky import ProcessPoolExecutor
+
+        os.chdir(sys.argv[1])
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            assert executor.submit(os.getcwd).result(timeout=10) == os.getcwd()
+        """
+        result = subprocess.run(
+            [sys.executable, "-c", cmd, str(tmp_path)],
+            capture_output=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stderr.decode(errors="replace")
+        assert not result.stderr
 
     def test_loky_process_inherit_multiprocessing_resource_tracker(self):
         cmd = """if 1:

@@ -1,6 +1,7 @@
 [run]
 branch = True
 parallel = True
+patch = subprocess
 source =
     loky
 omit =
