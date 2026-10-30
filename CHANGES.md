@@ -1,5 +1,9 @@
 ### 3.8.0 - In development
 
+- ``loky.backend.spawn.get_executable`` now returns ``bytes`` on POSIX (and
+  ``str`` on Windows), consistently with ``multiprocessing.spawn``, and a
+  matching ``set_executable`` helper is available. (#655)
+
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
   runs out of file descriptors (``EMFILE``). (#668)

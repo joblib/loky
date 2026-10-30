@@ -24,14 +24,30 @@ else:
     WINEXE = sys.platform == "win32" and getattr(sys, "frozen", False)
     WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
 
-if WINSERVICE:
-    _python_exe = os.path.join(sys.exec_prefix, "python.exe")
-else:
-    _python_exe = sys.executable
+
+def set_executable(exe):
+    """Set the path to the Python interpreter used to start child processes.
+
+    As in the standard library ``multiprocessing.spawn``, the path is stored
+    as ``bytes`` on POSIX and as ``str`` on Windows.
+    """
+    global _python_exe
+    if exe is None:
+        _python_exe = exe
+    elif sys.platform == "win32":
+        _python_exe = os.fsdecode(exe)
+    else:
+        _python_exe = os.fsencode(exe)
 
 
 def get_executable():
     return _python_exe
+
+
+if WINSERVICE:
+    set_executable(os.path.join(sys.exec_prefix, "python.exe"))
+else:
+    set_executable(sys.executable)
 
 
 def _check_not_importing_main():
