@@ -1394,6 +1394,9 @@ class ProcessPoolExecutor(Executor):
                 chunks of size chunksize and submitted to the process pool.
                 If set to one, the items in the list will be sent one at a
                 time.
+            buffersize: The maximum number of submitted chunks whose results
+                have not yet been yielded. This argument is available starting
+                with Python 3.14, and counts chunks when chunksize > 1.
 
         Returns:
             An iterator equivalent to: map(func, *iterables) but the calls may
@@ -1406,13 +1409,24 @@ class ProcessPoolExecutor(Executor):
         """
         timeout = kwargs.get("timeout", None)
         chunksize = kwargs.get("chunksize", 1)
+        buffersize = kwargs.get("buffersize", None)
         if chunksize < 1:
             raise ValueError("chunksize must be >= 1.")
+
+        if buffersize is not None and sys.version_info < (3, 14):
+            raise TypeError(
+                "ProcessPoolExecutor.map() got an unexpected keyword "
+                "argument 'buffersize'"
+            )
+
+        map_kwargs = {"timeout": timeout}
+        if sys.version_info >= (3, 14):
+            map_kwargs["buffersize"] = buffersize
 
         results = super().map(
             partial(_process_chunk, fn),
             _get_chunks(chunksize, *iterables),
-            timeout=timeout,
+            **map_kwargs,
         )
         return _chain_from_iterable_of_lists(results)
 
