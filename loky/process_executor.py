@@ -131,6 +131,14 @@ class _RecycledWorkerPid(int):
     """
 
 
+class _RequestedWorkerPid(_RecycledWorkerPid):
+    """PID of a worker stopped by an explicit queue sentinel."""
+
+
+class _TaskLimitWorkerPid(_RecycledWorkerPid):
+    """PID of a worker that completed its configured task allowance."""
+
+
 class _ThreadWakeup:
     def __init__(self):
         self._closed = False
@@ -441,6 +449,7 @@ def _process_worker(
     timeout,
     worker_exit_lock,
     current_depth,
+    max_tasks_per_child,
 ):
     """Evaluates calls from call_queue and places the results in result_queue.
 
@@ -460,6 +469,7 @@ def _process_worker(
         worker_exit_lock: Lock to avoid flagging the executor as broken on
             workers timeout.
         current_depth: Nested parallelism level, to avoid infinite spawning.
+        max_tasks_per_child: Maximum completed calls before recycling, or None.
     """
     if initializer is not None:
         try:
@@ -476,14 +486,17 @@ def _process_worker(
     _process_reference_size = None
     _last_memory_leak_check = None
     pid = os.getpid()
+    completed_tasks = 0
 
     mp.util.debug(f"Worker started with timeout={timeout}")
     _enable_faulthandler_if_needed()
 
     while True:
+        requested_exit = False
         try:
             call_item = call_queue.get(block=True, timeout=timeout)
             if call_item is None:
+                requested_exit = True
                 mp.util.info("Shutting down worker on sentinel")
         except queue.Empty:
             mp.util.info(f"Shutting down worker after timeout {timeout:0.3f}s")
@@ -505,7 +518,9 @@ def _process_worker(
             sys.exit(1)
         if call_item is None:
             # Notify queue management thread about worker shutdown
-            result_queue.put(pid)
+            result_queue.put(
+                _RequestedWorkerPid(pid) if requested_exit else pid
+            )
             is_clean = worker_exit_lock.acquire(True, timeout=30)
 
             # Early notify any loky executor running in this worker process
@@ -530,6 +545,20 @@ def _process_worker(
         # Free the resource as soon as possible, to avoid holding onto
         # open files or shared memory that is not needed anymore
         del call_item
+
+        completed_tasks += 1
+        if (
+            max_tasks_per_child is not None
+            and completed_tasks >= max_tasks_per_child
+        ):
+            # Keep the worker registered while nested executors finish, so
+            # kill_workers can still interrupt their cleanup if requested.
+            _python_exit()
+            # The last result is already sent. Announce the deliberate exit
+            # and use the existing handshake to avoid racing crash detection.
+            result_queue.put(_TaskLimitWorkerPid(pid))
+            worker_exit_lock.acquire(True, timeout=30)
+            return
 
         if _USE_PSUTIL:
             if _process_reference_size is None:
@@ -568,6 +597,50 @@ def _process_worker(
             ):
                 gc.collect()
                 _last_memory_leak_check = time()
+
+
+class _ProcessSpawner:
+    """Worker startup state that can outlive the executor's public lifetime."""
+
+    def __init__(self, executor):
+        self.context = executor._context
+        self.processes = executor._processes
+        self.env = executor._env
+        self.worker_args = (
+            executor._call_queue,
+            executor._result_queue,
+            executor._initializer,
+            executor._initargs,
+            executor._processes_management_lock,
+            executor._timeout,
+        )
+        self.current_depth = _CURRENT_DEPTH + 1
+        self.max_tasks_per_child = executor._max_tasks_per_child
+
+    def adjust_process_count(self, max_workers):
+        # The caller holds the processes management lock.
+        while len(self.processes) < max_workers:
+            worker_exit_lock = self.context.BoundedSemaphore(1)
+            args = self.worker_args + (
+                worker_exit_lock,
+                self.current_depth,
+                self.max_tasks_per_child,
+            )
+            worker_exit_lock.acquire()
+            try:
+                # Only the loky context supports environment overrides.
+                p = self.context.Process(
+                    target=_process_worker, args=args, env=self.env
+                )
+            except TypeError:
+                p = self.context.Process(target=_process_worker, args=args)
+            p._worker_exit_lock = worker_exit_lock
+            p.start()
+            self.processes[p.pid] = p
+        mp.util.debug(
+            f"Adjusted process count to {max_workers}: "
+            f"{[(p.name, pid) for pid, p in self.processes.items()]}"
+        )
 
 
 class _ExecutorManagerThread(threading.Thread):
@@ -620,6 +693,12 @@ class _ExecutorManagerThread(threading.Thread):
 
         # A list of the ctx.Process instances used as workers.
         self.processes = executor._processes
+
+        # Pending calls still need replacement workers after shutdown(wait=False)
+        # clears the executor's queues, or after the executor is collected.
+        # This state must not hold a strong reference to the executor itself.
+        self.process_spawner = executor._process_spawner
+        self.max_workers = executor._max_workers
 
         # A ctx.Queue that will be filled with _CallItems derived from
         # _WorkItems for processing by the process workers.
@@ -844,13 +923,17 @@ class _ExecutorManagerThread(threading.Thread):
             n_running = len(self.running_work_items)
             if n_pending - n_running > 0 or n_running > len(self.processes):
                 executor = self.executor_reference()
+                if executor is not None:
+                    self.max_workers = executor._max_workers
+                executor = None
                 if (
-                    executor is not None
-                    and len(self.processes) < executor._max_workers
+                    not self.executor_flags.kill_workers
+                    and len(self.processes) < self.max_workers
                 ):
-                    with executor._processes_management_lock:
-                        executor._adjust_process_count()
-                    executor = None
+                    with self.processes_management_lock:
+                        self.process_spawner.adjust_process_count(
+                            self.max_workers
+                        )
                     # Warn only once the pool is back to full strength, so
                     # that a filter turning this into an error costs no worker
                     if not isinstance(result_item, _RecycledWorkerPid):
@@ -861,7 +944,13 @@ class _ExecutorManagerThread(threading.Thread):
                             "OS-level out-of-memory (OOM) process killer.",
                             UserWarning,
                         )
-                    elif not self.recycling_warned:
+                    elif (
+                        not isinstance(
+                            result_item,
+                            (_TaskLimitWorkerPid, _RequestedWorkerPid),
+                        )
+                        and not self.recycling_warned
+                    ):
                         # Recycling is a deliberate decision of the executor and
                         # it is transparent to the caller, so repeating it for
                         # every worker of a long-running executor is just noise.
@@ -1165,6 +1254,7 @@ class ProcessPoolExecutor(Executor):
         initializer=None,
         initargs=(),
         env=None,
+        max_tasks_per_child=None,
     ):
         """Initializes a new ProcessPoolExecutor instance.
 
@@ -1189,6 +1279,12 @@ class ProcessPoolExecutor(Executor):
             env: A dict of environment variable to overwrite in the child
                 process. The environment variables are set before any module is
                 loaded. Note that this only works with the loky context.
+
+            max_tasks_per_child: int, optional (default: None)
+                Recycle each worker after this many completed calls, including
+                calls that raise exceptions. Each map chunk counts as one call.
+                None leaves workers without a task limit. Must be a positive
+                integer, and cannot be used with the fork context.
         """
         _check_system_limits()
 
@@ -1211,6 +1307,16 @@ class ProcessPoolExecutor(Executor):
 
         if context is None:
             context = get_context()
+        if max_tasks_per_child is not None:
+            if not isinstance(max_tasks_per_child, int):
+                raise TypeError("max_tasks_per_child must be an integer")
+            if max_tasks_per_child <= 0:
+                raise ValueError("max_tasks_per_child must be greater than 0")
+            if context.get_start_method() == "fork":
+                raise ValueError(
+                    "max_tasks_per_child is incompatible with the fork context"
+                )
+        self._max_tasks_per_child = max_tasks_per_child
         self._context = context
         self._env = env
 
@@ -1257,6 +1363,7 @@ class ProcessPoolExecutor(Executor):
 
         # Finally setup the queues for interprocess communication
         self._setup_queues(job_reducers, result_reducers)
+        self._process_spawner = None
 
         mp.util.debug("ProcessPoolExecutor is setup")
 
@@ -1316,34 +1423,12 @@ class ProcessPoolExecutor(Executor):
                     )
 
     def _adjust_process_count(self):
-        while len(self._processes) < self._max_workers:
-            worker_exit_lock = self._context.BoundedSemaphore(1)
-            args = (
-                self._call_queue,
-                self._result_queue,
-                self._initializer,
-                self._initargs,
-                self._processes_management_lock,
-                self._timeout,
-                worker_exit_lock,
-                _CURRENT_DEPTH + 1,
-            )
-            worker_exit_lock.acquire()
-            try:
-                # Try to spawn the process with some environment variable to
-                # overwrite but it only works with the loky context for now.
-                p = self._context.Process(
-                    target=_process_worker, args=args, env=self._env
-                )
-            except TypeError:
-                p = self._context.Process(target=_process_worker, args=args)
-            p._worker_exit_lock = worker_exit_lock
-            p.start()
-            self._processes[p.pid] = p
-        mp.util.debug(
-            f"Adjusted process count to {self._max_workers}: "
-            f"{[(p.name, pid) for pid, p in self._processes.items()]}"
-        )
+        if self._process_spawner is None:
+            # Capture queues at first use, after any pre-start customization.
+            self._process_spawner = _ProcessSpawner(self)
+        if self._executor_manager_thread is not None:
+            self._executor_manager_thread.max_workers = self._max_workers
+        self._process_spawner.adjust_process_count(self._max_workers)
 
     def _ensure_executor_running(self):
         """ensures all workers and management thread are running"""
@@ -1442,5 +1527,6 @@ class ProcessPoolExecutor(Executor):
         self._call_queue = None
         self._result_queue = None
         self._processes_management_lock = None
+        self._process_spawner = None
 
     shutdown.__doc__ = Executor.shutdown.__doc__

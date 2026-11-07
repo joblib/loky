@@ -58,6 +58,27 @@ number of bytes raises, or lowers, that threshold. It is read when
 :code:`loky.process_executor` is imported, in the workers as well as in the
 parent process, so it has to be set before the workers are started.
 
+A task limit can also be used independently of memory monitoring. Set
+:code:`max_tasks_per_child` to a positive integer when constructing
+:class:`ProcessPoolExecutor` or calling :func:`get_reusable_executor`. Each
+worker exits after that many completed calls, and replacement workers run the
+initializer again. For example::
+
+    executor = get_reusable_executor(max_workers=4, max_tasks_per_child=100)
+
+The default, :code:`None`, imposes no task limit. Calls that raise an exception
+or return an unpicklable result count toward the limit; cancelled calls and
+calls that cannot be serialized in the parent do not. When :meth:`ProcessPoolExecutor.map` uses
+:code:`chunksize > 1`, an entire chunk counts as one call.
+
+Replacement is transparent to pending futures, including during graceful
+shutdown. Idle workers that reach the limit need not be replaced until more
+work is submitted. Changing the limit starts a new reusable executor with
+:code:`reuse="auto"`. This option supports the :code:`loky`,
+:code:`spawn`, and :code:`forkserver` contexts; it is incompatible with
+:code:`fork`, which cannot safely start replacement processes from the
+manager thread.
+
 .. rubric:: Footnotes
 
 .. [#periodically_fn] every 1 second. This constant is defined in :code:`loky.process_executor._MEMORY_LEAK_CHECK_DELAY`
