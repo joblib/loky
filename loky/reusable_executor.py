@@ -58,6 +58,7 @@ def get_reusable_executor(
     initializer=None,
     initargs=(),
     env=None,
+    max_tasks_per_child=None,
 ):
     """Return the current ReusableExecutor instance for the current thread.
 
@@ -81,6 +82,12 @@ def get_reusable_executor(
     submitted tasks. Setting ``timeout`` to around 100 times the time required
     to spawn new processes and import packages in them (on the order of 100ms)
     ensures that the overhead of spawning workers is negligible.
+
+    Setting ``max_tasks_per_child`` to a positive integer recycles each worker
+    after that many completed calls, including calls that raise exceptions.
+    Each chunk submitted by ``map`` counts as one call. The default, ``None``,
+    imposes no task limit. Initializers run again in replacement workers.
+    Changing this option creates a new executor when ``reuse="auto"``.
 
     Setting ``kill_workers=True`` makes it possible to forcibly interrupt
     previously spawned jobs to get a new instance of the reusable executor
@@ -110,6 +117,7 @@ def get_reusable_executor(
         initializer=initializer,
         initargs=initargs,
         env=env,
+        max_tasks_per_child=max_tasks_per_child,
     )
     return _executor
 
@@ -126,6 +134,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         initializer=None,
         initargs=(),
         env=None,
+        max_tasks_per_child=None,
     ):
         super().__init__(
             max_workers=max_workers,
@@ -136,6 +145,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
             initializer=initializer,
             initargs=initargs,
             env=env,
+            max_tasks_per_child=max_tasks_per_child,
         )
         self.executor_id = executor_id
 
@@ -152,6 +162,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         initializer=None,
         initargs=(),
         env=None,
+        max_tasks_per_child=None,
     ):
         executor = _executor_storage.executor
 
@@ -180,6 +191,7 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
             initializer=initializer,
             initargs=initargs,
             env=env,
+            max_tasks_per_child=max_tasks_per_child,
         )
         if executor is None:
             is_reused = False
@@ -259,10 +271,16 @@ class _ReusablePoolExecutor(ProcessPoolExecutor):
         while len(self._processes) > max_workers and not self._flags.broken:
             time.sleep(1e-3)
 
-        self._adjust_process_count()
-        processes = list(self._processes.values())
-        while not all(p.is_alive() for p in processes):
+        while not self._flags.broken:
+            with self._processes_management_lock:
+                self._adjust_process_count()
+                # Workers can retire at their task limit during a resize.
+                # Re-read the registry so a retired process is not waited on
+                # forever after the manager has replaced it.
+                if all(p.is_alive() for p in self._processes.values()):
+                    return
             time.sleep(1e-3)
+        raise self._flags.broken
 
     def _wait_job_completion(self):
         """Wait for the cache to be empty before resizing the pool."""

@@ -1,5 +1,8 @@
 ### 3.8.0 - In development
 
+- Add optional ``max_tasks_per_child`` to process and reusable executors to
+  recycle workers after a fixed number of completed calls. (#373)
+
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
   runs out of file descriptors (``EMFILE``). (#668)
