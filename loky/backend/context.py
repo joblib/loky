@@ -59,8 +59,7 @@ def get_context(method=None):
         return mp_get_context(method)
     except ValueError:
         raise ValueError(
-            f"Unknown context '{method}'. Value should be in "
-            f"{START_METHODS}."
+            f"Unknown context '{method}'. Value should be in {START_METHODS}."
         )
 
 
@@ -141,9 +140,7 @@ def cpu_count(only_physical_cores=False):
         # physical core. See https://github.com/joblib/loky/issues/639.
         # On other platforms we lack easy access to CPU topology info to refine
         # the count, so just pass None for `cpu_affinity_set`.
-        cpu_affinity_set
-        if sys.platform == "linux"
-        else None
+        cpu_affinity_set if sys.platform == "linux" else None
     )
     if cpu_count_physical == "not found":
         cpu_count_physical = os_cpu_count
@@ -383,7 +380,9 @@ def _count_physical_cores_win32():
     )
     cpu_info = cpu_info.stdout.splitlines()
     cpu_info = [
-        l.split(",")[1] for l in cpu_info if (l and l != "Node,NumberOfCores")
+        line.split(",")[1]
+        for line in cpu_info
+        if line and line != "Node,NumberOfCores"
     ]
     return sum(map(int, cpu_info))
 

@@ -532,7 +532,7 @@ def test_shutdown_cleans_resources_once_and_folders_last(tmp_path):
 @pytest.mark.skipif(sys.platform == "win32", reason="pass_fds is POSIX-only")
 def test_shutdown_cleanup_failure_sets_exit_code():
     read_fd, write_fd = os.pipe()
-    cmd = "from loky.backend.resource_tracker import main; " f"main({read_fd})"
+    cmd = f"from loky.backend.resource_tracker import main; main({read_fd})"
     process = subprocess.Popen(
         [sys.executable, "-c", cmd],
         pass_fds=(read_fd,),

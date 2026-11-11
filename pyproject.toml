@@ -49,29 +49,15 @@ include-package-data = false
 [tool.setuptools.dynamic]
 version = {attr = "loky.__version__"}
 
-[tool.black]
+[tool.ruff]
 line-length = 79
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.hg
-  | \.mypy_cache
-  | \.pixi
-  | \.tox
-  | \.venv[^/]*
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
+# Apply the exclusion even when pre-commit passes filenames explicitly.
+force-exclude = true
+extend-exclude = ["loky/backend/stdlib_py*resource_tracker.py"]
 
-# Because pre-commit uses explicit filenames, you need to use force-exclude in
-# order for pre-commit black to leave the stdlib files untouched
-force-exclude = '''
-  loky/backend/stdlib_py.*resource_tracker\.py
-'''
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+unfixable = ["F401"]
 
 [tool.pytest.ini_options]
 # No test should last longer than 1 minute, even on the CI. Otherwise, dump

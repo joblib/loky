@@ -155,7 +155,7 @@ class TestsFuture:
         )
         assert (
             re.match(
-                "<Future at 0x[0-9a-f]+ state=finished raised " "OSError>",
+                "<Future at 0x[0-9a-f]+ state=finished raised OSError>",
                 repr(EXCEPTION_FUTURE),
             ).pos
             > -1

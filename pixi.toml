@@ -83,10 +83,10 @@ test-joblib = { cmd = "bash continuous_integration/runtests.sh", env = { JOBLIB_
 platforms = ["linux-64"]
 
 [feature.lint.dependencies]
-black = "25.1.0.*"
+pre-commit = "4.6.2.*"
 
 [feature.lint.tasks]
-lint = "black --check --diff ."
+lint = "pre-commit run --all-files --show-diff-on-failure"
 
 [environments]
 default = { features = [], no-default-feature = true }

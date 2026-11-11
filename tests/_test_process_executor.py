@@ -1,4 +1,3 @@
-import sysconfig
 from loky import process_executor
 
 import os
