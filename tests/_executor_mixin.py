@@ -106,20 +106,20 @@ def _check_subprocesses_number(
                 # Bypass pids checks when executor has been garbage collected
                 worker_pids = children_pids
             if expected_process_number is not None:
-                assert (
-                    len(children_pids) == expected_process_number
-                ), pids_cmdlines
-                assert (
-                    len(worker_pids) == expected_process_number
-                ), pids_cmdlines
+                assert len(children_pids) == expected_process_number, (
+                    pids_cmdlines
+                )
+                assert len(worker_pids) == expected_process_number, (
+                    pids_cmdlines
+                )
 
             if expected_max_process_number is not None:
-                assert (
-                    len(children_pids) <= expected_max_process_number
-                ), pids_cmdlines
-                assert (
-                    len(worker_pids) <= expected_max_process_number
-                ), pids_cmdlines
+                assert len(children_pids) <= expected_max_process_number, (
+                    pids_cmdlines
+                )
+                assert len(worker_pids) <= expected_max_process_number, (
+                    pids_cmdlines
+                )
 
             return
         except AssertionError as e:

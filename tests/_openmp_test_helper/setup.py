@@ -1,6 +1,5 @@
 """Helper module to test OpenMP support on Continuous Integration"""
 
-import os
 import sys
 
 from Cython.Build import cythonize

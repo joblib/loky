@@ -82,7 +82,7 @@ from loky import get_reusable_executor
 def say_hello(k):
     pid = os.getpid()
     print(f"Hello from {pid} with arg {k}")
-    sleep(.01)
+    sleep(0.01)
     return pid
 
 

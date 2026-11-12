@@ -67,8 +67,6 @@ import sys
 import signal
 import warnings
 from multiprocessing import util
-import base64
-import json
 import threading
 
 from .stdlib_py314_resource_tracker import (
@@ -313,6 +311,7 @@ if hasattr(os, 'register_at_fork'):
     os.register_at_fork(after_in_child=_resource_tracker._after_fork_in_child)
 # fmt: on
 
+
 # fmt: off
 # The main function has been copied from Python 3.14.7 and modified, mostly for
 # Windows support, logging and refcount functionality.
@@ -421,7 +420,7 @@ def main(fd, verbose=0):
                     exit_code = 3
                     try:
                         sys.excepthook(*sys.exc_info())
-                    except:
+                    except BaseException:
                         pass
     finally:
         # all processes have terminated; cleanup any remaining resources

@@ -572,9 +572,9 @@ class TestTerminateExecutor(ReusableExecutorMixin):
                         running_workers.append(worker_pid)
                     except psutil.NoSuchProcess:
                         pass
-            assert not len(
-                running_workers
-            ), f"There are running workers left: {running_workers}"
+            assert not len(running_workers), (
+                f"There are running workers left: {running_workers}"
+            )
 
 
 class TestResizeExecutor(ReusableExecutorMixin):
@@ -600,7 +600,7 @@ class TestResizeExecutor(ReusableExecutorMixin):
             expected_msg = "Trying to resize an executor with running jobs"
             assert expected_msg in str(w[0].message)
             assert res1.result(), (
-                "Resize should wait for current processes " " to finish"
+                "Resize should wait for current processes  to finish"
             )
             assert len(executor._processes) == 1
             assert next(iter(executor._processes.keys())) in pids

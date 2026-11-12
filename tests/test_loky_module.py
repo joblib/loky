@@ -15,9 +15,9 @@ from loky.backend.context import _MAX_WINDOWS_WORKERS
 
 
 def test_version():
-    assert hasattr(
-        loky, "__version__"
-    ), "There are no __version__ argument on the loky module"
+    assert hasattr(loky, "__version__"), (
+        "There are no __version__ argument on the loky module"
+    )
 
 
 def test_cpu_count(monkeypatch):
@@ -104,7 +104,7 @@ def test_windows_physical_cores_powershell_sums_sockets_mine(monkeypatch):
 
 
 cpu_count_cmd = (
-    "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
+    "from loky.backend.context import cpu_count;print(cpu_count({args}))"
 )
 
 
@@ -229,7 +229,7 @@ def test_cpu_count_cgroup_limit():
         check_output(
             f"{docker_bin} run --rm --cpus 0.5 -v {loky_project_path}:/loky python:3.11 "
             f"/bin/bash -c 'pip install --quiet -e /loky ; "
-            f"python -c \"{cpu_count_cmd.format(args='')}\"'",
+            f'python -c "{cpu_count_cmd.format(args="")}"\'',
             shell=True,
             text=True,
         ).strip()
@@ -242,7 +242,7 @@ def test_cpu_count_cgroup_limit():
         check_output(
             f"{docker_bin} run --rm --cpus 1.5 -v {loky_project_path}:/loky python:3.11 "
             f"/bin/bash -c 'pip install --quiet -e /loky ; "
-            f"python -c \"{cpu_count_cmd.format(args='')}\"'",
+            f'python -c "{cpu_count_cmd.format(args="")}"\'',
             shell=True,
             text=True,
         ).strip()
@@ -254,7 +254,7 @@ def test_cpu_count_cgroup_limit():
         check_output(
             f"{docker_bin} run --rm -v {loky_project_path}:/loky python:3.11 "
             f"/bin/bash -c 'pip install --quiet -e /loky ; "
-            f"python -c \"{cpu_count_cmd.format(args='')}\"'",
+            f'python -c "{cpu_count_cmd.format(args="")}"\'',
             shell=True,
             text=True,
         ).strip()
@@ -498,12 +498,12 @@ def test_cpu_count_cgroup_invalid_content(read_data, description):
     with patch("builtins.open", mock_open(read_data=read_data)):
         with patch("os.path.exists") as mock_exists:
             # cpu.max exists, but other files don't
-            mock_exists.side_effect = (
-                lambda path: path == "/sys/fs/cgroup/cpu.max"
+            mock_exists.side_effect = lambda path: (
+                path == "/sys/fs/cgroup/cpu.max"
             )
 
             # This should not raise ValueError and return os_cpu_count
             result = _cpu_count_cgroup(os_cpu_count)
-            assert (
-                result == os_cpu_count
-            ), f"cpu.max with {description} should return os_cpu_count"
+            assert result == os_cpu_count, (
+                f"cpu.max with {description} should return os_cpu_count"
+            )

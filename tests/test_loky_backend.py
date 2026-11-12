@@ -349,7 +349,7 @@ class TestLokyBackend:
         # assert p.exitcode == -signal.SIGTERM
 
     def test_active_children(self):
-        assert type(self.active_children()) == list
+        assert type(self.active_children()) is list
 
         p = self.Process(target=time.sleep, args=(DELTA,))
         assert p not in self.active_children()
@@ -363,12 +363,12 @@ class TestLokyBackend:
         assert p.exitcode == 0
 
     @classmethod
-    def _test_recursion(cls, wconn, l):
-        wconn.send(l)
-        if len(l) < 2:
+    def _test_recursion(cls, wconn, path):
+        wconn.send(path)
+        if len(path) < 2:
             for i in range(2):
                 p = cls.Process(
-                    target=cls._test_recursion, args=(wconn, l + [i])
+                    target=cls._test_recursion, args=(wconn, path + [i])
                 )
                 p.start()
                 p.join()
@@ -442,9 +442,10 @@ class TestLokyBackend:
         w: int
             fileno of the writable end of the Pipe, it should be closed
         """
-        to_clean_up = [
+        # Keep the synchronization objects alive until this worker exits.
+        _to_clean_up = [
             cls.Semaphore(0),
-            cls.BoundedSemaphore(1),  # noqa: F841
+            cls.BoundedSemaphore(1),
             cls.Lock(),
             cls.RLock(),
             cls.Condition(),
@@ -470,8 +471,7 @@ class TestLokyBackend:
             lines = out.splitlines()[1:]
         except (FileNotFoundError, OSError):
             print(
-                "lsof does not exist on this platform. Skip open files"
-                "check."
+                "lsof does not exist on this platform. Skip open filescheck."
             )
             return []
 

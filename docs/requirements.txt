@@ -1,3 +1,2 @@
 sphinx-gallery
 matplotlib
-

@@ -59,7 +59,6 @@ SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 
 
 class SemLock:
-
     _rand = tempfile._RandomNameSequence()
 
     def __init__(self, kind, value, maxvalue, name=None):
@@ -287,9 +286,9 @@ class Condition:
         return f"<{self.__class__.__name__}({self._lock}, {num_waiters})>"
 
     def wait(self, timeout=None):
-        assert (
-            self._lock._semlock._is_mine()
-        ), "must acquire() condition before using wait()"
+        assert self._lock._semlock._is_mine(), (
+            "must acquire() condition before using wait()"
+        )
 
         # indicate that this thread is going to sleep
         self._sleeping_count.release()
