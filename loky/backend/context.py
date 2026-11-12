@@ -31,6 +31,8 @@ from .process import LokyProcess, LokyInitMainProcess
 if sys.version_info < (3, 10):
     _MAX_WINDOWS_WORKERS = _MAX_WINDOWS_WORKERS - 1
 
+_WINDOWS_CPU_COUNT_TIMEOUT = 10
+
 START_METHODS = ["loky", "loky_init_main", "spawn"]
 if sys.platform != "win32":
     START_METHODS += ["fork", "forkserver"]
@@ -379,6 +381,7 @@ def _count_physical_cores_win32():
         "wmic CPU Get NumberOfCores /Format:csv".split(),
         capture_output=True,
         text=True,
+        timeout=_WINDOWS_CPU_COUNT_TIMEOUT,
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     cpu_info = cpu_info.stdout.splitlines()
@@ -394,6 +397,7 @@ def _count_physical_cores_win32_powershell():
         f"powershell.exe {cmd}".split(),
         capture_output=True,
         text=True,
+        timeout=_WINDOWS_CPU_COUNT_TIMEOUT,
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     cpu_info = cpu_info.stdout.splitlines()

@@ -103,6 +103,39 @@ def test_windows_physical_cores_powershell_sums_sockets_mine(monkeypatch):
     assert _count_physical_cores_win32_powershell() == 8
 
 
+@pytest.mark.parametrize("wmic_times_out", [False, True])
+def test_windows_physical_core_count_timeouts(monkeypatch, wmic_times_out):
+    from loky.backend import context
+
+    def unavailable():
+        raise OSError("Windows API unavailable")
+
+    commands = []
+
+    def run(args, *, timeout, **kwargs):
+        commands.append(args[0])
+        assert 0 < timeout < 60
+        if args[0] == "powershell.exe" or wmic_times_out:
+            raise subprocess.TimeoutExpired(args, timeout)
+        return subprocess.CompletedProcess(
+            args, 0, stdout="Node,NumberOfCores\nNODE,8\n"
+        )
+
+    monkeypatch.setattr(
+        context, "_count_physical_cores_win32_ctypes", unavailable
+    )
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0, raising=False)
+    monkeypatch.setattr(subprocess, "run", run)
+
+    if wmic_times_out:
+        with pytest.raises(subprocess.TimeoutExpired):
+            context._count_physical_cores_win32()
+    else:
+        assert context._count_physical_cores_win32() == 8
+
+    assert commands == ["powershell.exe", "wmic"]
+
+
 cpu_count_cmd = (
     "from loky.backend.context import cpu_count;" "print(cpu_count({args}))"
 )
