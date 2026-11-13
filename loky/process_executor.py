@@ -1153,8 +1153,6 @@ class ShutdownExecutorError(RuntimeError):
 
 class ProcessPoolExecutor(Executor):
 
-    _at_exit = None
-
     def __init__(
         self,
         max_workers=None,
