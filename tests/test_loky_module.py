@@ -236,6 +236,19 @@ def test_cpu_count_cgroup_limit():
     )
     assert res_500_mCPU == 1
 
+    # With the cgroup namespace of the host, the cgroup of the container is not
+    # the root of the cgroup mount, see #634.
+    res_host_cgroupns = int(
+        check_output(
+            f"{docker_bin} run --rm --cgroupns=host --cpus 0.5 -v {loky_project_path}:/loky python:3.11 "
+            f"/bin/bash -c 'pip install --quiet -e /loky ; "
+            f"python -c \"{cpu_count_cmd.format(args='')}\"'",
+            shell=True,
+            text=True,
+        ).strip()
+    )
+    assert res_host_cgroupns == 1
+
     # Limiting to 1.5 CPUs can lead to 1 if there is only 1 CPU on the machine or
     # 2 if there are 2 CPUs or more.
     res_1500_mCPU = int(

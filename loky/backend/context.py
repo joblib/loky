@@ -88,8 +88,9 @@ def cpu_count(only_physical_cores=False):
        ``multiprocessing.cpu_count``;
      * the CPU affinity settings of the current process
        (available on some Unix systems);
-     * Cgroup CPU bandwidth limit (available on Linux only, typically
-       set by docker and similar container orchestration systems);
+     * the Cgroup CPU bandwidth limits of the cgroup of the process and of
+       its ancestors (available on Linux only, typically set by docker or
+       systemd);
      * the value of the LOKY_MAX_CPU_COUNT environment variable if defined.
     and is given as the minimum of these constraints.
 
@@ -176,51 +177,62 @@ def _warn_physical_cores_not_found(exception):
 
 
 def _cpu_count_cgroup(os_cpu_count):
-    # Cgroup CPU bandwidth limit available in Linux since 2.6 kernel
-    cpu_max_fname = "/sys/fs/cgroup/cpu.max"
-    cfs_quota_fname = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
-    cfs_period_fname = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
+    """Return the number of CPUs allowed by the cgroup CPU bandwidth limits.
 
-    cpu_quota_us = None
-    cpu_period_us = None
+    A limit, set for instance by ``docker run --cpus`` or systemd's
+    ``CPUQuota=``, can be on the cgroup of the process or on any of its
+    ancestors, so return the smallest one, or os_cpu_count if there is none.
+    """
+    # The root of the usual cgroup v2 and cgroup v1 "cpu" mounts: the cgroup
+    # of the container when the process runs in one.
+    cgroup_dirs = [("/sys/fs/cgroup", True), ("/sys/fs/cgroup/cpu", False)]
+    try:
+        # See "/proc/$PID/cgroup" in
+        # https://docs.kernel.org/admin-guide/cgroup-v2.html
+        with open("/proc/self/cgroup", "rb") as f:
+            for line in f:
+                hierarchy, controllers, cgroup = (
+                    os.fsdecode(line).rstrip("\n").split(":", 2)
+                )
+                if hierarchy == "0":
+                    mount, is_v2 = "/sys/fs/cgroup", True
+                elif "cpu" in controllers.split(","):
+                    mount, is_v2 = "/sys/fs/cgroup/cpu", False
+                else:
+                    continue
+                parts = [part for part in cgroup.split("/") if part]
+                # Skip a cgroup that is outside of the cgroup namespace ("/..")
+                # or not in the mount, as in a container whose cgroup is the
+                # mount root (already in cgroup_dirs).
+                if ".." in parts or not os.path.isdir(
+                    os.path.join(mount, *parts)
+                ):
+                    continue
+                cgroup_dirs += [
+                    (os.path.join(mount, *parts[:i]), is_v2)
+                    for i in range(1, len(parts) + 1)
+                ]
+    except (OSError, ValueError):
+        pass
 
-    if os.path.exists(cpu_max_fname):
-        # cgroup v2
-        # https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
-        with open(cpu_max_fname) as fh:
-            # Parse the quota and period values
-            parts = fh.read().strip().split()
-            if len(parts) == 2:
-                cpu_quota_us, cpu_period_us = parts
-            # If len(parts) != 2, leave as None and fall back to v1
-
-    # If we didn't get values from cgroup v2, try cgroup v1
-    if cpu_quota_us is None or cpu_period_us is None:
-        if os.path.exists(cfs_quota_fname) and os.path.exists(
-            cfs_period_fname
-        ):
-            # cgroup v1
-            # https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
-            with open(cfs_quota_fname) as fh:
-                cpu_quota_us = fh.read().strip()
-            with open(cfs_period_fname) as fh:
-                cpu_period_us = fh.read().strip()
-        else:
-            # No Cgroup CPU bandwidth limit (e.g. non-Linux platform)
-            cpu_quota_us = "max"
-
-    if cpu_quota_us == "max":
-        # No active Cgroup quota on a Cgroup-capable platform
-        return os_cpu_count
-    else:
-        cpu_quota_us = int(cpu_quota_us)
-        cpu_period_us = int(cpu_period_us)
-        if cpu_quota_us > 0 and cpu_period_us > 0:
-            return math.ceil(cpu_quota_us / cpu_period_us)
-        else:  # pragma: no cover
-            # Setting a negative cpu_quota_us value is a valid way to disable
-            # cgroup CPU bandwidth limits
-            return os_cpu_count
+    cpu_counts = []
+    for cgroup_dir, is_v2 in cgroup_dirs:
+        try:
+            if is_v2:
+                with open(f"{cgroup_dir}/cpu.max", "rb") as f:
+                    quota, period = f.read().split()
+            else:
+                with open(f"{cgroup_dir}/cpu.cfs_quota_us", "rb") as f:
+                    quota = f.read()
+                with open(f"{cgroup_dir}/cpu.cfs_period_us", "rb") as f:
+                    period = f.read()
+            # No limit reads as "max" with cgroup v2 and as -1 with cgroup v1.
+            quota, period = int(quota), int(period)
+        except (OSError, ValueError):
+            continue
+        if quota > 0 and period > 0:
+            cpu_counts.append(math.ceil(quota / period))
+    return min(cpu_counts, default=os_cpu_count)
 
 
 def _cpu_count_affinity_set():

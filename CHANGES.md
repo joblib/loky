@@ -1,5 +1,10 @@
 ### 3.8.0 - In development
 
+- Fix ``cpu_count`` ignoring the CPU quotas of the cgroup of the process and
+  of its ancestors when that cgroup is not the root of the cgroup mount, as
+  for systemd services and scopes (``CPUQuota=``) or with
+  ``docker run --cgroupns=host --cpus``, with both cgroup v1 and v2. (#671)
+
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
   runs out of file descriptors (``EMFILE``). (#668)
