@@ -1001,6 +1001,37 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         assert len(pids) == 1, "the worker was recycled despite the threshold"
         assert not [w for w in record if "memory leak" in str(w.message)]
 
+    def test_max_memory_leak_size_env_var_changed_in_worker(self):
+        pytest.importorskip("psutil")  # cannot work without psutil
+
+        def _raise_threshold():
+            os.environ["LOKY_MAX_MEMORY_LEAK_SIZE"] = str(int(2e9))
+            return os.getpid()
+
+        def _leak_some_memory(size=int(3e6), delay=0.001):
+            from loky import process_executor
+
+            process_executor._MEMORY_LEAK_CHECK_DELAY = 0.1
+            if getattr(os, "_loky_leak", None) is None:
+                os._loky_leak = []
+            os._loky_leak.append(b"\x00" * size)
+            sleep(delay)
+            return os.getpid()
+
+        # The worker starts with the default 300 MB threshold.
+        # A first task raises it in the worker's environment, so the following submissions, which leak more than 300 MB, should not get the worker recycled.
+        with loky.ProcessPoolExecutor(max_workers=1) as executor:
+            first_pid = executor.submit(_raise_threshold).result()
+            with warnings.catch_warnings(record=True) as record:
+                warnings.simplefilter("always")
+                futures = [
+                    executor.submit(_leak_some_memory) for _ in range(150)
+                ]
+                pids = {f.result() for f in futures}
+
+        assert pids == {first_pid}, "the worker was recycled"
+        assert not [w for w in record if "memory leak" in str(w.message)]
+
     def test_reusable_executor_reuse_true(self):
         executor = get_reusable_executor(max_workers=3, timeout=42)
         executor.submit(id, 42).result()
