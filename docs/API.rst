@@ -34,16 +34,16 @@ Protection against memory leaks
 The memory size of long running worker processes can increase indefinitely if a
 memory leak is created. This can result in processes being shut down by the OS if
 those leaks are not resolved. To
-prevent it, loky provides leak detection, memory cleanups, and workers 
+prevent it, loky provides leak detection, memory cleanups, and workers
 shutdown.
 
-If :mod:`psutil` is installed, each worker periodically [#periodically_fn]_ checks its 
+If :mod:`psutil` is installed, each worker periodically [#periodically_fn]_ checks its
 memory usage after it completes its task. If the usage is found to be
-unusual [#psutil_unusual_fn]_, an additional :code:`gc.collect()` event is triggered to remove 
-objects with potential cyclic references. 
-If even after that, the memory usage of a process worker remains too high, 
+unusual [#psutil_unusual_fn]_, an additional :code:`gc.collect()` event is triggered to remove
+objects with potential cyclic references.
+If even after that, the memory usage of a process worker remains too high,
 it will shut down safely, and a fresh process will be automatically spawned by
-the executor. 
+the executor.
 
 If :mod:`psutil` is not installed, there is no easy way to monitor worker
 processes memory usage. :code:`gc.collect()` events will still be called
@@ -54,9 +54,10 @@ The reference is measured after the first task only and is never updated
 afterwards, so a workload whose tasks differ a lot in memory footprint can cross
 the threshold without leaking anything, and pay for a worker restart every time
 it does. Setting the environment variable :code:`LOKY_MAX_MEMORY_LEAK_SIZE` to a
-number of bytes raises, or lowers, that threshold. It is read when
-:code:`loky.process_executor` is imported, in the workers as well as in the
-parent process, so it has to be set before the workers are started.
+number of bytes raises, or lowers, that threshold. Each worker reads it every
+time it checks its memory usage, so it can also be changed from within a worker,
+for instance by a task. Workers have their own copy of the environment, so
+changing it in the parent process only affects workers started afterwards.
 
 .. rubric:: Footnotes
 

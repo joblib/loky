@@ -96,13 +96,25 @@ _CURRENT_DEPTH = 0
 # Minimum time interval between two consecutive memory leak protection checks.
 _MEMORY_LEAK_CHECK_DELAY = 1.0
 
-# Number of bytes of memory usage allowed over the reference process size.
-# Workloads whose tasks differ a lot in size can legitimately exceed the default
-# without leaking, so it is configurable; it is read in the worker processes,
-# which inherit the environment of the process that created the executor.
-_MAX_MEMORY_LEAK_SIZE = int(
-    float(os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE", 3e8))
-)
+# Default number of bytes of memory usage allowed over the reference process
+# size. Workloads whose tasks differ a lot in size can legitimately exceed it
+# without leaking, so it can be overridden with the LOKY_MAX_MEMORY_LEAK_SIZE
+# environment variable, see _get_max_memory_leak_size.
+_MAX_MEMORY_LEAK_SIZE = int(3e8)
+
+
+def _get_max_memory_leak_size():
+    """Return the memory growth (in bytes) allowed before recycling a worker.
+
+    The LOKY_MAX_MEMORY_LEAK_SIZE environment variable is read on each call,
+    so a change made after the worker started (for instance by a task) is
+    taken into account at the next memory check.
+    """
+    return int(
+        float(
+            os.environ.get("LOKY_MAX_MEMORY_LEAK_SIZE", _MAX_MEMORY_LEAK_SIZE)
+        )
+    )
 
 
 try:
@@ -538,9 +550,10 @@ def _process_worker(
                 _last_memory_leak_check = time()
                 continue
             if time() - _last_memory_leak_check > _MEMORY_LEAK_CHECK_DELAY:
+                max_memory_leak_size = _get_max_memory_leak_size()
                 mem_usage = _get_memory_usage(pid)
                 _last_memory_leak_check = time()
-                if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
+                if mem_usage - _process_reference_size < max_memory_leak_size:
                     # Memory usage stays within bounds: everything is fine.
                     continue
 
@@ -549,7 +562,7 @@ def _process_worker(
                 # cycles.
                 mem_usage = _get_memory_usage(pid, force_gc=True)
                 _last_memory_leak_check = time()
-                if mem_usage - _process_reference_size < _MAX_MEMORY_LEAK_SIZE:
+                if mem_usage - _process_reference_size < max_memory_leak_size:
                     # The GC managed to free the memory: everything is fine.
                     continue
 
@@ -869,7 +882,7 @@ class _ExecutorManagerThread(threading.Thread):
                         warnings.warn(
                             "A worker was restarted while some jobs were given "
                             "to the executor because it was using more than "
-                            f"{_MAX_MEMORY_LEAK_SIZE / 1e6:.0f} MB more memory "
+                            f"{_get_max_memory_leak_size() / 1e6:.0f} MB more memory "
                             "than when it started, which usually indicates a "
                             "memory leak. Further restarts of this executor "
                             "will not be reported.",

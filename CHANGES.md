@@ -1,4 +1,8 @@
 ### 3.8.0 - In development
+- Read ``LOKY_MAX_MEMORY_LEAK_SIZE`` every time a worker checks its memory
+  usage instead of once at import, so that changing it from within a worker,
+  for instance in a task, takes effect without restarting the worker.
+  (joblib/joblib#1915)
 
 - Fix ``Popen._launch`` on POSIX raising ``UnboundLocalError`` instead of the
   real ``OSError`` when ``os.pipe()`` fails, for instance when the parent process
