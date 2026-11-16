@@ -1032,6 +1032,19 @@ class TestGetReusableExecutor(ReusableExecutorMixin):
         assert pids == {first_pid}, "the worker was recycled"
         assert not [w for w in record if "memory leak" in str(w.message)]
 
+    def test_get_max_memory_leak_size(self, monkeypatch):
+        from loky.process_executor import (
+            _MAX_MEMORY_LEAK_SIZE,
+            _get_max_memory_leak_size,
+        )
+
+        monkeypatch.delenv("LOKY_MAX_MEMORY_LEAK_SIZE", raising=False)
+        assert _get_max_memory_leak_size() == _MAX_MEMORY_LEAK_SIZE
+
+        # The value is read again on every call, so a change is seen at once.
+        monkeypatch.setenv("LOKY_MAX_MEMORY_LEAK_SIZE", "1e9")
+        assert _get_max_memory_leak_size() == int(1e9)
+
     def test_reusable_executor_reuse_true(self):
         executor = get_reusable_executor(max_workers=3, timeout=42)
         executor.submit(id, 42).result()
